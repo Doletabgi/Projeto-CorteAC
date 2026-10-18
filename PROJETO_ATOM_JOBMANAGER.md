@@ -4,7 +4,7 @@
 > **Regra de ouro:** o que está marcado `[CONFIRMADO]` veio do relatório, do código ou do usuário. O que está `[NÃO CONFIRMADO]` é suposição e não deve virar "fato" sem validação. O que está `[PREENCHER]` o Antigravity deve completar lendo o código real.
 
 <!-- AUTO:header:start -->
-**Última sincronização com o código:** 2026-10-18 00:19 (HEAD ao gerar: `7d0a875`; 30 arquivos Python, ~18361 linhas)
+**Última sincronização com o código:** 2026-10-18 00:36 (HEAD ao gerar: `76cf4b2`; 30 arquivos Python, ~18536 linhas)
 <!-- AUTO:header:end -->
 **Versão deste documento:** 1
 
@@ -164,7 +164,7 @@ ui/shape_editor_view.py                     # JobManager 2000 (Python Edition)
 
 ### `tests/test_layout_editor_shortcuts.py`
 - `class DummyEvent` (linha 30, 1 métodos)
-- `class TestLayoutEditorShortcuts` (linha 36, 17 métodos)
+- `class TestLayoutEditorShortcuts` (linha 36, 19 métodos)
 
 ### `tests/test_mysql_concurrency.py`
 - `class TestMySQLConcurrency` (linha 29, 4 métodos)
@@ -185,7 +185,7 @@ ui/shape_editor_view.py                     # JobManager 2000 (Python Edition)
 - `class EditShapeInSessionDialog` (linha 11, 6 métodos)
 
 ### `ui/layout_editor_view.py`
-- `class LayoutEditorView` (linha 149, 69 métodos)
+- `class LayoutEditorView` (linha 149, 70 métodos)
 - funções: `rotate_piece_in_place`
 
 ### `ui/layout_print_dialog.py`
@@ -208,7 +208,7 @@ ui/shape_editor_view.py                     # JobManager 2000 (Python Edition)
 - `class NestingParamsDialog` (linha 10, 2 métodos)
 
 ### `ui/session_view.py`
-- `class SessionView` (linha 20, 63 métodos)
+- `class SessionView` (linha 20, 64 métodos)
 
 ### `ui/shape_editor_view.py`
 - `class ShapeEditorView` (linha 19, 47 métodos)
@@ -515,9 +515,9 @@ A ordem de corte do `.lay` para a mesa **não pode** ser aleatória:
 | 1 | `ui/main_window.py:463` | `self.grid_lower.bind("<ButtonPress-1>", self.on_grid_drag_start, add="+")` |
 | 1 | `ui/main_window.py:465` | `self.grid_lower.bind("<ButtonRelease-1>", self.on_tree_drag_end, add="+")` |
 | 1 | `ui/main_window.py:529` | `self.bind_all("<Button-1>", self.dismiss_popup_menus, add="+")` |
-| 1 | `ui/main_window.py:720` | `dock_item.bind("<Button-1>", lambda e: self.restore_window(window))` |
-| 1 | `ui/main_window.py:721` | `lbl.bind("<Button-1>", lambda e: self.restore_window(window))` |
-| 1 | `ui/main_window.py:1588` | `lb.bind("<Double-Button-1>", lambda e: on_confirm())` |
+| 1 | `ui/main_window.py:722` | `dock_item.bind("<Button-1>", lambda e: self.restore_window(window))` |
+| 1 | `ui/main_window.py:723` | `lbl.bind("<Button-1>", lambda e: self.restore_window(window))` |
+| 1 | `ui/main_window.py:1590` | `lb.bind("<Double-Button-1>", lambda e: on_confirm())` |
 | 1 | `ui/material_codes_view.py:72` | `title_bar.bind("<ButtonPress-1>", self._on_title_press)` |
 | 1 | `ui/material_codes_view.py:74` | `self.lbl_title.bind("<ButtonPress-1>", self._on_title_press)` |
 | 1 | `ui/material_codes_view.py:76` | `self.bind("<Button-1>", lambda e: self.lift(), add="+")` |
@@ -624,7 +624,7 @@ A ordem de corte do `.lay` para a mesa **não pode** ser aleatória:
 | Escape | `ui/edit_shape_in_session_dialog.py:147` | `self.bind("<Escape>", lambda e: self.destroy())` |
 | Escape | `ui/main_window.py:62` | `self.bind("<Escape>", self.exit_fullscreen)` |
 | Escape | `ui/main_window.py:532` | `self.bind_all("<Escape>", self.dismiss_popup_menus, add="+")` |
-| Escape | `ui/main_window.py:2375` | `dialog.bind("<Escape>", lambda e: dialog.destroy())` |
+| Escape | `ui/main_window.py:2377` | `dialog.bind("<Escape>", lambda e: dialog.destroy())` |
 | Escape | `ui/material_codes_view.py:466` | `dlg.bind("<Escape>", lambda e: dlg.destroy())` |
 | Escape | `ui/options_dialog.py:40` | `self.bind("<Escape>", lambda e: self.on_cancel())` |
 | Escape | `ui/session_view.py:1378` | `entry.bind("<Escape>", cancel)` |
@@ -684,7 +684,7 @@ A ordem de corte do `.lay` para a mesa **não pode** ser aleatória:
 | R | `ui/layout_editor_view.py:428` | `self.bind_all("<Key-r>", lambda e: self.rotate_selected(45))` |
 | R | `ui/layout_editor_view.py:429` | `self.bind_all("<Key-R>", lambda e: self.rotate_selected(45))` |
 | Return | `ui/edit_shape_in_session_dialog.py:146` | `self.bind("<Return>", lambda e: self.on_save())` |
-| Return | `ui/main_window.py:2374` | `dialog.bind("<Return>", lambda e: save())` |
+| Return | `ui/main_window.py:2376` | `dialog.bind("<Return>", lambda e: save())` |
 | Return | `ui/material_codes_view.py:199` | `self.tree.bind("<Return>", lambda e: self.open_edit_selected_dialog())` |
 | Return | `ui/material_codes_view.py:465` | `dlg.bind("<Return>", lambda e: save_action())` |
 | Return | `ui/session_view.py:530` | `self.tree_mat.bind("<Return>", self.on_mat_enter_key)` |
@@ -752,6 +752,7 @@ Amostras autênticas de arquivos `.lay` (`teste.lay`, `A40118.LAY`) foram locali
 - [ ] `.die` com múltiplas sagomas
 - [ ] `scale_factor` configurável
 - [ ] Validação do driver ANP em máquina real
+- [x] Arrasto de grade completa (múltipla seleção e pastas) para moldes do layout e correção de corte em ícones da toolbar — Concluído (`ui/main_window.py`, `ui/session_view.py`, `ui/layout_editor_view.py`, `assets/`)
 - [x] Recompilar executável Linux e pacote Windows após cada entrega — Concluído (`dist/teste_dola`, `teste_dola_linux`, `teste_dola_win11_pendrive.zip`)
 - [x] Instalar sincronização automática do `PROJETO_ATOM_JOBMANAGER.md` — Concluído (`tools/sync_project_doc.py`, `.githooks/pre-commit`, `git init`)
 
@@ -789,12 +790,15 @@ Local: `/home/dola/Documentos/clone do job/antigo/arquivos pos instalacao/Common
 | 2026-10-17 | Antigravity | Instalação da sincronização automática via Git pre-commit hook (`tools/sync_project_doc.py`, `.githooks/pre-commit`), inicialização do versionamento Git e atualização geral das seções manuais | `tools/sync_project_doc.py`, `.githooks/pre-commit`, `PROJETO_ATOM_JOBMANAGER.md` |
 | 2026-10-18 | Antigravity | Migração completa para MySQL 8.0 Central (8 PCs simultâneos, >1000 layouts/dia): criação do pacote `db/` (pool thread-safe `SimpleMySQLPool`, reconexão automática, conversão transparente de dialetos SQL), DDL MySQL 8.0 (`db/schema_mysql.sql`), refatoração de `database.py` (auditoria `operator_info`, paginação, concorrência otimista com versioning), modal de resolução de concorrência no `LayoutEditorView` (Salvar Cópia / Recarregar), script de migração idempotente `tools/migrate_sqlite_to_mysql.py` (100% de conciliação de linhas nas 10 tabelas), testes de carga com 8 threads concorrentes e 1000 salvamentos (>360 layouts/s, zero erros de rede, integridade referencial confirmada); suporte a caching_sha2_password empacotado no standalone Linux e Windows pendrive | `db/`, `database.py`, `ui/layout_editor_view.py`, `tools/migrate_sqlite_to_mysql.py`, `tests/test_db_layer.py`, `tests/test_mysql_concurrency.py`, `teste_dola.spec`, `build_linux.sh`, `README.md` |
 | 2026-10-18 | Antigravity | Correção de integridade referencial e resiliência na criação de sessões: auto-recuperação de foreign keys (order_id/material_id) e garantia de unicidade de code em `create_session`, adição de propriedade `backend` e método `get_session` em `DatabaseManager`, tratamento de exceção amigável e busca dinâmica de pedidos ativos em `MainWindow.on_new_session`, isolamento total da suíte de testes contra banco de produção (`TEST_DB_NAME`, 38/38 testes passando), conciliação 1:1 no MySQL de produção e recompilação do executável standalone | `database.py`, `ui/main_window.py`, `tests/test_db_layer.py`, `tests/test_mysql_concurrency.py`, `dist/teste_dola`, `teste_dola_linux` |
+| 2026-10-18 | Antigravity | Liberação para arrasto de grade completa (múltipla seleção ou pasta inteira) de moldes da árvore e soltura direta nos moldes do layout/sessão; correção de corte/truncamento no ícone de produção da barra de ferramentas (`btn_prod.png`, `btn_moldes.png`, `btn_mat.png`); adição de `add_shapes` em lote no `SessionView` e `LayoutEditorView`; 2 novos testes unitários (40/40 passando) e recompilação do standalone | `ui/main_window.py`, `ui/session_view.py`, `ui/layout_editor_view.py`, `assets/btn_prod.png`, `assets/btn_moldes.png`, `assets/btn_mat.png`, `tests/test_layout_editor_shortcuts.py`, `dist/teste_dola`, `teste_dola_linux` |
 
 **Commits recentes (automático):**
 
 <!-- AUTO:gitlog:start -->
 | Commit | Data | Autor | Mensagem |
 |---|---|---|---|
+| `76cf4b2` | 2026-10-18 | Doletabgi | feat(ui): liberar arrasto de grade completa para moldes do layout e corrigir icone de producao |
+| `2db8dfd` | 2026-10-18 | Doletabgi | fix(session): corrigir integridade referencial e resiliencia ao criar sessao no MySQL |
 | `7d0a875` | 2026-10-17 | Doletabgi | feat(db): migrar cliente desktop para MySQL 8.0 central com pool e concorrencia otimista |
 | `729774f` | 2026-10-17 | Doletabgi | docs: sincronizar blocos AUTO com primeiro commit e historico git |
 | `374dfbb` | 2026-10-17 | Doletabgi | feat: implementar suporte a .lay, atalhos CAM do LayoutEditorView e sincronizacao automatica |

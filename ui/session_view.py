@@ -62,7 +62,7 @@ class SessionView(tk.Frame):
         # Ícone de 4 cores e título em negrito branco
         self.lbl_title = tk.Label(
             title_bar,
-            text=f"🗂️ Session #{self.session_data['id']} [{self.session_data['status']}]",
+            text=f"🗂️ Session #{self.session_data.get('id', '')} [{self.session_data.get('status', 'Stand by')}]",
             bg=THEME["title_bar_bg"], fg=THEME["title_bar_fg"], font=("Segoe UI", 9, "bold")
         )
         self.lbl_title.pack(side="left")
@@ -1844,16 +1844,27 @@ class SessionView(tk.Frame):
         """Adiciona um único molde diretamente à sessão (ex: via Drag & Drop ou Import)."""
         if not shape_dict:
             return
+        self.add_shapes([shape_dict])
+
+    def add_shapes(self, shapes_list):
+        """Adiciona múltiplos moldes de uma só vez (ex: arrastar grade completa de numerações)."""
+        if not shapes_list:
+            return
         existing_ids = {s.get("id") for s in self.shapes_list if s.get("id")}
-        if shape_dict.get("id") not in existing_ids:
-            if "sequence" not in shape_dict:
-                shape_dict["sequence"] = len(self.shapes_list) + 1
-            self.shapes_list.append(shape_dict)
-        else:
-            for i, curr in enumerate(self.shapes_list):
-                if curr.get("id") == shape_dict.get("id"):
-                    self.shapes_list[i] = shape_dict
-                    break
+        for shape_dict in shapes_list:
+            if not shape_dict:
+                continue
+            s_copy = dict(shape_dict)
+            if s_copy.get("id") not in existing_ids:
+                if "sequence" not in s_copy:
+                    s_copy["sequence"] = len(self.shapes_list) + 1
+                self.shapes_list.append(s_copy)
+                existing_ids.add(s_copy.get("id"))
+            else:
+                for i, curr in enumerate(self.shapes_list):
+                    if curr.get("id") == s_copy.get("id"):
+                        self.shapes_list[i] = s_copy
+                        break
         self.set_shapes_data(self.shapes_list)
         if self.on_add_shapes_cb:
             self.on_add_shapes_cb(self.session_data.get("id"), self.shapes_list)

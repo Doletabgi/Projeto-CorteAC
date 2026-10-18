@@ -381,7 +381,7 @@ class MainWindow(tk.Tk):
         btn_jobs_kw = {"image": self.icons["btn_prod"]} if self.icons.get("btn_prod") else {"text": "🖥️"}
         self.btn_mode_jobs = tk.Button(
             mode_bar, **btn_jobs_kw, bg=THEME["bg_surface"],
-            relief="sunken", bd=2, width=24, height=22,
+            relief="sunken", bd=2, width=26, height=24, padx=0, pady=0,
             command=lambda: self.switch_tree_mode("jobs")
         )
         self.btn_mode_jobs.pack(side="left", padx=1)
@@ -389,7 +389,7 @@ class MainWindow(tk.Tk):
         btn_shp_kw = {"image": self.icons["btn_moldes"]} if self.icons.get("btn_moldes") else {"text": "🟩"}
         self.btn_mode_shapes = tk.Button(
             mode_bar, **btn_shp_kw, bg=THEME["bg_surface"],
-            relief="raised", bd=2, width=24, height=22,
+            relief="raised", bd=2, width=26, height=24, padx=0, pady=0,
             command=lambda: self.switch_tree_mode("shapes")
         )
         self.btn_mode_shapes.pack(side="left", padx=1)
@@ -397,7 +397,7 @@ class MainWindow(tk.Tk):
         btn_mat_kw = {"image": self.icons["btn_mat"]} if self.icons.get("btn_mat") else {"text": "📚"}
         self.btn_mode_materials = tk.Button(
             mode_bar, **btn_mat_kw, bg=THEME["bg_surface"],
-            relief="raised", bd=2, width=24, height=22,
+            relief="raised", bd=2, width=26, height=24, padx=0, pady=0,
             command=lambda: self.switch_tree_mode("materials")
         )
         self.btn_mode_materials.pack(side="left", padx=1)
@@ -411,7 +411,7 @@ class MainWindow(tk.Tk):
         tree_frame = tk.Frame(v_paned, bg=THEME["bg_surface"], relief="sunken", bd=2)
         v_paned.add(tree_frame, minsize=170)
 
-        self.tree_main = ttk.Treeview(tree_frame, show="tree")
+        self.tree_main = ttk.Treeview(tree_frame, show="tree", selectmode="extended")
         self.tree_main.pack(fill="both", expand=True)
         self.tree_main.bind("<<TreeviewSelect>>", self.on_tree_selected)
         self.tree_main.bind("<Double-1>", self.on_tree_double_click)
@@ -670,6 +670,8 @@ class MainWindow(tk.Tk):
                 break
         if self.current_session and self.current_session["id"] == sess_id:
             self.current_session["shapes"] = list(shapes)
+        if hasattr(self, "layout_editor_view") and self.layout_editor_view:
+            self.layout_editor_view.set_session_shapes(shapes)
         cnt = len(shapes)
         self.lbl_status_msg.config(text=f"Sessão #{sess_id}: {cnt} molde(s) configurado(s) na aba Moldes.")
 
@@ -2386,14 +2388,25 @@ class MainWindow(tk.Tk):
             else:
                 self._drag_data = None
                 return
+
+        curr_sel = list(self.tree_main.selection())
+        # Se o item clicado já faz parte de uma seleção múltipla, mantemos toda a grade selecionada!
+        if iid in curr_sel and len(curr_sel) > 1:
+            selected_iids = curr_sel
+            self._pending_single_select = iid
+        else:
+            selected_iids = [iid]
+            self._pending_single_select = None
+            try:
+                self.tree_main.selection_set(iid)
+            except Exception:
+                pass
+
         vals = self.tree_main.item(iid, "values")
         text = self.tree_main.item(iid, "text").strip()
+
         if vals and len(vals) >= 2:
             if vals[0] == "material":
-                try:
-                    self.tree_main.selection_set(iid)
-                except Exception:
-                    pass
                 self._drag_data = {
                     "type": "material",
                     "id": vals[1],
@@ -2401,27 +2414,62 @@ class MainWindow(tk.Tk):
                 }
                 self._drag_start_xy = (event.x_root, event.y_root)
                 self._is_dragging = False
-            elif vals[0] == "shape":
-                try:
-                    self.tree_main.selection_set(iid)
-                except Exception:
-                    pass
-                try:
-                    shape_id = int(vals[1])
-                except (ValueError, TypeError):
-                    shape_id = vals[1]
-                shape_folder = vals[2] if len(vals) >= 3 else ""
-                self._drag_data = {
-                    "type": "shape",
-                    "id": shape_id,
-                    "name": text,
-                    "folder": shape_folder,
-                    "source_iid": iid
-                }
-                self._drag_start_xy = (event.x_root, event.y_root)
-                self._is_dragging = False
+                return
+
+        # Coleta todos os moldes selecionados ou pertencentes à pasta/grade
+        shapes_to_drag = []
+        folder_name = ""
+
+        # Verifica se o item clicado é uma pasta de moldes
+        if vals and len(vals) >= 2 and vals[0] == "folder":
+            folder_name = str(vals[1])
+            for child_id in self.tree_main.get_children(iid):
+                c_vals = self.tree_main.item(child_id, "values")
+                if c_vals and len(c_vals) >= 2 and c_vals[0] == "shape":
+                    shp = next((s for s in self.current_shapes if str(s.get("id")) == str(c_vals[1])), None)
+                    if shp and shp not in shapes_to_drag:
+                        shapes_to_drag.append(shp)
+        else:
+            # Varre todos os iids selecionados
+            for s_iid in selected_iids:
+                s_vals = self.tree_main.item(s_iid, "values")
+                if not s_vals or len(s_vals) < 2:
+                    continue
+                if s_vals[0] == "shape":
+                    shp = next((s for s in self.current_shapes if str(s.get("id")) == str(s_vals[1])), None)
+                    if shp and shp not in shapes_to_drag:
+                        shapes_to_drag.append(shp)
+                        if not folder_name:
+                            folder_name = shp.get("folder", "")
+                elif s_vals[0] == "folder":
+                    f_name = str(s_vals[1])
+                    for child_id in self.tree_main.get_children(s_iid):
+                        c_vals = self.tree_main.item(child_id, "values")
+                        if c_vals and len(c_vals) >= 2 and c_vals[0] == "shape":
+                            shp = next((s for s in self.current_shapes if str(s.get("id")) == str(c_vals[1])), None)
+                            if shp and shp not in shapes_to_drag:
+                                shapes_to_drag.append(shp)
+                    if not folder_name:
+                        folder_name = f_name
+
+        if shapes_to_drag:
+            cnt = len(shapes_to_drag)
+            if cnt > 1:
+                name_lbl = f"Grade '{folder_name}' ({cnt} moldes)" if folder_name else f"Grade ({cnt} moldes)"
             else:
-                self._drag_data = None
+                name_lbl = shapes_to_drag[0].get("name", text)
+
+            self._drag_data = {
+                "type": "shape",
+                "id": shapes_to_drag[0].get("id"),
+                "name": name_lbl,
+                "folder": folder_name,
+                "shapes": shapes_to_drag,
+                "count": cnt,
+                "source_iids": selected_iids
+            }
+            self._drag_start_xy = (event.x_root, event.y_root)
+            self._is_dragging = False
         else:
             self._drag_data = None
 
@@ -2499,6 +2547,7 @@ class MainWindow(tk.Tk):
 
         if not getattr(self, "_is_dragging", False) and (dx > 6 or dy > 6):
             self._is_dragging = True
+            self._pending_single_select = None
 
         if getattr(self, "_is_dragging", False):
             if not getattr(self, "_drag_avatar", None):
@@ -2509,9 +2558,11 @@ class MainWindow(tk.Tk):
                 frame = tk.Frame(avatar, bg="#ffffd0", relief="solid", bd=1, padx=8, pady=4)
                 frame.pack()
                 icon = "📦" if self._drag_data.get("type") == "material" else "📐"
+                cnt = self._drag_data.get("count", 1)
+                cnt_suffix = f" [{cnt} moldes]" if cnt > 1 else ""
                 tk.Label(
                     frame,
-                    text=f"{icon} {self._drag_data['name']}",
+                    text=f"{icon} {self._drag_data['name']}{cnt_suffix}",
                     bg="#ffffd0",
                     fg="#000000",
                     font=("Segoe UI", 9, "bold")
@@ -2549,6 +2600,24 @@ class MainWindow(tk.Tk):
                     self.lbl_status_msg.config(text=f"Arraste '{self._drag_data['name']}' até a área da Sessão à direita...")
 
             elif drag_type == "shape":
+                is_over_session = False
+                try:
+                    rx = self.right_box.winfo_rootx()
+                    ry = self.right_box.winfo_rooty()
+                    rw = self.right_box.winfo_width()
+                    rh = self.right_box.winfo_height()
+                    is_over_session = (rx <= event.x_root <= rx + rw and ry <= event.y_root <= ry + rh)
+                except Exception:
+                    is_over_session = False
+
+                if is_over_session:
+                    try:
+                        self.config(cursor="hand2")
+                    except Exception:
+                        pass
+                    self.lbl_status_msg.config(text=f"⬇️ Solte para adicionar {self._drag_data['name']} aos Moldes do Layout / Sessão.")
+                    return
+
                 try:
                     tx = event.x_root - self.tree_main.winfo_rootx()
                     ty = event.y_root - self.tree_main.winfo_rooty()
@@ -2570,7 +2639,7 @@ class MainWindow(tk.Tk):
                                 except Exception:
                                     pass
                                 self.config(cursor="hand2")
-                                self.lbl_status_msg.config(text=f"⬇️ Solte para mover '{self._drag_data['name']}' para a pasta '{folder_name}'.")
+                                self.lbl_status_msg.config(text=f"⬇️ Solte para mover {self._drag_data['name']} para a pasta '{folder_name}'.")
                                 return
                             elif t_vals[0] == "root_shapes":
                                 try:
@@ -2578,16 +2647,16 @@ class MainWindow(tk.Tk):
                                 except Exception:
                                     pass
                                 self.config(cursor="hand2")
-                                self.lbl_status_msg.config(text=f"⬇️ Solte para mover '{self._drag_data['name']}' para a raiz de Moldes.")
+                                self.lbl_status_msg.config(text=f"⬇️ Solte para mover {self._drag_data['name']} para a raiz de Moldes.")
                                 return
                             elif t_vals[0] == "shape":
                                 s_folder = str(t_vals[2]) if len(t_vals) >= 3 else ""
                                 target_desc = f"pasta '{s_folder}'" if s_folder else "raiz de Moldes"
                                 self.config(cursor="hand2")
-                                self.lbl_status_msg.config(text=f"⬇️ Solte para mover '{self._drag_data['name']}' para a {target_desc}.")
+                                self.lbl_status_msg.config(text=f"⬇️ Solte para mover {self._drag_data['name']} para a {target_desc}.")
                                 return
                     self.config(cursor="hand2")
-                    self.lbl_status_msg.config(text=f"Arraste '{self._drag_data['name']}' sobre uma pasta na árvore de moldes...")
+                    self.lbl_status_msg.config(text=f"Arraste {self._drag_data['name']} sobre uma pasta ou para a área da Sessão / Layout...")
                 else:
                     try:
                         self.config(cursor="circle" if sys.platform != "win32" else "no")
@@ -2596,7 +2665,7 @@ class MainWindow(tk.Tk):
                             self.config(cursor="fleur")
                         except Exception:
                             pass
-                    self.lbl_status_msg.config(text=f"Arraste '{self._drag_data['name']}' para a árvore de moldes à esquerda...")
+                    self.lbl_status_msg.config(text=f"Arraste {self._drag_data['name']} até a área do Layout / Sessão à direita...")
 
     def on_tree_drag_end(self, event):
         if getattr(self, "_drag_avatar", None):
@@ -2628,6 +2697,12 @@ class MainWindow(tk.Tk):
                     self.apply_material_to_session(mat_id)
 
             elif drag_type == "shape":
+                shapes_to_add = self._drag_data.get("shapes", [])
+                if not shapes_to_add and "id" in self._drag_data:
+                    s_one = next((s for s in self.current_shapes if s["id"] == self._drag_data["id"]), None)
+                    if s_one:
+                        shapes_to_add = [s_one]
+
                 is_over_session = False
                 try:
                     rx = self.right_box.winfo_rootx()
@@ -2638,13 +2713,35 @@ class MainWindow(tk.Tk):
                 except Exception:
                     is_over_session = False
 
-                if is_over_session and self.session_view and self.session_view.winfo_ismapped():
-                    shp_id = self._drag_data["id"]
-                    shape_dict = next((s for s in self.current_shapes if s["id"] == shp_id), None)
-                    if shape_dict:
-                        self.session_view.add_shape(shape_dict)
-                        self.session_view.notebook.select(1)
-                        self.lbl_status_msg.config(text=f"Molde '{shape_dict.get('name')}' adicionado à aba Moldes da Sessão.")
+                if is_over_session and shapes_to_add:
+                    cnt = len(shapes_to_add)
+                    f_name = self._drag_data.get("folder", "")
+                    lbl = f"Grade '{f_name}' ({cnt} moldes)" if (f_name and cnt > 1) else f"{cnt} molde(s)"
+
+                    # 1. Se LayoutEditorView estiver aberto, adiciona diretamente aos moldes do layout
+                    if hasattr(self, "layout_editor_view") and self.layout_editor_view and self.layout_editor_view.winfo_ismapped():
+                        self.layout_editor_view.add_session_shapes(shapes_to_add)
+                        if self.session_view:
+                            self.session_view.add_shapes(shapes_to_add)
+                        elif self.current_session:
+                            self.db.update_session_shapes(self.current_session["id"], self.layout_editor_view.session_shapes)
+                        self.lbl_status_msg.config(text=f"Toda a {lbl} adicionada com sucesso aos Moldes do Layout!")
+                    # 2. Se SessionView estiver aberto, adiciona à aba Moldes da sessão
+                    elif self.session_view and self.session_view.winfo_ismapped():
+                        self.session_view.add_shapes(shapes_to_add)
+                        self.session_view.notebook.select(1) # Aba Moldes
+                        if hasattr(self, "layout_editor_view") and self.layout_editor_view:
+                            self.layout_editor_view.set_session_shapes(self.session_view.shapes_list)
+                        self.lbl_status_msg.config(text=f"Toda a {lbl} adicionada com sucesso à aba Moldes da Sessão.")
+                    # 3. Se nenhuma view estiver mapeada, abre a sessão ativa e adiciona os moldes
+                    elif self.current_session:
+                        self.show_session_window(self.current_session)
+                        if self.session_view:
+                            self.session_view.add_shapes(shapes_to_add)
+                            self.session_view.notebook.select(1)
+                        if hasattr(self, "layout_editor_view") and self.layout_editor_view:
+                            self.layout_editor_view.set_session_shapes(self.session_view.shapes_list if self.session_view else shapes_to_add)
+                        self.lbl_status_msg.config(text=f"Toda a {lbl} adicionada aos Moldes da Sessão #{self.current_session['id']}.")
                 else:
                     try:
                         tx = event.x_root - self.tree_main.winfo_rootx()
@@ -2655,7 +2752,7 @@ class MainWindow(tk.Tk):
                     except Exception:
                         is_over_tree = False
 
-                    if is_over_tree:
+                    if is_over_tree and shapes_to_add:
                         target_iid = self.tree_main.identify_row(ty)
                         if not target_iid:
                             sel = self.tree_main.selection()
@@ -2674,8 +2771,26 @@ class MainWindow(tk.Tk):
                                     dest_folder = str(t_vals[2]) if len(t_vals) >= 3 else ""
 
                                 if dest_folder is not None:
-                                    self.move_shape_to_folder(self._drag_data["id"], dest_folder)
+                                    moved_cnt = 0
+                                    for s_item in shapes_to_add:
+                                        self.db.update_shape_folder(s_item["id"], dest_folder)
+                                        s_item["folder"] = dest_folder
+                                        moved_cnt += 1
+                                    self.reload_shapes()
+                                    if self.current_mode == "shapes":
+                                        self.switch_tree_mode("shapes")
+                                        if dest_folder:
+                                            self.select_folder_node(dest_folder)
+                                    dest_desc = f"pasta '{dest_folder}'" if dest_folder else "raiz de Moldes"
+                                    self.lbl_status_msg.config(text=f"{moved_cnt} molde(s) da grade movido(s) com sucesso para a {dest_desc}!")
+        else:
+            if getattr(self, "_pending_single_select", None):
+                try:
+                    self.tree_main.selection_set(self._pending_single_select)
+                except Exception:
+                    pass
 
+        self._pending_single_select = None
         self._is_dragging = False
         self._drag_data = None
 

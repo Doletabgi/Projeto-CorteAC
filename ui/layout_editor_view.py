@@ -590,6 +590,25 @@ class LayoutEditorView(tk.Frame):
         self.update_sidebar_targets()
         self.redraw()
 
+    def add_session_shapes(self, new_shapes):
+        """Adiciona múltiplos moldes à sessão no LayoutEditor e atualiza a barra lateral."""
+        if not new_shapes:
+            return
+        existing_ids = {s.get("id") for s in self.session_shapes if s.get("id")}
+        for shp in new_shapes:
+            if not shp:
+                continue
+            if shp.get("id") not in existing_ids:
+                self.session_shapes.append(dict(shp))
+                existing_ids.add(shp.get("id"))
+            else:
+                for i, curr in enumerate(self.session_shapes):
+                    if curr.get("id") == shp.get("id"):
+                        self.session_shapes[i] = dict(shp)
+                        break
+        self.update_sidebar_targets()
+        self.redraw()
+
     def update_sidebar_targets(self):
         """Atualiza a lista de alvos (moldes) exibidos na barra lateral em grade de 4 colunas."""
         if hasattr(self, "session_shapes") and self.session_shapes:

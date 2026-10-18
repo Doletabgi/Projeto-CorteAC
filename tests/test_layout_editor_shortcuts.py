@@ -370,6 +370,36 @@ class TestLayoutEditorShortcuts(unittest.TestCase):
         self.assertIn("Limite da Chapa", status_text)
         self.assertEqual(status_fg, "#dc2626")
 
+    def test_add_session_shapes_batch_and_sidebar_targets(self):
+        """Testa adição de grade completa (múltiplos moldes) e atualização dos alvos da barra lateral."""
+        grade = [
+            {"id": f"323_{sz}", "name": f"323_PalAcb_{sz}a", "size": str(sz), "contour": [{"x": 0, "y": 0}, {"x": 50, "y": 0}, {"x": 50, "y": 30}, {"x": 0, "y": 30}]}
+            for sz in range(22, 37)
+        ]
+        self.view.add_session_shapes(grade)
+        self.assertEqual(len(self.view.session_shapes), 15)
+        # Na barra lateral, os 15 moldes formam grade 4x4 preenchida com 'grade_ch_0' como 16º item
+        self.assertEqual(len(self.view.sidebar_targets), 16)
+        # O primeiro da lista de alvos deve ser o tamanho 36 (ordenação decrescente)
+        self.assertEqual(self.view.sidebar_targets[0]["size"], "36")
+        self.assertEqual(self.view.sidebar_targets[-2]["size"], "22")
+        self.assertEqual(self.view.sidebar_targets[-1]["name"], "grade_ch_0")
+
+    def test_session_view_add_shapes_batch(self):
+        """Testa add_shapes em lote no SessionView com preservação de sequência e callback."""
+        from ui.session_view import SessionView
+        saved = []
+        sv = SessionView(self.root, session_data={"id": 101, "status": "Stand by"}, on_add_shapes=lambda sid, shapes: saved.append((sid, shapes)))
+        grade = [
+            {"id": f"shp_{sz}", "name": f"Molde_{sz}", "size": str(sz)}
+            for sz in range(22, 37)
+        ]
+        sv.add_shapes(grade)
+        self.assertEqual(len(sv.shapes_list), 15)
+        self.assertEqual(len(saved), 1)
+        self.assertEqual(saved[0][0], 101)
+        self.assertEqual(len(saved[0][1]), 15)
+
 
 if __name__ == "__main__":
     unittest.main()
