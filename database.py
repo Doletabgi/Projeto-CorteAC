@@ -131,7 +131,7 @@ class DatabaseManager:
                 cursor.execute("""
                 CREATE TABLE IF NOT EXISTS shapes (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    article_id INTEGER NOT NULL,
+                    article_id INTEGER,
                     name TEXT NOT NULL,
                     color TEXT NOT NULL,
                     contour_json TEXT NOT NULL,
@@ -153,7 +153,7 @@ class DatabaseManager:
                 CREATE TABLE IF NOT EXISTS sessions (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     code TEXT UNIQUE NOT NULL,
-                    order_id INTEGER NOT NULL,
+                    order_id INTEGER,
                     material_id TEXT NOT NULL,
                     name TEXT NOT NULL DEFAULT '',
                     job TEXT NOT NULL DEFAULT 'ProduçãoNova',
@@ -542,13 +542,22 @@ class DatabaseManager:
     def delete_order(self, order_id):
         with self.get_connection() as conn:
             cursor = conn.cursor()
+            cursor.execute("UPDATE sessions SET order_id = NULL WHERE order_id = ?", (order_id,))
             cursor.execute("SELECT id FROM articles WHERE order_id = ?", (order_id,))
-            art_ids = [r[0] for r in cursor.fetchall()]
+            art_ids = [r[0] if isinstance(r, (tuple, list)) else r["id"] for r in cursor.fetchall()]
             for aid in art_ids:
-                cursor.execute("DELETE FROM shapes WHERE article_id = ?", (aid,))
+                cursor.execute("UPDATE shapes SET article_id = NULL WHERE article_id = ?", (aid,))
             cursor.execute("DELETE FROM articles WHERE order_id = ?", (order_id,))
             cursor.execute("DELETE FROM orders WHERE id = ?", (order_id,))
             conn.commit()
+
+    def delete_article(self, article_id):
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("UPDATE shapes SET article_id = NULL WHERE article_id = ?", (article_id,))
+            cursor.execute("DELETE FROM articles WHERE id = ?", (article_id,))
+            conn.commit()
+
 
     def get_articles_by_order(self, order_id):
         with self.get_connection() as conn:
@@ -1014,7 +1023,7 @@ class DatabaseManager:
         session_id: Optional[int] = None,
         name: str = "Nova Sessão",
         job: str = "ProduçãoNova",
-        order_id: int = 1,
+        order_id: Optional[int] = None,
         material_id: str = "MAT_VAQ_01",
         status: str = "Stand by",
         placed_pieces: Optional[List[Dict[str, Any]]] = None,
@@ -1030,20 +1039,18 @@ class DatabaseManager:
             if session_id is None or session_id <= 0:
                 session_id = self.get_next_session_number()
 
-            # 2. Resiliência de chave estrangeira: order_id
+            # 2. Resiliência de chave estrangeira: order_id (opcional, sem recriação forçada de pedidos)
             valid_order_id = order_id
-            cursor.execute("SELECT id FROM orders WHERE id = ?", (valid_order_id,))
-            if not cursor.fetchone():
-                cursor.execute("SELECT id FROM orders ORDER BY id ASC LIMIT 1")
-                row_ord = cursor.fetchone()
-                if row_ord:
-                    valid_order_id = row_ord[0] if isinstance(row_ord, (tuple, list)) else row_ord["id"]
-                else:
-                    valid_order_id = 1
-                    cursor.execute("""
-                        INSERT INTO orders (id, code, customer, status, name)
-                        VALUES (?, ?, ?, ?, ?)
-                    """, (1, "ORD-2026-001", "Calçados Elite S/A", "Em Produção", "Derby Masculino #41"))
+            if valid_order_id is not None:
+                cursor.execute("SELECT id FROM orders WHERE id = ?", (valid_order_id,))
+                if not cursor.fetchone():
+                    cursor.execute("SELECT id FROM orders ORDER BY id ASC LIMIT 1")
+                    row_ord = cursor.fetchone()
+                    if row_ord:
+                        valid_order_id = row_ord[0] if isinstance(row_ord, (tuple, list)) else row_ord["id"]
+                    else:
+                        valid_order_id = None
+
 
             # 3. Resiliência de chave estrangeira: material_id
             valid_mat_id = material_id

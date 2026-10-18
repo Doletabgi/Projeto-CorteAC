@@ -66,7 +66,7 @@ CREATE TABLE IF NOT EXISTS job_folders (
 -- 5. Moldes / Geometria CAD (Shapes)
 CREATE TABLE IF NOT EXISTS shapes (
     id INT AUTO_INCREMENT PRIMARY KEY,
-    article_id INT NOT NULL,
+    article_id INT NULL DEFAULT NULL,
     name VARCHAR(150) NOT NULL,
     color VARCHAR(30) NOT NULL,
     contour_json LONGTEXT NOT NULL,
@@ -74,7 +74,7 @@ CREATE TABLE IF NOT EXISTS shapes (
     stitching_json LONGTEXT NULL,
     folder VARCHAR(150) DEFAULT '',
     size VARCHAR(50) DEFAULT '41',
-    FOREIGN KEY (article_id) REFERENCES articles(id) ON DELETE CASCADE,
+    FOREIGN KEY (article_id) REFERENCES articles(id) ON DELETE SET NULL,
     INDEX idx_shapes_article (article_id),
     INDEX idx_shapes_name (name),
     INDEX idx_shapes_folder (folder)
@@ -84,7 +84,7 @@ CREATE TABLE IF NOT EXISTS shapes (
 CREATE TABLE IF NOT EXISTS sessions (
     id INT AUTO_INCREMENT PRIMARY KEY,
     code VARCHAR(100) UNIQUE NOT NULL,
-    order_id INT NOT NULL,
+    order_id INT NULL DEFAULT NULL,
     material_id VARCHAR(50) NOT NULL,
     name VARCHAR(150) NOT NULL DEFAULT '',
     job VARCHAR(100) NOT NULL DEFAULT 'ProduçãoNova',
@@ -97,7 +97,7 @@ CREATE TABLE IF NOT EXISTS sessions (
     machine VARCHAR(150) DEFAULT 'ATOM FlashCut Flex 3020',
     shapes_json LONGTEXT NULL,
     created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (order_id) REFERENCES orders(id) ON DELETE CASCADE,
+    FOREIGN KEY (order_id) REFERENCES orders(id) ON DELETE SET NULL,
     FOREIGN KEY (material_id) REFERENCES materials(id) ON DELETE RESTRICT,
     INDEX idx_sessions_order (order_id),
     INDEX idx_sessions_created (created_at),

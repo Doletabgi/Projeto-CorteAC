@@ -2445,6 +2445,14 @@ class MainWindow(tk.Tk):
                     self.tree_menu.add_command(label="Importar Shape (.die)...", command=self.on_import_die)
                     self.tree_menu.add_command(label="🧩 Abrir no Layout Editor...", command=self.show_layout_editor)
 
+                elif node_type == "order":
+                    order_id = int(vals[1])
+                    self.tree_menu.add_command(label="Abrir", command=self.on_tree_menu_open)
+                    self.tree_menu.add_separator()
+                    self.tree_menu.add_command(label="Renomear", command=self.on_rename_tree_item)
+                    self.tree_menu.add_command(label="Excluir Artigo", command=self.on_delete_tree_item)
+                    self.tree_menu.add_command(label="Excluir", command=self.on_delete_tree_item)
+
                 else:  # root_production ou outros
                     self.tree_menu.add_command(label="Abrir", state="disabled")
                     self.tree_menu.add_separator()
@@ -3648,21 +3656,28 @@ class MainWindow(tk.Tk):
                     self.lbl_status_msg.config(text=f"{num} materiais excluídos com sucesso.")
             return
 
-        # 5. Trata pedidos/ordens
+        # 5. Trata pedidos/ordens/artigos
         if orders_to_del:
+            num = len(orders_to_del)
+            confirm_msg = f"Deseja realmente excluir o artigo '{orders_to_del[0][2]}'?" if num == 1 else f"Deseja realmente excluir os {num} artigos selecionados?"
+            if not messagebox.askyesno("Excluir Artigo" if num == 1 else "Excluir Artigos", confirm_msg, parent=self):
+                return
             for iid, o_id, o_name in orders_to_del:
-                if messagebox.askyesno("Excluir Pedido", f"Deseja realmente excluir o pedido '{o_name}'?", parent=self):
-                    self.db.delete_order(o_id)
-                    self.orders = [o for o in self.orders if o.get("id") != o_id]
-                    if self.current_order and self.current_order.get("id") == o_id:
-                        self.current_order = self.orders[0] if self.orders else None
-                        if self.active_child == self.order_view:
-                            if self.current_order:
-                                self.order_view.load_order(self.current_order)
-                            else:
-                                self.close_child_window()
+                self.db.delete_order(o_id)
+            del_ids = {o_id for _, o_id, _ in orders_to_del}
+            self.orders = [o for o in self.orders if o.get("id") not in del_ids]
+            if self.current_order and self.current_order.get("id") in del_ids:
+                self.current_order = self.orders[0] if self.orders else None
+                if getattr(self, "active_child", None) == getattr(self, "order_view", None):
+                    if self.current_order:
+                        if hasattr(self, "order_view") and self.order_view:
+                            self.order_view.load_order(self.current_order)
+                    else:
+                        if hasattr(self, "close_child_window"):
+                            self.close_child_window()
             if self.current_mode == "jobs":
                 self.switch_tree_mode("jobs")
+            self.lbl_status_msg.config(text=f"Artigo excluído com sucesso." if num == 1 else f"{num} artigos excluídos com sucesso.")
             return
 
     def on_delete_grid_item(self):
@@ -4315,9 +4330,9 @@ class MainWindow(tk.Tk):
         mat_id = self.current_material["id"] if (self.current_material and "id" in self.current_material) else "MAT_VAQ_01"
         try:
             orders = self.db.get_orders()
-            order_id = orders[0]["id"] if orders else 1
+            order_id = orders[0]["id"] if orders else None
         except Exception:
-            order_id = 1
+            order_id = None
 
         try:
             actual_id = self.db.create_session(

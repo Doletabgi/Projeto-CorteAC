@@ -981,6 +981,77 @@ class TestLayoutEditorShortcuts(unittest.TestCase):
         self.assertEqual(str(vals[0]), "3")
         self.assertEqual(str(vals[2]), "121805")
 
+    def test_delete_article_order_from_tree(self):
+        """Verifica a exclusão de artigo/pedido (Derby Masculino #41) via on_delete_tree_item."""
+        from tkinter import ttk
+        from unittest.mock import patch
+        from ui.main_window import MainWindow
+
+        class FakeDB:
+            def __init__(self):
+                self.deleted_orders = []
+            def get_job_folders(self):
+                return ["167044"]
+            def get_orders(self):
+                return []
+            def delete_order(self, oid):
+                self.deleted_orders.append(oid)
+
+        class DummyBtn:
+            def config(self, **kwargs):
+                pass
+
+        class FakeMain:
+            def __init__(self, root):
+                self.root = root
+                self.tree_main = ttk.Treeview(root)
+                self.grid_lower = ttk.Treeview(root)
+                self.current_mode = "jobs"
+                self.icons = {}
+                self.db = FakeDB()
+                self.orders = [{"id": 1, "name": "Derby Masculino #41"}]
+                self.sessions = [{"id": 3, "job": "167044", "name": "121805", "status": "Stand by"}]
+                self.current_session = self.sessions[0]
+                self.current_order = self.orders[0]
+                self.btn_mode_jobs = DummyBtn()
+                self.btn_mode_shapes = DummyBtn()
+                self.btn_mode_materials = DummyBtn()
+                self.sort_grid_lower = lambda col: None
+                self.lbl_status_msg = DummyBtn()
+                self.active_child = None
+                self.order_view = None
+
+            def switch_tree_mode(self, mode="jobs"):
+                MainWindow.switch_tree_mode(self, mode=mode)
+
+            def on_delete_tree_item(self):
+                MainWindow.on_delete_tree_item(self)
+
+        fm = FakeMain(self.root)
+        fm.switch_tree_mode("jobs")
+
+        # Localiza o nó do artigo/pedido
+        prod_root = fm.tree_main.get_children("")[0]
+        job_node = fm.tree_main.get_children(prod_root)[0]
+        children = fm.tree_main.get_children(job_node)
+        order_node = next(c for c in children if fm.tree_main.item(c, "values")[0] == "order")
+        self.assertEqual(fm.tree_main.item(order_node, "text").strip(), "Derby Masculino #41")
+
+        # Seleciona o artigo e executa exclusão confirmada
+        fm.tree_main.selection_set(order_node)
+        with patch("tkinter.messagebox.askyesno", return_value=True):
+            fm.on_delete_tree_item()
+
+        # Verifica que delete_order foi chamado com id=1
+        self.assertIn(1, fm.db.deleted_orders)
+        self.assertEqual(len(fm.orders), 0)
+
+        # Na árvore o nó de artigo não existe mais, restando apenas a sessão 121805
+        updated_job_node = fm.tree_main.get_children(fm.tree_main.get_children("")[0])[0]
+        remaining = fm.tree_main.get_children(updated_job_node)
+        self.assertEqual(len(remaining), 1)
+        self.assertEqual(fm.tree_main.item(remaining[0], "text").strip(), "121805")
+
 
 if __name__ == "__main__":
     unittest.main()
