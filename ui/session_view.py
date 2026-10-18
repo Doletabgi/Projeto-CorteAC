@@ -585,11 +585,14 @@ class SessionView(tk.Frame):
             font=("Segoe UI", 9), command=self.export_lay_file
         ).pack(side="left", padx=2)
 
-        tk.Button(
+        self.btn_open_editor = tk.Button(
             lays_bot_bar, text="✏️ Editor...",
             relief="raised", bd=2, bg=THEME["bg_surface"], fg=THEME["text_main"],
             font=("Segoe UI", 9), command=self.on_layout_row_double_click
-        ).pack(side="left", padx=2)
+        )
+        self.btn_open_editor.pack(side="left", padx=2)
+        has_pieces = bool(self.session_data.get("placed_pieces")) if isinstance(self.session_data, dict) else False
+        self.btn_open_editor.config(state="normal" if has_pieces else "disabled")
 
         tk.Button(
             lays_bot_bar, text="🗑️ Limpar",
@@ -619,7 +622,6 @@ class SessionView(tk.Frame):
         self.mini_layout_canvas = tk.Canvas(preview_box_lay, bg="#ece9d8", highlightthickness=0, cursor="hand2")
         self.mini_layout_canvas.pack(fill="both", expand=True, padx=4, pady=4)
         self.mini_layout_canvas.bind("<Double-1>", self.on_layout_row_double_click)
-        self.mini_layout_canvas.bind("<Button-1>", self.on_layout_row_double_click)
         self.mini_layout_canvas.bind("<Configure>", lambda e: self.draw_mini_layout_preview())
 
         self.draw_mini_layout_preview()
@@ -670,6 +672,14 @@ class SessionView(tk.Frame):
             self.on_close_cb()
 
     def on_layout_row_double_click(self, event=None):
+        placed = self.session_data.get("placed_pieces", []) if isinstance(self.session_data, dict) else []
+        if not placed:
+            messagebox.showwarning(
+                "Layout Editor",
+                "Não há layout calculado para esta sessão.\nExecute o cálculo de encaixe (Nest) primeiro.",
+                parent=self
+            )
+            return
         if self.on_open_layout_editor_cb:
             name = self.session_data.get("layout_name") or "[I0000]"
             self.on_open_layout_editor_cb(name)
@@ -856,6 +866,7 @@ class SessionView(tk.Frame):
 
         placed_pieces = self.session_data.get("placed_pieces", [])
         if not placed_pieces:
+            cv.config(cursor="")
             # Sessão em branco / sem encaixe: exibe a chapa vazia limpa sem peças falsas
             cv.create_rectangle(x1, y1, x2, y2, fill="#d4d0c8", outline="#808080", width=1)
             cv.create_text(
@@ -866,6 +877,8 @@ class SessionView(tk.Frame):
                 justify="center"
             )
             return
+
+        cv.config(cursor="hand2")
 
         # Fundo da chapa de corte cinza (#9b9b9b) com borda preta nítida (em pé/portrait)
         cv.create_rectangle(x1, y1, x2, y2, fill="#9b9b9b", outline="#000000", width=1.5)
@@ -1068,6 +1081,10 @@ class SessionView(tk.Frame):
                 area_str = f"{area_m2:.2f}".replace('.', ',') if area_m2 else "0,08"
                 self.tree_lays.insert("", "end", iid="lay_0", values=("▶", "0", eff_str, "1", "0", time_str, pieces_cnt, area_str))
                 self.tree_lays.selection_set("lay_0")
+
+        if hasattr(self, "btn_open_editor"):
+            has_pieces = bool(session_data.get("placed_pieces")) if isinstance(session_data, dict) else False
+            self.btn_open_editor.config(state="normal" if has_pieces else "disabled")
 
         # Atualiza a tabela da aba Materiais
         if hasattr(self, "tree_mat"):

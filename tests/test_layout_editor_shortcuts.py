@@ -56,7 +56,7 @@ class TestLayoutEditorShortcuts(unittest.TestCase):
     def setUp(self):
         if not self.root:
             self.skipTest("Tkinter display not available")
-        self.view = LayoutEditorView(self.root, layout_name="[TEST001]")
+        self.view = LayoutEditorView(self.root, layout_name="[TEST001]", load_sample=True)
         self.view.pack()
         self.view.update_idletasks()
 
@@ -1162,6 +1162,83 @@ class TestLayoutEditorShortcuts(unittest.TestCase):
         with patch("tkinter.messagebox.askyesno", return_value=True):
             fm2.on_delete_grid_item()
         self.assertIn("MAT_CAM_02", fm2.db.deleted_materials)
+
+    def test_layout_editor_empty_by_default(self):
+        """Verifica que o LayoutEditorView inicializado por padrão possui 0 peças e 0 moldes falsos."""
+        empty_view = LayoutEditorView(self.root, layout_name="[EMPTY]")
+        self.assertEqual(empty_view.placed_pieces, [])
+        self.assertEqual(empty_view.sidebar_targets, [])
+        empty_view.destroy()
+
+    def test_session_view_editor_button_state_and_guard(self):
+        """Verifica que o botão Editor e o duplo-clique na aba Layout são bloqueados se não houver cálculo."""
+        from ui.session_view import SessionView
+        from unittest.mock import MagicMock, patch
+
+        cb_open = MagicMock()
+        sess_data = {
+            "id": 99,
+            "name": "Sessão Teste Sem Layout",
+            "status": "Stand by",
+            "placed_pieces": [],
+            "shapes": [],
+            "material": {"id": "M1", "name": "Mat Test", "width_mm": 1350, "height_mm": 2550}
+        }
+        sv = SessionView(self.root, session_data=sess_data, on_open_layout_editor=cb_open)
+
+        # 1. Botão Editor deve estar desabilitado (disabled) quando não há layout
+        self.assertEqual(str(sv.btn_open_editor["state"]), "disabled")
+
+        # 2. Tentar abrir sem layout deve disparar aviso e não chamar o callback
+        with patch("tkinter.messagebox.showwarning") as mock_warn:
+            sv.on_layout_row_double_click()
+            self.assertTrue(mock_warn.called)
+            cb_open.assert_not_called()
+
+        # 3. Quando o layout é calculado ou peças são atribuídas, o botão passa a ser habilitado (normal)
+        sess_data["placed_pieces"] = [{"name": "P1", "contour": CONTOUR_CON, "x": 100, "y": 100, "rotation": 0}]
+        sess_data["layout_name"] = "[I0099]"
+        sv.load_session(sess_data)
+
+        self.assertEqual(str(sv.btn_open_editor["state"]), "normal")
+
+        # 4. Agora o duplo-clique / clique no Editor abre normalmente
+        sv.on_layout_row_double_click()
+        cb_open.assert_called_once_with("[I0099]")
+
+        sv.destroy()
+
+    def test_main_window_show_layout_editor_guard(self):
+        """Verifica que MainWindow.show_layout_editor barra a abertura sem cálculo de encaixe."""
+        from unittest.mock import MagicMock, patch
+
+        class DummyMainWindow:
+            def __init__(self):
+                self.minimized_windows = []
+                self.sessions = [{"id": 1, "placed_pieces": [], "shapes": []}]
+                self.current_session = self.sessions[0]
+                self.current_material = None
+                self.layout_editor_view = MagicMock()
+                self.lbl_status_msg = MagicMock()
+                self.maximize_window = MagicMock()
+                self.restore_window = MagicMock()
+
+        from ui.main_window import MainWindow
+
+        win = DummyMainWindow()
+        # Sem peças calculadas: showwarning deve ser chamado e a janela não deve ser maximizada
+        with patch("tkinter.messagebox.showwarning") as mock_warn:
+            MainWindow.show_layout_editor(win)
+            self.assertTrue(mock_warn.called)
+            win.maximize_window.assert_not_called()
+
+        # Com peças calculadas: abre com sucesso
+        win.current_session["placed_pieces"] = [{"name": "P1", "contour": CONTOUR_CON}]
+        win.current_session["layout_name"] = "[I0001]"
+        with patch("tkinter.messagebox.showwarning") as mock_warn:
+            MainWindow.show_layout_editor(win)
+            mock_warn.assert_not_called()
+            win.maximize_window.assert_called_once_with(win.layout_editor_view)
 
 
 if __name__ == "__main__":

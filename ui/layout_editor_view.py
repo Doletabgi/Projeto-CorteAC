@@ -147,7 +147,7 @@ TARGET_SPECS = [
 
 
 class LayoutEditorView(tk.Frame):
-    def __init__(self, parent, on_close=None, on_minimize=None, on_maximize=None, layout_name="[I0000]", on_save=None, db=None, **kwargs):
+    def __init__(self, parent, on_close=None, on_minimize=None, on_maximize=None, layout_name="[I0000]", on_save=None, db=None, load_sample=False, **kwargs):
         super().__init__(parent, bg=THEME["bg_surface"], relief="ridge", bd=2, **kwargs)
         self.on_close_cb = on_close
         self.on_minimize_cb = on_minimize
@@ -158,6 +158,7 @@ class LayoutEditorView(tk.Frame):
         self.db = db or getattr(parent, "db", None)
         self.layout_id = kwargs.get("layout_id", None)
         self.layout_version = kwargs.get("layout_version", 1)
+        self.load_sample = load_sample
         self.session_id = kwargs.get("session_id", 1)
 
         # Estado da chapa (mm) - Horizontal = largura (X), Vertical = comprimento/altura (Y)
@@ -210,7 +211,7 @@ class LayoutEditorView(tk.Frame):
 
         # Moldes da barra lateral (Session Shapes ou TARGET_SPECS)
         self.session_shapes = []
-        self.sidebar_targets = []
+        self.sidebar_targets = None
         self.active_target_index = 0
         self.sidebar_div_x = 0
         self.custom_divider_x = None
@@ -731,7 +732,10 @@ class LayoutEditorView(tk.Frame):
 
             self.sidebar_targets = targets
         else:
-            self.sidebar_targets = copy.deepcopy(TARGET_SPECS)
+            if getattr(self, "load_sample", False):
+                self.sidebar_targets = copy.deepcopy(TARGET_SPECS)
+            else:
+                self.sidebar_targets = []
 
     def _get_sidebar_grid_layout(self):
         cw = self.canvas.winfo_width()
@@ -744,7 +748,7 @@ class LayoutEditorView(tk.Frame):
 
     def draw_sidebar(self, div_x, ch, cw):
         """Renderiza a barra lateral em grade de moldes com miniaturas, nomes e contadores."""
-        if not hasattr(self, "sidebar_targets") or not self.sidebar_targets:
+        if not hasattr(self, "sidebar_targets") or self.sidebar_targets is None:
             self.update_sidebar_targets()
 
         sidebar_w = cw - div_x
@@ -936,9 +940,7 @@ class LayoutEditorView(tk.Frame):
         if hasattr(self, "sidebar_targets") and self.sidebar_targets:
             idx = min(self.active_target_index, len(self.sidebar_targets) - 1)
             target = self.sidebar_targets[idx]
-        else:
-            target = TARGET_SPECS[0]
-        self.add_piece_for_target(target)
+            self.add_piece_for_target(target)
 
     def add_piece_for_target(self, target):
         """Adiciona uma nova peça na mesa garantindo que não colida."""
@@ -1007,14 +1009,17 @@ class LayoutEditorView(tk.Frame):
     # Inicialização das Peças Conforme Print Autêntico
     # -------------------------------------------------------------
     def init_default_layout(self):
-        """Inicializa chapa estática conforme as dimensões definidas e carrega layout padrão."""
+        """Inicializa chapa estática conforme as dimensões definidas."""
         if hasattr(self, "_custom_sheet_size") and self._custom_sheet_size:
             self.sheet_width, self.sheet_height = self._custom_sheet_size
         else:
             self.sheet_width = 1380.0
             self.sheet_height = 1080.0
 
-        self.load_sample_nesting()
+        if getattr(self, "load_sample", False):
+            self.load_sample_nesting()
+        else:
+            self.placed_pieces = []
 
     def load_sample_nesting(self):
         """Reproduz as 22 peças aninhadas perfeitamente na chapa conforme o print autêntico."""

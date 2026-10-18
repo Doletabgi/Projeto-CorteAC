@@ -1209,15 +1209,24 @@ class MainWindow(tk.Tk):
         shp_name = target_shape.get("name", "Molde") if target_shape else ""
         self.lbl_status_msg.config(text=f"Shape Editor: [{shp_name}] aberto na área de trabalho.")
 
-    def show_layout_editor(self, layout_name=None):
-        if self.layout_editor_view in self.minimized_windows:
-            self.restore_window(self.layout_editor_view)
-        self.maximize_window(self.layout_editor_view)
-
+    def show_layout_editor(self, layout_name=None, force=False):
         # Sincroniza moldes e peças da sessão ativa caso existam
         active_sess = self.current_session
         if not active_sess and getattr(self, "sessions", None):
             active_sess = self.sessions[0]
+
+        placed = active_sess.get("placed_pieces") if isinstance(active_sess, dict) else None
+        if not force and (not active_sess or not placed):
+            messagebox.showwarning(
+                "Layout Editor",
+                "Não há layout calculado para esta sessão.\nExecute o cálculo de encaixe (Nest) primeiro.",
+                parent=self
+            )
+            return
+
+        if self.layout_editor_view in self.minimized_windows:
+            self.restore_window(self.layout_editor_view)
+        self.maximize_window(self.layout_editor_view)
 
         if active_sess:
             sess_mat = active_sess.get("material") or self.current_material
@@ -1249,10 +1258,12 @@ class MainWindow(tk.Tk):
                         "rotation": p.get("rotation", 0.0)
                     })
                 self.layout_editor_view.placed_pieces = le_pieces
-                self.layout_editor_view.redraw()
-                self.layout_editor_view.update_status()
+            else:
+                self.layout_editor_view.placed_pieces = []
+            self.layout_editor_view.redraw()
+            self.layout_editor_view.update_status()
 
-        doc_name = layout_name or "[I0000]"
+        doc_name = layout_name or (active_sess.get("layout_name") if active_sess else None) or "[I0000]"
         self.lbl_status_msg.config(text=f"Layout Editor: {doc_name} aberto na área de trabalho.")
 
     def show_material_codes_window(self):
@@ -1907,7 +1918,7 @@ class MainWindow(tk.Tk):
 
     def on_open_lay_file(self):
         """Abre e importa um arquivo de layout .lay no Layout Editor e sincroniza com a sessão ativa."""
-        self.show_layout_editor()
+        self.show_layout_editor(force=True)
         if hasattr(self, "layout_editor_view") and self.layout_editor_view:
             self.layout_editor_view.open_layout_dialog()
 

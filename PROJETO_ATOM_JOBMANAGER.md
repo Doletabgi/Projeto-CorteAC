@@ -4,7 +4,7 @@
 > **Regra de ouro:** o que está marcado `[CONFIRMADO]` veio do relatório, do código ou do usuário. O que está `[NÃO CONFIRMADO]` é suposição e não deve virar "fato" sem validação. O que está `[PREENCHER]` o Antigravity deve completar lendo o código real.
 
 <!-- AUTO:header:start -->
-**Última sincronização com o código:** 2026-10-18 20:02 (HEAD ao gerar: `0cb99e0`; 33 arquivos Python, ~22065 linhas)
+**Última sincronização com o código:** 2026-10-18 20:55 (HEAD ao gerar: `f60527e`; 33 arquivos Python, ~22175 linhas)
 <!-- AUTO:header:end -->
 **Versão deste documento:** 1
 
@@ -167,7 +167,7 @@ ui/sort_utils.py                            # JobManager 2000 (Python Edition)
 
 ### `tests/test_layout_editor_shortcuts.py`
 - `class DummyEvent` (linha 31, 1 métodos)
-- `class TestLayoutEditorShortcuts` (linha 37, 35 métodos)
+- `class TestLayoutEditorShortcuts` (linha 37, 38 métodos)
 
 ### `tests/test_mysql_concurrency.py`
 - `class TestMySQLConcurrency` (linha 29, 4 métodos)
@@ -920,21 +920,21 @@ A ordem de corte do `.lay` para a mesa **não pode** ser aleatória:
 
 | Atalho | Estado no código | Onde |
 |---|---|---|
-| F1 | encontrado | `ui/layout_editor_view.py:453`, `ui/layout_editor_view.py:454` |
-| F2 | encontrado | `ui/layout_editor_view.py:457`, `ui/layout_editor_view.py:458`, `ui/session_view.py:390` |
-| F3 | encontrado | `ui/layout_editor_view.py:461`, `ui/layout_editor_view.py:462` |
-| F4 | encontrado | `ui/layout_editor_view.py:469`, `ui/layout_editor_view.py:470` |
-| Ctrl+Z | encontrado | `ui/layout_editor_view.py:424`, `ui/layout_editor_view.py:425`, `ui/layout_editor_view.py:426` |
-| Ctrl+S | encontrado | `ui/layout_editor_view.py:290`, `ui/layout_editor_view.py:291`, `ui/layout_editor_view.py:436` |
-| Shift+F3 | bloqueado (correto) | `ui/layout_editor_view.py:466`, `ui/layout_editor_view.py:467` |
-| Ctrl+Y | bloqueado (correto) | `ui/layout_editor_view.py:430`, `ui/layout_editor_view.py:431`, `ui/layout_editor_view.py:432` |
+| F1 | encontrado | `ui/layout_editor_view.py:454`, `ui/layout_editor_view.py:455` |
+| F2 | encontrado | `ui/layout_editor_view.py:458`, `ui/layout_editor_view.py:459`, `ui/session_view.py:390` |
+| F3 | encontrado | `ui/layout_editor_view.py:462`, `ui/layout_editor_view.py:463` |
+| F4 | encontrado | `ui/layout_editor_view.py:470`, `ui/layout_editor_view.py:471` |
+| Ctrl+Z | encontrado | `ui/layout_editor_view.py:425`, `ui/layout_editor_view.py:426`, `ui/layout_editor_view.py:427` |
+| Ctrl+S | encontrado | `ui/layout_editor_view.py:291`, `ui/layout_editor_view.py:292`, `ui/layout_editor_view.py:437` |
+| Shift+F3 | bloqueado (correto) | `ui/layout_editor_view.py:467`, `ui/layout_editor_view.py:468` |
+| Ctrl+Y | bloqueado (correto) | `ui/layout_editor_view.py:431`, `ui/layout_editor_view.py:432`, `ui/layout_editor_view.py:433` |
 
 **Todos os atalhos detectados no código:**
 
 | Atalho | Local | Linha |
 |---|---|---|
-| Alt+Down | `ui/session_view.py:1784` | `entry.bind("<Alt-Down>", lambda e: adjust_number(-1))` |
-| Alt+Up | `ui/session_view.py:1783` | `entry.bind("<Alt-Up>", lambda e: adjust_number(+1))` |
+| Alt+Down | `ui/session_view.py:1801` | `entry.bind("<Alt-Down>", lambda e: adjust_number(-1))` |
+| Alt+Up | `ui/session_view.py:1800` | `entry.bind("<Alt-Up>", lambda e: adjust_number(+1))` |
 | Backspace | `ui/cad_canvas.py:69` | `self.master.bind("<BackSpace>", lambda e: self.delete_selected())` |
 | Backspace | `ui/main_window.py:545` | `self.bind_all("<BackSpace>", self.on_global_delete_key, add="+")` |
 | Ctrl+A | `ui/main_window.py:257` | `edit_menu.add_command(label="Selecionar tudo", accelerator="Ctrl+A", command=sel` |
@@ -943,43 +943,43 @@ A ordem de corte do `.lay` para a mesa **não pode** ser aleatória:
 | Ctrl+A | `ui/main_window.py:548` | `self.bind_all("<Control-Key-a>", self.on_select_all, add="+")` |
 | Ctrl+A | `ui/main_window.py:549` | `self.bind_all("<Control-Key-A>", self.on_select_all, add="+")` |
 | Ctrl+C | `ui/main_window.py:253` | `edit_menu.add_command(label="Copiar", accelerator="Ctrl+C")` |
-| Ctrl+Down | `ui/session_view.py:1782` | `entry.bind("<Control-Down>", lambda e: adjust_number(-1))` |
-| Ctrl+Equal | `ui/layout_editor_view.py:414` | `w.bind("<Control-equal>", lambda e: (self.zoom_in(), "break")[1])` |
-| Ctrl+Minus | `ui/layout_editor_view.py:415` | `w.bind("<Control-minus>", lambda e: (self.zoom_out(), "break")[1])` |
-| Ctrl+O | `ui/layout_editor_view.py:441` | `self.canvas.bind("<Control-o>", self.open_layout_dialog)` |
-| Ctrl+O | `ui/layout_editor_view.py:442` | `self.canvas.bind("<Control-O>", self.open_layout_dialog)` |
-| Ctrl+O | `ui/layout_editor_view.py:443` | `self.bind("<Control-o>", self.open_layout_dialog)` |
-| Ctrl+O | `ui/layout_editor_view.py:444` | `self.bind("<Control-O>", self.open_layout_dialog)` |
-| Ctrl+P | `ui/layout_editor_view.py:288` | `self.bind("<Control-p>", lambda e: self.print_layout())` |
-| Ctrl+P | `ui/layout_editor_view.py:289` | `self.bind("<Control-P>", lambda e: self.print_layout())` |
-| Ctrl+P | `ui/layout_editor_view.py:448` | `w.bind("<Control-p>", lambda e: (self.print_layout(), "break")[1])` |
-| Ctrl+P | `ui/layout_editor_view.py:449` | `w.bind("<Control-P>", lambda e: (self.print_layout(), "break")[1])` |
+| Ctrl+Down | `ui/session_view.py:1799` | `entry.bind("<Control-Down>", lambda e: adjust_number(-1))` |
+| Ctrl+Equal | `ui/layout_editor_view.py:415` | `w.bind("<Control-equal>", lambda e: (self.zoom_in(), "break")[1])` |
+| Ctrl+Minus | `ui/layout_editor_view.py:416` | `w.bind("<Control-minus>", lambda e: (self.zoom_out(), "break")[1])` |
+| Ctrl+O | `ui/layout_editor_view.py:442` | `self.canvas.bind("<Control-o>", self.open_layout_dialog)` |
+| Ctrl+O | `ui/layout_editor_view.py:443` | `self.canvas.bind("<Control-O>", self.open_layout_dialog)` |
+| Ctrl+O | `ui/layout_editor_view.py:444` | `self.bind("<Control-o>", self.open_layout_dialog)` |
+| Ctrl+O | `ui/layout_editor_view.py:445` | `self.bind("<Control-O>", self.open_layout_dialog)` |
+| Ctrl+P | `ui/layout_editor_view.py:289` | `self.bind("<Control-p>", lambda e: self.print_layout())` |
+| Ctrl+P | `ui/layout_editor_view.py:290` | `self.bind("<Control-P>", lambda e: self.print_layout())` |
+| Ctrl+P | `ui/layout_editor_view.py:449` | `w.bind("<Control-p>", lambda e: (self.print_layout(), "break")[1])` |
+| Ctrl+P | `ui/layout_editor_view.py:450` | `w.bind("<Control-P>", lambda e: (self.print_layout(), "break")[1])` |
 | Ctrl+P | `ui/layout_print_dialog.py:248` | `self.bind("<Control-p>", lambda e: self.do_print())` |
 | Ctrl+P | `ui/layout_print_dialog.py:249` | `self.bind("<Control-P>", lambda e: self.do_print())` |
 | Ctrl+P | `ui/main_window.py:66` | `self.bind("<Control-p>", self.handle_ctrl_p)` |
 | Ctrl+P | `ui/main_window.py:67` | `self.bind("<Control-P>", self.handle_ctrl_p)` |
-| Ctrl+Plus | `ui/layout_editor_view.py:413` | `w.bind("<Control-plus>", lambda e: (self.zoom_in(), "break")[1])` |
-| Ctrl+Q | `ui/layout_editor_view.py:411` | `w.bind("<Control-q>", lambda e: (self.zoom_in(), "break")[1])` |
-| Ctrl+Q | `ui/layout_editor_view.py:412` | `w.bind("<Control-Q>", lambda e: (self.zoom_in(), "break")[1])` |
-| Ctrl+S | `ui/layout_editor_view.py:290` | `self.bind("<Control-s>", self.save_layout)` |
-| Ctrl+S | `ui/layout_editor_view.py:291` | `self.bind("<Control-S>", self.save_layout)` |
-| Ctrl+S | `ui/layout_editor_view.py:436` | `self.canvas.bind("<Control-s>", self.save_layout)` |
-| Ctrl+S | `ui/layout_editor_view.py:437` | `self.canvas.bind("<Control-S>", self.save_layout)` |
-| Ctrl+S | `ui/layout_editor_view.py:438` | `self.bind("<Control-s>", self.save_layout)` |
-| Ctrl+S | `ui/layout_editor_view.py:439` | `self.bind("<Control-S>", self.save_layout)` |
+| Ctrl+Plus | `ui/layout_editor_view.py:414` | `w.bind("<Control-plus>", lambda e: (self.zoom_in(), "break")[1])` |
+| Ctrl+Q | `ui/layout_editor_view.py:412` | `w.bind("<Control-q>", lambda e: (self.zoom_in(), "break")[1])` |
+| Ctrl+Q | `ui/layout_editor_view.py:413` | `w.bind("<Control-Q>", lambda e: (self.zoom_in(), "break")[1])` |
+| Ctrl+S | `ui/layout_editor_view.py:291` | `self.bind("<Control-s>", self.save_layout)` |
+| Ctrl+S | `ui/layout_editor_view.py:292` | `self.bind("<Control-S>", self.save_layout)` |
+| Ctrl+S | `ui/layout_editor_view.py:437` | `self.canvas.bind("<Control-s>", self.save_layout)` |
+| Ctrl+S | `ui/layout_editor_view.py:438` | `self.canvas.bind("<Control-S>", self.save_layout)` |
+| Ctrl+S | `ui/layout_editor_view.py:439` | `self.bind("<Control-s>", self.save_layout)` |
+| Ctrl+S | `ui/layout_editor_view.py:440` | `self.bind("<Control-S>", self.save_layout)` |
 | Ctrl+S | `ui/main_window.py:64` | `self.bind("<Control-s>", self.handle_ctrl_s)` |
 | Ctrl+S | `ui/main_window.py:65` | `self.bind("<Control-S>", self.handle_ctrl_s)` |
-| Ctrl+Up | `ui/session_view.py:1781` | `entry.bind("<Control-Up>", lambda e: adjust_number(+1))` |
+| Ctrl+Up | `ui/session_view.py:1798` | `entry.bind("<Control-Up>", lambda e: adjust_number(+1))` |
 | Ctrl+V | `ui/main_window.py:254` | `edit_menu.add_command(label="Colar", accelerator="Ctrl+V")` |
 | Ctrl+X | `ui/main_window.py:252` | `edit_menu.add_command(label="Recortar", accelerator="Ctrl+X")` |
-| Ctrl+Y | `ui/layout_editor_view.py:430` | `self.canvas.bind("<Control-y>", lambda e: "break")` |
-| Ctrl+Y | `ui/layout_editor_view.py:431` | `self.canvas.bind("<Control-Y>", lambda e: "break")` |
-| Ctrl+Y | `ui/layout_editor_view.py:432` | `self.bind("<Control-y>", lambda e: "break")` |
-| Ctrl+Y | `ui/layout_editor_view.py:433` | `self.bind("<Control-Y>", lambda e: "break")` |
-| Ctrl+Z | `ui/layout_editor_view.py:424` | `self.canvas.bind("<Control-z>", self.undo_action)` |
-| Ctrl+Z | `ui/layout_editor_view.py:425` | `self.canvas.bind("<Control-Z>", self.undo_action)` |
-| Ctrl+Z | `ui/layout_editor_view.py:426` | `self.bind("<Control-z>", self.undo_action)` |
-| Ctrl+Z | `ui/layout_editor_view.py:427` | `self.bind("<Control-Z>", self.undo_action)` |
+| Ctrl+Y | `ui/layout_editor_view.py:431` | `self.canvas.bind("<Control-y>", lambda e: "break")` |
+| Ctrl+Y | `ui/layout_editor_view.py:432` | `self.canvas.bind("<Control-Y>", lambda e: "break")` |
+| Ctrl+Y | `ui/layout_editor_view.py:433` | `self.bind("<Control-y>", lambda e: "break")` |
+| Ctrl+Y | `ui/layout_editor_view.py:434` | `self.bind("<Control-Y>", lambda e: "break")` |
+| Ctrl+Z | `ui/layout_editor_view.py:425` | `self.canvas.bind("<Control-z>", self.undo_action)` |
+| Ctrl+Z | `ui/layout_editor_view.py:426` | `self.canvas.bind("<Control-Z>", self.undo_action)` |
+| Ctrl+Z | `ui/layout_editor_view.py:427` | `self.bind("<Control-z>", self.undo_action)` |
+| Ctrl+Z | `ui/layout_editor_view.py:428` | `self.bind("<Control-Z>", self.undo_action)` |
 | Ctrl+Z | `ui/main_window.py:250` | `edit_menu.add_command(label="Desfazer / Reverter", accelerator="Ctrl+Z", command` |
 | Ctrl+Z | `ui/main_window.py:550` | `self.bind_all("<Control-z>", self.on_global_undo, add="+")` |
 | Ctrl+Z | `ui/main_window.py:551` | `self.bind_all("<Control-Z>", self.on_global_undo, add="+")` |
@@ -994,74 +994,74 @@ A ordem de corte do `.lay` para a mesa **não pode** ser aleatória:
 | Ctrl+Z | `ui/shape_editor_view.py:214` | `self.canvas.bind("<Control-Key-z>", self.undo_or_revert)` |
 | Ctrl+Z | `ui/shape_editor_view.py:215` | `self.canvas.bind("<Control-Key-Z>", self.undo_or_revert)` |
 | Delete | `ui/cad_canvas.py:68` | `self.master.bind("<Delete>", lambda e: self.delete_selected())` |
-| Delete | `ui/layout_editor_view.py:475` | `self.bind_all("<Delete>", lambda e: self.delete_selected())` |
+| Delete | `ui/layout_editor_view.py:476` | `self.bind_all("<Delete>", lambda e: self.delete_selected())` |
 | Delete | `ui/main_window.py:255` | `edit_menu.add_command(label="Excluir", accelerator="Del", command=self.on_global` |
 | Delete | `ui/main_window.py:544` | `self.bind_all("<Delete>", self.on_global_delete_key, add="+")` |
-| Delete | `ui/main_window.py:2336` | `accelerator="Del",` |
-| Delete | `ui/main_window.py:2355` | `accelerator="Del",` |
-| Delete | `ui/main_window.py:2576` | `accelerator="Del",` |
-| Delete | `ui/main_window.py:2595` | `accelerator="Del",` |
+| Delete | `ui/main_window.py:2347` | `accelerator="Del",` |
+| Delete | `ui/main_window.py:2366` | `accelerator="Del",` |
+| Delete | `ui/main_window.py:2587` | `accelerator="Del",` |
+| Delete | `ui/main_window.py:2606` | `accelerator="Del",` |
 | Delete | `ui/session_view.py:387` | `self.tree_shapes.bind("<Delete>", lambda e: self.delete_selected_shape())` |
-| Down | `ui/layout_editor_view.py:479` | `self.bind_all("<Down>", lambda e: self.nudge_selected(0, -5))` |
-| Down | `ui/session_view.py:1768` | `entry.bind("<Down>", move_down)` |
+| Down | `ui/layout_editor_view.py:480` | `self.bind_all("<Down>", lambda e: self.nudge_selected(0, -5))` |
+| Down | `ui/session_view.py:1785` | `entry.bind("<Down>", move_down)` |
 | Escape | `ui/dieproc_dialog.py:39` | `self.bind("<Escape>", lambda e: self.destroy())` |
 | Escape | `ui/edit_shape_in_session_dialog.py:147` | `self.bind("<Escape>", lambda e: self.destroy())` |
 | Escape | `ui/layout_print_dialog.py:251` | `self.bind("<Escape>", self.on_escape)` |
 | Escape | `ui/main_window.py:63` | `self.bind("<Escape>", self.exit_fullscreen)` |
 | Escape | `ui/main_window.py:543` | `self.bind_all("<Escape>", self.dismiss_popup_menus, add="+")` |
-| Escape | `ui/main_window.py:2851` | `dialog.bind("<Escape>", lambda e: dialog.destroy())` |
+| Escape | `ui/main_window.py:2862` | `dialog.bind("<Escape>", lambda e: dialog.destroy())` |
 | Escape | `ui/material_codes_view.py:466` | `dlg.bind("<Escape>", lambda e: dlg.destroy())` |
 | Escape | `ui/options_dialog.py:40` | `self.bind("<Escape>", lambda e: self.on_cancel())` |
-| Escape | `ui/session_view.py:1409` | `entry.bind("<Escape>", cancel)` |
-| Escape | `ui/session_view.py:1484` | `dialog.bind("<Escape>", lambda e: dialog.destroy())` |
-| Escape | `ui/session_view.py:1777` | `entry.bind("<Escape>", cancel_edit)` |
-| F1 | `ui/layout_editor_view.py:453` | `w.bind("<F1>", self.on_f1_press)` |
-| F1 | `ui/layout_editor_view.py:454` | `w.bind("<Key-F1>", self.on_f1_press)` |
+| Escape | `ui/session_view.py:1426` | `entry.bind("<Escape>", cancel)` |
+| Escape | `ui/session_view.py:1501` | `dialog.bind("<Escape>", lambda e: dialog.destroy())` |
+| Escape | `ui/session_view.py:1794` | `entry.bind("<Escape>", cancel_edit)` |
+| F1 | `ui/layout_editor_view.py:454` | `w.bind("<F1>", self.on_f1_press)` |
+| F1 | `ui/layout_editor_view.py:455` | `w.bind("<Key-F1>", self.on_f1_press)` |
 | F11 | `ui/layout_print_dialog.py:250` | `self.bind("<F11>", self.toggle_fullscreen)` |
 | F11 | `ui/main_window.py:62` | `self.bind("<F11>", self.toggle_fullscreen)` |
-| F2 | `ui/layout_editor_view.py:457` | `w.bind("<F2>", self.on_f2_press)` |
-| F2 | `ui/layout_editor_view.py:458` | `w.bind("<Key-F2>", self.on_f2_press)` |
+| F2 | `ui/layout_editor_view.py:458` | `w.bind("<F2>", self.on_f2_press)` |
+| F2 | `ui/layout_editor_view.py:459` | `w.bind("<Key-F2>", self.on_f2_press)` |
 | F2 | `ui/session_view.py:390` | `self.tree_shapes.bind("<F2>", self.on_tree_shape_f2)` |
 | F2 | `ui/session_view.py:530` | `self.tree_mat.bind("<F2>", self.on_mat_f2_key)` |
-| F3 | `ui/layout_editor_view.py:461` | `w.bind("<F3>", self.on_f3_press)` |
-| F3 | `ui/layout_editor_view.py:462` | `w.bind("<Key-F3>", self.on_f3_press)` |
-| F4 | `ui/layout_editor_view.py:469` | `w.bind("<F4>", self.on_f4_press)` |
-| F4 | `ui/layout_editor_view.py:470` | `w.bind("<Key-F4>", self.on_f4_press)` |
+| F3 | `ui/layout_editor_view.py:462` | `w.bind("<F3>", self.on_f3_press)` |
+| F3 | `ui/layout_editor_view.py:463` | `w.bind("<Key-F3>", self.on_f3_press)` |
+| F4 | `ui/layout_editor_view.py:470` | `w.bind("<F4>", self.on_f4_press)` |
+| F4 | `ui/layout_editor_view.py:471` | `w.bind("<Key-F4>", self.on_f4_press)` |
 | F5 | `ui/main_window.py:105` | `self.bind_all("<F5>", lambda e: self.on_refresh_f5())` |
 | F5 | `ui/main_window.py:273` | `tools_menu.add_command(label="Atualizar", accelerator="F5", command=self.on_refr` |
-| Kp_down | `ui/session_view.py:1769` | `entry.bind("<KP_Down>", move_down)` |
+| Kp_down | `ui/session_view.py:1786` | `entry.bind("<KP_Down>", move_down)` |
 | Kp_enter | `ui/session_view.py:389` | `self.tree_shapes.bind("<KP_Enter>", self.on_tree_shape_enter)` |
-| Kp_enter | `ui/session_view.py:1773` | `entry.bind("<KP_Enter>", move_down)` |
-| Kp_up | `ui/session_view.py:1771` | `entry.bind("<KP_Up>", move_up)` |
-| Left | `ui/layout_editor_view.py:476` | `self.bind_all("<Left>", lambda e: self.nudge_selected(-5, 0))` |
+| Kp_enter | `ui/session_view.py:1790` | `entry.bind("<KP_Enter>", move_down)` |
+| Kp_up | `ui/session_view.py:1788` | `entry.bind("<KP_Up>", move_up)` |
+| Left | `ui/layout_editor_view.py:477` | `self.bind_all("<Left>", lambda e: self.nudge_selected(-5, 0))` |
 | R | `ui/cad_canvas.py:66` | `self.master.bind("<r>", lambda e: self.rotate_selected(45))` |
 | R | `ui/cad_canvas.py:67` | `self.master.bind("<R>", lambda e: self.rotate_selected(45))` |
-| R | `ui/layout_editor_view.py:473` | `self.bind_all("<Key-r>", lambda e: self.rotate_selected(45))` |
-| R | `ui/layout_editor_view.py:474` | `self.bind_all("<Key-R>", lambda e: self.rotate_selected(45))` |
+| R | `ui/layout_editor_view.py:474` | `self.bind_all("<Key-r>", lambda e: self.rotate_selected(45))` |
+| R | `ui/layout_editor_view.py:475` | `self.bind_all("<Key-R>", lambda e: self.rotate_selected(45))` |
 | Return | `ui/edit_shape_in_session_dialog.py:146` | `self.bind("<Return>", lambda e: self.on_save())` |
-| Return | `ui/main_window.py:2850` | `dialog.bind("<Return>", lambda e: save())` |
+| Return | `ui/main_window.py:2861` | `dialog.bind("<Return>", lambda e: save())` |
 | Return | `ui/material_codes_view.py:199` | `self.tree.bind("<Return>", lambda e: self.open_edit_selected_dialog())` |
 | Return | `ui/material_codes_view.py:465` | `dlg.bind("<Return>", lambda e: save_action())` |
 | Return | `ui/session_view.py:312` | `self.entry_sname.bind("<Return>", self._on_entry_sname_commit)` |
 | Return | `ui/session_view.py:388` | `self.tree_shapes.bind("<Return>", self.on_tree_shape_enter)` |
 | Return | `ui/session_view.py:529` | `self.tree_mat.bind("<Return>", self.on_mat_enter_key)` |
-| Return | `ui/session_view.py:1407` | `entry.bind("<Return>", lambda e: commit())` |
-| Return | `ui/session_view.py:1483` | `dialog.bind("<Return>", lambda e: save())` |
-| Return | `ui/session_view.py:1772` | `entry.bind("<Return>", move_down)` |
+| Return | `ui/session_view.py:1424` | `entry.bind("<Return>", lambda e: commit())` |
+| Return | `ui/session_view.py:1500` | `dialog.bind("<Return>", lambda e: save())` |
+| Return | `ui/session_view.py:1789` | `entry.bind("<Return>", move_down)` |
 | Return | `ui/shape_editor_view.py:276` | `self.entry_name.bind("<Return>", lambda e: self.on_name_change())` |
 | Return | `ui/shape_editor_view.py:309` | `self.entry_vx.bind("<Return>", self.on_vertex_entry_change)` |
 | Return | `ui/shape_editor_view.py:314` | `self.entry_vy.bind("<Return>", self.on_vertex_entry_change)` |
-| Right | `ui/layout_editor_view.py:477` | `self.bind_all("<Right>", lambda e: self.nudge_selected(5, 0))` |
-| Shift+F3 | `ui/layout_editor_view.py:466` | `w.bind("<Shift-F3>", lambda e: "break")` |
-| Shift+F3 | `ui/layout_editor_view.py:467` | `w.bind("<Shift-Key-F3>", lambda e: "break")` |
-| Shift+Return | `ui/session_view.py:1774` | `entry.bind("<Shift-Return>", move_up)` |
-| Shift+Tab | `ui/session_view.py:1411` | `entry.bind("<Shift-Tab>", on_shift_tab)` |
-| Shift+Tab | `ui/session_view.py:1776` | `entry.bind("<Shift-Tab>", move_up)` |
+| Right | `ui/layout_editor_view.py:478` | `self.bind_all("<Right>", lambda e: self.nudge_selected(5, 0))` |
+| Shift+F3 | `ui/layout_editor_view.py:467` | `w.bind("<Shift-F3>", lambda e: "break")` |
+| Shift+F3 | `ui/layout_editor_view.py:468` | `w.bind("<Shift-Key-F3>", lambda e: "break")` |
+| Shift+Return | `ui/session_view.py:1791` | `entry.bind("<Shift-Return>", move_up)` |
+| Shift+Tab | `ui/session_view.py:1428` | `entry.bind("<Shift-Tab>", on_shift_tab)` |
+| Shift+Tab | `ui/session_view.py:1793` | `entry.bind("<Shift-Tab>", move_up)` |
 | Space | `ui/add_shapes_dialog.py:135` | `self.tree.bind("<space>", self.on_tree_space)` |
-| Tab | `ui/session_view.py:1410` | `entry.bind("<Tab>", on_tab)` |
-| Tab | `ui/session_view.py:1775` | `entry.bind("<Tab>", move_down)` |
-| Up | `ui/layout_editor_view.py:478` | `self.bind_all("<Up>", lambda e: self.nudge_selected(0, 5))` |
-| Up | `ui/session_view.py:1770` | `entry.bind("<Up>", move_up)` |
+| Tab | `ui/session_view.py:1427` | `entry.bind("<Tab>", on_tab)` |
+| Tab | `ui/session_view.py:1792` | `entry.bind("<Tab>", move_down)` |
+| Up | `ui/layout_editor_view.py:479` | `self.bind_all("<Up>", lambda e: self.nudge_selected(0, 5))` |
+| Up | `ui/session_view.py:1787` | `entry.bind("<Up>", move_up)` |
 
 **Conflitos reais detectados:**
 
@@ -1232,12 +1232,14 @@ Local: `/home/dola/Documentos/clone do job/antigo/arquivos pos instalacao/Common
 | Dom, 18/10/2026 | 19:18 | Antigravity | Remoção de prefixo forçado de ID (#id) nos nós da árvore ao renomear sessão e preservação do SessId numérico na tabela inferior: criação de helper utilitário `clean_session_display_name` em `ui/sort_utils.py` para remoção consistente de prefixos automáticos como '(#3)' ou '( #3 )'; exibição direta do nome customizado (ex: '121805') na Treeview de Produção sem prefixos artificiais, idêntico ao software original ATOM; preenchimento automático do diálogo de renomeação (`on_rename_tree_item`) com o nome limpo e atualização no banco de dados e memória; sincronização bidirecional na edição direta pelo campo de nome da sessão (`SessionView.entry_sname`); preservação estrita do identificador numérico original da sessão na coluna `SessId` da tabela inferior (`grid_lower`); 3 novos testes unitários dedicados (71/71 testes passando) e recompilação do executável standalone Linux (`teste_dola_linux`) | `ui/sort_utils.py`, `ui/main_window.py`, `ui/session_view.py`, `tests/test_layout_editor_shortcuts.py`, `PROJETO_ATOM_JOBMANAGER.md`, `teste_dola_linux`, `dist/teste_dola` |
 | Dom, 18/10/2026 | 19:40 | Antigravity | Opção de exclusão de artigos/pedidos e desacoplamento de artigos no sistema: inclusão de comando 'Excluir Artigo' / 'Excluir' no menu de contexto com clique direito em artigos na árvore (`ui/main_window.py`) e suporte à tecla Delete/Backspace; exclusão segura em `database.py` (`delete_order` e `delete_article`) desvinculando sessões (`order_id = NULL`) e moldes (`article_id = NULL`) sem perda de geometria nem violação de integridade referencial; alteração dos esquemas MySQL 8.0 e SQLite para permitir `order_id` e `article_id` nulos com `ON DELETE SET NULL`; eliminação da recriação automática forçada de artigos de exemplo ('Derby Masculino #41') na criação de sessões; 1 novo teste unitário dedicado (72/72 testes passando) e recompilação do executável standalone Linux (`teste_dola_linux`) | `database.py`, `ui/main_window.py`, `db/schema_mysql.sql`, `db/migrations/001_initial_mysql_schema.sql`, `tests/test_layout_editor_shortcuts.py`, `PROJETO_ATOM_JOBMANAGER.md`, `teste_dola_linux`, `dist/teste_dola` |
 | Dom, 18/10/2026 | 20:02 | Antigravity | Opção de exclusão de materiais clicando com o mouse na árvore e no grid (`MainWindow`): implementação de menu de contexto dinâmico no clique com botão direito sobre materiais na Treeview (`tree_main`) e no DataGrid inferior (`grid_lower`) exibindo 'Excluir Material' (Del) e 'Excluir', além de suporte a exclusão em lote; exclusão segura em `database.py` (`delete_material`) desvinculando sessões (`material_id = NULL`) e artigos (`material_id = NULL`) sem violação de FK nem perda de dados; migração dos esquemas MySQL 8.0 e SQLite para suportar `material_id` anulável com `ON DELETE SET NULL`; sincronização e recarga imediata em cache, árvore, grid, janelas de sessão e códigos de materiais (`refresh_materials_everywhere`); 2 novos testes unitários dedicados (74/74 testes passando) e recompilação do executável standalone Linux (`teste_dola_linux`) | `database.py`, `ui/main_window.py`, `db/schema_mysql.sql`, `db/migrations/001_initial_mysql_schema.sql`, `tests/test_layout_editor_shortcuts.py`, `tests/test_db_layer.py`, `PROJETO_ATOM_JOBMANAGER.md`, `teste_dola_linux`, `dist/teste_dola` |
+| Dom, 18/10/2026 | 20:55 | Antigravity | Bloqueio de abertura do Layout Editor sem cálculo prévio de encaixe e eliminação de peças fantasmas em sessões em branco: desativação do botão 'Editor...' na aba Layout da sessão quando não há layout calculado (`btn_open_editor["state"] = "disabled"`); bloqueio com alerta explicativo ('Não há layout calculado para esta sessão. Execute o cálculo de encaixe (Nest) primeiro.') ao tentar abrir via duplo-clique na lista ou no mini-preview, menu de contexto da tabela de layout, menus superiores (Arquivo/Ferramentas/Janela), barra de ferramentas (`btn_lay`) e menu da árvore (`MainWindow.show_layout_editor`); eliminação de injeção automática de 22 peças fictícias e moldes de exemplo (`load_sample_nesting`, `TARGET_SPECS`) no `LayoutEditorView` por padrão (`load_sample=False`); sincronização dinâmica de estado do botão ao executar Nesting ou limpar layout; 3 novos testes unitários dedicados (77/77 testes passando) e recompilação do executável standalone Linux (`teste_dola_linux`) | `ui/layout_editor_view.py`, `ui/session_view.py`, `ui/main_window.py`, `tests/test_layout_editor_shortcuts.py`, `PROJETO_ATOM_JOBMANAGER.md`, `teste_dola_linux`, `dist/teste_dola` |
 
 **Commits recentes (automático):**
 
 <!-- AUTO:gitlog:start -->
 | Commit | Data | Autor | Mensagem |
 |---|---|---|---|
+| `f60527e` | 2026-10-18 | Doletabgi | feat(ui): opcao de excluir material clicando com o mouse na arvore e no grid |
 | `0cb99e0` | 2026-10-18 | Doletabgi | feat(ui): opcao de exclusao de artigos e desacoplamento do uso de artigos no sistema |
 | `9a41755` | 2026-10-18 | Doletabgi | feat(ui): remover prefixo forçado de ID da árvore ao renomear sessão e preservar SessId original |
 | `83075c2` | 2026-10-18 | Doletabgi | feat(ui): suporte completo a criacao e gestao de subpastas em producao |
@@ -1252,7 +1254,6 @@ Local: `/home/dola/Documentos/clone do job/antigo/arquivos pos instalacao/Common
 | `68b8648` | 2026-10-18 | Doletabgi | feat(ui): habilitar zoom de 20% ao clicar na ferramenta e atalho Ctrl+Clique no canvas |
 | `9d88e22` | 2026-10-18 | Doletabgi | feat(ui): digitacao continua de pares via setas cima/baixo e enter |
 | `8ce8ae4` | 2026-10-18 | Doletabgi | docs: sincronizar header e gitlog do PROJETO_ATOM_JOBMANAGER.md |
-| `b9d44c6` | 2026-10-18 | Doletabgi | feat(ui): classificar moldes e tamanhos do maior para o menor e vice-versa |
 <!-- AUTO:gitlog:end -->
 
 ---
