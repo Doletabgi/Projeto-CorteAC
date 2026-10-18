@@ -472,6 +472,61 @@ class LayoutPrintDialog(tk.Toplevel):
             tags="print_bed"
         )
 
+        # Grade Milimétrica e Marcações de 10 em 10 cm no Relatório (como no Editor)
+        grid_step = 100.0  # 100 mm = 10 cm
+        tick_len = max(2.0, 2.5 * self.zoom)
+        f_ruler = ("Courier", max(5, int(6.0 * self.zoom)))
+
+        cur_wx = 0.0
+        while cur_wx <= self.sheet_w_mm + 0.1:
+            gx = bed_x + cur_wx * bed_scale
+            # Linha de grade vertical sutil interna
+            if 0.5 < cur_wx < self.sheet_w_mm - 0.5:
+                self.canvas.create_line(gx, bed_y, gx, bed_y + bed_h, fill="#d0d0d0", width=1, tags="print_grid")
+
+            # Ticks superior e inferior
+            self.canvas.create_line(gx, bed_y + bed_h - tick_len, gx, bed_y + bed_h + tick_len, fill="#000000", width=1, tags="print_tick")
+            self.canvas.create_line(gx, bed_y - tick_len, gx, bed_y + tick_len, fill="#000000", width=1, tags="print_tick")
+
+            # Numeração inferior em cm (10, 20, 30...)
+            cm_x = int(round(cur_wx / 10.0))
+            if cm_x > 0 and cur_wx < self.sheet_w_mm - 0.5:
+                self.canvas.create_text(
+                    gx, bed_y + bed_h + tick_len + 2,
+                    text=str(cm_x),
+                    font=f_ruler,
+                    fill="#000000",
+                    anchor="n",
+                    tags="print_label"
+                )
+
+            cur_wx += grid_step
+
+        cur_wy = 0.0
+        while cur_wy <= self.sheet_h_mm + 0.1:
+            gy = bed_y + bed_h - cur_wy * bed_scale
+            # Linha de grade horizontal sutil interna
+            if 0.5 < cur_wy < self.sheet_h_mm - 0.5:
+                self.canvas.create_line(bed_x, gy, bed_x + bed_w, gy, fill="#d0d0d0", width=1, tags="print_grid")
+
+            # Ticks esquerda e direita
+            self.canvas.create_line(bed_x - tick_len, gy, bed_x + tick_len, gy, fill="#000000", width=1, tags="print_tick")
+            self.canvas.create_line(bed_x + bed_w - tick_len, gy, bed_x + bed_w + tick_len, gy, fill="#000000", width=1, tags="print_tick")
+
+            # Numeração direita em cm (10, 20, 30...)
+            cm_y = int(round(cur_wy / 10.0))
+            if cm_y > 0 and cur_wy < self.sheet_h_mm - 0.5:
+                self.canvas.create_text(
+                    bed_x + bed_w + tick_len + 3, gy,
+                    text=str(cm_y),
+                    font=f_ruler,
+                    fill="#000000",
+                    anchor="w",
+                    tags="print_label"
+                )
+
+            cur_wy += grid_step
+
         # Desenha cada peça encaixada na chapa
         for piece in self.placed_pieces:
             c = piece.get("contour", [])
@@ -492,8 +547,10 @@ class LayoutPrintDialog(tk.Toplevel):
 
             scr_coords = []
             for pt in c:
-                rx = pt["x"] * cos_r - pt["y"] * sin_r + cx
-                ry = pt["x"] * sin_r + pt["y"] * cos_r + cy
+                px_val = pt["x"] if isinstance(pt, dict) else pt[0]
+                py_val = pt["y"] if isinstance(pt, dict) else pt[1]
+                rx = px_val * cos_r - py_val * sin_r + cx
+                ry = px_val * sin_r + py_val * cos_r + cy
 
                 sx = bed_x + rx * bed_scale
                 sy = bed_y + (self.sheet_h_mm - ry) * bed_scale
@@ -538,11 +595,13 @@ class LayoutPrintDialog(tk.Toplevel):
             f_mono_bold = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSansMono-Bold.ttf", int(9 * scale))
             f_title = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSansMono-Bold.ttf", int(14 * scale))
             f_small = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSansMono.ttf", int(7.5 * scale))
+            f_ruler = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSansMono.ttf", max(6, int(6.0 * scale)))
         except Exception:
             f_mono = ImageFont.load_default()
             f_mono_bold = f_mono
             f_title = f_mono
             f_small = f_mono
+            f_ruler = f_mono
 
         m_left = int(36 * scale)
         m_right = pw - int(36 * scale)
@@ -617,6 +676,51 @@ class LayoutPrintDialog(tk.Toplevel):
 
         draw.rectangle([bed_x, bed_y, bed_x + bed_w, bed_y + bed_h], outline="black", width=max(1, int(scale)))
 
+        # Grade e Marcações de 10 em 10 cm na Impressão/Exportação
+        grid_step = 100.0  # 100 mm = 10 cm
+        tick_px = max(2, int(2.5 * scale))
+        line_w = max(1, int(0.75 * scale))
+
+        cur_wx = 0.0
+        while cur_wx <= self.sheet_w_mm + 0.1:
+            gx = bed_x + int(round(cur_wx * scale_bed))
+            # Linha de grade vertical interna sutil
+            if 0.5 < cur_wx < self.sheet_w_mm - 0.5:
+                draw.line([gx, bed_y, gx, bed_y + bed_h], fill="#d0d0d0", width=line_w)
+
+            # Ticks superior e inferior
+            draw.line([gx, bed_y + bed_h - tick_px, gx, bed_y + bed_h + tick_px], fill="black", width=line_w)
+            draw.line([gx, bed_y - tick_px, gx, bed_y + tick_px], fill="black", width=line_w)
+
+            # Numeração inferior em cm (10, 20, 30...)
+            cm_x = int(round(cur_wx / 10.0))
+            if cm_x > 0 and cur_wx < self.sheet_w_mm - 0.5:
+                bbox = draw.textbbox((0, 0), str(cm_x), font=f_ruler)
+                tw = bbox[2] - bbox[0]
+                draw.text((gx - tw // 2, bed_y + bed_h + tick_px + 2), str(cm_x), fill="black", font=f_ruler)
+
+            cur_wx += grid_step
+
+        cur_wy = 0.0
+        while cur_wy <= self.sheet_h_mm + 0.1:
+            gy = bed_y + bed_h - int(round(cur_wy * scale_bed))
+            # Linha de grade horizontal interna sutil
+            if 0.5 < cur_wy < self.sheet_h_mm - 0.5:
+                draw.line([bed_x, gy, bed_x + bed_w, gy], fill="#d0d0d0", width=line_w)
+
+            # Ticks esquerda e direita
+            draw.line([bed_x - tick_px, gy, bed_x + tick_px, gy], fill="black", width=line_w)
+            draw.line([bed_x + bed_w - tick_px, gy, bed_x + bed_w + tick_px, gy], fill="black", width=line_w)
+
+            # Numeração direita em cm (10, 20, 30...)
+            cm_y = int(round(cur_wy / 10.0))
+            if cm_y > 0 and cur_wy < self.sheet_h_mm - 0.5:
+                bbox = draw.textbbox((0, 0), str(cm_y), font=f_ruler)
+                th = bbox[3] - bbox[1]
+                draw.text((bed_x + bed_w + tick_px + 3, gy - th // 2), str(cm_y), fill="black", font=f_ruler)
+
+            cur_wy += grid_step
+
         for piece in self.placed_pieces:
             c = piece.get("contour", [])
             if not c:
@@ -635,8 +739,10 @@ class LayoutPrintDialog(tk.Toplevel):
 
             poly_pts = []
             for pt in c:
-                rx = pt["x"] * cos_r - pt["y"] * sin_r + cx
-                ry = pt["x"] * sin_r + pt["y"] * cos_r + cy
+                px_val = pt["x"] if isinstance(pt, dict) else pt[0]
+                py_val = pt["y"] if isinstance(pt, dict) else pt[1]
+                rx = px_val * cos_r - py_val * sin_r + cx
+                ry = px_val * sin_r + py_val * cos_r + cy
                 sx = bed_x + rx * scale_bed
                 sy = bed_y + (self.sheet_h_mm - ry) * scale_bed
                 poly_pts.append((sx, sy))

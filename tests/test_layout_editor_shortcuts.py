@@ -713,8 +713,42 @@ class TestLayoutEditorShortcuts(unittest.TestCase):
         self.view.show_grid = True
         self.view.redraw()
 
+    def test_print_preview_contains_10cm_grid_and_labels(self):
+        """O relatório de impressão e exportação contém a grade, traços e números de 10 em 10 cm na chapa."""
+        from ui.layout_print_dialog import LayoutPrintDialog
+
+        dlg = LayoutPrintDialog(self.view, layout_data={
+            "layout_name": "GRID_TEST.lay",
+            "sheet_w_mm": 1380.0,
+            "sheet_h_mm": 1080.0,
+        })
+        dlg.update_idletasks()
+        dlg.redraw()
+
+        # 1. Canvas do diálogo deve conter itens das tags print_grid, print_tick e print_label
+        grid_lines = dlg.canvas.find_withtag("print_grid")
+        ticks = dlg.canvas.find_withtag("print_tick")
+        labels = dlg.canvas.find_withtag("print_label")
+
+        self.assertGreater(len(grid_lines), 15, "A tela de impressão deve conter linhas de grade interna")
+        self.assertGreater(len(ticks), 20, "A tela de impressão deve conter traços (ticks) de régua")
+        self.assertGreater(len(labels), 15, "A tela de impressão deve conter numeração em cm")
+
+        label_texts = [dlg.canvas.itemcget(item, "text") for item in labels]
+        self.assertIn("10", label_texts, "Deve conter a marcação de 10 cm na régua da impressão")
+        self.assertIn("20", label_texts, "Deve conter a marcação de 20 cm na régua da impressão")
+        self.assertIn("30", label_texts, "Deve conter a marcação de 30 cm na régua da impressão")
+
+        # 2. Renderização Pillow (utilizada para PDF, impressão física e exportação de imagem) deve gerar com sucesso
+        im = dlg.render_pillow_page(dpi=150)
+        self.assertIsNotNone(im)
+        self.assertEqual(im.size, (int(8.27 * 150), int(11.69 * 150)))
+
+        dlg.destroy()
+
 
 if __name__ == "__main__":
     unittest.main()
+
 
 
