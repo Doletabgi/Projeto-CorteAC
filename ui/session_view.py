@@ -202,29 +202,11 @@ class SessionView(tk.Frame):
             height=6
         )
         self.cb_mat_code.set("(unspecified)")
-        self.cb_mat_code.pack(fill="x", pady=(0, 10))
+        self.cb_mat_code.pack(fill="x", pady=(0, 4))
         self.cb_mat_code.bind("<<ComboboxSelected>>", self.on_material_code_selected)
 
-        # 4. Máquina de corte
-        tk.Label(
-            col_right,
-            text="Máquina de corte:",
-            anchor="w",
-            bg=THEME["bg_card"],
-            fg=THEME["text_main"],
-            font=("Segoe UI", 9)
-        ).pack(fill="x", pady=(0, 2))
-
-        self.cb_machine = ttk.Combobox(
-            col_right,
-            values=["ATOM FlashCut Flex 3020", "ATOM FlashCut 1510", "ATOM Easy 888"],
-            state="readonly",
-            font=("Segoe UI", 9),
-            height=5
-        )
-        self.cb_machine.set(self.session_data.get("machine") or "ATOM FlashCut Flex 3020")
-        self.cb_machine.pack(fill="x", pady=(0, 4))
-        self.cb_machine.bind("<<ComboboxSelected>>", self.on_machine_selected)
+        # Máquina de corte padrão fixa (ATOM FlashCut Flex 3020) mantida nos dados da sessão sem exibir opção no editor
+        self.session_data["machine"] = self.session_data.get("machine") or "ATOM FlashCut Flex 3020"
 
         # Linha de Botões de Ação estilo Windows XP idêntica ao print do usuário (aba geral-mais tres op.png)
         btn_action_box = tk.Frame(gen_container, bg=THEME["bg_card"])
@@ -986,7 +968,7 @@ class SessionView(tk.Frame):
         return None
 
     def on_machine_selected(self, event=None):
-        machine = self.cb_machine.get()
+        machine = self.cb_machine.get() if hasattr(self, "cb_machine") else (self.session_data.get("machine") or "ATOM FlashCut Flex 3020")
         self.session_data["machine"] = machine
 
     def on_material_code_selected(self, event=None):
@@ -1019,7 +1001,9 @@ class SessionView(tk.Frame):
         return self.cb_params.get() if hasattr(self, "cb_params") else "stdNOTFill"
 
     def get_machine(self):
-        return self.cb_machine.get() if hasattr(self, "cb_machine") else "ATOM FlashCut Flex 3020"
+        if hasattr(self, "cb_machine"):
+            return self.cb_machine.get()
+        return self.session_data.get("machine") or "ATOM FlashCut Flex 3020"
 
     def set_materials_list(self, materials):
         if hasattr(self, "cb_mat_code"):

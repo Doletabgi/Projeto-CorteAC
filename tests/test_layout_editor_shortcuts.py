@@ -515,6 +515,17 @@ class TestLayoutEditorShortcuts(unittest.TestCase):
             right_margin_vert = self.view.sidebar_div_x - self.view.plate_x2
             self.assertAlmostEqual(left_margin_vert, right_margin_vert, places=2)
 
+    def test_machine_default_preserved_without_editor_combobox(self):
+        """A máquina padrão 'ATOM FlashCut Flex 3020' é mantida sem exibir combobox no editor."""
+        from ui.session_view import SessionView
+        sv = SessionView(self.root, session_data={"id": 99, "status": "Stand by"})
+        self.assertFalse(hasattr(sv, "cb_machine"))
+        self.assertEqual(sv.get_machine(), "ATOM FlashCut Flex 3020")
+        self.assertEqual(sv.session_data.get("machine"), "ATOM FlashCut Flex 3020")
+        sv.load_session({"id": 100, "status": "Stand by"})
+        self.assertEqual(sv.get_machine(), "ATOM FlashCut Flex 3020")
+        sv.destroy()
+
 
 if __name__ == "__main__":
     unittest.main()
