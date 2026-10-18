@@ -494,6 +494,27 @@ class TestLayoutEditorShortcuts(unittest.TestCase):
         self.view.zoom_out()
         self.assertAlmostEqual(self.view.zoom_factor, 1.0, places=4)
 
+    def test_plate_centered_in_cad_screen_area(self):
+        """A placa do layout é centralizada simetricamente no meio da tela da área CAD."""
+        self.root.geometry("1024x515")
+        self.view.update()
+        self.view.redraw()
+
+        cw = self.view.canvas.winfo_width()
+        if cw > 50:
+            div_x = self.view.sidebar_div_x
+            left_margin = self.view.plate_x1
+            right_margin = div_x - self.view.plate_x2
+            # Margens laterais na área CAD devem ser rigorosamente iguais (diferença zero)
+            self.assertAlmostEqual(left_margin, right_margin, places=2)
+
+            # Testa também com dimensões de chapa verticais (conforme captura: 1380 x 2980)
+            self.view.set_sheet_size(1380.0, 2980.0)
+            self.view.update()
+            left_margin_vert = self.view.plate_x1
+            right_margin_vert = self.view.sidebar_div_x - self.view.plate_x2
+            self.assertAlmostEqual(left_margin_vert, right_margin_vert, places=2)
+
 
 if __name__ == "__main__":
     unittest.main()

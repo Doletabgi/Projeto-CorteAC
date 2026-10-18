@@ -1120,26 +1120,28 @@ class LayoutEditorView(tk.Frame):
             return
 
         # 1. Escala proporcional e limites estáticos da chapa
-        top_lbl_h = 20.0
-        avail_h = max(50.0, ch - 35.0 - top_lbl_h)
+        top_lbl_h = 24.0
+        bottom_margin = 16.0
+        avail_h = max(50.0, ch - top_lbl_h - bottom_margin)
 
         if getattr(self, "custom_divider_ratio", None) is not None:
             raw_div = int(cw * self.custom_divider_ratio)
             min_div = 150
             max_div = max(min_div + 50, cw - 80)
             div_x = max(min_div, min(max_div, raw_div))
-            avail_w = max(50.0, div_x - 55.0)
         elif getattr(self, "custom_divider_x", None) is not None:
             min_div = 150
             max_div = max(min_div + 50, cw - 80)
             div_x = max(min_div, min(max_div, self.custom_divider_x))
-            avail_w = max(50.0, div_x - 55.0)
         else:
-            avail_w = max(50.0, cw * 0.58)
-            base_tmp = min(avail_w / max(1.0, self.sheet_width), avail_h / max(1.0, self.sheet_height))
-            div_x = max(int(35.0 + self.sheet_width * base_tmp + 25), 180)
+            sidebar_pref_w = 320
+            if cw > 650:
+                div_x = max(250, cw - sidebar_pref_w)
+            else:
+                div_x = max(150, int(cw * 0.65))
 
         self.sidebar_div_x = div_x
+        avail_w = max(50.0, div_x - 40.0)
 
         base_scale = min(avail_w / max(1.0, self.sheet_width), avail_h / max(1.0, self.sheet_height))
         self.base_scale = base_scale
@@ -1149,13 +1151,16 @@ class LayoutEditorView(tk.Frame):
         plate_w = self.sheet_width * scale
         plate_h = self.sheet_height * scale
 
-        # Origem e centro da chapa ancorados
+        # Origem e centro da chapa ancorados (Centralizada no meio da tela CAD)
+        cad_center_x = div_x / 2.0
+        cad_center_y = (top_lbl_h + (ch - bottom_margin)) / 2.0
+
         if getattr(self, "view_center_wx", None) is not None and getattr(self, "view_center_sx", None) is not None:
             x1 = self.view_center_sx - self.view_center_wx * scale + getattr(self, "pan_offset_x", 0.0)
             y2 = self.view_center_sy + self.view_center_wy * scale + getattr(self, "pan_offset_y", 0.0)
         else:
-            x1 = 35.0 + getattr(self, "pan_offset_x", 0.0)
-            y2 = ch - 20.0 + getattr(self, "pan_offset_y", 0.0)
+            x1 = (cad_center_x - plate_w / 2.0) + getattr(self, "pan_offset_x", 0.0)
+            y2 = (cad_center_y + plate_h / 2.0) + getattr(self, "pan_offset_y", 0.0)
 
         x2 = x1 + plate_w
         y1 = y2 - plate_h
