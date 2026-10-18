@@ -643,7 +643,7 @@ class MainWindow(tk.Tk):
             elif self.sessions:
                 sess_dict = self.sessions[0]
             else:
-                sess_dict = {"id": 91, "name": "Sessão Principal #91", "status": "Stand by"}
+                return None
         elif isinstance(session_data_or_id, dict):
             sess_dict = session_data_or_id
         else:
@@ -1018,16 +1018,12 @@ class MainWindow(tk.Tk):
                 w.btn_max.config(text="❐")
 
     def get_next_session_number(self):
-        """Calcula o próximo número sequencial de sessão: #1, #2, #3..."""
+        """Calcula o próximo número sequencial de sessão estritamente único e monotônico."""
         try:
-            sessions = self.db.get_sessions()
+            return self.db.get_next_session_number()
         except Exception:
-            sessions = getattr(self, "sessions", [])
-        existing_ids = {s["id"] for s in sessions if isinstance(s.get("id"), int)}
-        num = 1
-        while num in existing_ids:
-            num += 1
-        return num
+            existing_ids = {s["id"] for s in getattr(self, "sessions", []) if isinstance(s.get("id"), int)}
+            return max(existing_ids, default=0) + 1
 
     def save_current_session_state(self):
         """Salva as peças colocadas e métricas da sessão ativa no banco e memória."""
@@ -3670,15 +3666,33 @@ class MainWindow(tk.Tk):
 
         DieProcDialog(self, self.db, initial_preset=preset, on_select=_on_select)
 
+    def _select_session_in_tree(self, parent_item, target_sess_id):
+        """Busca recursivamente o item da sessão na árvore e o seleciona/abre."""
+        vals = self.tree_main.item(parent_item, "values")
+        if vals and len(vals) >= 2 and vals[0] == "session":
+            try:
+                if int(vals[1]) == target_sess_id:
+                    self.tree_main.selection_set(parent_item)
+                    self.tree_main.focus(parent_item)
+                    self.tree_main.see(parent_item)
+                    return True
+            except (ValueError, TypeError):
+                pass
+        for child in self.tree_main.get_children(parent_item):
+            if self._select_session_in_tree(child, target_sess_id):
+                self.tree_main.item(parent_item, open=True)
+                return True
+        return False
+
     def on_new_session(self):
         """
-        Cria uma nova sessão em branco numerando #1, #2, #3 em sequência,
-        limpa a mesa CAD (clear_bed) e abre a janela de sessão pronta para nesting.
+        Cria uma nova sessão em branco numerando sequencialmente (#1, #2, #3...),
+        garantindo unicidade estrita (números apagados nunca são reutilizados).
         """
         # 1. Salva o estado da sessão atual antes de criar a nova
         self.save_current_session_state()
 
-        # 2. Calcula próximo número sequencial (#1, #2, #3...)
+        # 2. Calcula próximo número sequencial monotônico (#1, #2, #3...)
         next_id = self.get_next_session_number()
         sess_name = f"Sessão #{next_id}"
         sess_job = "ProduçãoNova"
@@ -3708,7 +3722,7 @@ class MainWindow(tk.Tk):
             order_id = 1
 
         try:
-            self.db.create_session(
+            actual_id = self.db.create_session(
                 session_id=next_id,
                 name=sess_name,
                 job=sess_job,
@@ -3721,29 +3735,46 @@ class MainWindow(tk.Tk):
                 shapes=[]
             )
             self.sessions = self.db.get_sessions()
-            self.current_session = next((s for s in self.sessions if s["id"] == next_id), None)
+            self.current_session = next((s for s in self.sessions if s["id"] == actual_id), None)
+            if not self.current_session:
+                self.current_session = self.db.get_session(actual_id) or {
+                    "id": actual_id,
+                    "name": sess_name,
+                    "job": sess_job,
+                    "order_id": order_id,
+                    "material_id": mat_id,
+                    "status": "Stand by",
+                    "placed_pieces": [],
+                    "shapes": [],
+                    "strategy": def_strat,
+                    "params": def_params
+                }
         except Exception as e:
             from tkinter import messagebox
-            messagebox.showerror("Erro ao Criar Sessão", f"Não foi possível criar a sessão no banco de dados:\n{e}")
+            messagebox.showerror("Erro ao Criar Sessão", f"Não foi possível criar a sessão no banco de dados:\n{e}", parent=self)
             self.lbl_status_msg.config(text=f"Erro ao criar sessão: {e}")
             return
 
         # 4. Limpa completamente a mesa CAD (em branco)
         self.canvas.clear_bed()
 
-        # 5. Atualiza a árvore e grid se estiver em modo jobs
-        if self.current_mode == "jobs":
-            self.switch_tree_mode("jobs")
+        # 5. SEMPRE alterna a visualização para modo Produção ('jobs')
+        self.switch_tree_mode("jobs")
+
+        # Seleciona a sessão na árvore
+        for root_item in self.tree_main.get_children():
+            self._select_session_in_tree(root_item, actual_id)
 
         # 6. Exibe a janela da sessão com a aba Moldes ativa em branco
-        self.show_session_window(self.current_session)
-        if self.session_view:
-            self.session_view.load_session(self.current_session)
-            self.session_view.set_shapes_data([])
-            self.session_view.notebook.select(1)  # Aba Moldes (índice 1)
+        view = self.show_session_window(self.current_session)
+        if view:
+            view.load_session(self.current_session)
+            view.set_shapes_data([])
+            if hasattr(view, "notebook"):
+                view.notebook.select(1)  # Aba Moldes (índice 1)
         self.update_all_metrics()
 
-        self.lbl_status_msg.config(text=f"Nova sessão #{next_id} criada em branco. Adicione os moldes na aba Moldes.")
+        self.lbl_status_msg.config(text=f"Nova sessão #{actual_id} criada com sucesso. Adicione os moldes na aba Moldes.")
 
     def on_export_gcode(self):
         if not self.canvas.placed_pieces:

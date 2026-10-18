@@ -280,6 +280,14 @@ class DatabaseManager:
         with self.get_connection() as conn:
             cursor = conn.cursor()
 
+            # Se o banco já foi inicializado anteriormente, NÃO recria sessões nem moldes apagados
+            cursor.execute("SELECT `value` FROM settings WHERE `key` = 'db_seeded'")
+            row_seeded = cursor.fetchone()
+            if row_seeded:
+                val = row_seeded["value"] if isinstance(row_seeded, dict) else row_seeded[0]
+                if str(val) == "1":
+                    return
+
             # Inserir materiais padrão se tabela estiver vazia
             cursor.execute("SELECT COUNT(*) FROM materials")
             if cursor.fetchone()[0] == 0:
@@ -304,7 +312,7 @@ class DatabaseManager:
                 VALUES ('MAT_VAQ_01', 'Sheet (2553.38 X 1350.00)', 'como placa', 1350.0, 2553.38, 3.447, 1.0, 2, 1.0)
                 """)
 
-            # Inserir configurações padrão
+            # Inserir configurações padrão sem sobrescrever as existentes
             default_settings = {
                 "ask_session_name": "1",
                 "start_maximized": "1",
@@ -330,7 +338,9 @@ class DatabaseManager:
                 "language": "Português (Brasil)"
             }
             for k, v in default_settings.items():
-                cursor.execute("REPLACE INTO settings (`key`, `value`) VALUES (?, ?)", (k, str(v)))
+                cursor.execute("SELECT `key` FROM settings WHERE `key` = ?", (k,))
+                if not cursor.fetchone():
+                    cursor.execute("INSERT INTO settings (`key`, `value`) VALUES (?, ?)", (k, str(v)))
 
             # Inserir presets padrão DieProc
             default_dieproc_presets = [
@@ -431,18 +441,25 @@ class DatabaseManager:
                         json.dumps(s["stitching"])
                     ))
 
-            # Sessões iniciais
+            # Sessões iniciais apenas se tabela estiver vazia na primeira inicialização
             cursor.execute("SELECT COUNT(*) FROM sessions")
             if cursor.fetchone()[0] == 0:
+                # Busca um order_id válido
+                cursor.execute("SELECT id FROM orders ORDER BY id ASC LIMIT 1")
+                row_ord = cursor.fetchone()
+                valid_oid = row_ord[0] if row_ord else 1
                 cursor.execute("""
                 INSERT OR IGNORE INTO sessions (id, code, order_id, material_id, name, job, status, yield_percent, cutting_time_sec, placed_pieces_json)
-                VALUES (91, 'SESS-091', 1, 'MAT_VAQ_01', 'Sessão Principal #91', 'ProduçãoNova', 'Stand by', 0.0, 0.0, '[]')
-                """)
+                VALUES (91, 'SESS-091', ?, 'MAT_VAQ_01', 'Sessão Principal #91', 'ProduçãoNova', 'Stand by', 0.0, 0.0, '[]')
+                """, (valid_oid,))
                 cursor.execute("""
                 INSERT OR IGNORE INTO sessions (id, code, order_id, material_id, name, job, status, yield_percent, cutting_time_sec, placed_pieces_json)
-                VALUES (38, 'SESS-038', 1, 'MAT_VAQ_01', 'Corte Vamp/Toe', 'ProduçãoNova', 'Nested', 68.5, 142.0, '[]')
-                """)
+                VALUES (38, 'SESS-038', ?, 'MAT_VAQ_01', 'Corte Vamp/Toe', 'ProduçãoNova', 'Nested', 68.5, 142.0, '[]')
+                """, (valid_oid,))
+                cursor.execute("REPLACE INTO settings (`key`, `value`) VALUES ('last_session_number', '91')")
 
+            # Marca que o banco já foi semeado inicialmente
+            cursor.execute("REPLACE INTO settings (`key`, `value`) VALUES ('db_seeded', '1')")
             conn.commit()
 
     def get_orders(self):
@@ -747,7 +764,7 @@ class DatabaseManager:
             if order_id:
                 sql += " WHERE order_id = ?"
                 params.append(order_id)
-            sql += " ORDER BY CASE WHEN id = 91 THEN 1 WHEN id = 38 THEN 2 ELSE 3 END, id ASC"
+            sql += " ORDER BY id ASC"
             if limit is not None:
                 sql += " LIMIT ? OFFSET ?"
                 params.extend([int(limit), int(offset)])
@@ -798,6 +815,38 @@ class DatabaseManager:
                     p["shape"]["size"] = p_sz
             return d
 
+    def get_next_session_number(self) -> int:
+        """
+        Retorna o próximo número sequencial de sessão estritamente único e monotônico (#1, #2, #3...).
+        Mesmo que sessões anteriores (ex: #1) sejam apagadas, o contador nunca regride nem reutiliza números.
+        """
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            # 1. Busca último número registrado nas configurações
+            cursor.execute("SELECT `value` FROM settings WHERE `key` = 'last_session_number'")
+            row_set = cursor.fetchone()
+            last_num = 0
+            if row_set:
+                try:
+                    val = row_set["value"] if isinstance(row_set, dict) else row_set[0]
+                    last_num = int(val)
+                except (ValueError, TypeError):
+                    last_num = 0
+
+            # 2. Busca maior id atualmente existente em sessions
+            cursor.execute("SELECT COALESCE(MAX(id), 0) FROM sessions")
+            row_max = cursor.fetchone()
+            max_id = 0
+            if row_max:
+                try:
+                    val_m = row_max[0] if isinstance(row_max, (tuple, list)) else list(row_max.values())[0]
+                    max_id = int(val_m)
+                except (ValueError, TypeError):
+                    max_id = 0
+
+            next_num = max(last_num, max_id) + 1
+            return next_num
+
     def create_session(
         self,
         session_id: Optional[int] = None,
@@ -815,11 +864,9 @@ class DatabaseManager:
         with self.get_connection() as conn:
             cursor = conn.cursor()
 
-            # 1. Se session_id não for informado, busca próximo id sequencial
+            # 1. Se session_id não for informado, busca próximo id sequencial monotônico
             if session_id is None or session_id <= 0:
-                cursor.execute("SELECT COALESCE(MAX(id), 0) + 1 FROM sessions")
-                row_max = cursor.fetchone()
-                session_id = row_max[0] if isinstance(row_max, (tuple, list)) else row_max[list(row_max.keys())[0]]
+                session_id = self.get_next_session_number()
 
             # 2. Resiliência de chave estrangeira: order_id
             valid_order_id = order_id
@@ -878,6 +925,19 @@ class DatabaseManager:
                     session_id, code, valid_order_id, valid_mat_id, name, job, status,
                     json.dumps(placed_pieces or []), strategy, params, machine, json.dumps(shapes or [])
                 ))
+
+            # 6. Atualiza o contador permanente de último número de sessão
+            cursor.execute("SELECT `value` FROM settings WHERE `key` = 'last_session_number'")
+            row_last = cursor.fetchone()
+            curr_last = 0
+            if row_last:
+                try:
+                    curr_last = int(row_last["value"] if isinstance(row_last, dict) else row_last[0])
+                except (ValueError, TypeError):
+                    curr_last = 0
+            if session_id > curr_last:
+                cursor.execute("REPLACE INTO settings (`key`, `value`) VALUES ('last_session_number', ?)", (str(session_id),))
+
             conn.commit()
             return session_id
 

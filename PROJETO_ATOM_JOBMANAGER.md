@@ -4,7 +4,7 @@
 > **Regra de ouro:** o que está marcado `[CONFIRMADO]` veio do relatório, do código ou do usuário. O que está `[NÃO CONFIRMADO]` é suposição e não deve virar "fato" sem validação. O que está `[PREENCHER]` o Antigravity deve completar lendo o código real.
 
 <!-- AUTO:header:start -->
-**Última sincronização com o código:** 2026-10-18 00:52 (HEAD ao gerar: `065dced`; 30 arquivos Python, ~18896 linhas)
+**Última sincronização com o código:** 2026-10-18 01:13 (HEAD ao gerar: `a2a564e`; 31 arquivos Python, ~19073 linhas)
 <!-- AUTO:header:end -->
 **Versão deste documento:** 1
 
@@ -94,6 +94,7 @@ tests/test_db_layer.py                      # Testes Unitários da Camada de Ban
 tests/test_lay_parser.py                    # Testes Unitários para o Parser e Gerador de Arquivos .lay (ATOM $$LAYOUT.v3$$)
 tests/test_layout_editor_shortcuts.py       # Testes Automatizados para Atalhos do LayoutEditorView:
 tests/test_mysql_concurrency.py             # JobManager 2000 (Python Edition)
+tests/test_session_monotonic.py             # Testes Unitários: Monotonicidade Estrita de Sessões e Persistência contra Re-semeadura
 tools/migrate_sqlite_to_mysql.py            # tools/migrate_sqlite_to_mysql.py - Migra jobmanager.db (SQLite) para MySQL 8.0 Central.
 ui/add_shapes_dialog.py                     # JobManager 2000 (Python Edition)
 ui/cad_canvas.py                            # JobManager 2000 (Python Edition)
@@ -115,7 +116,7 @@ ui/shape_editor_view.py                     # JobManager 2000 (Python Edition)
 
 <!-- AUTO:symbols:start -->
 ### `database.py`
-- `class DatabaseManager` (linha 41, 49 métodos)
+- `class DatabaseManager` (linha 41, 50 métodos)
 - funções: `get_current_operator`
 
 ### `main.py`
@@ -169,6 +170,9 @@ ui/shape_editor_view.py                     # JobManager 2000 (Python Edition)
 ### `tests/test_mysql_concurrency.py`
 - `class TestMySQLConcurrency` (linha 29, 4 métodos)
 
+### `tests/test_session_monotonic.py`
+- `class TestSessionMonotonic` (linha 10, 4 métodos)
+
 ### `tools/migrate_sqlite_to_mysql.py`
 - funções: `make_backup`, `migrate`, `main`
 
@@ -192,7 +196,7 @@ ui/shape_editor_view.py                     # JobManager 2000 (Python Edition)
 - `class LayoutPrintDialog` (linha 20, 14 métodos): Janela modal de Visualização de Impressão (Print Preview) do Layout Editor.
 
 ### `ui/main_window.py`
-- `class MainWindow` (linha 42, 100 métodos)
+- `class MainWindow` (linha 42, 101 métodos)
 - funções: `get_assets_dir`
 
 ### `ui/material_codes_view.py`
@@ -517,7 +521,7 @@ A ordem de corte do `.lay` para a mesa **não pode** ser aleatória:
 | 1 | `ui/main_window.py:531` | `self.bind_all("<Button-1>", self.dismiss_popup_menus, add="+")` |
 | 1 | `ui/main_window.py:728` | `dock_item.bind("<Button-1>", lambda e: self.restore_window(window))` |
 | 1 | `ui/main_window.py:729` | `lbl.bind("<Button-1>", lambda e: self.restore_window(window))` |
-| 1 | `ui/main_window.py:1600` | `lb.bind("<Double-Button-1>", lambda e: on_confirm())` |
+| 1 | `ui/main_window.py:1596` | `lb.bind("<Double-Button-1>", lambda e: on_confirm())` |
 | 1 | `ui/material_codes_view.py:72` | `title_bar.bind("<ButtonPress-1>", self._on_title_press)` |
 | 1 | `ui/material_codes_view.py:74` | `self.lbl_title.bind("<ButtonPress-1>", self._on_title_press)` |
 | 1 | `ui/material_codes_view.py:76` | `self.bind("<Button-1>", lambda e: self.lift(), add="+")` |
@@ -629,7 +633,7 @@ A ordem de corte do `.lay` para a mesa **não pode** ser aleatória:
 | Escape | `ui/edit_shape_in_session_dialog.py:147` | `self.bind("<Escape>", lambda e: self.destroy())` |
 | Escape | `ui/main_window.py:62` | `self.bind("<Escape>", self.exit_fullscreen)` |
 | Escape | `ui/main_window.py:534` | `self.bind_all("<Escape>", self.dismiss_popup_menus, add="+")` |
-| Escape | `ui/main_window.py:2411` | `dialog.bind("<Escape>", lambda e: dialog.destroy())` |
+| Escape | `ui/main_window.py:2407` | `dialog.bind("<Escape>", lambda e: dialog.destroy())` |
 | Escape | `ui/material_codes_view.py:466` | `dlg.bind("<Escape>", lambda e: dlg.destroy())` |
 | Escape | `ui/options_dialog.py:40` | `self.bind("<Escape>", lambda e: self.on_cancel())` |
 | Escape | `ui/session_view.py:1378` | `entry.bind("<Escape>", cancel)` |
@@ -689,7 +693,7 @@ A ordem de corte do `.lay` para a mesa **não pode** ser aleatória:
 | R | `ui/layout_editor_view.py:428` | `self.bind_all("<Key-r>", lambda e: self.rotate_selected(45))` |
 | R | `ui/layout_editor_view.py:429` | `self.bind_all("<Key-R>", lambda e: self.rotate_selected(45))` |
 | Return | `ui/edit_shape_in_session_dialog.py:146` | `self.bind("<Return>", lambda e: self.on_save())` |
-| Return | `ui/main_window.py:2410` | `dialog.bind("<Return>", lambda e: save())` |
+| Return | `ui/main_window.py:2406` | `dialog.bind("<Return>", lambda e: save())` |
 | Return | `ui/material_codes_view.py:199` | `self.tree.bind("<Return>", lambda e: self.open_edit_selected_dialog())` |
 | Return | `ui/material_codes_view.py:465` | `dlg.bind("<Return>", lambda e: save_action())` |
 | Return | `ui/session_view.py:530` | `self.tree_mat.bind("<Return>", self.on_mat_enter_key)` |
@@ -804,7 +808,8 @@ Local: `/home/dola/Documentos/clone do job/antigo/arquivos pos instalacao/Common
 <!-- AUTO:gitlog:start -->
 | Commit | Data | Autor | Mensagem |
 |---|---|---|---|
-| `065dced` | 2026-10-18 | Doletabgi | feat(ui): permitir selecionar e excluir multiplas sessoes em lote |
+| `a2a564e` | 2026-10-18 | Doletabgi | fix(session): numeracao monotonica estrita, protecao contra re-semeadura no restart e atualizacao do binario |
+| `432e06f` | 2026-10-18 | Doletabgi | feat(ui): permitir selecionar e excluir multiplas sessoes em lote |
 | `183058f` | 2026-10-18 | Doletabgi | feat(ui): liberar arrasto de grade completa para moldes do layout e corrigir icone de producao |
 | `2db8dfd` | 2026-10-18 | Doletabgi | fix(session): corrigir integridade referencial e resiliencia ao criar sessao no MySQL |
 | `7d0a875` | 2026-10-17 | Doletabgi | feat(db): migrar cliente desktop para MySQL 8.0 central com pool e concorrencia otimista |
