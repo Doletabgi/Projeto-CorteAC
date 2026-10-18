@@ -1419,6 +1419,9 @@ class LayoutEditorView(tk.Frame):
     # Operações CAD nas Peças (Bump, Rotate, Delete, Duplicate)
     # -------------------------------------------------------------
     def nudge_selected(self, dx_mm, dy_mm):
+        focused = self.focus_get()
+        if isinstance(focused, (tk.Entry, ttk.Entry, tk.Text, ttk.Treeview)):
+            return
         if 0 <= self.selected_index < len(self.placed_pieces):
             self.push_undo()
             p = self.placed_pieces[self.selected_index]
@@ -1433,6 +1436,9 @@ class LayoutEditorView(tk.Frame):
         Rotaciona a peça selecionada por delta_deg (graus).
         Usa rotação matemática invariante centrada no contorno base unrotated.
         """
+        focused = self.focus_get()
+        if isinstance(focused, (tk.Entry, ttk.Entry, tk.Text, ttk.Treeview)):
+            return
         if 0 <= self.selected_index < len(self.placed_pieces):
             if not group_autorepeat:
                 self.push_undo()
@@ -1533,6 +1539,9 @@ class LayoutEditorView(tk.Frame):
             self.update_status()
 
     def delete_selected(self):
+        focused = self.focus_get()
+        if isinstance(focused, (tk.Entry, ttk.Entry, tk.Text, ttk.Treeview)):
+            return
         if 0 <= self.selected_index < len(self.placed_pieces):
             self.push_undo()
             self.placed_pieces.pop(self.selected_index)

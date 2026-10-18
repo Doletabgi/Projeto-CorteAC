@@ -768,39 +768,59 @@ class DatabaseManager:
             return [row["name"] for row in cursor.fetchall()]
 
     def create_shape_folder(self, name):
-        name = name.strip()
+        name = name.strip().strip("/")
         if not name:
             return False
+        parts = [p.strip() for p in name.split("/") if p.strip()]
         with self.get_connection() as conn:
             cursor = conn.cursor()
             try:
-                cursor.execute("INSERT OR IGNORE INTO shape_folders (name) VALUES (?)", (name,))
+                curr = ""
+                for part in parts:
+                    curr = f"{curr}/{part}" if curr else part
+                    cursor.execute("INSERT OR IGNORE INTO shape_folders (name) VALUES (?)", (curr,))
                 conn.commit()
                 return True
             except Exception:
                 return False
 
     def rename_shape_folder(self, old_name, new_name):
-        old_name = old_name.strip()
-        new_name = new_name.strip()
-        if not old_name or not new_name:
+        old_name = old_name.strip().strip("/")
+        new_name = new_name.strip().strip("/")
+        if not old_name or not new_name or old_name == new_name:
             return False
         with self.get_connection() as conn:
             cursor = conn.cursor()
             cursor.execute("UPDATE shape_folders SET name = ? WHERE name = ?", (new_name, old_name))
             cursor.execute("UPDATE shapes SET folder = ? WHERE folder = ?", (new_name, old_name))
+
+            # Atualiza também subpastas filhas (ex: 807266/Sub1 -> Novo/Sub1)
+            old_prefix = old_name + "/"
+            cursor.execute("SELECT name FROM shape_folders WHERE name LIKE ?", (old_prefix + "%",))
+            subs = [row["name"] for row in cursor.fetchall()]
+            for sub in subs:
+                updated_sub = new_name + "/" + sub[len(old_prefix):]
+                cursor.execute("UPDATE shape_folders SET name = ? WHERE name = ?", (updated_sub, sub))
+
+            cursor.execute("SELECT id, folder FROM shapes WHERE folder LIKE ?", (old_prefix + "%",))
+            shps = cursor.fetchall()
+            for s in shps:
+                updated_f = new_name + "/" + s["folder"][len(old_prefix):]
+                cursor.execute("UPDATE shapes SET folder = ? WHERE id = ?", (updated_f, s["id"]))
+
             conn.commit()
             return True
 
     def delete_shape_folder(self, name, delete_shapes=False):
-        name = name.strip()
+        name = name.strip().strip("/")
+        old_prefix = name + "/"
         with self.get_connection() as conn:
             cursor = conn.cursor()
-            cursor.execute("DELETE FROM shape_folders WHERE name = ?", (name,))
+            cursor.execute("DELETE FROM shape_folders WHERE name = ? OR name LIKE ?", (name, old_prefix + "%"))
             if delete_shapes:
-                cursor.execute("DELETE FROM shapes WHERE folder = ?", (name,))
+                cursor.execute("DELETE FROM shapes WHERE folder = ? OR folder LIKE ?", (name, old_prefix + "%"))
             else:
-                cursor.execute("UPDATE shapes SET folder = '' WHERE folder = ?", (name,))
+                cursor.execute("UPDATE shapes SET folder = '' WHERE folder = ? OR folder LIKE ?", (name, old_prefix + "%"))
             conn.commit()
             return True
 

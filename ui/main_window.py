@@ -230,6 +230,7 @@ class MainWindow(tk.Tk):
         file_menu.add_command(label="🧩 Abrir Layout Editor...", command=self.show_layout_editor)
         file_menu.add_separator()
         file_menu.add_command(label="📁 Criar Pasta de Moldes...", command=self.on_create_shape_folder)
+        file_menu.add_command(label="📁 Criar Subpasta de Moldes...", command=self.on_create_subfolder_menu_action)
         file_menu.add_command(label="📂 Importar Molde (.die)...", command=self.on_import_die)
         file_menu.add_command(label="📂 Abrir Layout (.lay)...", command=self.on_open_lay_file)
         file_menu.add_command(label="💾 Exportar Layout (.lay)...", command=self.on_export_lay_file)
@@ -271,6 +272,7 @@ class MainWindow(tk.Tk):
         tools_menu.add_command(label="Shape Editor (Editor de Moldes)...", command=self.show_shape_editor)
         tools_menu.add_command(label="📋 Códigos materiais (Listagem)...", command=self.show_material_codes_window)
         tools_menu.add_command(label="📁 Criar Pasta de Moldes...", command=self.on_create_shape_folder)
+        tools_menu.add_command(label="📁 Criar Subpasta de Moldes...", command=self.on_create_subfolder_menu_action)
         tools_menu.add_command(label="📂 Importar Shape (.die)...", command=self.on_import_die)
         tools_menu.add_separator()
         tools_menu.add_command(label="Parâmetros de Nesting...", command=self.open_params_dialog)
@@ -1365,22 +1367,103 @@ class MainWindow(tk.Tk):
             if _check(r):
                 break
 
-    def on_create_shape_folder(self):
-        """Cria uma nova pasta para organizar moldes .die."""
-        name = simpledialog.askstring("Criar Pasta de Moldes", "Nome da nova pasta de moldes:", initialvalue="Nova Pasta", parent=self)
-        if name and name.strip():
-            folder_name = name.strip()
-            self.db.create_shape_folder(folder_name)
-            if self.current_mode == "shapes":
-                self.switch_tree_mode("shapes")
-                self.select_folder_node(folder_name)
-            self.lbl_status_msg.config(text=f"Pasta de moldes '{folder_name}' criada com sucesso.")
+    def on_create_shape_folder(self, parent_folder=""):
+        """Cria uma nova pasta ou subpasta para organizar moldes .die."""
+        if parent_folder:
+            name = simpledialog.askstring("Criar Subpasta de Moldes", f"Nome da nova subpasta dentro de '{parent_folder}':", initialvalue="Nova Subpasta", parent=self)
+            if name and name.strip():
+                sub_name = name.strip().strip("/")
+                folder_path = f"{parent_folder}/{sub_name}"
+                self.db.create_shape_folder(folder_path)
+                if self.current_mode == "shapes":
+                    self.switch_tree_mode("shapes")
+                    self.select_folder_node(folder_path)
+                self.lbl_status_msg.config(text=f"Subpasta de moldes '{folder_path}' criada com sucesso.")
+        else:
+            name = simpledialog.askstring("Criar Pasta de Moldes", "Nome da nova pasta de moldes:", initialvalue="Nova Pasta", parent=self)
+            if name and name.strip():
+                folder_name = name.strip().strip("/")
+                self.db.create_shape_folder(folder_name)
+                if self.current_mode == "shapes":
+                    self.switch_tree_mode("shapes")
+                    self.select_folder_node(folder_name)
+                self.lbl_status_msg.config(text=f"Pasta de moldes '{folder_name}' criada com sucesso.")
+
+    def on_create_shape_subfolder(self, parent_folder):
+        """Cria explicitamente uma subpasta dentro de parent_folder."""
+        self.on_create_shape_folder(parent_folder=parent_folder)
+
+    def on_create_subfolder_menu_action(self):
+        """Ação de menu para criar subpasta: se houver pasta selecionada na árvore, usa-a como pai."""
+        parent_folder = ""
+        if self.current_mode == "shapes":
+            sel = self.tree_main.selection()
+            if sel:
+                vals = self.tree_main.item(sel[0], "values")
+                if vals and vals[0] == "folder":
+                    parent_folder = str(vals[1])
+        if not parent_folder:
+            folders = self.db.get_shape_folders()
+            if not folders:
+                messagebox.showinfo("Criar Subpasta", "Nenhuma pasta raiz existe ainda. Crie primeiro uma pasta raiz.", parent=self)
+                return self.on_create_shape_folder()
+            parent_folder = self.prompt_select_parent_folder(folders)
+            if not parent_folder:
+                return
+        self.on_create_shape_subfolder(parent_folder)
+
+    def prompt_select_parent_folder(self, folders):
+        """Diálogo para selecionar uma pasta existente como pai da nova subpasta."""
+        dlg = tk.Toplevel(self)
+        dlg.title("Selecionar Pasta Pai")
+        dlg.geometry("320x260")
+        dlg.resizable(False, False)
+        dlg.configure(bg=THEME["bg_surface"])
+        dlg.transient(self)
+        dlg.grab_set()
+
+        tk.Label(dlg, text="Selecione a pasta onde criar a subpasta:", bg=THEME["bg_surface"], fg=THEME["text_main"], font=("Segoe UI", 9, "bold")).pack(padx=10, pady=8, anchor="w")
+
+        lb_frame = tk.Frame(dlg, bg=THEME["bg_surface"], relief="sunken", bd=1)
+        lb_frame.pack(fill="both", expand=True, padx=10, pady=4)
+
+        lb = tk.Listbox(lb_frame, bg="white", fg="black", selectbackground=THEME["select_bg"], selectforeground="white", font=("Segoe UI", 9))
+        lb.pack(side="left", fill="both", expand=True)
+        sb = ttk.Scrollbar(lb_frame, orient="vertical", command=lb.yview)
+        sb.pack(side="right", fill="y")
+        lb.config(yscrollcommand=sb.set)
+
+        for f in folders:
+            depth = f.count("/")
+            indent = "    " * depth
+            name_part = f.split("/")[-1]
+            lb.insert("end", f"{indent}📁 {name_part} ({f})")
+        lb.selection_set(0)
+
+        chosen = [None]
+        def do_confirm():
+            sel_idx = lb.curselection()
+            if sel_idx:
+                chosen[0] = folders[sel_idx[0]]
+            dlg.destroy()
+
+        btn_box = tk.Frame(dlg, bg=THEME["bg_surface"], pady=6)
+        btn_box.pack(fill="x", padx=10)
+        tk.Button(btn_box, text="Avançar", width=10, bg=THEME["bg_surface"], fg=THEME["text_main"], relief="raised", bd=2, command=do_confirm).pack(side="right", padx=4)
+        tk.Button(btn_box, text="Cancelar", width=10, bg=THEME["bg_surface"], fg=THEME["text_main"], relief="raised", bd=2, command=dlg.destroy).pack(side="right", padx=4)
+
+        self.wait_window(dlg)
+        return chosen[0]
 
     def on_rename_shape_folder(self, folder_name):
-        """Renomeia uma pasta de moldes existente."""
-        new_name = simpledialog.askstring("Renomear Pasta", "Novo nome para a pasta:", initialvalue=folder_name, parent=self)
-        if new_name and new_name.strip() and new_name.strip() != folder_name:
-            new_name = new_name.strip()
+        """Renomeia uma pasta de moldes existente e atualiza suas subpastas."""
+        folder_name = folder_name.strip().strip("/")
+        base_name = folder_name.split("/")[-1]
+        parent_prefix = "/".join(folder_name.split("/")[:-1])
+        new_base = simpledialog.askstring("Renomear Pasta", f"Novo nome para a pasta '{base_name}':", initialvalue=base_name, parent=self)
+        if new_base and new_base.strip() and new_base.strip() != base_name:
+            new_base = new_base.strip().strip("/")
+            new_name = f"{parent_prefix}/{new_base}" if parent_prefix else new_base
             self.db.rename_shape_folder(folder_name, new_name)
             self.reload_shapes()
             if self.current_mode == "shapes":
@@ -1389,8 +1472,10 @@ class MainWindow(tk.Tk):
             self.lbl_status_msg.config(text=f"Pasta renomeada para '{new_name}'.")
 
     def on_delete_shape_folder(self, folder_name):
-        """Exclui uma pasta de moldes com opção de mover ou excluir os moldes."""
-        shapes_in_folder = [s for s in self.current_shapes if (s.get("folder") or "").strip() == folder_name.strip()]
+        """Exclui uma pasta de moldes (e suas subpastas) com opção de mover ou excluir os moldes."""
+        folder_name = folder_name.strip().strip("/")
+        f_prefix = folder_name + "/"
+        shapes_in_folder = [s for s in self.current_shapes if (s.get("folder") or "").strip() == folder_name or (s.get("folder") or "").strip().startswith(f_prefix)]
         if len(shapes_in_folder) == 0:
             if not messagebox.askyesno("Excluir Pasta de Moldes", f"Deseja realmente excluir a pasta '{folder_name}'?", parent=self):
                 return
@@ -1398,9 +1483,9 @@ class MainWindow(tk.Tk):
         else:
             resp = messagebox.askyesnocancel(
                 "Excluir Pasta de Moldes",
-                f"Deseja excluir a pasta '{folder_name}'?\n\n"
-                f"• Clique 'Sim' para excluir a pasta E todos os moldes dentro dela.\n"
-                f"• Clique 'Não' para excluir apenas a pasta (os moldes irão para a raiz 'Moldes').\n"
+                f"Deseja excluir a pasta '{folder_name}' e todas as suas subpastas?\n\n"
+                f"• Clique 'Sim' para excluir a pasta E todos os moldes dentro dela ({len(shapes_in_folder)} moldes).\n"
+                f"• Clique 'Não' para excluir apenas as pastas (os moldes irão para a raiz 'Moldes').\n"
                 f"• Clique 'Cancelar' para desistir.",
                 parent=self
             )
@@ -1415,7 +1500,7 @@ class MainWindow(tk.Tk):
         self.lbl_status_msg.config(text=f"Pasta '{folder_name}' excluída.")
 
     def on_move_shape_to_folder(self, shape_id):
-        """Abre janela para mover um molde para outra pasta."""
+        """Abre janela para mover um molde para outra pasta ou subpasta."""
         target = next((s for s in self.current_shapes if s["id"] == shape_id), None)
         if not target:
             return
@@ -1423,7 +1508,7 @@ class MainWindow(tk.Tk):
         folders = self.db.get_shape_folders()
         dlg = tk.Toplevel(self)
         dlg.title("Mover Molde")
-        dlg.geometry("320x260")
+        dlg.geometry("340x280")
         dlg.resizable(False, False)
         dlg.configure(bg=THEME["bg_surface"])
         dlg.transient(self)
@@ -1440,9 +1525,12 @@ class MainWindow(tk.Tk):
         sb.pack(side="right", fill="y")
         lb.config(yscrollcommand=sb.set)
 
-        options = ["[ Moldes (Raiz / Sem Pasta) ]"] + folders
-        for opt in options:
-            lb.insert("end", opt)
+        lb.insert("end", "[ Moldes (Raiz / Sem Pasta) ]")
+        for f in folders:
+            depth = f.count("/")
+            indent = "    " * depth
+            name_part = f.split("/")[-1]
+            lb.insert("end", f"{indent}📁 {name_part} ({f})")
 
         curr_folder = target.get("folder", "")
         if curr_folder in folders:
@@ -2011,23 +2099,32 @@ class MainWindow(tk.Tk):
 
             root = self.tree_main.insert("", "end", text=" Moldes", open=True, values=("root_shapes", ""), **img_shp)
 
-            # 1. Carrega pastas cadastradas
+            # 1. Carrega pastas cadastradas de forma hierárquica (suporte a subpastas)
             folders = self.db.get_shape_folders()
             folder_nodes = {}
+
+            def get_or_create_folder_node(f_path):
+                f_path = f_path.strip().strip("/")
+                if not f_path:
+                    return root
+                parts = [p.strip() for p in f_path.split("/") if p.strip()]
+                curr_parent = root
+                curr_path = ""
+                for part in parts:
+                    curr_path = f"{curr_path}/{part}" if curr_path else part
+                    if curr_path not in folder_nodes:
+                        fn_id = self.tree_main.insert(curr_parent, "end", text=f" {part}", open=True, values=("folder", curr_path), **img_folder)
+                        folder_nodes[curr_path] = fn_id
+                    curr_parent = folder_nodes[curr_path]
+                return curr_parent
+
             for f_name in folders:
-                fn_id = self.tree_main.insert(root, "end", text=f" {f_name}", open=True, values=("folder", f_name), **img_folder)
-                folder_nodes[f_name] = fn_id
+                get_or_create_folder_node(f_name)
 
             # 2. Adiciona os moldes sob sua respectiva pasta ou diretamente na raiz
             for s in self.current_shapes:
-                s_folder = s.get("folder", "").strip()
-                if s_folder:
-                    if s_folder not in folder_nodes:
-                        fn_id = self.tree_main.insert(root, "end", text=f" {s_folder}", open=True, values=("folder", s_folder), **img_folder)
-                        folder_nodes[s_folder] = fn_id
-                    parent = folder_nodes[s_folder]
-                else:
-                    parent = root
+                s_folder = s.get("folder", "").strip().strip("/")
+                parent = get_or_create_folder_node(s_folder) if s_folder else root
 
                 self.tree_main.insert(parent, "end", text=f" {s['name']}", values=("shape", s["id"], s_folder), **img_shp)
                 self.grid_lower.insert("", "end", values=(s["id"], "Externo", s["name"], s.get("size", "41"), s_folder or "-"))
@@ -2171,13 +2268,18 @@ class MainWindow(tk.Tk):
 
             if node_type == "folder":
                 folder_name = str(vals[1])
+                disp_name = folder_name.split("/")[-1]
                 self.moldes_menu.add_command(
                     label="📂 Importar Shape (.die) nesta pasta...",
                     command=lambda f=folder_name: self.on_import_die(target_folder=f)
                 )
                 self.moldes_menu.add_command(
-                    label="📁 Criar Pasta...",
-                    command=self.on_create_shape_folder
+                    label=f"📁 Criar Subpasta em '{disp_name}'...",
+                    command=lambda f=folder_name: self.on_create_shape_subfolder(f)
+                )
+                self.moldes_menu.add_command(
+                    label="📁 Criar Pasta na Raiz...",
+                    command=lambda: self.on_create_shape_folder(parent_folder="")
                 )
                 self.moldes_menu.add_separator()
                 self.moldes_menu.add_command(
@@ -3479,9 +3581,11 @@ class MainWindow(tk.Tk):
                 folder_name = vals[1]
                 self.lbl_status_msg.config(text=f"Pasta de moldes selecionada: '{folder_name}'")
                 self.grid_lower.delete(*self.grid_lower.get_children())
+                f_prefix = folder_name + "/"
                 for s in self.current_shapes:
-                    if s.get("folder", "").strip() == folder_name:
-                        self.grid_lower.insert("", "end", values=(s["id"], "Externo", s["name"], s.get("size", "41"), folder_name))
+                    s_f = s.get("folder", "").strip()
+                    if s_f == folder_name or s_f.startswith(f_prefix):
+                        self.grid_lower.insert("", "end", values=(s["id"], "Externo", s["name"], s.get("size", "41"), s_f))
             elif node_type == "root_shapes":
                 self.lbl_status_msg.config(text="Todos os moldes (Raiz)")
                 self.grid_lower.delete(*self.grid_lower.get_children())

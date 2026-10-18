@@ -451,6 +451,12 @@ def main():
             parent_doc_space.write_text(new, encoding="utf-8", newline="\n")
         except Exception:
             pass
+    parent_doc_raw = root.parent / "PROJETO_ATOM_JOBMANAGER"
+    if parent_doc_raw.exists():
+        try:
+            parent_doc_raw.write_text(new, encoding="utf-8", newline="\n")
+        except Exception:
+            pass
     print("Documento atualizado. Blocos alterados: " + ", ".join(changed))
     return 0
 

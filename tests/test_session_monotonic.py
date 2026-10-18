@@ -131,6 +131,53 @@ class TestSessionMonotonic(unittest.TestCase):
         db2 = DatabaseManager(self.tmp_path, backend="sqlite")
         self.assertEqual(len(db2.get_job_folders()), 0, "Pasta excluída nunca deve reaparecer ao reiniciar")
 
+    def test_shape_subfolders_crud_and_cascade(self):
+        """Testa criação, hierarquia, renomeação em cascata e exclusão em cascata de subpastas de moldes."""
+        # 1. Cria subpasta aninhada diretamente
+        ok = self.db.create_shape_folder("807266/Gáspea/Direita")
+        self.assertTrue(ok)
+
+        folders = self.db.get_shape_folders()
+        self.assertIn("807266", folders)
+        self.assertIn("807266/Gáspea", folders)
+        self.assertIn("807266/Gáspea/Direita", folders)
+
+        # 2. Cria shapes em diferentes níveis
+        s1 = self.db.create_shape(name="Shape Raiz", folder="")
+        s2 = self.db.create_shape(name="Shape Pai", folder="807266")
+        s3 = self.db.create_shape(name="Shape Filho", folder="807266/Gáspea")
+        s4 = self.db.create_shape(name="Shape Neto", folder="807266/Gáspea/Direita")
+
+        # 3. Renomeia pasta intermediária e verifica cascata
+        self.db.rename_shape_folder("807266/Gáspea", "807266/Gaspea_Renomeada")
+        folders_after_rename = self.db.get_shape_folders()
+        self.assertNotIn("807266/Gáspea", folders_after_rename)
+        self.assertIn("807266/Gaspea_Renomeada", folders_after_rename)
+        self.assertIn("807266/Gaspea_Renomeada/Direita", folders_after_rename)
+
+        shape3_data = next(s for s in self.db.get_shapes() if s["id"] == s3)
+        shape4_data = next(s for s in self.db.get_shapes() if s["id"] == s4)
+        self.assertEqual(shape3_data["folder"], "807266/Gaspea_Renomeada")
+        self.assertEqual(shape4_data["folder"], "807266/Gaspea_Renomeada/Direita")
+
+        # 4. Exclui pasta pai com delete_shapes=False (shapes devem ir para raiz "")
+        self.db.delete_shape_folder("807266", delete_shapes=False)
+        folders_after_del = self.db.get_shape_folders()
+        self.assertNotIn("807266", folders_after_del)
+        self.assertNotIn("807266/Gaspea_Renomeada", folders_after_del)
+        self.assertNotIn("807266/Gaspea_Renomeada/Direita", folders_after_del)
+
+        # Moldes ainda devem existir, agora na raiz
+        remaining_shapes = {s["id"]: s["folder"] for s in self.db.get_shapes()}
+        self.assertIn(s1, remaining_shapes)
+        self.assertIn(s2, remaining_shapes)
+        self.assertIn(s3, remaining_shapes)
+        self.assertIn(s4, remaining_shapes)
+        self.assertEqual(remaining_shapes[s2], "")
+        self.assertEqual(remaining_shapes[s3], "")
+        self.assertEqual(remaining_shapes[s4], "")
+
 
 if __name__ == "__main__":
     unittest.main()
+
