@@ -4,7 +4,7 @@
 > **Regra de ouro:** o que está marcado `[CONFIRMADO]` veio do relatório, do código ou do usuário. O que está `[NÃO CONFIRMADO]` é suposição e não deve virar "fato" sem validação. O que está `[PREENCHER]` o Antigravity deve completar lendo o código real.
 
 <!-- AUTO:header:start -->
-**Última sincronização com o código:** 2026-10-18 16:31 (HEAD ao gerar: `ae66409`; 33 arquivos Python, ~20742 linhas)
+**Última sincronização com o código:** 2026-10-18 17:46 (HEAD ao gerar: `4d7aa81`; 33 arquivos Python, ~20838 linhas)
 <!-- AUTO:header:end -->
 **Versão deste documento:** 1
 
@@ -167,7 +167,7 @@ ui/sort_utils.py                            # JobManager 2000 (Python Edition)
 
 ### `tests/test_layout_editor_shortcuts.py`
 - `class DummyEvent` (linha 30, 1 métodos)
-- `class TestLayoutEditorShortcuts` (linha 36, 26 métodos)
+- `class TestLayoutEditorShortcuts` (linha 36, 27 métodos)
 
 ### `tests/test_mysql_concurrency.py`
 - `class TestMySQLConcurrency` (linha 29, 4 métodos)
@@ -200,7 +200,7 @@ ui/sort_utils.py                            # JobManager 2000 (Python Edition)
 - funções: `rotate_piece_in_place`
 
 ### `ui/layout_print_dialog.py`
-- `class LayoutPrintDialog` (linha 20, 14 métodos): Janela modal de Visualização de Impressão (Print Preview) do Layout Editor.
+- `class LayoutPrintDialog` (linha 20, 17 métodos): Janela modal de Visualização de Impressão (Print Preview) do Layout Editor.
 
 ### `ui/main_window.py`
 - `class MainWindow` (linha 43, 107 métodos)
@@ -954,8 +954,8 @@ A ordem de corte do `.lay` para a mesa **não pode** ser aleatória:
 | Ctrl+P | `ui/layout_editor_view.py:289` | `self.bind("<Control-P>", lambda e: self.print_layout())` |
 | Ctrl+P | `ui/layout_editor_view.py:448` | `w.bind("<Control-p>", lambda e: (self.print_layout(), "break")[1])` |
 | Ctrl+P | `ui/layout_editor_view.py:449` | `w.bind("<Control-P>", lambda e: (self.print_layout(), "break")[1])` |
-| Ctrl+P | `ui/layout_print_dialog.py:228` | `self.bind("<Control-p>", lambda e: self.do_print())` |
-| Ctrl+P | `ui/layout_print_dialog.py:229` | `self.bind("<Control-P>", lambda e: self.do_print())` |
+| Ctrl+P | `ui/layout_print_dialog.py:248` | `self.bind("<Control-p>", lambda e: self.do_print())` |
+| Ctrl+P | `ui/layout_print_dialog.py:249` | `self.bind("<Control-P>", lambda e: self.do_print())` |
 | Ctrl+P | `ui/main_window.py:66` | `self.bind("<Control-p>", self.handle_ctrl_p)` |
 | Ctrl+P | `ui/main_window.py:67` | `self.bind("<Control-P>", self.handle_ctrl_p)` |
 | Ctrl+Plus | `ui/layout_editor_view.py:413` | `w.bind("<Control-plus>", lambda e: (self.zoom_in(), "break")[1])` |
@@ -1002,7 +1002,7 @@ A ordem de corte do `.lay` para a mesa **não pode** ser aleatória:
 | Down | `ui/session_view.py:1736` | `entry.bind("<Down>", move_down)` |
 | Escape | `ui/dieproc_dialog.py:39` | `self.bind("<Escape>", lambda e: self.destroy())` |
 | Escape | `ui/edit_shape_in_session_dialog.py:147` | `self.bind("<Escape>", lambda e: self.destroy())` |
-| Escape | `ui/layout_print_dialog.py:230` | `self.bind("<Escape>", lambda e: self.destroy())` |
+| Escape | `ui/layout_print_dialog.py:251` | `self.bind("<Escape>", self.on_escape)` |
 | Escape | `ui/main_window.py:63` | `self.bind("<Escape>", self.exit_fullscreen)` |
 | Escape | `ui/main_window.py:539` | `self.bind_all("<Escape>", self.dismiss_popup_menus, add="+")` |
 | Escape | `ui/main_window.py:2627` | `dialog.bind("<Escape>", lambda e: dialog.destroy())` |
@@ -1013,6 +1013,7 @@ A ordem de corte do `.lay` para a mesa **não pode** ser aleatória:
 | Escape | `ui/session_view.py:1745` | `entry.bind("<Escape>", cancel_edit)` |
 | F1 | `ui/layout_editor_view.py:453` | `w.bind("<F1>", self.on_f1_press)` |
 | F1 | `ui/layout_editor_view.py:454` | `w.bind("<Key-F1>", self.on_f1_press)` |
+| F11 | `ui/layout_print_dialog.py:250` | `self.bind("<F11>", self.toggle_fullscreen)` |
 | F11 | `ui/main_window.py:62` | `self.bind("<F11>", self.toggle_fullscreen)` |
 | F2 | `ui/layout_editor_view.py:457` | `w.bind("<F2>", self.on_f2_press)` |
 | F2 | `ui/layout_editor_view.py:458` | `w.bind("<Key-F2>", self.on_f2_press)` |
@@ -1218,12 +1219,14 @@ Local: `/home/dola/Documentos/clone do job/antigo/arquivos pos instalacao/Common
 | Dom, 18/10/2026 | 11:51 | Antigravity | Remoção do seletor visual de máquina de corte no editor (`SessionView`): remoção do rótulo e combobox `cb_machine` da interface gráfica conforme o padrão clássico original, mantendo a máquina fixa padrão 'ATOM FlashCut Flex 3020' nos dados da sessão, backend e exportadores; preservação do método `get_machine()`; 1 novo teste unitário dedicado (`test_machine_default_preserved_without_editor_combobox`, 59/59 testes passando) e recompilação do executável standalone Linux (`teste_dola_linux`) | `ui/session_view.py`, `tests/test_layout_editor_shortcuts.py`, `PROJETO_ATOM_JOBMANAGER.md`, `teste_dola_linux`, `dist/teste_dola` |
 | Dom, 18/10/2026 | 12:12 | Antigravity | Atalho de impressão Ctrl+P e correção da escala proporcional da chapa no relatório de impressão A4 (`LayoutPrintDialog`): vinculação de `<Control-p>`/`<Control-P>` no `LayoutEditorView` (canvas e frame), na janela principal (`MainWindow`) e no diálogo; cálculo dinâmico da chapa preenchendo a folha A4 proporcionalmente e centralizada (substituição do antigo limite fixo de 60pt por área disponível de ~550pt entre metadados e rodapé); preservação estrita do aspect ratio para qualquer chapa (horizontal, vertical ou tiras); renderização idêntica no preview Tkinter e exportador PIL/PDF; 2 novos testes unitários (61/61 testes passando) e recompilação do executável standalone Linux (`teste_dola_linux`) | `ui/layout_print_dialog.py`, `ui/layout_editor_view.py`, `ui/main_window.py`, `tests/test_layout_editor_shortcuts.py`, `PROJETO_ATOM_JOBMANAGER.md`, `teste_dola_linux`, `dist/teste_dola` |
 | Dom, 18/10/2026 | 16:30 | Antigravity | Alteração da nomenclatura de 'Sheet' para 'Placa' com medidas em centímetros (cm) e desativação de referências a 'Leather' (couro): atualização dos rótulos sobre a mesa CAD e na barra de status do `LayoutEditorView` e `SessionView` para 'Placa (h X w cm)'; remoção da estratégia 'flashnestleather' da combobox de estratégias e da opção 'como pele' no cadastro de materiais; atualização de materiais seed no banco de dados; 1 novo teste unitário dedicado (`test_plate_label_in_cm_and_no_sheet_nor_leather`, 62/62 testes passando) e recompilação do executável standalone Linux (`teste_dola_linux`) | `ui/layout_editor_view.py`, `ui/session_view.py`, `ui/material_codes_view.py`, `database.py`, `tests/test_layout_editor_shortcuts.py`, `PROJETO_ATOM_JOBMANAGER.md`, `teste_dola_linux`, `dist/teste_dola` |
+| Dom, 18/10/2026 | 17:45 | Antigravity | Abertura da tela de impressão (`LayoutPrintDialog`) em tela cheia / maximizada: inicialização maximizada ocupando todo o monitor (`-zoomed` / `state("zoomed")` / resolução de tela); remoção da restrição `transient` permitindo controles padrão de janela (minimizar, restaurar e fechar); botão `⛶ Tela Cheia` na barra de ferramentas e atalho `<F11>` para alternar entre maximizado e fullscreen sem bordas; atalho `<Escape>` inteligente (sai de fullscreen antes de fechar); reajuste dinâmico automático (`fit_to_page`) no evento `<Configure>` da tela cheia garantindo zoom proporcional de 100% da folha A4; 1 novo teste unitário dedicado (`test_layout_print_dialog_fullscreen_and_maximized`, 63/63 testes passando) e recompilação do executável standalone Linux (`teste_dola_linux`) | `ui/layout_print_dialog.py`, `tests/test_layout_editor_shortcuts.py`, `PROJETO_ATOM_JOBMANAGER.md`, `teste_dola_linux`, `dist/teste_dola` |
 
 **Commits recentes (automático):**
 
 <!-- AUTO:gitlog:start -->
 | Commit | Data | Autor | Mensagem |
 |---|---|---|---|
+| `4d7aa81` | 2026-10-18 | Doletabgi | feat(ui): alterar nomenclatura para Placa em cm e desativar Sheet e Leather |
 | `ae66409` | 2026-10-18 | Doletabgi | feat(ui): atalho Ctrl+P de impressao e proporcao correta da placa no relatorio A4 |
 | `91a1a9a` | 2026-10-18 | Doletabgi | feat(ui): manter maquina ATOM FlashCut Flex 3020 padrao e remover opcao do editor |
 | `09955d4` | 2026-10-18 | Doletabgi | feat(ui): centralizar placa do layout simetricamente no meio da tela |
@@ -1238,7 +1241,6 @@ Local: `/home/dola/Documentos/clone do job/antigo/arquivos pos instalacao/Common
 | `e6d1a1f` | 2026-10-18 | Doletabgi | feat(ui): permitir excluir, renomear e persistir pastas de producao e moldes |
 | `9aaa8be` | 2026-10-18 | Doletabgi | fix(cad): adicionar resiliencia de FK ao importar moldes .die no MySQL |
 | `ec861d1` | 2026-10-18 | Doletabgi | docs: registrar dia, data e hora nas atualizacoes do changelog e espelhar na raiz |
-| `f8721fe` | 2026-10-18 | Doletabgi | fix(session): numeracao monotonica estrita, protecao contra re-semeadura no restart e atualizacao do binario |
 <!-- AUTO:gitlog:end -->
 
 ---

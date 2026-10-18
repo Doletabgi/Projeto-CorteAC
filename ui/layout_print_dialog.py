@@ -25,10 +25,24 @@ class LayoutPrintDialog(tk.Toplevel):
     def __init__(self, parent, layout_data=None, **kwargs):
         super().__init__(parent, bg=THEME["bg_surface"], **kwargs)
         self.title("Print Preview - Layout")
-        self.geometry("860x780")
+        self.geometry("1100x800")
         self.minsize(680, 500)
-        self.transient(parent)
 
+        # Inicia a tela de impressão maximizada ocupando a tela cheia do monitor
+        try:
+            self.attributes("-zoomed", True)
+        except Exception:
+            try:
+                self.state("zoomed")
+            except Exception:
+                try:
+                    sw = self.winfo_screenwidth()
+                    sh = self.winfo_screenheight()
+                    self.geometry(f"{sw}x{sh}+0+0")
+                except Exception:
+                    pass
+
+        self._initial_fit_done = False
         self.layout_data = layout_data or {}
         self.zoom = 1.0
         self.logo_img = None
@@ -189,6 +203,12 @@ class LayoutPrintDialog(tk.Toplevel):
             relief="raised", bd=2, font=("Segoe UI", 9), padx=4, command=self.fit_to_page
         ).pack(side="left", padx=2)
 
+        self.btn_fullscreen = tk.Button(
+            tb, text="⛶ Tela Cheia", bg=THEME["bg_surface"], fg=THEME["text_main"],
+            relief="raised", bd=2, font=("Segoe UI", 9), padx=4, command=self.toggle_fullscreen
+        )
+        self.btn_fullscreen.pack(side="left", padx=2)
+
         tk.Button(
             tb, text="❌ Fechar", bg=THEME["bg_surface"], fg=THEME["text_main"],
             relief="raised", bd=2, font=("Segoe UI", 9), padx=8, command=self.destroy
@@ -216,7 +236,7 @@ class LayoutPrintDialog(tk.Toplevel):
         self.h_scroll.pack(side="bottom", fill="x")
         self.canvas.pack(side="left", fill="both", expand=True)
 
-        self.canvas.bind("<Configure>", lambda e: self.redraw())
+        self.canvas.bind("<Configure>", self._on_canvas_configure)
 
         # Interações de rolagem e zoom
         self.bind("<Control-MouseWheel>", self._on_ctrl_wheel)
@@ -227,7 +247,46 @@ class LayoutPrintDialog(tk.Toplevel):
         # Atalhos de teclado
         self.bind("<Control-p>", lambda e: self.do_print())
         self.bind("<Control-P>", lambda e: self.do_print())
-        self.bind("<Escape>", lambda e: self.destroy())
+        self.bind("<F11>", self.toggle_fullscreen)
+        self.bind("<Escape>", self.on_escape)
+
+    def _on_canvas_configure(self, event):
+        if not getattr(self, "_initial_fit_done", False):
+            if event.width > 200 and event.height > 200:
+                self._initial_fit_done = True
+                self.fit_to_page()
+                return
+        self.redraw()
+
+    def toggle_fullscreen(self, event=None):
+        try:
+            self._is_fullscreen = not getattr(self, "_is_fullscreen", False)
+            try:
+                self.attributes("-fullscreen", self._is_fullscreen)
+            except Exception:
+                pass
+            if hasattr(self, "btn_fullscreen"):
+                self.btn_fullscreen.config(text="🗗 Restaurar" if self._is_fullscreen else "⛶ Tela Cheia")
+            self.after(60, self.fit_to_page)
+        except Exception:
+            pass
+
+    def on_escape(self, event=None):
+        try:
+            if getattr(self, "_is_fullscreen", False):
+                self._is_fullscreen = False
+                try:
+                    self.attributes("-fullscreen", False)
+                except Exception:
+                    pass
+                if hasattr(self, "btn_fullscreen"):
+                    self.btn_fullscreen.config(text="⛶ Tela Cheia")
+                self.after(60, self.fit_to_page)
+                return "break"
+        except Exception:
+            pass
+        self.destroy()
+        return "break"
 
     def _on_wheel(self, event):
         delta = -1 if event.delta > 0 else 1
@@ -248,6 +307,12 @@ class LayoutPrintDialog(tk.Toplevel):
     def fit_to_page(self):
         cv_w = self.canvas.winfo_width()
         cv_h = self.canvas.winfo_height()
+        if cv_w < 100 or cv_h < 100:
+            try:
+                cv_w = int(self.canvas.cget("width"))
+                cv_h = int(self.canvas.cget("height"))
+            except Exception:
+                cv_w, cv_h = 1000, 700
         if cv_w < 100 or cv_h < 100:
             self.zoom = 0.85
         else:
@@ -403,7 +468,8 @@ class LayoutPrintDialog(tk.Toplevel):
         # Retângulo do Material / Chapa
         self.canvas.create_rectangle(
             bed_x, bed_y, bed_x + bed_w, bed_y + bed_h,
-            fill="#ffffff", outline="#000000", width=1
+            fill="#ffffff", outline="#000000", width=1,
+            tags="print_bed"
         )
 
         # Desenha cada peça encaixada na chapa

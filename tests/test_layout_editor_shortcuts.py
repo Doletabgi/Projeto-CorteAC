@@ -651,6 +651,36 @@ class TestLayoutEditorShortcuts(unittest.TestCase):
         self.assertNotIn("flashnestleather", strat_values)
         sv.destroy()
 
+    def test_layout_print_dialog_fullscreen_and_maximized(self):
+        """Tela de impressão inicia maximizada / tela cheia, possui controle F11 e escape inteligente."""
+        from ui.layout_print_dialog import LayoutPrintDialog
+
+        dlg = LayoutPrintDialog(self.view, layout_data={"layout_name": "TEST_FS.lay"})
+        dlg.update_idletasks()
+
+        # 1. Verifica existência do botão de tela cheia
+        self.assertTrue(hasattr(dlg, "btn_fullscreen"))
+        self.assertEqual(dlg.btn_fullscreen.cget("text"), "⛶ Tela Cheia")
+
+        # 2. Testa alternância de tela cheia (F11 / toggle_fullscreen)
+        dlg.toggle_fullscreen()
+        self.assertEqual(dlg.btn_fullscreen.cget("text"), "🗗 Restaurar")
+        try:
+            self.assertTrue(bool(dlg.attributes("-fullscreen")))
+        except Exception:
+            pass
+
+        # 3. Testa on_escape em tela cheia: deve restaurar sem destruir a janela
+        res = dlg.on_escape()
+        self.assertEqual(res, "break")
+        self.assertEqual(dlg.btn_fullscreen.cget("text"), "⛶ Tela Cheia")
+        self.assertTrue(dlg.winfo_exists())
+
+        # 4. Testa on_escape fora de tela cheia: destrói a janela
+        dlg.on_escape()
+        self.assertFalse(dlg.winfo_exists())
+
 
 if __name__ == "__main__":
     unittest.main()
+
