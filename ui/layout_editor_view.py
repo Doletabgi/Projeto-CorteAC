@@ -1134,7 +1134,7 @@ class LayoutEditorView(tk.Frame):
 
         # 1. Escala proporcional e limites estáticos da chapa
         top_lbl_h = 24.0
-        bottom_margin = 16.0
+        bottom_margin = 22.0
         avail_h = max(50.0, ch - top_lbl_h - bottom_margin)
 
         if getattr(self, "custom_divider_ratio", None) is not None:
@@ -1207,19 +1207,58 @@ class LayoutEditorView(tk.Frame):
             tags="sheet_label"
         )
 
-        # 3. Grade Milimétrica Sutil
+        # 3. Grade Milimétrica Sutil e Marcações de 10 em 10 cm (com números e traços)
         if self.show_grid:
-            grid_step = 100.0
+            grid_step = 100.0  # 100 mm = 10 cm
+
             cur_wx = 0.0
-            while cur_wx <= self.sheet_width:
+            while cur_wx <= self.sheet_width + 0.1:
                 gx = x1 + cur_wx * scale
-                self.canvas.create_line(gx, y1, gx, y2, fill="#8c8c8c", width=1)
+                # Linha de grade vertical interna
+                if 0.5 < cur_wx < self.sheet_width - 0.5:
+                    self.canvas.create_line(gx, y1, gx, y2, fill="#8c8c8c", width=1, tags="grid_line")
+
+                # Marcações (ticks) nas bordas superior e inferior
+                self.canvas.create_line(gx, y2 - 3, gx, y2 + 3, fill="#000000", width=1, tags="grid_tick")
+                self.canvas.create_line(gx, y1 - 3, gx, y1 + 3, fill="#000000", width=1, tags="grid_tick")
+
+                # Numeração de 10 em 10 cm na borda inferior
+                cm_x = int(round(cur_wx / 10.0))
+                if cm_x > 0 and cur_wx < self.sheet_width - 0.5:
+                    self.canvas.create_text(
+                        gx, y2 + 8,
+                        text=str(cm_x),
+                        fill="#000000",
+                        font=("Segoe UI", 7),
+                        anchor="n",
+                        tags="grid_label"
+                    )
+
                 cur_wx += grid_step
 
             cur_wy = 0.0
-            while cur_wy <= self.sheet_height:
+            while cur_wy <= self.sheet_height + 0.1:
                 gy = y2 - cur_wy * scale
-                self.canvas.create_line(x1, gy, x2, gy, fill="#8c8c8c", width=1)
+                # Linha de grade horizontal interna
+                if 0.5 < cur_wy < self.sheet_height - 0.5:
+                    self.canvas.create_line(x1, gy, x2, gy, fill="#8c8c8c", width=1, tags="grid_line")
+
+                # Marcações (ticks) nas bordas esquerda e direita
+                self.canvas.create_line(x1 - 3, gy, x1 + 3, gy, fill="#000000", width=1, tags="grid_tick")
+                self.canvas.create_line(x2 - 3, gy, x2 + 3, gy, fill="#000000", width=1, tags="grid_tick")
+
+                # Numeração de 10 em 10 cm na borda direita (conforme imagem do usuário: 10, 20, 30...)
+                cm_y = int(round(cur_wy / 10.0))
+                if cm_y > 0 and cur_wy < self.sheet_height - 0.5:
+                    self.canvas.create_text(
+                        x2 + 5, gy,
+                        text=str(cm_y),
+                        fill="#000000",
+                        font=("Segoe UI", 8),
+                        anchor="w",
+                        tags="grid_label"
+                    )
+
                 cur_wy += grid_step
 
         # Indicador visual de Zoom ativo no topo da tela

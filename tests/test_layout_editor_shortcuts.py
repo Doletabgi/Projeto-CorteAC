@@ -680,7 +680,41 @@ class TestLayoutEditorShortcuts(unittest.TestCase):
         dlg.on_escape()
         self.assertFalse(dlg.winfo_exists())
 
+    def test_grid_10cm_markings_and_labels(self):
+        """A placa do layout possui marcações e réguas de 10 em 10 cm com traços e números."""
+        self.root.geometry("1024x515")
+        self.view.update()
+        self.view.set_sheet_size(1380.0, 2980.0)
+        self.view.update()
+        self.view.redraw()
+
+        # 1. Verifica presença de traços de marcação (ticks) nas bordas
+        ticks = self.view.canvas.find_withtag("grid_tick")
+        self.assertGreater(len(ticks), 10, "A placa deve possuir traços (ticks) de marcação ao longo das bordas")
+
+        # 2. Verifica presença de números de 10 em 10 cm
+        labels = self.view.canvas.find_withtag("grid_label")
+        self.assertGreater(len(labels), 10, "A placa deve possuir numeração de 10 em 10 cm")
+
+        label_texts = [self.view.canvas.itemcget(item, "text") for item in labels]
+        self.assertIn("10", label_texts, "Deve conter a marcação de 10 cm")
+        self.assertIn("20", label_texts, "Deve conter a marcação de 20 cm")
+        self.assertIn("30", label_texts, "Deve conter a marcação de 30 cm")
+
+        # 3. Testa ocultação quando show_grid é desativado
+        self.view.show_grid = False
+        self.view.redraw()
+        labels_hidden = self.view.canvas.find_withtag("grid_label")
+        ticks_hidden = self.view.canvas.find_withtag("grid_tick")
+        self.assertEqual(len(labels_hidden), 0)
+        self.assertEqual(len(ticks_hidden), 0)
+
+        # Restaura show_grid
+        self.view.show_grid = True
+        self.view.redraw()
+
 
 if __name__ == "__main__":
     unittest.main()
+
 
