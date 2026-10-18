@@ -252,7 +252,27 @@ class TestSessionViewInlineArrowNavigation(unittest.TestCase):
         self.root.update()
         self.assertEqual(entry.get(), "16", "Control-Down deve decrementar o valor em -1")
 
+    def test_summary_text_does_not_contain_shapes_or_notes_placeholders(self):
+        """Testa que o texto do sumário da sessão não inclui informações desnecessárias de Shapes e Notes."""
+        self.sv.update_summary_text(layouts_count=5, yield_pct=83.5, est_sec=125)
+        self.root.update()
+        summary_content = self.sv.txt_summary.get("1.0", "end")
+
+        # Verifica que o sumário contém as informações essenciais da sessão
+        self.assertIn("Summary information for session", summary_content)
+        self.assertIn("Material / Layout:", summary_content)
+        self.assertIn("Layouts:", summary_content)
+        self.assertIn("Material Yield", summary_content)
+
+        # Verifica que as informações removidas a pedido do usuário NÃO constam no texto
+        self.assertNotIn("Status: Processed and verified", summary_content)
+        self.assertNotIn("Ready for cutting table: YES", summary_content)
+        self.assertNotIn("Output profile: ATOM FlashCut Flex 3020 CNC", summary_content)
+        self.assertNotIn("Blade type: Pneumatic Oscillating Knife 0.6mm", summary_content)
+        self.assertNotIn("Export format: G-Code ISO 6983 / DXF", summary_content)
+
 
 if __name__ == "__main__":
     unittest.main()
+
 

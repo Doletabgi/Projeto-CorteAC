@@ -632,7 +632,7 @@ class SessionView(tk.Frame):
 
         notes_box = tk.Frame(tab_summary, relief="sunken", bd=2, bg=THEME["bg_input"], height=90)
         notes_box.pack(fill="x")
-        tk.Label(notes_box, text="Notes: ATOM FlashCut Flex 3020 / Oscillating Knife profile loaded.", bg=THEME["bg_input"], fg=THEME["text_main"], font=("Segoe UI", 9), anchor="w").pack(fill="x", padx=4, pady=4)
+        tk.Label(notes_box, text="Notes:", bg=THEME["bg_input"], fg=THEME["text_main"], font=("Segoe UI", 9, "bold"), anchor="w").pack(fill="x", padx=4, pady=4)
 
         self.update_summary_text(0, 0, 0)
 
@@ -2286,29 +2286,22 @@ class SessionView(tk.Frame):
         gap = mat.get("gap", 1.0)
         area = mat.get("area_m2", round(w_m * l_m, 4))
         mat_code = mat.get("code", "853412")
+        w_cm = w_m * 100.0
+        l_cm = l_m * 100.0
 
         text = f"""Summary information for session #{sess_id} of job {sess_job}
 
 Material / Layout:
 - Código do Material: {mat_code}
-- Dimensões do Layout: {w_m:.2f}m (Largura) x {l_m:.2f}m (Comprimento) [{int(w_m*1000)} x {int(l_m*1000)} mm]
+- Dimensões do Layout: {l_cm:.2f} X {w_cm:.2f} cm [{w_m:.2f}m x {l_m:.2f}m]
 - Camadas de corte (Layers): {layers}
 - Gap entre peças: {gap} mm
-- Área total da chapa: {area:.4f} m²
+- Área total da placa: {area:.4f} m²
 
 Layouts:
 - Calculated Layouts: {layouts_count}
 - Material Yield (Aproveitamento Útil): {yield_pct:.1f}%
 - Estimated ATOM Cycle Time: {int(est_sec // 60)}m {int(est_sec % 60):02d}s
-
-Shapes:
-- Status: Processed and verified
-- Ready for cutting table: YES
-
-Notes:
-- Output profile: ATOM FlashCut Flex 3020 CNC
-- Blade type: Pneumatic Oscillating Knife 0.6mm
-- Export format: G-Code ISO 6983 / DXF
 """
         self.txt_summary.delete("1.0", "end")
         self.txt_summary.insert("1.0", text)
