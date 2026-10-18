@@ -272,7 +272,39 @@ class DatabaseManager:
                     FOREIGN KEY (shape_id) REFERENCES shapes(id)
                 )
                 """)
-                conn.commit()
+
+            # Tabela de pastas de produção (job_folders) para MySQL e SQLite
+            if conn.backend == "mysql":
+                cursor.execute("""
+                CREATE TABLE IF NOT EXISTS job_folders (
+                    id INT AUTO_INCREMENT PRIMARY KEY,
+                    name VARCHAR(150) UNIQUE NOT NULL
+                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+                """)
+            else:
+                cursor.execute("""
+                CREATE TABLE IF NOT EXISTS job_folders (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    name TEXT UNIQUE NOT NULL
+                )
+                """)
+
+            # Inicialização idempotente de job_folders (executa apenas uma vez no setup)
+            cursor.execute("SELECT `value` FROM settings WHERE `key` = 'job_folders_initialized'")
+            row_init = cursor.fetchone()
+            if not row_init:
+                cursor.execute("SELECT COUNT(*) FROM job_folders")
+                if cursor.fetchone()[0] == 0:
+                    cursor.execute("INSERT OR IGNORE INTO job_folders (name) VALUES ('ProduçãoNova')")
+                    try:
+                        cursor.execute("SELECT DISTINCT job FROM sessions WHERE job IS NOT NULL AND job != ''")
+                        for r in cursor.fetchall():
+                            cursor.execute("INSERT OR IGNORE INTO job_folders (name) VALUES (?)", (r[0],))
+                    except Exception:
+                        pass
+                cursor.execute("REPLACE INTO settings (`key`, `value`) VALUES ('job_folders_initialized', '1')")
+
+            conn.commit()
 
         self.seed_initial_data()
 
@@ -769,6 +801,56 @@ class DatabaseManager:
                 cursor.execute("DELETE FROM shapes WHERE folder = ?", (name,))
             else:
                 cursor.execute("UPDATE shapes SET folder = '' WHERE folder = ?", (name,))
+            conn.commit()
+            return True
+
+    # -------------------------------------------------------------
+    # Gestão de Pastas de Produção (Jobs)
+    # -------------------------------------------------------------
+    def get_job_folders(self) -> List[str]:
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT name FROM job_folders ORDER BY id ASC")
+            folders = [row["name"] for row in cursor.fetchall()]
+            return folders
+
+    def create_job_folder(self, name: str) -> bool:
+        name = name.strip()
+        if not name:
+            return False
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            try:
+                cursor.execute("INSERT OR IGNORE INTO job_folders (name) VALUES (?)", (name,))
+                conn.commit()
+                return True
+            except Exception:
+                return False
+
+    def rename_job_folder(self, old_name: str, new_name: str) -> bool:
+        old_name = old_name.strip()
+        new_name = new_name.strip()
+        if not old_name or not new_name:
+            return False
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("UPDATE job_folders SET name = ? WHERE name = ?", (new_name, old_name))
+            cursor.execute("UPDATE sessions SET job = ? WHERE job = ?", (new_name, old_name))
+            conn.commit()
+            return True
+
+    def delete_job_folder(self, name: str, delete_sessions: bool = False) -> bool:
+        name = name.strip()
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("DELETE FROM job_folders WHERE name = ?", (name,))
+            if delete_sessions:
+                cursor.execute("SELECT id FROM sessions WHERE job = ?", (name,))
+                s_ids = [r[0] for r in cursor.fetchall()]
+                if s_ids:
+                    self.delete_sessions(s_ids)
+            else:
+                cursor.execute("UPDATE sessions SET job = '' WHERE job = ?", (name,))
             conn.commit()
             return True
 

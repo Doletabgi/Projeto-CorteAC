@@ -54,6 +54,12 @@ CREATE TABLE IF NOT EXISTS shape_folders (
     name VARCHAR(150) UNIQUE NOT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+-- 4.1 Pastas de Produção (Job Folders)
+CREATE TABLE IF NOT EXISTS job_folders (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    name VARCHAR(150) UNIQUE NOT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 -- 5. Moldes / Geometria CAD (Shapes)
 CREATE TABLE IF NOT EXISTS shapes (
     id INT AUTO_INCREMENT PRIMARY KEY,

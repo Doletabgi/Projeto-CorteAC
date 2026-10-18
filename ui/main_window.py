@@ -1390,17 +1390,24 @@ class MainWindow(tk.Tk):
 
     def on_delete_shape_folder(self, folder_name):
         """Exclui uma pasta de moldes com opção de mover ou excluir os moldes."""
-        resp = messagebox.askyesnocancel(
-            "Excluir Pasta de Moldes",
-            f"Deseja excluir a pasta '{folder_name}'?\n\n"
-            f"• Clique 'Sim' para excluir a pasta E todos os moldes dentro dela.\n"
-            f"• Clique 'Não' para excluir apenas a pasta (os moldes irão para a raiz 'Moldes').\n"
-            f"• Clique 'Cancelar' para desistir.",
-            parent=self
-        )
-        if resp is None:
-            return
-        delete_shapes = (resp is True)
+        shapes_in_folder = [s for s in self.current_shapes if (s.get("folder") or "").strip() == folder_name.strip()]
+        if len(shapes_in_folder) == 0:
+            if not messagebox.askyesno("Excluir Pasta de Moldes", f"Deseja realmente excluir a pasta '{folder_name}'?", parent=self):
+                return
+            delete_shapes = False
+        else:
+            resp = messagebox.askyesnocancel(
+                "Excluir Pasta de Moldes",
+                f"Deseja excluir a pasta '{folder_name}'?\n\n"
+                f"• Clique 'Sim' para excluir a pasta E todos os moldes dentro dela.\n"
+                f"• Clique 'Não' para excluir apenas a pasta (os moldes irão para a raiz 'Moldes').\n"
+                f"• Clique 'Cancelar' para desistir.",
+                parent=self
+            )
+            if resp is None:
+                return
+            delete_shapes = (resp is True)
+
         self.db.delete_shape_folder(folder_name, delete_shapes=delete_shapes)
         self.reload_shapes()
         if self.current_mode == "shapes":
@@ -1910,21 +1917,34 @@ class MainWindow(tk.Tk):
             self.grid_lower.column("nome", width=110, anchor="w")
             self.grid_lower.column("status", width=65, anchor="center")
 
-            # Árvore: Nó raiz Produção com ícone de PC e nó filho ProduçãoNova com ícone de pasta amarela
+            # Árvore: Nó raiz Produção com ícone de PC e nós de pastas de Produção com ícone de pasta amarela
             img_root = {"image": self.icons["node_base"]} if self.icons.get("node_base") else {}
-            root = self.tree_main.insert("", "end", text=" Produção", open=True, **img_root)
+            root = self.tree_main.insert("", "end", text=" Produção", open=True, values=("root_production", ""), **img_root)
 
             img_folder = {"image": self.icons["job_folder"]} if self.icons.get("job_folder") else {}
-            prod_nova = self.tree_main.insert(root, "end", text=" ProduçãoNova", open=True, **img_folder)
-
             img_order = {"image": self.icons["job_order"]} if self.icons.get("job_order") else {}
             img_sess = {"image": self.icons["job_session"]} if self.icons.get("job_session") else {}
-            
+
+            # Carrega pastas de produção do banco
+            job_folders = self.db.get_job_folders()
+
+            # Se não houver pastas no banco e existirem sessões ou pedidos, assegura a pasta padrão
+            if not job_folders and (self.sessions or self.orders):
+                self.db.create_job_folder("ProduçãoNova")
+                job_folders = ["ProduçãoNova"]
+
+            folder_nodes = {}
+            for j_name in job_folders:
+                fn_id = self.tree_main.insert(root, "end", text=f" {j_name}", open=True, values=("job_folder", j_name), **img_folder)
+                folder_nodes[j_name] = fn_id
+
+            first_parent = folder_nodes[job_folders[0]] if job_folders else root
+
             # Insere pedidos/ordens dinamicamente
             for ord_item in self.orders:
                 o_id = ord_item["id"]
                 o_name = ord_item.get("name") or (f"Derby Masculino #41" if o_id == 1 else f"Pedido #{o_id}")
-                self.tree_main.insert(prod_nova, "end", text=f" {o_name}", values=("order", o_id), **img_order)
+                self.tree_main.insert(first_parent, "end", text=f" {o_name}", values=("order", o_id), **img_order)
 
             # Insere as sessões dinamicamente
             selected_sess_item = None
@@ -1932,7 +1952,15 @@ class MainWindow(tk.Tk):
                 s_id = sess["id"]
                 s_name = sess.get("name", f"Sessão #{s_id}")
                 s_status = sess.get("status", "Stand by")
-                s_job = sess.get("job", "ProduçãoNova")
+                s_job = (sess.get("job") or "").strip() or (job_folders[0] if job_folders else "ProduçãoNova")
+
+                # Se a pasta da sessão ainda não estiver no nó, insere dinamicamente
+                if s_job not in folder_nodes:
+                    self.db.create_job_folder(s_job)
+                    fn_id = self.tree_main.insert(root, "end", text=f" {s_job}", open=True, values=("job_folder", s_job), **img_folder)
+                    folder_nodes[s_job] = fn_id
+
+                parent_node = folder_nodes.get(s_job, root)
 
                 # Formatação do rótulo na árvore
                 if s_name.startswith(f"(#{s_id})") or s_name.startswith(f"( #{s_id} )"):
@@ -1942,18 +1970,20 @@ class MainWindow(tk.Tk):
                 else:
                     node_text = f" (#{s_id}) {s_name}"
 
-                item_id = self.tree_main.insert(prod_nova, "end", text=node_text, values=("session", s_id), **img_sess)
+                item_id = self.tree_main.insert(parent_node, "end", text=node_text, values=("session", s_id), **img_sess)
                 if self.current_session and self.current_session.get("id") == s_id:
                     selected_sess_item = item_id
 
                 # Alimenta grid inferior
                 self.grid_lower.insert("", "end", values=(str(s_id), s_job, s_name, s_status))
 
-            # Seleciona o item da sessão ativa ou ProduçãoNova
+            # Seleciona o item da sessão ativa ou primeira pasta ou raiz
             if selected_sess_item:
                 self.tree_main.selection_set(selected_sess_item)
+            elif job_folders and job_folders[0] in folder_nodes:
+                self.tree_main.selection_set(folder_nodes[job_folders[0]])
             else:
-                self.tree_main.selection_set(prod_nova)
+                self.tree_main.selection_set(root)
 
         elif mode == "shapes":
             # -------------------------------------------------------------
@@ -2224,9 +2254,21 @@ class MainWindow(tk.Tk):
                 self.tree_menu.entryconfig("Renomear", state="disabled")
                 self.tree_menu.entryconfig("Excluir", state="normal", label=lbl_del, command=self.on_delete_tree_item)
             else:
+                is_root = False
+                if sel:
+                    vals = self.tree_main.item(sel[0], "values")
+                    if vals and vals[0] == "root_production":
+                        is_root = True
+                    elif self.tree_main.parent(sel[0]) == "" and self.tree_main.item(sel[0], "text").strip() == "Produção":
+                        is_root = True
+
                 self.tree_menu.entryconfig("Abrir", state="normal", label="Abrir", command=self.on_tree_menu_open)
-                self.tree_menu.entryconfig("Renomear", state="normal")
-                self.tree_menu.entryconfig("Excluir", state="normal", label="Excluir", command=self.on_delete_tree_item)
+                if is_root:
+                    self.tree_menu.entryconfig("Renomear", state="disabled")
+                    self.tree_menu.entryconfig("Excluir", state="disabled")
+                else:
+                    self.tree_menu.entryconfig("Renomear", state="normal")
+                    self.tree_menu.entryconfig("Excluir", state="normal", label="Excluir", command=self.on_delete_tree_item)
             self.show_popup_menu(self.tree_menu, event.x_root, event.y_root)
 
     def show_grid_context_menu(self, event):
@@ -2918,13 +2960,18 @@ class MainWindow(tk.Tk):
 
     def on_create_production(self):
         name = simpledialog.askstring("Criar Produção", "Nome da nova Produção:", initialvalue="ProduçãoNova_2", parent=self)
-        if name:
-            img_folder = {"image": self.icons["job_folder"]} if self.icons.get("job_folder") else {}
-            roots = self.tree_main.get_children()
-            if roots:
-                new_item = self.tree_main.insert(roots[0], "end", text=f" {name}", open=True, **img_folder)
-                self.tree_main.selection_set(new_item)
-                self.lbl_status_msg.config(text=f"Produção '{name}' criada.")
+        if name and name.strip():
+            folder_name = name.strip()
+            self.db.create_job_folder(folder_name)
+            self.switch_tree_mode("jobs")
+            # Seleciona a pasta recém criada
+            for item in self.tree_main.get_children():
+                for sub in self.tree_main.get_children(item):
+                    vals = self.tree_main.item(sub, "values")
+                    if vals and len(vals) >= 2 and vals[0] == "job_folder" and vals[1] == folder_name:
+                        self.tree_main.selection_set(sub)
+                        break
+            self.lbl_status_msg.config(text=f"Pasta de produção '{folder_name}' criada.")
 
     def on_rename_tree_item(self):
         sel = self.tree_main.selection()
@@ -2933,7 +2980,8 @@ class MainWindow(tk.Tk):
         curr = self.tree_main.item(sel[0], "text").strip()
         vals = self.tree_main.item(sel[0], "values")
         new_name = simpledialog.askstring("Renomear", "Novo nome:", initialvalue=curr, parent=self)
-        if new_name:
+        if new_name and new_name.strip():
+            new_name = new_name.strip()
             if vals and len(vals) >= 2 and vals[0] == "session":
                 sess_id = int(vals[1])
                 self.db.update_session(sess_id, name=new_name)
@@ -2958,9 +3006,68 @@ class MainWindow(tk.Tk):
                     self.order_view.load_order(self.current_order)
                 if self.current_mode == "jobs":
                     self.switch_tree_mode("jobs")
+            elif vals and len(vals) >= 2 and vals[0] == "job_folder":
+                old_name = str(vals[1])
+                self.db.rename_job_folder(old_name, new_name)
+                self.sessions = self.db.get_sessions()
+                self.switch_tree_mode("jobs")
+                self.lbl_status_msg.config(text=f"Pasta de produção renomeada para '{new_name}'.")
+                return
+            elif vals and len(vals) >= 2 and vals[0] == "folder":
+                old_name = str(vals[1])
+                self.db.rename_shape_folder(old_name, new_name)
+                self.reload_shapes()
+                self.switch_tree_mode("shapes")
+                self.lbl_status_msg.config(text=f"Pasta de moldes renomeada para '{new_name}'.")
+                return
             else:
                 self.tree_main.item(sel[0], text=f" {new_name}")
             self.lbl_status_msg.config(text=f"Item renomeado para '{new_name}'.")
+
+    def on_delete_job_folder(self, folder_name: str):
+        """Exclui uma pasta de produção (job) com confirmação e opção de exclusão em cascata."""
+        folder_name = folder_name.strip()
+        sessions_in_job = [s for s in self.sessions if (s.get("job") or "").strip() == folder_name]
+        num_sess = len(sessions_in_job)
+
+        if num_sess == 0:
+            if not messagebox.askyesno("Excluir Produção", f"Deseja realmente excluir a pasta de produção '{folder_name}'?", parent=self):
+                return
+            self.db.delete_job_folder(folder_name, delete_sessions=False)
+        else:
+            resp = messagebox.askyesnocancel(
+                "Excluir Pasta de Produção",
+                f"A pasta '{folder_name}' contém {num_sess} sessão(ões).\n\n"
+                f"• Clique 'Sim' para excluir a pasta E todas as suas sessões.\n"
+                f"• Clique 'Não' para excluir apenas a pasta (as sessões serão mantidas).\n"
+                f"• Clique 'Cancelar' para desistir.",
+                parent=self
+            )
+            if resp is None:
+                return
+            delete_sessions = (resp is True)
+            if delete_sessions:
+                sess_ids = [s["id"] for s in sessions_in_job]
+                for sid in sess_ids:
+                    if sid in self.open_sessions:
+                        self.close_session_window(sid)
+                self.db.delete_sessions(sess_ids)
+                self.db.delete_job_folder(folder_name, delete_sessions=False)
+                del_set = set(sess_ids)
+                self.sessions = [s for s in self.sessions if s.get("id") not in del_set]
+                if self.current_session and self.current_session.get("id") in del_set:
+                    self.current_session = self.sessions[0] if self.sessions else None
+                    if not self.current_session:
+                        self.canvas.clear_bed()
+                        if self.active_child == self.session_view:
+                            self.close_child_window()
+            else:
+                self.db.delete_job_folder(folder_name, delete_sessions=False)
+                self.sessions = self.db.get_sessions()
+
+        if self.current_mode == "jobs":
+            self.switch_tree_mode("jobs")
+        self.lbl_status_msg.config(text=f"Pasta de produção '{folder_name}' excluída com sucesso.")
 
     def on_delete_tree_item(self):
         sel = self.tree_main.selection()
@@ -2971,14 +3078,20 @@ class MainWindow(tk.Tk):
         sessions_to_del = []
         shapes_to_del = []
         folders_to_del = []
+        job_folders_to_del = []
         orders_to_del = []
         materials_to_del = []
 
         for iid in sel:
             vals = self.tree_main.item(iid, "values")
             name = self.tree_main.item(iid, "text").strip()
+            parent_id = self.tree_main.parent(iid)
+
             if not vals:
+                if self.current_mode == "jobs" and parent_id:
+                    job_folders_to_del.append((iid, name))
                 continue
+
             node_type = vals[0]
             if node_type == "session" and len(vals) >= 2:
                 try:
@@ -2992,6 +3105,8 @@ class MainWindow(tk.Tk):
                     pass
             elif node_type == "folder" and len(vals) >= 2:
                 folders_to_del.append((iid, str(vals[1])))
+            elif node_type == "job_folder" and len(vals) >= 2:
+                job_folders_to_del.append((iid, str(vals[1])))
             elif node_type == "order" and len(vals) >= 2:
                 try:
                     orders_to_del.append((iid, int(vals[1]), name))
@@ -3066,6 +3181,12 @@ class MainWindow(tk.Tk):
         if folders_to_del:
             for _, f_name in folders_to_del:
                 self.on_delete_shape_folder(f_name)
+            return
+
+        # 3.1 Trata pastas de produção (jobs) selecionadas
+        if job_folders_to_del:
+            for _, f_name in job_folders_to_del:
+                self.on_delete_job_folder(f_name)
             return
 
         # 4. Trata materiais selecionados
@@ -3373,7 +3494,12 @@ class MainWindow(tk.Tk):
                 self.lbl_status_msg.config(text=f"Molde selecionado: ID {shape_id} (Pasta: {s_folder or 'Raiz'})")
         elif self.current_mode == "jobs":
             node_type = vals[0]
-            if node_type == "session" and len(vals) >= 2:
+            if node_type == "job_folder":
+                folder_name = vals[1] if len(vals) >= 2 else ""
+                self.lbl_status_msg.config(text=f"Pasta de produção selecionada: '{folder_name}'")
+            elif node_type == "root_production":
+                self.lbl_status_msg.config(text="Ambiente de Produção (Raiz)")
+            elif node_type == "session" and len(vals) >= 2:
                 try:
                     sess_id = int(vals[1])
                     if self.current_session and self.current_session.get("id") == sess_id and self.active_child == self.session_view:
@@ -3419,7 +3545,10 @@ class MainWindow(tk.Tk):
 
         if self.current_mode == "jobs":
             if item_vals and len(item_vals) >= 2:
-                if item_vals[0] == "session":
+                if item_vals[0] == "job_folder":
+                    self.tree_main.item(sel[0], open=not self.tree_main.item(sel[0], "open"))
+                    return
+                elif item_vals[0] == "session":
                     try:
                         self.switch_to_session(int(item_vals[1]))
                         return
@@ -3704,7 +3833,28 @@ class MainWindow(tk.Tk):
         # 2. Calcula próximo número sequencial monotônico (#1, #2, #3...)
         next_id = self.get_next_session_number()
         sess_name = f"Sessão #{next_id}"
-        sess_job = "ProduçãoNova"
+
+        # Determina a pasta de produção (job) para a nova sessão
+        sel = self.tree_main.selection()
+        sess_job = None
+        if sel:
+            vals = self.tree_main.item(sel[0], "values")
+            if vals and len(vals) >= 2 and vals[0] == "job_folder":
+                sess_job = str(vals[1])
+            elif vals and len(vals) >= 2 and vals[0] == "session":
+                s_obj = next((s for s in self.sessions if s["id"] == int(vals[1])), None)
+                if s_obj and s_obj.get("job"):
+                    sess_job = s_obj["job"]
+
+        if not sess_job and self.current_session and self.current_session.get("job"):
+            sess_job = self.current_session["job"]
+
+        if not sess_job:
+            folders = self.db.get_job_folders()
+            sess_job = folders[0] if folders else "ProduçãoNova"
+
+        # Garante que a pasta de produção existe no banco
+        self.db.create_job_folder(sess_job)
 
         # Conexão com Opções: Pergunta o nome da sessão ao criá-la
         ask_name = self.db.get_setting("ask_session_name", "1") == "1"

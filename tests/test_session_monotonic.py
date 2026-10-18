@@ -101,6 +101,36 @@ class TestSessionMonotonic(unittest.TestCase):
         self.assertIsNotNone(sid2)
         self.assertGreater(sid2, 0)
 
+    def test_job_folders_crud_and_persistence(self):
+        """Testa criação, listagem, renomeação e exclusão de pastas de produção."""
+        initial = self.db.get_job_folders()
+        self.assertIn("ProduçãoNova", initial)
+
+        # Cria nova pasta
+        ok = self.db.create_job_folder("Lote_2026")
+        self.assertTrue(ok)
+        self.assertIn("Lote_2026", self.db.get_job_folders())
+
+        # Renomeia
+        ok = self.db.rename_job_folder("Lote_2026", "Lote_2026_Final")
+        self.assertTrue(ok)
+        self.assertNotIn("Lote_2026", self.db.get_job_folders())
+        self.assertIn("Lote_2026_Final", self.db.get_job_folders())
+
+        # Exclui pasta
+        ok = self.db.delete_job_folder("Lote_2026_Final")
+        self.assertTrue(ok)
+        self.assertNotIn("Lote_2026_Final", self.db.get_job_folders())
+
+    def test_delete_job_folder_persistence_across_restarts(self):
+        """Testa que apagar uma pasta de produção (como ProduçãoNova) não reaparece ao reabrir o programa."""
+        self.db.delete_job_folder("ProduçãoNova")
+        self.assertEqual(len(self.db.get_job_folders()), 0)
+
+        # Re-instancia DatabaseManager simulando fechar e reabrir o programa
+        db2 = DatabaseManager(self.tmp_path, backend="sqlite")
+        self.assertEqual(len(db2.get_job_folders()), 0, "Pasta excluída nunca deve reaparecer ao reiniciar")
+
 
 if __name__ == "__main__":
     unittest.main()
