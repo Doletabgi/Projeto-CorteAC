@@ -835,42 +835,62 @@ class DatabaseManager:
             return folders
 
     def create_job_folder(self, name: str) -> bool:
-        name = name.strip()
+        name = name.strip().strip("/")
         if not name:
             return False
+        parts = [p.strip() for p in name.split("/") if p.strip()]
         with self.get_connection() as conn:
             cursor = conn.cursor()
             try:
-                cursor.execute("INSERT OR IGNORE INTO job_folders (name) VALUES (?)", (name,))
+                curr = ""
+                for part in parts:
+                    curr = f"{curr}/{part}" if curr else part
+                    cursor.execute("INSERT OR IGNORE INTO job_folders (name) VALUES (?)", (curr,))
                 conn.commit()
                 return True
             except Exception:
                 return False
 
     def rename_job_folder(self, old_name: str, new_name: str) -> bool:
-        old_name = old_name.strip()
-        new_name = new_name.strip()
-        if not old_name or not new_name:
+        old_name = old_name.strip().strip("/")
+        new_name = new_name.strip().strip("/")
+        if not old_name or not new_name or old_name == new_name:
             return False
         with self.get_connection() as conn:
             cursor = conn.cursor()
             cursor.execute("UPDATE job_folders SET name = ? WHERE name = ?", (new_name, old_name))
             cursor.execute("UPDATE sessions SET job = ? WHERE job = ?", (new_name, old_name))
+
+            # Atualiza também subpastas filhas (ex: SEMANA-46/LOTE-1 -> SEMANA-47/LOTE-1)
+            old_prefix = old_name + "/"
+            cursor.execute("SELECT name FROM job_folders WHERE name LIKE ?", (old_prefix + "%",))
+            subs = [row["name"] for row in cursor.fetchall()]
+            for sub in subs:
+                updated_sub = new_name + "/" + sub[len(old_prefix):]
+                cursor.execute("UPDATE job_folders SET name = ? WHERE name = ?", (updated_sub, sub))
+
+            cursor.execute("SELECT id, job FROM sessions WHERE job LIKE ?", (old_prefix + "%",))
+            sess_rows = cursor.fetchall()
+            for s in sess_rows:
+                updated_j = new_name + "/" + s["job"][len(old_prefix):]
+                cursor.execute("UPDATE sessions SET job = ? WHERE id = ?", (updated_j, s["id"]))
+
             conn.commit()
             return True
 
     def delete_job_folder(self, name: str, delete_sessions: bool = False) -> bool:
-        name = name.strip()
+        name = name.strip().strip("/")
+        old_prefix = name + "/"
         with self.get_connection() as conn:
             cursor = conn.cursor()
-            cursor.execute("DELETE FROM job_folders WHERE name = ?", (name,))
+            cursor.execute("DELETE FROM job_folders WHERE name = ? OR name LIKE ?", (name, old_prefix + "%"))
             if delete_sessions:
-                cursor.execute("SELECT id FROM sessions WHERE job = ?", (name,))
+                cursor.execute("SELECT id FROM sessions WHERE job = ? OR job LIKE ?", (name, old_prefix + "%"))
                 s_ids = [r[0] for r in cursor.fetchall()]
                 if s_ids:
                     self.delete_sessions(s_ids)
             else:
-                cursor.execute("UPDATE sessions SET job = '' WHERE job = ?", (name,))
+                cursor.execute("UPDATE sessions SET job = '' WHERE job = ? OR job LIKE ?", (name, old_prefix + "%"))
             conn.commit()
             return True
 
@@ -1083,7 +1103,7 @@ class DatabaseManager:
             conn.commit()
             return session_id
 
-    def update_session(self, session_id, name=None, status=None, placed_pieces=None, yield_pct=None, time_sec=None, material_id=None, strategy=None, params=None, machine=None, shapes=None):
+    def update_session(self, session_id, name=None, status=None, placed_pieces=None, yield_pct=None, time_sec=None, material_id=None, strategy=None, params=None, machine=None, shapes=None, job=None):
         with self.get_connection() as conn:
             cursor = conn.cursor()
             updates = []
@@ -1118,6 +1138,9 @@ class DatabaseManager:
             if machine is not None:
                 updates.append("machine = ?")
                 values.append(machine)
+            if job is not None:
+                updates.append("job = ?")
+                values.append(job)
             if updates:
                 values.append(session_id)
                 cursor.execute(f"UPDATE sessions SET {', '.join(updates)} WHERE id = ?", values)

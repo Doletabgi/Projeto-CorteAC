@@ -746,6 +746,87 @@ class TestLayoutEditorShortcuts(unittest.TestCase):
 
         dlg.destroy()
 
+    def test_production_tree_subfolders_hierarchy(self):
+        """Valida que pastas de produção com subpastas (ex: SEMANA-46/LOTE-1) são aninhadas corretamente na árvore."""
+        from tkinter import ttk
+        from ui.main_window import MainWindow
+
+        class FakeDB:
+            def get_job_folders(self):
+                return ["SEMANA-46", "SEMANA-46/LOTE-1", "SEMANA-46/LOTE-1/CORTE", "SEMANA-47"]
+            def create_job_folder(self, name):
+                pass
+            def get_sessions(self):
+                return []
+            def get_orders(self):
+                return []
+
+        class FakeMain:
+            def __init__(self, root):
+                self.root = root
+                self.tree_main = ttk.Treeview(root)
+                self.grid_lower = ttk.Treeview(root)
+                self.icons = {}
+                self.db = FakeDB()
+                self.sessions = [
+                    {"id": 1, "name": "Sessao 1", "status": "Stand by", "job": "SEMANA-46"},
+                    {"id": 2, "name": "Sessao 2", "status": "Stand by", "job": "SEMANA-46/LOTE-1"},
+                    {"id": 3, "name": "Sessao 3", "status": "Stand by", "job": "SEMANA-46/LOTE-1/CORTE"},
+                ]
+                self.orders = []
+                self.current_session = None
+                class DummyBtn:
+                    def config(self, **kwargs):
+                        pass
+                self.btn_mode_jobs = DummyBtn()
+                self.btn_mode_shapes = DummyBtn()
+                self.btn_mode_materials = DummyBtn()
+                self.sort_grid_lower = lambda col: None
+
+            def switch_tree_mode(self, mode="jobs"):
+                MainWindow.switch_tree_mode(self, mode=mode)
+
+        fm = FakeMain(self.root)
+        fm.switch_tree_mode("jobs")
+
+        # Verifica hierarquia na treeview:
+        # Raiz tem filho "Produção"
+        root_nodes = fm.tree_main.get_children("")
+        self.assertEqual(len(root_nodes), 1)
+        prod_root = root_nodes[0]
+        self.assertEqual(fm.tree_main.item(prod_root, "text").strip(), "Produção")
+
+        # Filhos diretos de Produção: SEMANA-46 e SEMANA-47
+        prod_children = fm.tree_main.get_children(prod_root)
+        prod_child_texts = [fm.tree_main.item(c, "text").strip() for c in prod_children]
+        self.assertIn("SEMANA-46", prod_child_texts)
+        self.assertIn("SEMANA-47", prod_child_texts)
+        self.assertNotIn("LOTE-1", prod_child_texts)  # LOTE-1 não deve estar na raiz, deve ser filho de SEMANA-46!
+
+        # Localiza o nó de SEMANA-46
+        sem46_node = next(c for c in prod_children if fm.tree_main.item(c, "text").strip() == "SEMANA-46")
+        sem46_children = fm.tree_main.get_children(sem46_node)
+        sem46_child_texts = [fm.tree_main.item(c, "text").strip() for c in sem46_children]
+
+        # Sob SEMANA-46 deve existir a subpasta "LOTE-1" e a "Sessao 1"
+        self.assertIn("LOTE-1", sem46_child_texts)
+        self.assertTrue(any("Sessao 1" in t for t in sem46_child_texts))
+
+        # Localiza o nó de LOTE-1
+        lote1_node = next(c for c in sem46_children if fm.tree_main.item(c, "text").strip() == "LOTE-1")
+        lote1_children = fm.tree_main.get_children(lote1_node)
+        lote1_child_texts = [fm.tree_main.item(c, "text").strip() for c in lote1_children]
+
+        # Sob LOTE-1 deve existir a subpasta "CORTE" e a "Sessao 2"
+        self.assertIn("CORTE", lote1_child_texts)
+        self.assertTrue(any("Sessao 2" in t for t in lote1_child_texts))
+
+        # Sob CORTE deve existir a "Sessao 3"
+        corte_node = next(c for c in lote1_children if fm.tree_main.item(c, "text").strip() == "CORTE")
+        corte_children = fm.tree_main.get_children(corte_node)
+        corte_child_texts = [fm.tree_main.item(c, "text").strip() for c in corte_children]
+        self.assertTrue(any("Sessao 3" in t for t in corte_child_texts))
+
 
 if __name__ == "__main__":
     unittest.main()

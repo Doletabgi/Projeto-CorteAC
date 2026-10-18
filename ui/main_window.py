@@ -232,6 +232,8 @@ class MainWindow(tk.Tk):
         file_menu.add_command(label="Abrir Ordem...", command=self.show_order_window)
         file_menu.add_command(label="🧩 Abrir Layout Editor...", command=self.show_layout_editor)
         file_menu.add_separator()
+        file_menu.add_command(label="📁 Criar Produção...", command=self.on_create_production)
+        file_menu.add_command(label="📁 Criar Subpasta de Produção...", command=self.on_create_job_subfolder_menu_action)
         file_menu.add_command(label="📁 Criar Pasta de Moldes...", command=self.on_create_shape_folder)
         file_menu.add_command(label="📁 Criar Subpasta de Moldes...", command=self.on_create_subfolder_menu_action)
         file_menu.add_command(label="📂 Importar Molde (.die)...", command=self.on_import_die)
@@ -274,6 +276,8 @@ class MainWindow(tk.Tk):
         tools_menu.add_command(label="🧩 Layout Editor (Nesting)...", command=self.show_layout_editor)
         tools_menu.add_command(label="Shape Editor (Editor de Moldes)...", command=self.show_shape_editor)
         tools_menu.add_command(label="📋 Códigos materiais (Listagem)...", command=self.show_material_codes_window)
+        tools_menu.add_command(label="📁 Criar Produção...", command=self.on_create_production)
+        tools_menu.add_command(label="📁 Criar Subpasta de Produção...", command=self.on_create_job_subfolder_menu_action)
         tools_menu.add_command(label="📁 Criar Pasta de Moldes...", command=self.on_create_shape_folder)
         tools_menu.add_command(label="📁 Criar Subpasta de Moldes...", command=self.on_create_subfolder_menu_action)
         tools_menu.add_command(label="📂 Importar Shape (.die)...", command=self.on_import_die)
@@ -1376,6 +1380,24 @@ class MainWindow(tk.Tk):
             if _check(r):
                 break
 
+    def select_job_folder_node(self, folder_name):
+        """Localiza e destaca visualmente o nó da pasta de produção na árvore."""
+        def _check(item):
+            vals = self.tree_main.item(item, "values")
+            if vals and len(vals) >= 2 and vals[0] == "job_folder" and vals[1] == folder_name:
+                self.tree_main.selection_set(item)
+                self.tree_main.focus(item)
+                self.tree_main.see(item)
+                return True
+            for child in self.tree_main.get_children(item):
+                if _check(child):
+                    return True
+            return False
+
+        for r in self.tree_main.get_children(""):
+            if _check(r):
+                break
+
     def on_create_shape_folder(self, parent_folder=""):
         """Cria uma nova pasta ou subpasta para organizar moldes .die."""
         if parent_folder:
@@ -2031,11 +2053,26 @@ class MainWindow(tk.Tk):
                 job_folders = ["ProduçãoNova"]
 
             folder_nodes = {}
-            for j_name in job_folders:
-                fn_id = self.tree_main.insert(root, "end", text=f" {j_name}", open=True, values=("job_folder", j_name), **img_folder)
-                folder_nodes[j_name] = fn_id
 
-            first_parent = folder_nodes[job_folders[0]] if job_folders else root
+            def get_or_create_job_node(j_path):
+                j_path = (j_path or "").strip().strip("/")
+                if not j_path:
+                    return root
+                parts = [p.strip() for p in j_path.split("/") if p.strip()]
+                curr_parent = root
+                curr_path = ""
+                for part in parts:
+                    curr_path = f"{curr_path}/{part}" if curr_path else part
+                    if curr_path not in folder_nodes:
+                        fn_id = self.tree_main.insert(curr_parent, "end", text=f" {part}", open=True, values=("job_folder", curr_path), **img_folder)
+                        folder_nodes[curr_path] = fn_id
+                    curr_parent = folder_nodes[curr_path]
+                return curr_parent
+
+            for j_name in job_folders:
+                get_or_create_job_node(j_name)
+
+            first_parent = folder_nodes[job_folders[0]] if (job_folders and job_folders[0] in folder_nodes) else root
 
             # Insere pedidos/ordens dinamicamente
             for ord_item in self.orders:
@@ -2049,15 +2086,10 @@ class MainWindow(tk.Tk):
                 s_id = sess["id"]
                 s_name = sess.get("name", f"Sessão #{s_id}")
                 s_status = sess.get("status", "Stand by")
-                s_job = (sess.get("job") or "").strip() or (job_folders[0] if job_folders else "ProduçãoNova")
+                s_job = (sess.get("job") or "").strip().strip("/") or (job_folders[0] if job_folders else "ProduçãoNova")
 
-                # Se a pasta da sessão ainda não estiver no nó, insere dinamicamente
-                if s_job not in folder_nodes:
-                    self.db.create_job_folder(s_job)
-                    fn_id = self.tree_main.insert(root, "end", text=f" {s_job}", open=True, values=("job_folder", s_job), **img_folder)
-                    folder_nodes[s_job] = fn_id
-
-                parent_node = folder_nodes.get(s_job, root)
+                # Assegura que o nó da pasta (e eventuais ancestrais) existe
+                parent_node = get_or_create_job_node(s_job)
 
                 # Formatação do rótulo na árvore
                 if s_name.startswith(f"(#{s_id})") or s_name.startswith(f"( #{s_id} )"):
@@ -2357,29 +2389,77 @@ class MainWindow(tk.Tk):
 
         else:
             # Modo Produção (Print 1)
+            self.tree_menu.delete(0, "end")
             sel = self.tree_main.selection()
             if len(sel) > 1:
                 sess_count = sum(1 for item in sel if self.tree_main.item(item, "values") and len(self.tree_main.item(item, "values")) >= 2 and self.tree_main.item(item, "values")[0] == "session")
                 lbl_del = f"Excluir ({sess_count} sessões)" if sess_count > 0 else f"Excluir ({len(sel)} selecionados)"
-                self.tree_menu.entryconfig("Abrir", state="disabled")
-                self.tree_menu.entryconfig("Renomear", state="disabled")
-                self.tree_menu.entryconfig("Excluir", state="normal", label=lbl_del, command=self.on_delete_tree_item)
+                self.tree_menu.add_command(label="Abrir", state="disabled")
+                self.tree_menu.add_separator()
+                self.tree_menu.add_command(label=lbl_del, command=self.on_delete_tree_item)
             else:
-                is_root = False
-                if sel:
-                    vals = self.tree_main.item(sel[0], "values")
-                    if vals and vals[0] == "root_production":
-                        is_root = True
-                    elif self.tree_main.parent(sel[0]) == "" and self.tree_main.item(sel[0], "text").strip() == "Produção":
-                        is_root = True
+                vals = self.tree_main.item(sel[0], "values") if sel else ()
+                node_type = vals[0] if vals else "root_production"
 
-                self.tree_menu.entryconfig("Abrir", state="normal", label="Abrir", command=self.on_tree_menu_open)
-                if is_root:
-                    self.tree_menu.entryconfig("Renomear", state="disabled")
-                    self.tree_menu.entryconfig("Excluir", state="disabled")
-                else:
-                    self.tree_menu.entryconfig("Renomear", state="normal")
-                    self.tree_menu.entryconfig("Excluir", state="normal", label="Excluir", command=self.on_delete_tree_item)
+                if node_type == "job_folder":
+                    folder_path = str(vals[1])
+                    disp_name = folder_path.split("/")[-1]
+                    self.tree_menu.add_command(label="Abrir", command=self.on_tree_menu_open)
+                    self.tree_menu.add_separator()
+                    self.tree_menu.add_command(label=f"📁 Criar Subpasta em '{disp_name}'...", command=lambda f=folder_path: self.on_create_job_subfolder(f))
+                    self.tree_menu.add_command(label="📁 Criar Produção na Raiz...", command=lambda: self.on_create_production(parent_folder=""))
+                    self.tree_menu.add_command(label=f"Criar sessão em '{disp_name}'", command=self.on_new_session)
+                    self.tree_menu.add_command(label="Criar pedido", command=self.on_create_order)
+                    self.tree_menu.add_separator()
+                    self.tree_menu.add_command(label="Explodir", state="disabled")
+                    self.tree_menu.add_separator()
+                    self.tree_menu.add_command(label="Renomear", command=self.on_rename_tree_item)
+                    self.tree_menu.add_command(label="Excluir", command=self.on_delete_tree_item)
+                    self.tree_menu.add_separator()
+                    self.tree_menu.add_command(label="Publish", command=self.on_publish)
+                    self.tree_menu.add_command(label="Export as xml...", command=self.on_export_xml)
+                    self.tree_menu.add_command(label="Import xml here...", command=self.on_import_xml)
+                    self.tree_menu.add_command(label="Importar Shape (.die)...", command=self.on_import_die)
+                    self.tree_menu.add_command(label="🧩 Abrir no Layout Editor...", command=self.show_layout_editor)
+
+                elif node_type == "session":
+                    sess_id = int(vals[1])
+                    self.tree_menu.add_command(label="Abrir", command=self.on_tree_menu_open)
+                    self.tree_menu.add_separator()
+                    self.tree_menu.add_command(label="Criar sessão", command=self.on_new_session)
+                    self.tree_menu.add_command(label="Criar pedido", command=self.on_create_order)
+                    self.tree_menu.add_command(label="📁 Criar Produção...", command=self.on_create_production)
+                    self.tree_menu.add_command(label="📁 Criar Subpasta de Produção...", command=self.on_create_job_subfolder_menu_action)
+                    self.tree_menu.add_separator()
+                    self.tree_menu.add_command(label="📁 Mover para Pasta de Produção...", command=lambda s=sess_id: self.on_move_session_to_job_folder(s))
+                    self.tree_menu.add_separator()
+                    self.tree_menu.add_command(label="Explodir", state="disabled")
+                    self.tree_menu.add_separator()
+                    self.tree_menu.add_command(label="Renomear", command=self.on_rename_tree_item)
+                    self.tree_menu.add_command(label="Excluir", command=self.on_delete_tree_item)
+                    self.tree_menu.add_separator()
+                    self.tree_menu.add_command(label="Publish", command=self.on_publish)
+                    self.tree_menu.add_command(label="Export as xml...", command=self.on_export_xml)
+                    self.tree_menu.add_command(label="Import xml here...", command=self.on_import_xml)
+                    self.tree_menu.add_command(label="Importar Shape (.die)...", command=self.on_import_die)
+                    self.tree_menu.add_command(label="🧩 Abrir no Layout Editor...", command=self.show_layout_editor)
+
+                else:  # root_production ou outros
+                    self.tree_menu.add_command(label="Abrir", state="disabled")
+                    self.tree_menu.add_separator()
+                    self.tree_menu.add_command(label="📁 Criar Produção...", command=lambda: self.on_create_production(parent_folder=""))
+                    self.tree_menu.add_command(label="📁 Criar Subpasta de Produção...", command=self.on_create_job_subfolder_menu_action)
+                    self.tree_menu.add_command(label="Criar sessão", command=self.on_new_session)
+                    self.tree_menu.add_command(label="Criar pedido", command=self.on_create_order)
+                    self.tree_menu.add_separator()
+                    self.tree_menu.add_command(label="Explodir", state="disabled")
+                    self.tree_menu.add_separator()
+                    self.tree_menu.add_command(label="Publish", command=self.on_publish)
+                    self.tree_menu.add_command(label="Export as xml...", command=self.on_export_xml)
+                    self.tree_menu.add_command(label="Import xml here...", command=self.on_import_xml)
+                    self.tree_menu.add_command(label="Importar Shape (.die)...", command=self.on_import_die)
+                    self.tree_menu.add_command(label="🧩 Abrir no Layout Editor...", command=self.show_layout_editor)
+
             self.show_popup_menu(self.tree_menu, event.x_root, event.y_root)
 
     def show_grid_context_menu(self, event):
@@ -3127,20 +3207,171 @@ class MainWindow(tk.Tk):
         else:
             self.show_session_window()
 
-    def on_create_production(self):
-        name = simpledialog.askstring("Criar Produção", "Nome da nova Produção:", initialvalue="ProduçãoNova_2", parent=self)
-        if name and name.strip():
-            folder_name = name.strip()
-            self.db.create_job_folder(folder_name)
-            self.switch_tree_mode("jobs")
-            # Seleciona a pasta recém criada
-            for item in self.tree_main.get_children():
-                for sub in self.tree_main.get_children(item):
-                    vals = self.tree_main.item(sub, "values")
-                    if vals and len(vals) >= 2 and vals[0] == "job_folder" and vals[1] == folder_name:
-                        self.tree_main.selection_set(sub)
-                        break
-            self.lbl_status_msg.config(text=f"Pasta de produção '{folder_name}' criada.")
+    def on_create_production(self, parent_folder=""):
+        """Cria uma nova pasta ou subpasta de produção (job)."""
+        if parent_folder:
+            disp_parent = parent_folder.split("/")[-1]
+            name = simpledialog.askstring("Criar Subpasta de Produção", f"Nome da nova subpasta dentro de '{disp_parent}':", initialvalue="Nova Subpasta", parent=self)
+            if name and name.strip():
+                sub_name = name.strip().strip("/")
+                folder_path = f"{parent_folder}/{sub_name}"
+                self.db.create_job_folder(folder_path)
+                self.switch_tree_mode("jobs")
+                self.select_job_folder_node(folder_path)
+                self.lbl_status_msg.config(text=f"Subpasta de produção '{folder_path}' criada com sucesso.")
+        else:
+            name = simpledialog.askstring("Criar Produção", "Nome da nova Produção:", initialvalue="ProduçãoNova_2", parent=self)
+            if name and name.strip():
+                folder_name = name.strip().strip("/")
+                self.db.create_job_folder(folder_name)
+                self.switch_tree_mode("jobs")
+                self.select_job_folder_node(folder_name)
+                self.lbl_status_msg.config(text=f"Pasta de produção '{folder_name}' criada.")
+
+    def on_create_job_subfolder(self, parent_folder: str):
+        """Cria explicitamente uma subpasta dentro de parent_folder."""
+        self.on_create_production(parent_folder=parent_folder)
+
+    def on_create_job_subfolder_menu_action(self):
+        """Ação de menu para criar subpasta de produção: usa a pasta selecionada ou solicita ao usuário."""
+        parent_folder = ""
+        if self.current_mode == "jobs":
+            sel = self.tree_main.selection()
+            if sel:
+                vals = self.tree_main.item(sel[0], "values")
+                if vals and vals[0] == "job_folder":
+                    parent_folder = str(vals[1])
+                elif vals and vals[0] == "session":
+                    s_id = int(vals[1])
+                    s_obj = next((s for s in self.sessions if s["id"] == s_id), None)
+                    if s_obj and s_obj.get("job"):
+                        parent_folder = s_obj["job"]
+        if not parent_folder:
+            folders = self.db.get_job_folders()
+            if not folders:
+                messagebox.showinfo("Criar Subpasta", "Nenhuma pasta de produção existe ainda. Crie primeiro uma pasta raiz.", parent=self)
+                return self.on_create_production()
+            parent_folder = self.prompt_select_parent_job_folder(folders)
+            if not parent_folder:
+                return
+        self.on_create_job_subfolder(parent_folder)
+
+    def prompt_select_parent_job_folder(self, folders):
+        """Diálogo para selecionar uma pasta de produção existente como pai da nova subpasta."""
+        dlg = tk.Toplevel(self)
+        dlg.title("Selecionar Pasta Pai de Produção")
+        dlg.geometry("340x280")
+        dlg.resizable(False, False)
+        dlg.configure(bg=THEME["bg_surface"])
+        dlg.transient(self)
+        dlg.grab_set()
+
+        tk.Label(dlg, text="Selecione a pasta onde criar a subpasta de produção:", bg=THEME["bg_surface"], fg=THEME["text_main"], font=("Segoe UI", 9, "bold")).pack(padx=10, pady=8, anchor="w")
+
+        lb_frame = tk.Frame(dlg, bg=THEME["bg_surface"], relief="sunken", bd=1)
+        lb_frame.pack(fill="both", expand=True, padx=10, pady=4)
+
+        lb = tk.Listbox(lb_frame, bg="white", fg="black", selectbackground=THEME["select_bg"], selectforeground="white", font=("Segoe UI", 9))
+        lb.pack(side="left", fill="both", expand=True)
+        sb = ttk.Scrollbar(lb_frame, orient="vertical", command=lb.yview)
+        sb.pack(side="right", fill="y")
+        lb.config(yscrollcommand=sb.set)
+
+        for f in folders:
+            depth = f.count("/")
+            indent = "    " * depth
+            name_part = f.split("/")[-1]
+            lb.insert("end", f"{indent}📁 {name_part} ({f})")
+        lb.selection_set(0)
+
+        chosen = [None]
+        def do_confirm():
+            sel_idx = lb.curselection()
+            if sel_idx:
+                chosen[0] = folders[sel_idx[0]]
+            dlg.destroy()
+
+        btn_box = tk.Frame(dlg, bg=THEME["bg_surface"], pady=6)
+        btn_box.pack(fill="x", padx=10)
+
+        tk.Button(btn_box, text="Avançar", width=10, bg=THEME["bg_surface"], fg=THEME["text_main"], relief="raised", bd=2, command=do_confirm).pack(side="right", padx=4)
+        tk.Button(btn_box, text="Cancelar", width=10, bg=THEME["bg_surface"], fg=THEME["text_main"], relief="raised", bd=2, command=dlg.destroy).pack(side="right", padx=4)
+
+        lb.bind("<Double-1>", lambda e: do_confirm())
+        self.wait_window(dlg)
+        return chosen[0]
+
+    def on_move_session_to_job_folder(self, sess_id: int):
+        """Abre janela para mover uma sessão para outra pasta ou subpasta de produção."""
+        target = next((s for s in self.sessions if s["id"] == sess_id), None)
+        if not target:
+            return
+
+        folders = self.db.get_job_folders()
+        if not folders:
+            return
+
+        dlg = tk.Toplevel(self)
+        dlg.title("Mover Sessão")
+        dlg.geometry("340x280")
+        dlg.resizable(False, False)
+        dlg.configure(bg=THEME["bg_surface"])
+        dlg.transient(self)
+        dlg.grab_set()
+
+        s_name = target.get("name") or f"Sessão #{sess_id}"
+        tk.Label(dlg, text=f"Mover '{s_name}' para a pasta de produção:", bg=THEME["bg_surface"], fg=THEME["text_main"], font=("Segoe UI", 9, "bold")).pack(padx=10, pady=8, anchor="w")
+
+        lb_frame = tk.Frame(dlg, bg=THEME["bg_surface"], relief="sunken", bd=1)
+        lb_frame.pack(fill="both", expand=True, padx=10, pady=4)
+
+        lb = tk.Listbox(lb_frame, bg="white", fg="black", selectbackground=THEME["select_bg"], selectforeground="white", font=("Segoe UI", 9))
+        lb.pack(side="left", fill="both", expand=True)
+        sb = ttk.Scrollbar(lb_frame, orient="vertical", command=lb.yview)
+        sb.pack(side="right", fill="y")
+        lb.config(yscrollcommand=sb.set)
+
+        for f in folders:
+            depth = f.count("/")
+            indent = "    " * depth
+            name_part = f.split("/")[-1]
+            lb.insert("end", f"{indent}📁 {name_part} ({f})")
+
+        curr_job = target.get("job", "")
+        if curr_job in folders:
+            idx = folders.index(curr_job)
+            lb.selection_set(idx)
+        else:
+            lb.selection_set(0)
+
+        def do_move():
+            sel_idx = lb.curselection()
+            if not sel_idx:
+                return
+            dest = folders[sel_idx[0]]
+            self.move_session_to_job_folder(sess_id, dest)
+            dlg.destroy()
+
+        btn_box = tk.Frame(dlg, bg=THEME["bg_surface"], pady=6)
+        btn_box.pack(fill="x", padx=10)
+        tk.Button(btn_box, text="Mover", width=10, bg=THEME["bg_surface"], fg=THEME["text_main"], relief="raised", bd=2, command=do_move).pack(side="right", padx=4)
+        tk.Button(btn_box, text="Cancelar", width=10, bg=THEME["bg_surface"], fg=THEME["text_main"], relief="raised", bd=2, command=dlg.destroy).pack(side="right", padx=4)
+
+        lb.bind("<Double-1>", lambda e: do_move())
+        self.wait_window(dlg)
+
+    def move_session_to_job_folder(self, sess_id: int, dest_folder: str):
+        """Atualiza a pasta de produção da sessão no banco e na memória."""
+        self.db.update_session(sess_id, job=dest_folder)
+        for s in self.sessions:
+            if s.get("id") == sess_id:
+                s["job"] = dest_folder
+                break
+        if self.current_session and self.current_session.get("id") == sess_id:
+            self.current_session["job"] = dest_folder
+        self.switch_tree_mode("jobs")
+        self.select_job_folder_node(dest_folder)
+        self.lbl_status_msg.config(text=f"Sessão #{sess_id} movida para '{dest_folder}'.")
 
     def on_rename_tree_item(self):
         sel = self.tree_main.selection()
@@ -3177,11 +3408,21 @@ class MainWindow(tk.Tk):
                     self.switch_tree_mode("jobs")
             elif vals and len(vals) >= 2 and vals[0] == "job_folder":
                 old_name = str(vals[1])
-                self.db.rename_job_folder(old_name, new_name)
-                self.sessions = self.db.get_sessions()
-                self.switch_tree_mode("jobs")
-                self.lbl_status_msg.config(text=f"Pasta de produção renomeada para '{new_name}'.")
-                return
+                disp_old = old_name.split("/")[-1]
+                new_name = simpledialog.askstring("Renomear Produção", "Novo nome da pasta de produção:", initialvalue=disp_old, parent=self)
+                if new_name and new_name.strip():
+                    new_part = new_name.strip().strip("/")
+                    if "/" in old_name:
+                        parent_path = old_name.rsplit("/", 1)[0]
+                        full_new_name = f"{parent_path}/{new_part}"
+                    else:
+                        full_new_name = new_part
+                    self.db.rename_job_folder(old_name, full_new_name)
+                    self.sessions = self.db.get_sessions()
+                    self.switch_tree_mode("jobs")
+                    self.select_job_folder_node(full_new_name)
+                    self.lbl_status_msg.config(text=f"Pasta de produção renomeada para '{full_new_name}'.")
+                    return
             elif vals and len(vals) >= 2 and vals[0] == "folder":
                 old_name = str(vals[1])
                 self.db.rename_shape_folder(old_name, new_name)
@@ -3195,19 +3436,19 @@ class MainWindow(tk.Tk):
 
     def on_delete_job_folder(self, folder_name: str):
         """Exclui uma pasta de produção (job) com confirmação e opção de exclusão em cascata."""
-        folder_name = folder_name.strip()
-        sessions_in_job = [s for s in self.sessions if (s.get("job") or "").strip() == folder_name]
+        folder_name = folder_name.strip().strip("/")
+        sessions_in_job = [s for s in self.sessions if (s.get("job") or "").strip() == folder_name or (s.get("job") or "").strip().startswith(folder_name + "/")]
         num_sess = len(sessions_in_job)
 
         if num_sess == 0:
-            if not messagebox.askyesno("Excluir Produção", f"Deseja realmente excluir a pasta de produção '{folder_name}'?", parent=self):
+            if not messagebox.askyesno("Excluir Produção", f"Deseja realmente excluir a pasta de produção '{folder_name}' e suas eventuais subpastas?", parent=self):
                 return
             self.db.delete_job_folder(folder_name, delete_sessions=False)
         else:
             resp = messagebox.askyesnocancel(
                 "Excluir Pasta de Produção",
-                f"A pasta '{folder_name}' contém {num_sess} sessão(ões).\n\n"
-                f"• Clique 'Sim' para excluir a pasta E todas as suas sessões.\n"
+                f"A pasta '{folder_name}' (ou subpastas) contém {num_sess} sessão(ões).\n\n"
+                f"• Clique 'Sim' para excluir a pasta, subpastas E todas as suas sessões.\n"
                 f"• Clique 'Não' para excluir apenas a pasta (as sessões serão mantidas).\n"
                 f"• Clique 'Cancelar' para desistir.",
                 parent=self

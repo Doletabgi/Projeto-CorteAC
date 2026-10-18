@@ -131,6 +131,52 @@ class TestSessionMonotonic(unittest.TestCase):
         db2 = DatabaseManager(self.tmp_path, backend="sqlite")
         self.assertEqual(len(db2.get_job_folders()), 0, "Pasta excluída nunca deve reaparecer ao reiniciar")
 
+    def test_job_subfolders_crud_and_cascade(self):
+        """Testa criação, hierarquia, renomeação em cascata e exclusão em cascata de subpastas de produção."""
+        # 1. Cria subpasta de produção aninhada diretamente
+        ok = self.db.create_job_folder("SEMANA-46/LOTE-A/CORTE")
+        self.assertTrue(ok)
+
+        folders = self.db.get_job_folders()
+        self.assertIn("SEMANA-46", folders)
+        self.assertIn("SEMANA-46/LOTE-A", folders)
+        self.assertIn("SEMANA-46/LOTE-A/CORTE", folders)
+
+        # 2. Cria sessões em diferentes níveis de pastas de produção
+        s1 = self.db.create_session(order_id=1, material_id=1, name="Sessao Pai", job="SEMANA-46")
+        s2 = self.db.create_session(order_id=1, material_id=1, name="Sessao Filho", job="SEMANA-46/LOTE-A")
+        s3 = self.db.create_session(order_id=1, material_id=1, name="Sessao Neto", job="SEMANA-46/LOTE-A/CORTE")
+
+        # 3. Renomeia pasta intermediária e verifica cascata nas subpastas e sessões
+        self.db.rename_job_folder("SEMANA-46/LOTE-A", "SEMANA-46/LOTE_RENOMEADO")
+        folders_after = self.db.get_job_folders()
+        self.assertNotIn("SEMANA-46/LOTE-A", folders_after)
+        self.assertIn("SEMANA-46/LOTE_RENOMEADO", folders_after)
+        self.assertIn("SEMANA-46/LOTE_RENOMEADO/CORTE", folders_after)
+
+        sess_map = {s["id"]: s["job"] for s in self.db.get_sessions()}
+        self.assertEqual(sess_map[s1], "SEMANA-46")
+        self.assertEqual(sess_map[s2], "SEMANA-46/LOTE_RENOMEADO")
+        self.assertEqual(sess_map[s3], "SEMANA-46/LOTE_RENOMEADO/CORTE")
+
+        # 4. Testa movimentação direta de sessão via update_session(job=...)
+        self.db.create_job_folder("SEMANA-47/URGENTE")
+        self.db.update_session(s1, job="SEMANA-47/URGENTE")
+        sess_map_updated = {s["id"]: s["job"] for s in self.db.get_sessions()}
+        self.assertEqual(sess_map_updated[s1], "SEMANA-47/URGENTE")
+
+        # 5. Exclui pasta pai com delete_sessions=False (sessões preservadas com job='')
+        self.db.delete_job_folder("SEMANA-46", delete_sessions=False)
+        folders_del = self.db.get_job_folders()
+        self.assertNotIn("SEMANA-46", folders_del)
+        self.assertNotIn("SEMANA-46/LOTE_RENOMEADO", folders_del)
+        self.assertNotIn("SEMANA-46/LOTE_RENOMEADO/CORTE", folders_del)
+
+        sess_after_del = {s["id"]: s["job"] for s in self.db.get_sessions()}
+        self.assertEqual(sess_after_del[s2], "")
+        self.assertEqual(sess_after_del[s3], "")
+
+
     def test_shape_subfolders_crud_and_cascade(self):
         """Testa criação, hierarquia, renomeação em cascata e exclusão em cascata de subpastas de moldes."""
         # 1. Cria subpasta aninhada diretamente
