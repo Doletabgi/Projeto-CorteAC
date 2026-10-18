@@ -400,6 +400,10 @@ class SessionView(tk.Frame):
         self.tree_shapes.bind("<Double-1>", self.on_tree_shape_double_click)
         self.tree_shapes.bind("<Button-3>", self.show_shapes_context_menu)
         self.tree_shapes.bind("<Delete>", lambda e: self.delete_selected_shape())
+        self.tree_shapes.bind("<Return>", self.on_tree_shape_enter)
+        self.tree_shapes.bind("<KP_Enter>", self.on_tree_shape_enter)
+        self.tree_shapes.bind("<F2>", self.on_tree_shape_f2)
+        self.tree_shapes.bind("<Key>", self.on_tree_shape_key)
 
         # Painel lateral direito: Pré-visualizador da peça CAD conforme media_1792070997258.jpg
         # Fundo branco puro #ffffff, moldura sunken clássica de 2px, sem cabeçalho e sem botões
@@ -1574,22 +1578,30 @@ class SessionView(tk.Frame):
                 justify="center"
             )
 
-    def spawn_tree_inline_editor(self, row_id, col):
-        """Abre uma caixa de edição inline diretamente sobre a célula do Treeview (Pares ou Sequência)."""
+    def spawn_tree_inline_editor(self, row_id, col, initial_char=None):
+        """Abre uma caixa de edição inline diretamente sobre a célula do Treeview (Pares ou Sequência),
+        com suporte a navegação contínua por setas (Cima/Baixo), Enter e substituição imediata."""
         if not row_id or col not in ("#5", "#7"):
             return
+
+        try:
+            idx = int(row_id)
+            if idx < 0 or idx >= len(self.shapes_list):
+                return
+            target = self.shapes_list[idx]
+        except (ValueError, IndexError):
+            return
+
+        # Garante que a linha esteja visível no viewport antes de calcular a geometria
+        self.tree_shapes.see(row_id)
+        self.tree_shapes.update_idletasks()
 
         bbox = self.tree_shapes.bbox(row_id, col)
         if not bbox:
             return
         x, y, w, h = bbox
 
-        try:
-            idx = int(row_id)
-            target = self.shapes_list[idx]
-        except (ValueError, IndexError):
-            return
-
+        # Se já existir um editor aberto, destrói com segurança
         if hasattr(self, "_inline_editor") and self._inline_editor:
             try:
                 self._inline_editor.destroy()
@@ -1598,6 +1610,7 @@ class SessionView(tk.Frame):
             self._inline_editor = None
 
         is_pairs = (col == "#5")
+        col_key = "pares" if is_pairs else "sequencia"
         initial_val = str(target.get("pairs", 16)) if is_pairs else str(target.get("sequence", idx + 1))
 
         entry = tk.Entry(
@@ -1609,44 +1622,168 @@ class SessionView(tk.Frame):
             relief="solid",
             bd=1
         )
-        entry.insert(0, initial_val)
-        entry.select_range(0, "end")
+        if initial_char is not None and str(initial_char).isdigit():
+            entry.insert(0, str(initial_char))
+            entry.icursor("end")
+        else:
+            entry.insert(0, initial_val)
+            entry.select_range(0, "end")
+            entry.icursor("end")
+
         entry.place(x=x, y=y, width=w, height=h)
         entry.focus_set()
         self._inline_editor = entry
 
-        def save_and_close(event=None):
-            val_str = entry.get().strip()
-            try:
-                val_int = max(1, int(val_str))
-                if is_pairs:
-                    target["pairs"] = val_int
-                else:
-                    target["sequence"] = val_int
-                    self.shapes_list.sort(key=lambda s: int(s.get("sequence", 999)))
+        state = {"navigating": False, "saved": False}
 
-                self.set_shapes_data(self.shapes_list)
-                if self.on_add_shapes_cb:
-                    self.on_add_shapes_cb(self.session_data.get("id"), self.shapes_list)
-            except ValueError:
+        def save_current_value():
+            if state["saved"]:
+                return
+            val_str = entry.get().strip()
+            cleaned = "".join(ch for ch in val_str if ch.isdigit())
+            try:
+                val_int = max(1, int(cleaned)) if cleaned else max(1, int(initial_val))
+            except Exception:
+                val_int = 16 if is_pairs else 1
+
+            if is_pairs:
+                target["pairs"] = val_int
+            else:
+                target["sequence"] = val_int
+
+            try:
+                self.tree_shapes.set(row_id, col_key, str(val_int))
+            except Exception:
                 pass
-            finally:
+
+            if self.on_add_shapes_cb and self.session_data:
                 try:
-                    entry.destroy()
+                    self.on_add_shapes_cb(self.session_data.get("id"), self.shapes_list)
                 except Exception:
                     pass
-                self._inline_editor = None
+            state["saved"] = True
 
-        def cancel_edit(event=None):
+        def close_editor():
+            if hasattr(self, "_inline_editor") and self._inline_editor == entry:
+                self._inline_editor = None
             try:
                 entry.destroy()
             except Exception:
                 pass
-            self._inline_editor = None
 
-        entry.bind("<Return>", save_and_close)
-        entry.bind("<FocusOut>", save_and_close)
+        def move_down(event=None):
+            if state["navigating"]:
+                return "break"
+            state["navigating"] = True
+            save_current_value()
+            close_editor()
+
+            children = list(self.tree_shapes.get_children())
+            if row_id in children:
+                pos = children.index(row_id)
+                if pos + 1 < len(children):
+                    next_row_id = children[pos + 1]
+                    self.tree_shapes.selection_set(next_row_id)
+                    self.tree_shapes.focus(next_row_id)
+                    self.tree_shapes.see(next_row_id)
+                    try:
+                        self.draw_preview_shape(self.shapes_list[int(next_row_id)])
+                    except Exception:
+                        pass
+                    self.after(30, lambda: self.spawn_tree_inline_editor(next_row_id, col))
+                else:
+                    self.tree_shapes.selection_set(row_id)
+                    self.tree_shapes.focus(row_id)
+            return "break"
+
+        def move_up(event=None):
+            if state["navigating"]:
+                return "break"
+            state["navigating"] = True
+            save_current_value()
+            close_editor()
+
+            children = list(self.tree_shapes.get_children())
+            if row_id in children:
+                pos = children.index(row_id)
+                if pos - 1 >= 0:
+                    prev_row_id = children[pos - 1]
+                    self.tree_shapes.selection_set(prev_row_id)
+                    self.tree_shapes.focus(prev_row_id)
+                    self.tree_shapes.see(prev_row_id)
+                    try:
+                        self.draw_preview_shape(self.shapes_list[int(prev_row_id)])
+                    except Exception:
+                        pass
+                    self.after(30, lambda: self.spawn_tree_inline_editor(prev_row_id, col))
+                else:
+                    self.tree_shapes.selection_set(row_id)
+                    self.tree_shapes.focus(row_id)
+            return "break"
+
+        def adjust_number(delta):
+            val_str = entry.get().strip()
+            cleaned = "".join(ch for ch in val_str if ch.isdigit())
+            try:
+                cur = int(cleaned) if cleaned else (16 if is_pairs else 1)
+            except Exception:
+                cur = 16 if is_pairs else 1
+            new_val = max(1, cur + delta)
+            entry.delete(0, "end")
+            entry.insert(0, str(new_val))
+            entry.select_range(0, "end")
+            return "break"
+
+        def on_focus_out(event=None):
+            if state["navigating"]:
+                return
+            save_current_value()
+            close_editor()
+
+        def cancel_edit(event=None):
+            state["navigating"] = True
+            close_editor()
+            self.tree_shapes.selection_set(row_id)
+            self.tree_shapes.focus(row_id)
+            return "break"
+
+        # Atalhos do editor inline: Down e Up navegam entre linhas para digitação contínua
+        entry.bind("<Down>", move_down)
+        entry.bind("<KP_Down>", move_down)
+        entry.bind("<Up>", move_up)
+        entry.bind("<KP_Up>", move_up)
+        entry.bind("<Return>", move_down)
+        entry.bind("<KP_Enter>", move_down)
+        entry.bind("<Shift-Return>", move_up)
+        entry.bind("<Tab>", move_down)
+        entry.bind("<Shift-Tab>", move_up)
         entry.bind("<Escape>", cancel_edit)
+        entry.bind("<FocusOut>", on_focus_out)
+
+        # Teclas de ajuste rápido (incremento/decremento com Ctrl/Alt)
+        entry.bind("<Control-Up>", lambda e: adjust_number(+1))
+        entry.bind("<Control-Down>", lambda e: adjust_number(-1))
+        entry.bind("<Alt-Up>", lambda e: adjust_number(+1))
+        entry.bind("<Alt-Down>", lambda e: adjust_number(-1))
+
+    def on_tree_shape_enter(self, event=None):
+        sel = self.tree_shapes.selection()
+        if sel:
+            self.spawn_tree_inline_editor(sel[0], "#5")
+            return "break"
+
+    def on_tree_shape_f2(self, event=None):
+        sel = self.tree_shapes.selection()
+        if sel:
+            self.spawn_tree_inline_editor(sel[0], "#5")
+            return "break"
+
+    def on_tree_shape_key(self, event):
+        if event.char and event.char.isdigit():
+            sel = self.tree_shapes.selection()
+            if sel:
+                self.spawn_tree_inline_editor(sel[0], "#5", initial_char=event.char)
+                return "break"
 
     def on_tree_shape_cell_click(self, event):
         """Ao clicar diretamente na célula de Pares (#5) ou Sequência (#7), abre a edição inline."""

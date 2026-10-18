@@ -102,5 +102,157 @@ class TestShapeSorting(unittest.TestCase):
         self.assertGreater(shape_area_sort_key(large_box), shape_area_sort_key(small_box))
 
 
+class DummyKeyEvent:
+    def __init__(self, char="", keysym=""):
+        self.char = char
+        self.keysym = keysym
+
+
+class TestSessionViewInlineArrowNavigation(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        import tkinter as tk
+        try:
+            cls.root = tk.Tk()
+            cls.root.geometry("800x600")
+        except Exception:
+            cls.root = None
+
+    @classmethod
+    def tearDownClass(cls):
+        if cls.root:
+            try:
+                cls.root.destroy()
+            except Exception:
+                pass
+
+    def setUp(self):
+        if not self.root:
+            self.skipTest("Tkinter display not available")
+        from ui.session_view import SessionView
+        self.saved_sessions = []
+        self.session_data = {
+            "id": 42,
+            "name": "Sessão Teste Digitação",
+            "status": "Stand by",
+            "shapes": [
+                {"id": 10, "name": "Molde_36", "size": "36", "pairs": 16, "sequence": 1},
+                {"id": 11, "name": "Molde_35", "size": "35", "pairs": 16, "sequence": 2},
+                {"id": 12, "name": "Molde_34", "size": "34", "pairs": 16, "sequence": 3},
+            ]
+        }
+        self.sv = SessionView(
+            self.root,
+            session_data=self.session_data,
+            on_add_shapes=lambda sid, shapes: self.saved_sessions.append((sid, list(shapes)))
+        )
+        self.sv.pack()
+        self.sv.load_session(self.session_data)
+        self.sv.notebook.select(1)  # Aba Moldes
+        self.root.update()
+
+    def tearDown(self):
+        try:
+            self.sv.destroy()
+        except Exception:
+            pass
+
+    def test_inline_editor_arrows_down_and_up_data_entry(self):
+        """Testa digitação contínua de pares descendo e subindo pelas setas do teclado."""
+        import time
+        # 1. Abre inline editor na linha 0, coluna #5 (Pares...)
+        self.sv.spawn_tree_inline_editor("0", "#5")
+        self.root.update()
+        entry = self.sv._inline_editor
+        self.assertIsNotNone(entry, "Editor inline deve estar aberto")
+        self.assertEqual(entry.get(), "16")
+
+        # 2. Usuário digita 100 na primeira linha e pressiona Seta para Baixo (<Down>)
+        entry.delete(0, "end")
+        entry.insert(0, "100")
+        entry.focus_force()
+        entry.event_generate("<Down>", when="now")
+        time.sleep(0.06)
+        self.root.update()
+
+        # Verifica se linha 0 salvou 100
+        self.assertEqual(self.sv.shapes_list[0]["pairs"], 100)
+        self.assertEqual(self.sv.tree_shapes.set("0", "pares"), "100")
+
+        # 3. Editor agora deve estar aberto na linha 1
+        entry_row1 = self.sv._inline_editor
+        self.assertIsNotNone(entry_row1, "Editor inline deve ter avançado para linha 1")
+        self.assertEqual(entry_row1.get(), "16")
+
+        # Usuário digita 24 e pressiona <Return> (também desce)
+        entry_row1.delete(0, "end")
+        entry_row1.insert(0, "24")
+        entry_row1.focus_force()
+        entry_row1.event_generate("<Return>", when="now")
+        time.sleep(0.06)
+        self.root.update()
+
+        # Verifica se linha 1 salvou 24
+        self.assertEqual(self.sv.shapes_list[1]["pairs"], 24)
+        self.assertEqual(self.sv.tree_shapes.set("1", "pares"), "24")
+
+        # 4. Editor agora está na linha 2 (última linha)
+        entry_row2 = self.sv._inline_editor
+        self.assertIsNotNone(entry_row2, "Editor inline deve estar na linha 2")
+        entry_row2.delete(0, "end")
+        entry_row2.insert(0, "50")
+
+        # Usuário pressiona Seta para Cima (<Up>) para voltar e corrigir a linha 1
+        entry_row2.focus_force()
+        entry_row2.event_generate("<Up>", when="now")
+        time.sleep(0.06)
+        self.root.update()
+
+        # Verifica se linha 2 salvou 50
+        self.assertEqual(self.sv.shapes_list[2]["pairs"], 50)
+        self.assertEqual(self.sv.tree_shapes.set("2", "pares"), "50")
+
+        # Editor deve ter voltado para a linha 1
+        entry_back = self.sv._inline_editor
+        self.assertIsNotNone(entry_back, "Editor inline deve ter retornado para a linha 1")
+        self.assertEqual(entry_back.get(), "24")
+
+        # Callback de persistência foi chamado com sucesso
+        self.assertGreaterEqual(len(self.saved_sessions), 3)
+
+    def test_treeview_direct_digit_entry(self):
+        """Testa iniciar digitação imediata ao pressionar número no teclado sobre a linha selecionada."""
+        self.sv.tree_shapes.selection_set("1")
+        self.sv.tree_shapes.focus("1")
+        self.root.update()
+
+        # Simula usuário pressionando tecla '8'
+        res = self.sv.on_tree_shape_key(DummyKeyEvent(char="8", keysym="8"))
+        self.assertEqual(res, "break")
+        self.root.update()
+
+        entry = self.sv._inline_editor
+        self.assertIsNotNone(entry, "Editor inline deve abrir imediatamente ao teclar número")
+        self.assertEqual(entry.get(), "8", "Dígito inicial teclado deve constar no editor")
+
+    def test_inline_editor_quick_adjust_increment(self):
+        """Testa ajuste incremental rápido com Ctrl/Alt Up/Down."""
+        self.sv.spawn_tree_inline_editor("0", "#5")
+        self.root.update()
+        entry = self.sv._inline_editor
+        entry.delete(0, "end")
+        entry.insert(0, "16")
+        entry.focus_force()
+
+        entry.event_generate("<Control-Up>", when="now")
+        self.root.update()
+        self.assertEqual(entry.get(), "17", "Control-Up deve incrementar o valor em +1")
+
+        entry.event_generate("<Control-Down>", when="now")
+        self.root.update()
+        self.assertEqual(entry.get(), "16", "Control-Down deve decrementar o valor em -1")
+
+
 if __name__ == "__main__":
     unittest.main()
+
