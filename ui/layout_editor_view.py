@@ -443,6 +443,11 @@ class LayoutEditorView(tk.Frame):
         self.bind("<Control-o>", self.open_layout_dialog)
         self.bind("<Control-O>", self.open_layout_dialog)
 
+        # Imprimir layout (Ctrl+P)
+        for w in (self, self.canvas):
+            w.bind("<Control-p>", lambda e: (self.print_layout(), "break")[1])
+            w.bind("<Control-P>", lambda e: (self.print_layout(), "break")[1])
+
         # Atalhos CAM F1 / F2 / F3 / F4 e Proibição Shift+F3
         for w in (self, self.canvas):
             w.bind("<F1>", self.on_f1_press)

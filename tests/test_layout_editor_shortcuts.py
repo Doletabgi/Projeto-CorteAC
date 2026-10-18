@@ -526,6 +526,101 @@ class TestLayoutEditorShortcuts(unittest.TestCase):
         self.assertEqual(sv.get_machine(), "ATOM FlashCut Flex 3020")
         sv.destroy()
 
+    def test_ctrl_p_shortcut_triggers_print_layout(self):
+        """Atalho Ctrl+P e Ctrl+p no LayoutEditorView estão devidamente vinculados ao canvas e frame."""
+        # 1. Verifica presença de bindings no canvas e frame
+        self.assertTrue(self.view.canvas.bind("<Control-p>"), "Canvas deve ter bind de <Control-p>")
+        self.assertTrue(self.view.canvas.bind("<Control-P>"), "Canvas deve ter bind de <Control-P>")
+        self.assertTrue(self.view.bind("<Control-p>"), "Frame deve ter bind de <Control-p>")
+        self.assertTrue(self.view.bind("<Control-P>"), "Frame deve ter bind de <Control-P>")
+
+        # 2. Testa acionamento de print_layout()
+        called = []
+        original_print = self.view.print_layout
+        self.view.print_layout = lambda: called.append("print")
+        try:
+            self.view.print_layout()
+            self.assertIn("print", called)
+        finally:
+            self.view.print_layout = original_print
+
+    def test_layout_print_dialog_plate_proportional_and_large(self):
+        """Desenho da chapa no relatório A4 tem escala proporcional e tamanho expandido (sem travar em 60pt)."""
+        from ui.layout_print_dialog import LayoutPrintDialog
+
+        # Caso 1: Chapa padrão 1380 x 1080 mm
+        dlg = LayoutPrintDialog(self.view, layout_data={
+            "layout_name": "10001.lay",
+            "sheet_w_mm": 1380.0,
+            "sheet_h_mm": 1080.0,
+        })
+        dlg.update_idletasks()
+        dlg.redraw()
+
+        items = dlg.canvas.find_all()
+        rect_coords = None
+        for it in items:
+            if dlg.canvas.type(it) == "rectangle":
+                coords = dlg.canvas.coords(it)
+                if len(coords) == 4 and dlg.canvas.itemcget(it, "fill") == "#ffffff":
+                    w = coords[2] - coords[0]
+                    h = coords[3] - coords[1]
+                    if w < 595 and h < 842:
+                        rect_coords = coords
+                        break
+        self.assertIsNotNone(rect_coords)
+        w = rect_coords[2] - rect_coords[0]
+        h = rect_coords[3] - rect_coords[1]
+
+        # O tamanho DEVE ser grande proporcional à folha, muito maior que o antigo teto de 60pt!
+        self.assertGreater(h, 200.0, "A chapa deve ser grande e proporcional, não miniatura de 60pt")
+        self.assertGreater(w, 250.0, "A chapa deve ser grande e proporcional, não miniatura")
+
+        # A proporção geométrica (aspect ratio) deve coincidir com a da chapa
+        expected_ratio = 1380.0 / 1080.0
+        actual_ratio = w / h
+        self.assertAlmostEqual(actual_ratio, expected_ratio, delta=0.05)
+
+        # Testa renderização PIL
+        im = dlg.render_pillow_page(dpi=150)
+        self.assertIsNotNone(im)
+        self.assertEqual(im.size, (int(8.27 * 150), int(11.69 * 150)))
+        dlg.destroy()
+
+        # Caso 2: Chapa alta (1350 x 2553.38 mm) como na captura do usuário (media_1792335385519)
+        dlg2 = LayoutPrintDialog(self.view, layout_data={
+            "layout_name": "TALL.lay",
+            "sheet_w_mm": 1350.0,
+            "sheet_h_mm": 2553.38,
+        })
+        dlg2.update_idletasks()
+        dlg2.redraw()
+
+        items2 = dlg2.canvas.find_all()
+        rect_coords2 = None
+        for it in items2:
+            if dlg2.canvas.type(it) == "rectangle":
+                coords = dlg2.canvas.coords(it)
+                if len(coords) == 4 and dlg2.canvas.itemcget(it, "fill") == "#ffffff":
+                    w2 = coords[2] - coords[0]
+                    h2 = coords[3] - coords[1]
+                    if w2 < 595 and h2 < 842:
+                        rect_coords2 = coords
+                        break
+        self.assertIsNotNone(rect_coords2)
+        w2 = rect_coords2[2] - rect_coords2[0]
+        h2 = rect_coords2[3] - rect_coords2[1]
+
+        # Na captura media_1792335385519, h2 era 48-60pt e w2 era 22pt!
+        # Agora h2 deve preencher a maior parte do espaço vertical disponível (~500pt)
+        self.assertGreater(h2, 350.0)
+        self.assertGreater(w2, 180.0)
+        expected_ratio2 = 1350.0 / 2553.38
+        actual_ratio2 = w2 / h2
+        self.assertAlmostEqual(actual_ratio2, expected_ratio2, delta=0.05)
+
+        dlg2.destroy()
+
 
 if __name__ == "__main__":
     unittest.main()

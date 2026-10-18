@@ -63,11 +63,22 @@ class LayoutPrintDialog(tk.Toplevel):
 
         # Dados da chapa e peças
         self.placed_pieces = self.layout_data.get("placed_pieces", [])
+        if self.placed_pieces is None:
+            self.placed_pieces = []
 
-        # Se não foram fornecidas peças reais encaixadas, usa a configuração padrão 100% autêntica
-        if not self.placed_pieces:
+        # Dimensões da chapa
+        if "sheet_w_mm" in self.layout_data:
+            self.sheet_w_mm = float(self.layout_data.get("sheet_w_mm", 1380.0))
+            self.sheet_h_mm = float(self.layout_data.get("sheet_h_mm", 1080.0))
+        elif not self.placed_pieces:
             self.sheet_w_mm = 1500.0
             self.sheet_h_mm = 90.0
+        else:
+            self.sheet_w_mm = 1380.0
+            self.sheet_h_mm = 1080.0
+
+        # Se não foram fornecidas peças nem dimensões customizadas, usa layout de exemplo (velcro)
+        if not self.placed_pieces and "sheet_w_mm" not in self.layout_data:
             self.dimensions_str = "1.50 X 0.09 M"
             self.mat_area_str = "0.13 sq.M."
             self.used_area_str = "0.11 sq.M."
@@ -75,9 +86,6 @@ class LayoutPrintDialog(tk.Toplevel):
             self.shapes_count = 15
             self.instances_count = 40
             self.init_sample_pieces()
-        else:
-            self.sheet_w_mm = float(self.layout_data.get("sheet_w_mm", 1500.0))
-            self.sheet_h_mm = float(self.layout_data.get("sheet_h_mm", 90.0))
 
         # Dimensões da folha A4 em pontos de tela (base 100%): 595 x 842 pt
         self.page_w_base = 595
@@ -215,6 +223,11 @@ class LayoutPrintDialog(tk.Toplevel):
         self.canvas.bind("<MouseWheel>", self._on_wheel)
         self.canvas.bind("<Button-4>", lambda e: self.canvas.yview_scroll(-2, "units"))
         self.canvas.bind("<Button-5>", lambda e: self.canvas.yview_scroll(2, "units"))
+
+        # Atalhos de teclado
+        self.bind("<Control-p>", lambda e: self.do_print())
+        self.bind("<Control-P>", lambda e: self.do_print())
+        self.bind("<Escape>", lambda e: self.destroy())
 
     def _on_wheel(self, event):
         delta = -1 if event.delta > 0 else 1
@@ -367,20 +380,25 @@ class LayoutPrintDialog(tk.Toplevel):
         )
 
         # =====================================================================
-        # 3. Gráfico do Encaixe / Chapa de Corte (como no print do usuário)
+        # 3. Gráfico do Encaixe / Chapa de Corte (Proporcional à Folha A4)
         # =====================================================================
-        bed_area_y = py + int(page_h * 0.82)
-        bed_max_w = int(page_w - 72 * self.zoom)
-        bed_max_h = int(60 * self.zoom)
+        meta_end_y = meta_y + int(18 * self.zoom)
+        footer_y = py + page_h - int(24 * self.zoom)
 
-        scale_bed_x = bed_max_w / max(100.0, self.sheet_w_mm)
-        scale_bed_y = bed_max_h / max(20.0, self.sheet_h_mm)
+        avail_top = meta_end_y + int(15 * self.zoom)
+        avail_bottom = footer_y - int(12 * self.zoom)
+        avail_w = max(50.0, float(margin_right - margin_left))
+        avail_h = max(50.0, float(avail_bottom - avail_top))
+
+        scale_bed_x = avail_w / max(1.0, float(self.sheet_w_mm))
+        scale_bed_y = avail_h / max(1.0, float(self.sheet_h_mm))
         bed_scale = min(scale_bed_x, scale_bed_y)
 
-        bed_w = int(self.sheet_w_mm * bed_scale)
-        bed_h = max(int(24 * self.zoom), int(self.sheet_h_mm * bed_scale))
-        bed_x = margin_left
-        bed_y = bed_area_y
+        bed_w = max(10, int(round(self.sheet_w_mm * bed_scale)))
+        bed_h = max(10, int(round(self.sheet_h_mm * bed_scale)))
+
+        bed_x = margin_left + (int(avail_w) - bed_w) // 2
+        bed_y = avail_top + (int(avail_h) - bed_h) // 2
 
         # Retângulo do Material / Chapa
         self.canvas.create_rectangle(
@@ -512,16 +530,24 @@ class LayoutPrintDialog(tk.Toplevel):
         draw.text((m_left + col_w, meta_y), f"Instances: {self.instances_count}", fill="black", font=f_mono)
         draw.text((m_left + col_w * 2, meta_y), f"Gap: {self.gap_str}", fill="black", font=f_mono)
 
-        # Gráfico do Encaixe
-        bed_area_y = int(ph * 0.82)
-        bed_max_w = pw - int(72 * scale)
-        bed_max_h = int(60 * scale)
+        # Gráfico do Encaixe Proporcional à Folha A4
+        meta_end_y = meta_y + int(18 * scale)
+        footer_y = ph - int(36 * scale)
 
-        scale_bed = min(bed_max_w / max(100.0, self.sheet_w_mm), bed_max_h / max(20.0, self.sheet_h_mm))
-        bed_w = int(self.sheet_w_mm * scale_bed)
-        bed_h = max(int(24 * scale), int(self.sheet_h_mm * scale_bed))
-        bed_x = m_left
-        bed_y = bed_area_y
+        avail_top = meta_end_y + int(15 * scale)
+        avail_bottom = footer_y - int(12 * scale)
+        avail_w = max(50.0, float(m_right - m_left))
+        avail_h = max(50.0, float(avail_bottom - avail_top))
+
+        scale_bed_x = avail_w / max(1.0, float(self.sheet_w_mm))
+        scale_bed_y = avail_h / max(1.0, float(self.sheet_h_mm))
+        scale_bed = min(scale_bed_x, scale_bed_y)
+
+        bed_w = max(10, int(round(self.sheet_w_mm * scale_bed)))
+        bed_h = max(10, int(round(self.sheet_h_mm * scale_bed)))
+
+        bed_x = m_left + (int(avail_w) - bed_w) // 2
+        bed_y = avail_top + (int(avail_h) - bed_h) // 2
 
         draw.rectangle([bed_x, bed_y, bed_x + bed_w, bed_y + bed_h], outline="black", width=max(1, int(scale)))
 

@@ -63,6 +63,8 @@ class MainWindow(tk.Tk):
         self.bind("<Escape>", self.exit_fullscreen)
         self.bind("<Control-s>", self.handle_ctrl_s)
         self.bind("<Control-S>", self.handle_ctrl_s)
+        self.bind("<Control-p>", self.handle_ctrl_p)
+        self.bind("<Control-P>", self.handle_ctrl_p)
 
         # Carrega Ícones Nativos Extraídos do Sistema Original
         self.load_icons()
@@ -822,6 +824,12 @@ class MainWindow(tk.Tk):
         if hasattr(self, "session_view") and self.session_view and self.session_view.winfo_ismapped():
             self.lbl_status_msg.config(text="Sessão salva com sucesso no banco de dados.")
             return "break"
+
+    def handle_ctrl_p(self, event=None):
+        if hasattr(self, "layout_editor_view") and self.layout_editor_view and self.layout_editor_view.winfo_ismapped():
+            self.layout_editor_view.print_layout()
+            return "break"
+        return None
 
     def on_layout_editor_save(self, placed_pieces, sheet_w=1350.0, sheet_h=2553.38, layout_name="[I0000]"):
         """Salva as peças posicionadas no layout de volta para a sessão ativa e banco de dados SQLite."""
