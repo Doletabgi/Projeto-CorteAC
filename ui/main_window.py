@@ -31,6 +31,7 @@ from ui.material_codes_view import MaterialCodesView
 from ui.options_dialog import OptionsDialog
 from ui.params_dialog import NestingParamsDialog
 from ui.dieproc_dialog import DieProcDialog
+from ui.sort_utils import natural_sort_key, size_sort_key
 
 def get_assets_dir():
     if getattr(sys, 'frozen', False):
@@ -1995,10 +1996,10 @@ class MainWindow(tk.Tk):
 
             # Configura colunas do Grid: SessId | Produção | Nome sessão | Status
             self.grid_lower["columns"] = ("sess_id", "prod", "nome", "status")
-            self.grid_lower.heading("sess_id", text="SessId")
-            self.grid_lower.heading("prod", text="Produção")
-            self.grid_lower.heading("nome", text="Nome sessão")
-            self.grid_lower.heading("status", text="Status")
+            self.grid_lower.heading("sess_id", text="SessId", command=lambda: self.sort_grid_lower("sess_id"))
+            self.grid_lower.heading("prod", text="Produção", command=lambda: self.sort_grid_lower("prod"))
+            self.grid_lower.heading("nome", text="Nome sessão", command=lambda: self.sort_grid_lower("nome"))
+            self.grid_lower.heading("status", text="Status", command=lambda: self.sort_grid_lower("status"))
 
             self.grid_lower.column("sess_id", width=50, anchor="center")
             self.grid_lower.column("prod", width=80, anchor="w")
@@ -2081,11 +2082,11 @@ class MainWindow(tk.Tk):
 
             # Configura colunas do Grid: ShapeId | Percurso | Nome | Tamanho | Pasta
             self.grid_lower["columns"] = ("shape_id", "percurso", "nome", "tamanho", "pasta")
-            self.grid_lower.heading("shape_id", text="ShapeId")
-            self.grid_lower.heading("percurso", text="Percurso")
-            self.grid_lower.heading("nome", text="Nome")
-            self.grid_lower.heading("tamanho", text="Tamanho")
-            self.grid_lower.heading("pasta", text="Pasta")
+            self.grid_lower.heading("shape_id", text="ShapeId", command=lambda: self.sort_grid_lower("shape_id"))
+            self.grid_lower.heading("percurso", text="Percurso", command=lambda: self.sort_grid_lower("percurso"))
+            self.grid_lower.heading("nome", text="Nome", command=lambda: self.sort_grid_lower("nome"))
+            self.grid_lower.heading("tamanho", text="Tamanho", command=lambda: self.sort_grid_lower("tamanho"))
+            self.grid_lower.heading("pasta", text="Pasta", command=lambda: self.sort_grid_lower("pasta"))
 
             self.grid_lower.column("shape_id", width=55, anchor="center")
             self.grid_lower.column("percurso", width=70, anchor="w")
@@ -2140,11 +2141,11 @@ class MainWindow(tk.Tk):
 
             # Configura colunas do Grid: Cod. Mat. | Partida | Definição | Comprimento (m) | Largura (m)
             self.grid_lower["columns"] = ("cod_mat", "partida", "definicao", "comprimento", "largura")
-            self.grid_lower.heading("cod_mat", text="Cod. Mat.")
-            self.grid_lower.heading("partida", text="Partida")
-            self.grid_lower.heading("definicao", text="Definição")
-            self.grid_lower.heading("comprimento", text="Comprimento (m)")
-            self.grid_lower.heading("largura", text="Largura (m)")
+            self.grid_lower.heading("cod_mat", text="Cod. Mat.", command=lambda: self.sort_grid_lower("cod_mat"))
+            self.grid_lower.heading("partida", text="Partida", command=lambda: self.sort_grid_lower("partida"))
+            self.grid_lower.heading("definicao", text="Definição", command=lambda: self.sort_grid_lower("definicao"))
+            self.grid_lower.heading("comprimento", text="Comprimento (m)", command=lambda: self.sort_grid_lower("comprimento"))
+            self.grid_lower.heading("largura", text="Largura (m)", command=lambda: self.sort_grid_lower("largura"))
 
             self.grid_lower.column("cod_mat", width=75, anchor="w")
             self.grid_lower.column("partida", width=55, anchor="center")
@@ -2434,6 +2435,64 @@ class MainWindow(tk.Tk):
                 self.tree_menu.entryconfig("Renomear", state="normal")
                 self.tree_menu.entryconfig("Excluir", state="normal", label="Excluir", command=self.on_delete_grid_item)
             self.show_popup_menu(self.tree_menu, event.x_root, event.y_root)
+
+    def sort_grid_lower(self, col):
+        """Classifica os itens visíveis no grid inferior pelo cabeçalho clicado (alternando maior/menor)."""
+        children = self.grid_lower.get_children("")
+        if not children:
+            return
+
+        if not hasattr(self, "_grid_sort_state"):
+            self._grid_sort_state = {}
+
+        curr = self._grid_sort_state.get(col, None)
+        if curr is None:
+            # Padrão: maior para o menor para tamanho, nome, comprimento, largura
+            desc = True if col in ("tamanho", "nome", "comprimento", "largura") else False
+        else:
+            desc = not curr
+        self._grid_sort_state[col] = desc
+
+        cols = list(self.grid_lower["columns"])
+        if col not in cols:
+            return
+        col_idx = cols.index(col)
+
+        def get_sort_key(item_id):
+            vals = self.grid_lower.item(item_id, "values")
+            val = vals[col_idx] if col_idx < len(vals) else ""
+            if col == "tamanho":
+                name_val = vals[2] if len(vals) > 2 else ""
+                return size_sort_key(val, name_val)
+            elif col in ("nome", "pasta", "percurso", "prod", "definicao", "status"):
+                return natural_sort_key(val)
+            elif col in ("shape_id", "sess_id", "partida"):
+                try:
+                    return (0, int(val), "")
+                except Exception:
+                    return (1, 0, str(val))
+            elif col in ("comprimento", "largura"):
+                try:
+                    return (0, float(str(val).replace(",", ".")), "")
+                except Exception:
+                    return (1, 0, str(val))
+            return natural_sort_key(val)
+
+        items_sorted = sorted(children, key=get_sort_key, reverse=desc)
+        for idx, k in enumerate(items_sorted):
+            self.grid_lower.move(k, "", idx)
+
+        # Atualiza indicador de seta ▲ / ▼ no cabeçalho
+        arrow = " ▼" if desc else " ▲"
+        for c in cols:
+            base_txt = self.grid_lower.heading(c, "text").rstrip(" ▲▼")
+            if c == col:
+                self.grid_lower.heading(c, text=base_txt + arrow)
+            else:
+                self.grid_lower.heading(c, text=base_txt)
+
+        dir_lbl = "Maior → Menor" if desc else "Menor → Maior"
+        self.lbl_status_msg.config(text=f"Grid classificado por '{col}' ({dir_lbl}).")
 
     def on_create_material(self):
         """Abre a janela modal clássica para cadastrar um novo material no estoque."""

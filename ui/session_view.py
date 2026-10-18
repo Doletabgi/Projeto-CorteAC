@@ -16,6 +16,7 @@ from ui.add_shapes_dialog import AddShapesDialog
 from ui.dieproc_dialog import DieProcDialog
 from ui.edit_shape_in_session_dialog import EditShapeInSessionDialog
 from cad.lay_parser import parse_lay, export_layout_from_pieces, validate_layout_placement
+from ui.sort_utils import natural_sort_key, size_sort_key, shape_area_sort_key
 
 class SessionView(tk.Frame):
     def __init__(self, parent, session_data=None, canvas_ref=None, on_close=None, on_minimize=None, on_maximize=None, on_edit_shape=None, on_delete_shape=None, on_import_die=None, on_open_layout_editor=None, on_material_change=None, on_nest=None, on_standby=None, on_rewind=None, on_cut=None, on_strategy_change=None, on_add_shapes=None, all_shapes_catalog=None, db=None, on_open_dieproc=None, **kwargs):
@@ -52,6 +53,8 @@ class SessionView(tk.Frame):
         self.db = db or kwargs.get("database")
         self.on_open_dieproc_cb = on_open_dieproc
         self.active_dieproc_params = None
+        self.shape_sort_col = None
+        self.shape_sort_desc = True
         self.setup_ui()
 
     def setup_ui(self):
@@ -368,13 +371,13 @@ class SessionView(tk.Frame):
 
         cols_shp = ("shape_id", "percurso", "tamanho", "molde", "pares", "resto", "sequencia")
         self.tree_shapes = ttk.Treeview(table_frame, columns=cols_shp, show="headings", height=8)
-        self.tree_shapes.heading("shape_id", text="ShapeId")
-        self.tree_shapes.heading("percurso", text="Percurso")
-        self.tree_shapes.heading("tamanho", text="Tama...")
-        self.tree_shapes.heading("molde", text="Molde")
-        self.tree_shapes.heading("pares", text="Pares...")
-        self.tree_shapes.heading("resto", text="Resto")
-        self.tree_shapes.heading("sequencia", text="Sequência /")
+        self.tree_shapes.heading("shape_id", text="ShapeId", command=lambda: self.sort_shapes_by("shape_id"))
+        self.tree_shapes.heading("percurso", text="Percurso", command=lambda: self.sort_shapes_by("percurso"))
+        self.tree_shapes.heading("tamanho", text="Tama...", command=lambda: self.sort_shapes_by("tamanho"))
+        self.tree_shapes.heading("molde", text="Molde", command=lambda: self.sort_shapes_by("molde"))
+        self.tree_shapes.heading("pares", text="Pares...", command=lambda: self.sort_shapes_by("pares"))
+        self.tree_shapes.heading("resto", text="Resto", command=lambda: self.sort_shapes_by("resto"))
+        self.tree_shapes.heading("sequencia", text="Sequência /", command=lambda: self.sort_shapes_by("sequencia"))
 
         self.tree_shapes.column("shape_id", width=55, anchor="center")
         self.tree_shapes.column("percurso", width=180, anchor="w")
@@ -455,6 +458,13 @@ class SessionView(tk.Frame):
             relief="raised", bd=2, bg=THEME["bg_surface"], fg=THEME["text_main"],
             font=("Segoe UI", 9), command=self.move_selected_shape_down
         ).pack(side="left", padx=2)
+
+        self.btn_sort = tk.Button(
+            shp_bot_bar, text="🔽 Classificar ▾",
+            relief="raised", bd=2, bg=THEME["bg_surface"], fg=THEME["text_main"],
+            font=("Segoe UI", 9, "bold"), command=self.show_sort_menu
+        )
+        self.btn_sort.pack(side="left", padx=2)
 
         tk.Button(
             shp_bot_bar, text="⚙️ Configurar...",
@@ -1494,7 +1504,7 @@ class SessionView(tk.Frame):
             self.on_material_change_cb(mat_dict)
 
 
-    def set_shapes_data(self, shapes):
+    def set_shapes_data(self, shapes, preserve_id=None):
         self.shapes_list = list(shapes or [])
 
         # Garante atributos numéricos sequence, pairs e color em cada molde
@@ -1539,9 +1549,16 @@ class SessionView(tk.Frame):
             )
 
         if self.shapes_list:
-            self.tree_shapes.selection_set("0")
-            self.tree_shapes.focus("0")
-            self.draw_preview_shape(self.shapes_list[0])
+            sel_idx = 0
+            if preserve_id is not None:
+                for i, s in enumerate(self.shapes_list):
+                    if s.get("id") == preserve_id:
+                        sel_idx = i
+                        break
+            self.tree_shapes.selection_set(str(sel_idx))
+            self.tree_shapes.focus(str(sel_idx))
+            self.tree_shapes.see(str(sel_idx))
+            self.draw_preview_shape(self.shapes_list[sel_idx])
         else:
             self.preview_canvas.delete("all")
             # Mensagem suave quando a sessão estiver sem moldes
@@ -1788,6 +1805,129 @@ class SessionView(tk.Frame):
         except Exception:
             pass
 
+    def show_sort_menu(self, event=None):
+        """Exibe menu dropdown/popup com opções rápidas de classificação de moldes e tamanhos."""
+        menu = tk.Menu(self, tearoff=0, bg=THEME["bg_surface"], fg=THEME["text_main"], activebackground=THEME["select_bg"], activeforeground=THEME["select_fg"])
+        menu.add_command(
+            label="🔽 Tamanho: Maior → Menor (ex: 36a → 22a)",
+            command=lambda: self.sort_shapes_by("tamanho", force_desc=True)
+        )
+        menu.add_command(
+            label="🔼 Tamanho: Menor → Maior (ex: 22a → 36a)",
+            command=lambda: self.sort_shapes_by("tamanho", force_desc=False)
+        )
+        menu.add_separator()
+        menu.add_command(
+            label="🔽 Molde: Maior → Menor (Z → A)",
+            command=lambda: self.sort_shapes_by("molde", force_desc=True)
+        )
+        menu.add_command(
+            label="🔼 Molde: Menor → Maior (A → Z)",
+            command=lambda: self.sort_shapes_by("molde", force_desc=False)
+        )
+        menu.add_separator()
+        menu.add_command(
+            label="📐 Área da Peça: Maior → Menor (peças maiores primeiro)",
+            command=lambda: self.sort_shapes_by("area", force_desc=True)
+        )
+        menu.add_command(
+            label="📐 Área da Peça: Menor → Maior (peças menores primeiro)",
+            command=lambda: self.sort_shapes_by("area", force_desc=False)
+        )
+        menu.add_separator()
+        menu.add_command(
+            label="🔢 Sequência: 1 → N",
+            command=lambda: self.sort_shapes_by("sequencia", force_desc=False)
+        )
+
+        if event:
+            x, y = event.x_root, event.y_root
+        elif hasattr(self, "btn_sort") and self.btn_sort.winfo_ismapped():
+            x = self.btn_sort.winfo_rootx()
+            y = self.btn_sort.winfo_rooty() - 210
+            if y < 10:
+                y = self.btn_sort.winfo_rooty() + self.btn_sort.winfo_height()
+        else:
+            x = self.winfo_rootx() + 50
+            y = self.winfo_rooty() + 50
+
+        try:
+            menu.tk_popup(x, y)
+        finally:
+            menu.grab_release()
+
+    def sort_shapes_by(self, col, force_desc=None):
+        """Classifica os moldes da sessão pelo campo especificado e atualiza a sequência de corte/produção."""
+        if not self.shapes_list:
+            return
+
+        if force_desc is not None:
+            desc = force_desc
+        elif self.shape_sort_col == col:
+            desc = not self.shape_sort_desc
+        else:
+            # Padrão: maior para o menor para tamanho, molde, pares, resto e área
+            desc = True if col in ("tamanho", "molde", "pares", "resto", "area") else False
+
+        self.shape_sort_col = col
+        self.shape_sort_desc = desc
+
+        # Preserva ID do molde selecionado
+        selected_shape_id = None
+        sel = self.tree_shapes.selection()
+        if sel:
+            try:
+                selected_shape_id = self.shapes_list[int(sel[0])].get("id")
+            except Exception:
+                pass
+
+        if col == "tamanho":
+            self.shapes_list.sort(key=lambda s: size_sort_key(s.get("size"), s.get("name")), reverse=desc)
+        elif col == "molde":
+            self.shapes_list.sort(key=lambda s: natural_sort_key(s.get("name")), reverse=desc)
+        elif col == "pares":
+            self.shapes_list.sort(key=lambda s: int(s.get("pairs", 0)), reverse=desc)
+        elif col == "resto":
+            self.shapes_list.sort(key=lambda s: int(s.get("rest", 0)), reverse=desc)
+        elif col == "area":
+            self.shapes_list.sort(key=lambda s: shape_area_sort_key(s), reverse=desc)
+        elif col == "percurso":
+            self.shapes_list.sort(key=lambda s: natural_sort_key(s.get("folder") or "Externo"), reverse=desc)
+        elif col == "shape_id":
+            self.shapes_list.sort(key=lambda s: int(s.get("id", 0)) if str(s.get("id", "")).isdigit() else natural_sort_key(s.get("id")), reverse=desc)
+        elif col == "sequencia":
+            self.shapes_list.sort(key=lambda s: int(s.get("sequence", 999)), reverse=desc)
+        else:
+            self.shapes_list.sort(key=lambda s: natural_sort_key(s.get(col, "")), reverse=desc)
+
+        # Atualiza a numeração de sequência de geração (1, 2, 3...)
+        for i, s in enumerate(self.shapes_list, start=1):
+            s["sequence"] = i
+
+        # Atualiza os cabeçalhos com o indicador visual de seta ▲ / ▼
+        arrow = " ▼" if desc else " ▲"
+        headers = {
+            "shape_id": "ShapeId",
+            "percurso": "Percurso",
+            "tamanho": "Tama...",
+            "molde": "Molde",
+            "pares": "Pares...",
+            "resto": "Resto",
+            "sequencia": "Sequência /"
+        }
+        for c_name, c_text in headers.items():
+            if c_name == col:
+                self.tree_shapes.heading(c_name, text=c_text + arrow)
+            else:
+                self.tree_shapes.heading(c_name, text=c_text)
+
+        # Renderiza a lista na treeview preservando o item selecionado
+        self.set_shapes_data(self.shapes_list, preserve_id=selected_shape_id)
+
+        # Persiste a ordem atualizada na sessão (MySQL / SQLite)
+        if self.on_add_shapes_cb and self.session_data:
+            self.on_add_shapes_cb(self.session_data.get("id"), self.shapes_list)
+
     def open_edit_selected_shape_dialog(self, shape_idx=None):
         if shape_idx is None:
             sel = self.tree_shapes.selection()
@@ -1913,6 +2053,19 @@ class SessionView(tk.Frame):
             menu.add_command(label="🎨 Alterar Cor do Número...", command=self.change_selected_shape_color)
             menu.add_command(label="⚙️ Configurar Molde na Sessão...", command=self.open_edit_selected_shape_dialog)
             menu.add_command(label="📐 Abrir no Shape Editor", command=self.on_edit_button_click)
+            menu.add_separator()
+            sort_sub = tk.Menu(menu, tearoff=0, bg=THEME["bg_surface"], fg=THEME["text_main"], activebackground=THEME["select_bg"], activeforeground=THEME["select_fg"])
+            sort_sub.add_command(label="🔽 Tamanho: Maior → Menor (ex: 36a → 22a)", command=lambda: self.sort_shapes_by("tamanho", force_desc=True))
+            sort_sub.add_command(label="🔼 Tamanho: Menor → Maior (ex: 22a → 36a)", command=lambda: self.sort_shapes_by("tamanho", force_desc=False))
+            sort_sub.add_separator()
+            sort_sub.add_command(label="🔽 Molde: Maior → Menor (Z → A)", command=lambda: self.sort_shapes_by("molde", force_desc=True))
+            sort_sub.add_command(label="🔼 Molde: Menor → Maior (A → Z)", command=lambda: self.sort_shapes_by("molde", force_desc=False))
+            sort_sub.add_separator()
+            sort_sub.add_command(label="📐 Área da Peça: Maior → Menor", command=lambda: self.sort_shapes_by("area", force_desc=True))
+            sort_sub.add_command(label="📐 Área da Peça: Menor → Maior", command=lambda: self.sort_shapes_by("area", force_desc=False))
+            sort_sub.add_separator()
+            sort_sub.add_command(label="🔢 Sequência: 1 → N", command=lambda: self.sort_shapes_by("sequencia", force_desc=False))
+            menu.add_cascade(label="📊 Classificar Moldes...", menu=sort_sub)
             menu.add_separator()
             menu.add_command(label="🗑️ Remover Molde da Sessão", command=self.delete_selected_shape)
         try:

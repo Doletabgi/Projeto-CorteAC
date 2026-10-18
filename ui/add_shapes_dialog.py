@@ -7,6 +7,7 @@ import copy
 import tkinter as tk
 from tkinter import ttk, messagebox
 from config import THEME
+from ui.sort_utils import natural_sort_key, size_sort_key
 
 
 class AddShapesDialog(tk.Toplevel):
@@ -106,11 +107,11 @@ class AddShapesDialog(tk.Toplevel):
         cols = ("sel", "id", "name", "folder", "size", "pairs", "status")
         self.tree = ttk.Treeview(tree_frame, columns=cols, show="headings", selectmode="browse")
         self.tree.heading("sel", text="✓", anchor="center")
-        self.tree.heading("id", text="ID", anchor="center")
-        self.tree.heading("name", text="Nome do Molde", anchor="w")
-        self.tree.heading("folder", text="Pasta / Percurso", anchor="w")
-        self.tree.heading("size", text="Tamanho", anchor="center")
-        self.tree.heading("pairs", text="Pares", anchor="center")
+        self.tree.heading("id", text="ID", anchor="center", command=lambda: self.sort_by("id"))
+        self.tree.heading("name", text="Nome do Molde", anchor="w", command=lambda: self.sort_by("name"))
+        self.tree.heading("folder", text="Pasta / Percurso", anchor="w", command=lambda: self.sort_by("folder"))
+        self.tree.heading("size", text="Tamanho", anchor="center", command=lambda: self.sort_by("size"))
+        self.tree.heading("pairs", text="Pares", anchor="center", command=lambda: self.sort_by("pairs"))
         self.tree.heading("status", text="Status na Sessão", anchor="center")
 
         self.tree.column("sel", width=36, anchor="center", stretch=False)
@@ -200,6 +201,36 @@ class AddShapesDialog(tk.Toplevel):
         self.update_count_label()
 
     def filter_tree(self):
+        self.populate_tree()
+
+    def sort_by(self, col):
+        """Classifica a lista de moldes do catálogo por tamanho, nome ou id."""
+        if not hasattr(self, "_sort_state"):
+            self._sort_state = {}
+        curr = self._sort_state.get(col, None)
+        desc = (not curr) if curr is not None else (True if col in ("size", "name", "pairs") else False)
+        self._sort_state[col] = desc
+
+        if col == "size":
+            self.all_shapes.sort(key=lambda s: size_sort_key(s.get("size"), s.get("name")), reverse=desc)
+        elif col == "name":
+            self.all_shapes.sort(key=lambda s: natural_sort_key(s.get("name")), reverse=desc)
+        elif col == "folder":
+            self.all_shapes.sort(key=lambda s: natural_sort_key(s.get("folder") or "Raiz"), reverse=desc)
+        elif col == "id":
+            self.all_shapes.sort(key=lambda s: int(s.get("id", 0)) if str(s.get("id", "")).isdigit() else natural_sort_key(s.get("id")), reverse=desc)
+        elif col == "pairs":
+            self.all_shapes.sort(key=lambda s: int(self.pairs_map.get(s.get("id"), s.get("pairs", 24))), reverse=desc)
+
+        # Atualiza setas nos cabeçalhos
+        arrow = " ▼" if desc else " ▲"
+        headers = {"id": "ID", "name": "Nome do Molde", "folder": "Pasta / Percurso", "size": "Tamanho", "pairs": "Pares", "status": "Status na Sessão"}
+        for c, h_text in headers.items():
+            if c == col:
+                self.tree.heading(c, text=h_text + arrow)
+            else:
+                self.tree.heading(c, text=h_text)
+
         self.populate_tree()
 
     def on_tree_click(self, event):
