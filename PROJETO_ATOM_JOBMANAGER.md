@@ -4,7 +4,7 @@
 > **Regra de ouro:** o que está marcado `[CONFIRMADO]` veio do relatório, do código ou do usuário. O que está `[NÃO CONFIRMADO]` é suposição e não deve virar "fato" sem validação. O que está `[PREENCHER]` o Antigravity deve completar lendo o código real.
 
 <!-- AUTO:header:start -->
-**Última sincronização com o código:** 2026-10-17 23:13 (HEAD ao gerar: `sem git`; 24 arquivos Python, ~16589 linhas)
+**Última sincronização com o código:** 2026-10-17 23:13 (HEAD ao gerar: `374dfbb`; 24 arquivos Python, ~16589 linhas)
 <!-- AUTO:header:end -->
 **Versão deste documento:** 1
 
@@ -735,7 +735,9 @@ Local: `/home/dola/Documentos/clone do job/antigo/arquivos pos instalacao/Common
 **Commits recentes (automático):**
 
 <!-- AUTO:gitlog:start -->
-_Sem histórico git disponível._
+| Commit | Data | Autor | Mensagem |
+|---|---|---|---|
+| `374dfbb` | 2026-10-17 | Doletabgi | feat: implementar suporte a .lay, atalhos CAM do LayoutEditorView e sincronizacao automatica |
 <!-- AUTO:gitlog:end -->
 
 ---
