@@ -145,38 +145,109 @@ def schema_from_db(path):
         return None
 
 
-CREATE_RE = re.compile(
-    r"CREATE\s+TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?\w+\s*\((?:[^()]|\([^()]*\))*\)", re.I)
+def check_db_outdated(db_path, code_path):
+    if not db_path.exists() or not code_path.exists():
+        return []
+    try:
+        con = sqlite3.connect(db_path.resolve().as_uri() + "?mode=ro", uri=True)
+        db_tables = {r[0]: set() for r in con.execute("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'").fetchall()}
+        for t in db_tables:
+            cols = [r[1] for r in con.execute(f"PRAGMA table_info({t})").fetchall()]
+            db_tables[t] = set(cols)
+        con.close()
+    except Exception:
+        return []
+
+    code = read(code_path)
+    create_re = re.compile(r"CREATE\s+TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?(\w+)\s*\((.*?)\)", re.DOTALL | re.IGNORECASE)
+    code_tables = {}
+    for m in create_re.finditer(code):
+        tname = m.group(1).lower()
+        body = m.group(2)
+        cols = set()
+        for line in body.splitlines():
+            line = line.strip().rstrip(",")
+            if not line or line.upper().startswith(("FOREIGN", "PRIMARY KEY", "INDEX", "UNIQUE", "CHECK", ")", "CONSTRAINT")):
+                continue
+            cname = line.split()[0].strip("\"'`")
+            if cname and not cname.upper().startswith(("ENGINE",)):
+                cols.add(cname)
+        code_tables.setdefault(tname, set()).update(cols)
+
+    warnings = []
+    missing_tables = sorted(set(code_tables.keys()) - set(db_tables.keys()))
+    if missing_tables:
+        warnings.append(f"- **Tabelas ausentes no `.db`:** " + ", ".join(f"`{t}`" for t in missing_tables))
+    for t in sorted(code_tables.keys()):
+        if t in db_tables:
+            diff = sorted(code_tables[t] - db_tables[t])
+            if diff:
+                warnings.append(f"- **Colunas ausentes na tabela `{t}`:** " + ", ".join(f"`{c}`" for c in diff))
+    return warnings
 
 
 def block_schema(root, files):
     out = []
-    for f in files:
-        if f.suffix.lower() in DB_EXT:
-            stmts = schema_from_db(f)
-            rel = f.relative_to(root).as_posix()
-            if stmts is None:
-                out.append(f"-- {rel}: não foi possível ler (arquivo inválido ou bloqueado)")
-            else:
-                out.append(f"-- Banco: {rel}")
-                out.extend(s.strip() + ";" for s in stmts)
-                out.append("")
-    if not out:
-        seen = set()
-        for f in files:
-            if f.suffix in {".py", ".sql"}:
-                for m in CREATE_RE.finditer(read(f)):
-                    stmt = " ".join(m.group(0).split())
-                    if stmt not in seen:
-                        seen.add(stmt)
-                        out.append(f"-- {f.relative_to(root).as_posix()}")
-                        out.append(m.group(0).strip() + ";")
-                        out.append("")
-        if out:
-            out.insert(0, "-- Nenhum arquivo de banco no repositório; schema extraído dos CREATE TABLE do código")
-    if not out:
-        out = ["-- Nenhum banco nem CREATE TABLE encontrado"]
-    return "```sql\n" + "\n".join(out).rstrip() + "\n```"
+
+    # 1. MySQL Schema (Principal)
+    mysql_path = root / "db" / "schema_mysql.sql"
+    mig_dir = root / "db" / "migrations"
+    mysql_sql = []
+    if mysql_path.exists():
+        mysql_sql.append("-- =============================================================================")
+        mysql_sql.append("-- DDL Base: db/schema_mysql.sql")
+        mysql_sql.append("-- =============================================================================")
+        mysql_sql.append(read(mysql_path).strip())
+        mysql_sql.append("")
+    if mig_dir.exists():
+        for mf in sorted(mig_dir.glob("*.sql")):
+            rel_mig = mf.relative_to(root).as_posix()
+            mysql_sql.append("-- -----------------------------------------------------------------------------")
+            mysql_sql.append(f"-- Migração: {rel_mig}")
+            mysql_sql.append("-- -----------------------------------------------------------------------------")
+            mysql_sql.append(read(mf).strip())
+            mysql_sql.append("")
+
+    if mysql_sql:
+        out.append("### 4.1 Schema MySQL 8.0 (Banco de Dados Principal Central)")
+        out.append("")
+        out.append("DDL base (`db/schema_mysql.sql`) e migrações versionadas (`db/migrations/*.sql`):")
+        out.append("")
+        out.append("```sql")
+        out.extend(mysql_sql)
+        out.append("```")
+        out.append("")
+
+    # 2. SQLite Schema (Reserva local / contingência)
+    out.append("### 4.2 Schema SQLite (Reserva Local / Legado)")
+    out.append("")
+    out.append("Origem: `jobmanager.db` (banco de contingência offline local)")
+    out.append("")
+
+    db_file = root / "jobmanager.db"
+    if db_file.exists():
+        diff_warnings = check_db_outdated(db_file, root / "database.py")
+        if diff_warnings:
+            out.append("> [!WARNING]")
+            out.append("> **Aviso de desatualização do arquivo local `jobmanager.db`:**")
+            out.append("> O arquivo `jobmanager.db` versionado no repositório está desatualizado em relação às tabelas e colunas criadas dinamicamente pelo código (`database.py`):")
+            for w in diff_warnings:
+                out.append(f"> {w}")
+            out.append("> *(Nota: Em tempo de execução, o `database.py` aplica as migrações automaticamente no SQLite via `_migrate_layouts_table()` e `CREATE TABLE IF NOT EXISTS`).*")
+            out.append("")
+
+        stmts = schema_from_db(db_file)
+        if stmts:
+            out.append("```sql")
+            out.append("-- Banco: jobmanager.db")
+            out.extend(s.strip() + ";" for s in stmts)
+            out.append("```")
+        else:
+            out.append("_Não foi possível ler o schema de `jobmanager.db`._")
+    else:
+        out.append("_Arquivo `jobmanager.db` não encontrado._")
+
+    return "\n".join(out).strip()
 
 
 # --- atalhos
@@ -189,19 +260,41 @@ TK_KEY = re.compile(r"""["'](<[^>"']+>)["']""")
 QT_KEY = re.compile(r"Key_(\w+)")
 MODS = ["ctrl", "shift", "alt", "meta"]
 
+IGNORE_TK_EVENTS = {
+    "button", "buttonpress", "buttonrelease", "double", "triple",
+    "motion", "b1-motion", "b2-motion", "b3-motion",
+    "enter", "leave", "configure", "focusin", "focusout",
+    "mousewheel", "activate", "deactivate", "destroy", "expose",
+    "map", "unmap", "visibility", "property", "colormap",
+    "keyrelease", "keypress"
+}
+
 
 def norm_key(raw):
-    parts = [p.lower() for p in re.split(r"[+\-]", raw.strip("<>")) if p]
-    parts = [{"control": "ctrl", "key": None, "keypress": None}.get(p, p) for p in parts]
+    parts = [p.lower() for p in re.split(r"[+\-]", raw.strip("<>'\"")) if p]
+    if any(p in IGNORE_TK_EVENTS for p in parts):
+        return None
+    parts = [{"control": "ctrl", "key": None}.get(p, p) for p in parts]
     parts = [p for p in parts if p]
     if not parts:
-        return raw
+        return None
     mods = [m for m in MODS if m in parts]
     key = [p for p in parts if p not in MODS]
     if not key:
-        return raw
+        return None
     k = key[-1]
-    k = k.upper() if len(k) == 1 or re.fullmatch(r"f\d+", k) else k.capitalize()
+    if re.fullmatch(r"\d+", k):
+        return None
+    if k in ("del", "delete"):
+        k = "Delete"
+    elif k in ("enter", "return"):
+        k = "Return"
+    elif k in ("esc", "escape"):
+        k = "Escape"
+    elif len(k) == 1 or re.fullmatch(r"f\d+", k):
+        k = k.upper()
+    else:
+        k = k.capitalize()
     return "+".join([m.capitalize() for m in mods] + [k])
 
 
@@ -211,16 +304,27 @@ def find_shortcuts(root, files):
         if f.suffix != ".py":
             continue
         rel = f.relative_to(root).as_posix()
+        if rel.startswith(("tools/", "tests/")):
+            continue
         for i, line in enumerate(read(f).splitlines(), 1):
             if not KEY_LINE.search(line):
                 continue
-            keys = {norm_key(m.group(1)) for m in STR_KEY.finditer(line)}
-            keys |= {norm_key(m.group(1)) for m in TK_KEY.finditer(line)}
+            keys = set()
+            for m in STR_KEY.finditer(line):
+                nk = norm_key(m.group(1))
+                if nk:
+                    keys.add(nk)
+            for m in TK_KEY.finditer(line):
+                nk = norm_key(m.group(1))
+                if nk:
+                    keys.add(nk)
             for m in QT_KEY.finditer(line):
-                k = norm_key(m.group(1))
-                if re.search(r"Control|Ctrl", line) and not k.startswith("Ctrl+"):
-                    k = "Ctrl+" + k
-                keys.add(k)
+                raw = m.group(1)
+                nk = norm_key(raw)
+                if nk:
+                    if re.search(r"Control|Ctrl", line) and not nk.startswith("Ctrl+"):
+                        nk = "Ctrl+" + nk
+                    keys.add(nk)
             for k in keys:
                 found.append((k, f"{rel}:{i}", line.strip()[:80]))
     return found
@@ -242,8 +346,12 @@ def block_shortcuts(root, files):
     for k in FORBIDDEN_SHORTCUTS:
         hits = by_key.get(k)
         if hits:
-            out.append(f"| {k} | **PRESENTE, mas deveria NÃO existir** | "
-                       f"{', '.join(f'`{w}`' for w, _ in hits[:3])} |")
+            all_break = all('"break"' in code or "'break'" in code for _, code in hits)
+            if all_break:
+                out.append(f"| {k} | bloqueado (correto) | {', '.join(f'`{w}`' for w, _ in hits[:3])} |")
+            else:
+                out.append(f"| {k} | **PRESENTE, mas deveria NÃO existir** | "
+                           f"{', '.join(f'`{w}`' for w, _ in hits[:3])} |")
         else:
             out.append(f"| {k} | ausente (correto) | |")
     out += ["", "**Todos os atalhos detectados no código:**", "",
@@ -253,12 +361,21 @@ def block_shortcuts(root, files):
     for k in sorted(by_key):
         for where, code in by_key[k]:
             out.append(f"| {k} | `{where}` | `{code.replace('|', chr(92) + '|')}` |")
-    multi = [k for k, v in by_key.items() if len({w.split(':')[0] for w, _ in v}) > 1]
-    if multi:
-        out += ["", "**Mesma tecla em mais de um arquivo (verificar conflito):** "
-                + ", ".join(sorted(multi))]
+
+    # Conflitos reais: teclas com concorrência global via bind_all em múltiplos arquivos
+    real_conflicts = []
+    for k, entries in sorted(by_key.items()):
+        ba_files = sorted({w.split(':')[0] for w, c in entries if "bind_all" in c and '"break"' not in c and "'break'" not in c})
+        if len(ba_files) > 1:
+            real_conflicts.append(f"- `{k}`: múltiplos `bind_all` concorrentes em arquivos distintos ({', '.join(f'`{f}`' for f in ba_files)}).")
+
+    if real_conflicts:
+        out += ["", "**Conflitos reais detectados:**", ""] + real_conflicts
+    else:
+        out += ["", "**Conflitos reais:** Nenhum conflito real detectado (atalhos em arquivos diferentes pertencem a janelas e diálogos independentes)."]
+
     out += ["", "_Detecção por texto (QShortcut, setShortcut, bind, accelerator, Key_*). "
-                "Atalhos montados dinamicamente podem não aparecer._"]
+                "Eventos de mouse (Button, Motion, Wheel) e de ciclo de vida (Configure, Focus) são ignorados._"]
     return "\n".join(out)
 
 

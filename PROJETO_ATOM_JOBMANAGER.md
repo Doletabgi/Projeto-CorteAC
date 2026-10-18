@@ -4,7 +4,7 @@
 > **Regra de ouro:** o que está marcado `[CONFIRMADO]` veio do relatório, do código ou do usuário. O que está `[NÃO CONFIRMADO]` é suposição e não deve virar "fato" sem validação. O que está `[PREENCHER]` o Antigravity deve completar lendo o código real.
 
 <!-- AUTO:header:start -->
-**Última sincronização com o código:** 2026-10-18 01:39 (HEAD ao gerar: `e6d1a1f`; 31 arquivos Python, ~19405 linhas)
+**Última sincronização com o código:** 2026-10-18 01:58 (HEAD ao gerar: `eedf717`; 31 arquivos Python, ~19405 linhas)
 <!-- AUTO:header:end -->
 **Versão deste documento:** 1
 
@@ -224,19 +224,442 @@ ui/shape_editor_view.py                     # JobManager 2000 (Python Edition)
 |---|---|---|
 | `cad/die_parser.py` | Importador/exportador `.die` | Pronto. **Não alterar** sem pedido explícito |
 | `cad/lay_parser.py` | Importador/exportador `.lay` (`$$LAYOUT.v3$$`), nesting e ordenação de corte CNC | Pronto |
-| `database.py` | Acesso SQLite (`jobmanager.db`), gerenciamento de ordens, artigos, moldes, sessões e layouts | Pronto |
+| `database.py` | Acesso SQLite (`jobmanager.db`), gerenciamento de ordens, artigos, moldes, sessões e layouts | Pronto (`DIVERGÊNCIA: refatorado para MySQL 8.0 Central via pacote db/, SQLite é contingência`) |
 | `SessionView` | Sessão de corte, aba Moldes, mini-preview, disparo do encaixe e integração | Pronto |
 | `ShapeEditorView` | Reprodução visual do ShedNt | Pronto (visual) |
 | `LayoutEditorView` | Editor de layout (canvas vetorial) | Pronto: atalhos F1-F4, Ctrl+Z, Ctrl+S, rotação e persistência |
-| `PrintPreviewDialog` | Relatório A4 com rendimento % | Pronto |
-| `anp_client.py` | Driver ANP: socket não-bloqueante, 4001 (ping) e 4000 (dados) | Pronto `[NÃO CONFIRMADO em máquina real]` |
-| `LoopDaemon` (em `atom_reborn`) | Substitui o TheLoop.exe | Pronto |
+| `PrintPreviewDialog` | Relatório A4 com rendimento % | Pronto (`DIVERGÊNCIA: implementado como LayoutPrintDialog em ui/layout_print_dialog.py`) |
+| `anp_client.py` | Driver ANP: socket não-bloqueante, 4001 (ping) e 4000 (dados) | `[NÃO IMPLEMENTADO]` (`DIVERGÊNCIA: arquivo inexistente no repositório; planejado`) |
+| `LoopDaemon` (em `atom_reborn`) | Substitui o TheLoop.exe | Pronto `[NÃO CONFIRMADO no repositório local]` |
+
+> **DIVERGÊNCIAS da Seção 3.1 em relação ao código real:**
+> 1. **`database.py`**: O acesso ao banco agora é centralizado via pacote `db/` (`db.connection`, `db.config`). O banco de dados **primário em produção é MySQL 8.0 Central** (com suporte multi-máquina a 8 PCs simultâneos, pool de conexões e concorrência otimista), mantendo o SQLite local (`jobmanager.db`) como contingência/reserva offline.
+> 2. **`PrintPreviewDialog`**: No código real do repositório, a classe chama-se `LayoutPrintDialog` e reside em `ui/layout_print_dialog.py` (linha 20, 14 métodos).
+> 3. **`anp_client.py`**: O arquivo `anp_client.py` **não existe** no repositório atual. Foi concebido no planejamento original para comunicação direta via socket com a máquina de corte ATOM (portas 4000 e 4001), mas ainda não foi implementado neste repositório.
 
 ---
 
 ## 4. Modelo de dados (automático)
 
 <!-- AUTO:schema:start -->
+### 4.1 Schema MySQL 8.0 (Banco de Dados Principal Central)
+
+DDL base (`db/schema_mysql.sql`) e migrações versionadas (`db/migrations/*.sql`):
+
+```sql
+-- =============================================================================
+-- DDL Base: db/schema_mysql.sql
+-- =============================================================================
+-- =============================================================================
+-- JobManager 2000 Reborn - Schema DDL para MySQL 8.0 Central
+-- Compatível com 8 PCs simultâneos e > 1000 layouts/dia
+-- Engine: InnoDB | Charset: utf8mb4 | Collation: utf8mb4_unicode_ci
+-- =============================================================================
+
+CREATE TABLE IF NOT EXISTS schema_version (
+    version INT PRIMARY KEY,
+    description VARCHAR(255) NOT NULL,
+    applied_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- 1. Materiais (Chapas, Bobinas, Peles)
+CREATE TABLE IF NOT EXISTS materials (
+    id VARCHAR(50) PRIMARY KEY,
+    name VARCHAR(150) NOT NULL,
+    type VARCHAR(50) NOT NULL,
+    width_mm DOUBLE NOT NULL,
+    height_mm DOUBLE NOT NULL,
+    area_m2 DOUBLE NOT NULL,
+    thickness_mm DOUBLE NOT NULL,
+    layers INT DEFAULT 2,
+    gap_mm DOUBLE DEFAULT 1.0
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- 2. Ordens de Produção (Orders)
+CREATE TABLE IF NOT EXISTS orders (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    code VARCHAR(100) UNIQUE NOT NULL,
+    customer VARCHAR(150) NOT NULL,
+    name VARCHAR(150) DEFAULT 'Derby Masculino #41',
+    status VARCHAR(50) NOT NULL DEFAULT 'Pendente',
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    INDEX idx_orders_code (code),
+    INDEX idx_orders_status (status)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- 3. Artigos por Ordem (Articles)
+CREATE TABLE IF NOT EXISTS articles (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    order_id INT NOT NULL,
+    name VARCHAR(150) NOT NULL,
+    pairs_count INT NOT NULL DEFAULT 1,
+    material_id VARCHAR(50) NOT NULL,
+    FOREIGN KEY (order_id) REFERENCES orders(id) ON DELETE CASCADE,
+    FOREIGN KEY (material_id) REFERENCES materials(id) ON DELETE RESTRICT,
+    INDEX idx_articles_order (order_id),
+    INDEX idx_articles_material (material_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- 4. Pastas de Moldes CAD (Shape Folders)
+CREATE TABLE IF NOT EXISTS shape_folders (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    name VARCHAR(150) UNIQUE NOT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- 4.1 Pastas de Produção (Job Folders)
+CREATE TABLE IF NOT EXISTS job_folders (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    name VARCHAR(150) UNIQUE NOT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- 5. Moldes / Geometria CAD (Shapes)
+CREATE TABLE IF NOT EXISTS shapes (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    article_id INT NOT NULL,
+    name VARCHAR(150) NOT NULL,
+    color VARCHAR(30) NOT NULL,
+    contour_json LONGTEXT NOT NULL,
+    holes_json LONGTEXT NULL,
+    stitching_json LONGTEXT NULL,
+    folder VARCHAR(150) DEFAULT '',
+    size VARCHAR(50) DEFAULT '41',
+    FOREIGN KEY (article_id) REFERENCES articles(id) ON DELETE CASCADE,
+    INDEX idx_shapes_article (article_id),
+    INDEX idx_shapes_name (name),
+    INDEX idx_shapes_folder (folder)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- 6. Sessões de Corte / Nesting (Sessions)
+CREATE TABLE IF NOT EXISTS sessions (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    code VARCHAR(100) UNIQUE NOT NULL,
+    order_id INT NOT NULL,
+    material_id VARCHAR(50) NOT NULL,
+    name VARCHAR(150) NOT NULL DEFAULT '',
+    job VARCHAR(100) NOT NULL DEFAULT 'ProduçãoNova',
+    status VARCHAR(50) NOT NULL DEFAULT 'Planejado',
+    yield_percent DOUBLE DEFAULT 0.0,
+    cutting_time_sec DOUBLE DEFAULT 0.0,
+    placed_pieces_json LONGTEXT NULL,
+    strategy VARCHAR(100) DEFAULT 'flashnestsheet',
+    params VARCHAR(100) DEFAULT 'stdNOTFill',
+    machine VARCHAR(150) DEFAULT 'ATOM FlashCut Flex 3020',
+    shapes_json LONGTEXT NULL,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (order_id) REFERENCES orders(id) ON DELETE CASCADE,
+    FOREIGN KEY (material_id) REFERENCES materials(id) ON DELETE RESTRICT,
+    INDEX idx_sessions_order (order_id),
+    INDEX idx_sessions_created (created_at),
+    INDEX idx_sessions_status (status)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- 7. Configurações Globais do Sistema (Settings)
+CREATE TABLE IF NOT EXISTS settings (
+    `key` VARCHAR(100) PRIMARY KEY,
+    `value` LONGTEXT NOT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- 8. Presets DieProc (dp98 ATOM)
+CREATE TABLE IF NOT EXISTS dieproc_presets (
+    name VARCHAR(100) PRIMARY KEY,
+    coupling VARCHAR(100) NOT NULL,
+    step DOUBLE DEFAULT 1.0,
+    solutions INT DEFAULT 30,
+    range1_from DOUBLE DEFAULT -3.0,
+    range1_to DOUBLE DEFAULT 3.0,
+    range1_step DOUBLE DEFAULT 1.0,
+    range2_from DOUBLE DEFAULT 0.0,
+    range2_to DOUBLE DEFAULT 0.0,
+    range2_step DOUBLE DEFAULT 0.0,
+    range3_from DOUBLE DEFAULT 0.0,
+    range3_to DOUBLE DEFAULT 0.0,
+    range3_step DOUBLE DEFAULT 0.0,
+    gap1 DOUBLE DEFAULT 1.0,
+    gap2 DOUBLE DEFAULT 0.0,
+    gap3 DOUBLE DEFAULT 0.0,
+    row_interlock INT DEFAULT 1,
+    diagonal INT DEFAULT 0
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- 9. Layouts de Corte (.lay) com Controle de Versão Otimista
+CREATE TABLE IF NOT EXISTS layouts (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    session_id INT NOT NULL,
+    name VARCHAR(150) NOT NULL DEFAULT 'l0000.lay',
+    width_mm DOUBLE NOT NULL DEFAULT 0.0,
+    height_mm DOUBLE NOT NULL DEFAULT 0.0,
+    yield_pct DOUBLE NOT NULL DEFAULT 0.0,
+    status VARCHAR(50) NOT NULL DEFAULT 'Nested',
+    lay_path VARCHAR(500) NULL,
+    version INT NOT NULL DEFAULT 1,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    created_by VARCHAR(100) NULL,
+    updated_by VARCHAR(100) NULL,
+    -- Colunas de compatibilidade e suporte ao formato .lay
+    code VARCHAR(100) NOT NULL DEFAULT 'l0000.lay',
+    path VARCHAR(500) DEFAULT '',
+    `desc` VARCHAR(255) DEFAULT '',
+    material_code VARCHAR(100) DEFAULT '',
+    material_name VARCHAR(150) DEFAULT '',
+    gap_mm DOUBLE DEFAULT 1.0,
+    ris_w DOUBLE DEFAULT 0.0,
+    ris_l DOUBLE DEFAULT 0.0,
+    area_mm2 DOUBLE DEFAULT 0.0,
+    yield_percent DOUBLE DEFAULT 0.0,
+    num_items INT DEFAULT 0,
+    num_dies INT DEFAULT 0,
+    FOREIGN KEY (session_id) REFERENCES sessions(id) ON DELETE CASCADE,
+    INDEX idx_layouts_session_status (session_id, created_at, status),
+    INDEX idx_layouts_version (id, version)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- 10. Peças Posicionadas do Layout (layout_pieces)
+CREATE TABLE IF NOT EXISTS layout_pieces (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    layout_id INT NOT NULL,
+    mold_id INT NULL,
+    shape_id INT NULL,
+    x DOUBLE NOT NULL,
+    y DOUBLE NOT NULL,
+    rotation_deg SMALLINT NOT NULL CHECK (rotation_deg >= 0 AND rotation_deg < 360),
+    mirrored TINYINT(1) NOT NULL DEFAULT 0,
+    is_mirrored TINYINT(1) NOT NULL DEFAULT 0,
+    -- Colunas de metadados CAM / .lay
+    item_index INT NOT NULL DEFAULT 0,
+    target_index INT NOT NULL DEFAULT 0,
+    instance_id INT NOT NULL DEFAULT 0,
+    piece_name VARCHAR(150) NOT NULL DEFAULT '',
+    size VARCHAR(50) DEFAULT '',
+    rotation_rad DOUBLE DEFAULT 0.0,
+    color VARCHAR(30) DEFAULT '#2563eb',
+    tag VARCHAR(50) DEFAULT 'Pasted',
+    quality_zone INT DEFAULT 1,
+    FOREIGN KEY (layout_id) REFERENCES layouts(id) ON DELETE CASCADE,
+    FOREIGN KEY (mold_id) REFERENCES shapes(id) ON DELETE RESTRICT,
+    FOREIGN KEY (shape_id) REFERENCES shapes(id) ON DELETE RESTRICT,
+    INDEX idx_layout_pieces_layout (layout_id),
+    INDEX idx_layout_pieces_mold (mold_id),
+    INDEX idx_layout_pieces_shape (shape_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- -----------------------------------------------------------------------------
+-- Migração: db/migrations/001_initial_mysql_schema.sql
+-- -----------------------------------------------------------------------------
+-- Migração 001: Schema inicial do MySQL 8.0 para o JobManager Reborn
+-- Idempotente
+
+-- =============================================================================
+-- JobManager 2000 Reborn - Schema DDL para MySQL 8.0 Central
+-- Compatível com 8 PCs simultâneos e > 1000 layouts/dia
+-- Engine: InnoDB | Charset: utf8mb4 | Collation: utf8mb4_unicode_ci
+-- =============================================================================
+
+CREATE TABLE IF NOT EXISTS schema_version (
+    version INT PRIMARY KEY,
+    description VARCHAR(255) NOT NULL,
+    applied_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- 1. Materiais (Chapas, Bobinas, Peles)
+CREATE TABLE IF NOT EXISTS materials (
+    id VARCHAR(50) PRIMARY KEY,
+    name VARCHAR(150) NOT NULL,
+    type VARCHAR(50) NOT NULL,
+    width_mm DOUBLE NOT NULL,
+    height_mm DOUBLE NOT NULL,
+    area_m2 DOUBLE NOT NULL,
+    thickness_mm DOUBLE NOT NULL,
+    layers INT DEFAULT 2,
+    gap_mm DOUBLE DEFAULT 1.0
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- 2. Ordens de Produção (Orders)
+CREATE TABLE IF NOT EXISTS orders (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    code VARCHAR(100) UNIQUE NOT NULL,
+    customer VARCHAR(150) NOT NULL,
+    name VARCHAR(150) DEFAULT 'Derby Masculino #41',
+    status VARCHAR(50) NOT NULL DEFAULT 'Pendente',
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    INDEX idx_orders_code (code),
+    INDEX idx_orders_status (status)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- 3. Artigos por Ordem (Articles)
+CREATE TABLE IF NOT EXISTS articles (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    order_id INT NOT NULL,
+    name VARCHAR(150) NOT NULL,
+    pairs_count INT NOT NULL DEFAULT 1,
+    material_id VARCHAR(50) NOT NULL,
+    FOREIGN KEY (order_id) REFERENCES orders(id) ON DELETE CASCADE,
+    FOREIGN KEY (material_id) REFERENCES materials(id) ON DELETE RESTRICT,
+    INDEX idx_articles_order (order_id),
+    INDEX idx_articles_material (material_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- 4. Pastas de Moldes CAD (Shape Folders)
+CREATE TABLE IF NOT EXISTS shape_folders (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    name VARCHAR(150) UNIQUE NOT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- 4.1 Pastas de Produção (Job Folders)
+CREATE TABLE IF NOT EXISTS job_folders (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    name VARCHAR(150) UNIQUE NOT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- 5. Moldes / Geometria CAD (Shapes)
+CREATE TABLE IF NOT EXISTS shapes (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    article_id INT NOT NULL,
+    name VARCHAR(150) NOT NULL,
+    color VARCHAR(30) NOT NULL,
+    contour_json LONGTEXT NOT NULL,
+    holes_json LONGTEXT NULL,
+    stitching_json LONGTEXT NULL,
+    folder VARCHAR(150) DEFAULT '',
+    size VARCHAR(50) DEFAULT '41',
+    FOREIGN KEY (article_id) REFERENCES articles(id) ON DELETE CASCADE,
+    INDEX idx_shapes_article (article_id),
+    INDEX idx_shapes_name (name),
+    INDEX idx_shapes_folder (folder)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- 6. Sessões de Corte / Nesting (Sessions)
+CREATE TABLE IF NOT EXISTS sessions (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    code VARCHAR(100) UNIQUE NOT NULL,
+    order_id INT NOT NULL,
+    material_id VARCHAR(50) NOT NULL,
+    name VARCHAR(150) NOT NULL DEFAULT '',
+    job VARCHAR(100) NOT NULL DEFAULT 'ProduçãoNova',
+    status VARCHAR(50) NOT NULL DEFAULT 'Planejado',
+    yield_percent DOUBLE DEFAULT 0.0,
+    cutting_time_sec DOUBLE DEFAULT 0.0,
+    placed_pieces_json LONGTEXT NULL,
+    strategy VARCHAR(100) DEFAULT 'flashnestsheet',
+    params VARCHAR(100) DEFAULT 'stdNOTFill',
+    machine VARCHAR(150) DEFAULT 'ATOM FlashCut Flex 3020',
+    shapes_json LONGTEXT NULL,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (order_id) REFERENCES orders(id) ON DELETE CASCADE,
+    FOREIGN KEY (material_id) REFERENCES materials(id) ON DELETE RESTRICT,
+    INDEX idx_sessions_order (order_id),
+    INDEX idx_sessions_created (created_at),
+    INDEX idx_sessions_status (status)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- 7. Configurações Globais do Sistema (Settings)
+CREATE TABLE IF NOT EXISTS settings (
+    `key` VARCHAR(100) PRIMARY KEY,
+    `value` LONGTEXT NOT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- 8. Presets DieProc (dp98 ATOM)
+CREATE TABLE IF NOT EXISTS dieproc_presets (
+    name VARCHAR(100) PRIMARY KEY,
+    coupling VARCHAR(100) NOT NULL,
+    step DOUBLE DEFAULT 1.0,
+    solutions INT DEFAULT 30,
+    range1_from DOUBLE DEFAULT -3.0,
+    range1_to DOUBLE DEFAULT 3.0,
+    range1_step DOUBLE DEFAULT 1.0,
+    range2_from DOUBLE DEFAULT 0.0,
+    range2_to DOUBLE DEFAULT 0.0,
+    range2_step DOUBLE DEFAULT 0.0,
+    range3_from DOUBLE DEFAULT 0.0,
+    range3_to DOUBLE DEFAULT 0.0,
+    range3_step DOUBLE DEFAULT 0.0,
+    gap1 DOUBLE DEFAULT 1.0,
+    gap2 DOUBLE DEFAULT 0.0,
+    gap3 DOUBLE DEFAULT 0.0,
+    row_interlock INT DEFAULT 1,
+    diagonal INT DEFAULT 0
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- 9. Layouts de Corte (.lay) com Controle de Versão Otimista
+CREATE TABLE IF NOT EXISTS layouts (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    session_id INT NOT NULL,
+    name VARCHAR(150) NOT NULL DEFAULT 'l0000.lay',
+    width_mm DOUBLE NOT NULL DEFAULT 0.0,
+    height_mm DOUBLE NOT NULL DEFAULT 0.0,
+    yield_pct DOUBLE NOT NULL DEFAULT 0.0,
+    status VARCHAR(50) NOT NULL DEFAULT 'Nested',
+    lay_path VARCHAR(500) NULL,
+    version INT NOT NULL DEFAULT 1,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    created_by VARCHAR(100) NULL,
+    updated_by VARCHAR(100) NULL,
+    -- Colunas de compatibilidade e suporte ao formato .lay
+    code VARCHAR(100) NOT NULL DEFAULT 'l0000.lay',
+    path VARCHAR(500) DEFAULT '',
+    `desc` VARCHAR(255) DEFAULT '',
+    material_code VARCHAR(100) DEFAULT '',
+    material_name VARCHAR(150) DEFAULT '',
+    gap_mm DOUBLE DEFAULT 1.0,
+    ris_w DOUBLE DEFAULT 0.0,
+    ris_l DOUBLE DEFAULT 0.0,
+    area_mm2 DOUBLE DEFAULT 0.0,
+    yield_percent DOUBLE DEFAULT 0.0,
+    num_items INT DEFAULT 0,
+    num_dies INT DEFAULT 0,
+    FOREIGN KEY (session_id) REFERENCES sessions(id) ON DELETE CASCADE,
+    INDEX idx_layouts_session_status (session_id, created_at, status),
+    INDEX idx_layouts_version (id, version)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- 10. Peças Posicionadas do Layout (layout_pieces)
+CREATE TABLE IF NOT EXISTS layout_pieces (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    layout_id INT NOT NULL,
+    mold_id INT NULL,
+    shape_id INT NULL,
+    x DOUBLE NOT NULL,
+    y DOUBLE NOT NULL,
+    rotation_deg SMALLINT NOT NULL CHECK (rotation_deg >= 0 AND rotation_deg < 360),
+    mirrored TINYINT(1) NOT NULL DEFAULT 0,
+    is_mirrored TINYINT(1) NOT NULL DEFAULT 0,
+    -- Colunas de metadados CAM / .lay
+    item_index INT NOT NULL DEFAULT 0,
+    target_index INT NOT NULL DEFAULT 0,
+    instance_id INT NOT NULL DEFAULT 0,
+    piece_name VARCHAR(150) NOT NULL DEFAULT '',
+    size VARCHAR(50) DEFAULT '',
+    rotation_rad DOUBLE DEFAULT 0.0,
+    color VARCHAR(30) DEFAULT '#2563eb',
+    tag VARCHAR(50) DEFAULT 'Pasted',
+    quality_zone INT DEFAULT 1,
+    FOREIGN KEY (layout_id) REFERENCES layouts(id) ON DELETE CASCADE,
+    FOREIGN KEY (mold_id) REFERENCES shapes(id) ON DELETE RESTRICT,
+    FOREIGN KEY (shape_id) REFERENCES shapes(id) ON DELETE RESTRICT,
+    INDEX idx_layout_pieces_layout (layout_id),
+    INDEX idx_layout_pieces_mold (mold_id),
+    INDEX idx_layout_pieces_shape (shape_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+INSERT INTO schema_version (version, description)
+SELECT 1, 'Schema inicial do JobManager Desktop para MySQL 8.0 com suporte a multi-usuário e concorrência'
+WHERE NOT EXISTS (SELECT 1 FROM schema_version WHERE version = 1);
+
+```
+
+### 4.2 Schema SQLite (Reserva Local / Legado)
+
+Origem: `jobmanager.db` (banco de contingência offline local)
+
+> [!WARNING]
+> **Aviso de desatualização do arquivo local `jobmanager.db`:**
+> O arquivo `jobmanager.db` versionado no repositório está desatualizado em relação às tabelas e colunas criadas dinamicamente pelo código (`database.py`):
+> - **Tabelas ausentes no `.db`:** `job_folders`
+> - **Colunas ausentes na tabela `layout_pieces`:** `mirrored`, `mold_id`
+> - **Colunas ausentes na tabela `layouts`:** `created_by`, `height_mm`, `name`, `updated_at`, `updated_by`, `version`, `width_mm`, `yield_pct`
+> *(Nota: Em tempo de execução, o `database.py` aplica as migrações automaticamente no SQLite via `_migrate_layouts_table()` e `CREATE TABLE IF NOT EXISTS`).*
+
 ```sql
 -- Banco: jobmanager.db
 CREATE TABLE articles (
@@ -487,104 +910,27 @@ A ordem de corte do `.lay` para a mesa **não pode** ser aleatória:
 
 | Atalho | Estado no código | Onde |
 |---|---|---|
-| F1 | encontrado | `ui/layout_editor_view.py:408`, `ui/layout_editor_view.py:409`, `ui/layout_editor_view.py:410` |
-| F2 | encontrado | `ui/layout_editor_view.py:412`, `ui/layout_editor_view.py:413`, `ui/layout_editor_view.py:414` |
-| F3 | encontrado | `ui/layout_editor_view.py:416`, `ui/layout_editor_view.py:417`, `ui/layout_editor_view.py:418` |
-| F4 | encontrado | `ui/layout_editor_view.py:424`, `ui/layout_editor_view.py:425`, `ui/layout_editor_view.py:426` |
+| F1 | encontrado | `ui/layout_editor_view.py:408`, `ui/layout_editor_view.py:409` |
+| F2 | encontrado | `ui/layout_editor_view.py:412`, `ui/layout_editor_view.py:413`, `ui/session_view.py:531` |
+| F3 | encontrado | `ui/layout_editor_view.py:416`, `ui/layout_editor_view.py:417` |
+| F4 | encontrado | `ui/layout_editor_view.py:424`, `ui/layout_editor_view.py:425` |
 | Ctrl+Z | encontrado | `ui/layout_editor_view.py:384`, `ui/layout_editor_view.py:385`, `ui/layout_editor_view.py:386` |
 | Ctrl+S | encontrado | `ui/layout_editor_view.py:278`, `ui/layout_editor_view.py:279`, `ui/layout_editor_view.py:396` |
-| Shift+F3 | **PRESENTE, mas deveria NÃO existir** | `tests/test_layout_editor_shortcuts.py:299`, `ui/layout_editor_view.py:421`, `ui/layout_editor_view.py:422` |
-| Ctrl+Y | **PRESENTE, mas deveria NÃO existir** | `tests/test_layout_editor_shortcuts.py:302`, `ui/layout_editor_view.py:390`, `ui/layout_editor_view.py:391` |
+| Shift+F3 | bloqueado (correto) | `ui/layout_editor_view.py:421`, `ui/layout_editor_view.py:422` |
+| Ctrl+Y | bloqueado (correto) | `ui/layout_editor_view.py:390`, `ui/layout_editor_view.py:391`, `ui/layout_editor_view.py:392` |
 
 **Todos os atalhos detectados no código:**
 
 | Atalho | Local | Linha |
 |---|---|---|
-| 1 | `ui/add_shapes_dialog.py:132` | `self.tree.bind("<Button-1>", self.on_tree_click)` |
-| 1 | `ui/add_shapes_dialog.py:133` | `self.tree.bind("<Double-1>", self.on_tree_double_click)` |
-| 1 | `ui/cad_canvas.py:48` | `self.bind("<ButtonPress-1>", self.on_button1_down)` |
-| 1 | `ui/cad_canvas.py:50` | `self.bind("<ButtonRelease-1>", self.on_button1_up)` |
-| 1 | `ui/layout_editor_view.py:269` | `title_bar.bind("<ButtonPress-1>", self._on_title_press)` |
-| 1 | `ui/layout_editor_view.py:271` | `title_bar.bind("<Double-Button-1>", lambda e: self.on_maximize_click())` |
-| 1 | `ui/layout_editor_view.py:272` | `self.lbl_title.bind("<ButtonPress-1>", self._on_title_press)` |
-| 1 | `ui/layout_editor_view.py:274` | `self.lbl_title.bind("<Double-Button-1>", lambda e: self.on_maximize_click())` |
-| 1 | `ui/layout_editor_view.py:275` | `self.bind("<Button-1>", lambda e: (self.lift(), self.focus_set()), add="+")` |
-| 1 | `ui/layout_editor_view.py:376` | `self.canvas.bind("<ButtonPress-1>", self.on_canvas_click)` |
-| 1 | `ui/layout_editor_view.py:377` | `self.canvas.bind("<Double-Button-1>", self.on_canvas_double_click)` |
-| 1 | `ui/layout_editor_view.py:379` | `self.canvas.bind("<ButtonRelease-1>", self.on_canvas_release)` |
-| 1 | `ui/main_window.py:419` | `self.tree_main.bind("<Double-1>", self.on_tree_double_click)` |
-| 1 | `ui/main_window.py:421` | `self.tree_main.bind("<ButtonPress-1>", self.on_tree_drag_start, add="+")` |
-| 1 | `ui/main_window.py:423` | `self.tree_main.bind("<ButtonRelease-1>", self.on_tree_drag_end, add="+")` |
-| 1 | `ui/main_window.py:463` | `self.grid_lower.bind("<Double-1>", self.on_grid_double_click)` |
-| 1 | `ui/main_window.py:465` | `self.grid_lower.bind("<ButtonPress-1>", self.on_grid_drag_start, add="+")` |
-| 1 | `ui/main_window.py:467` | `self.grid_lower.bind("<ButtonRelease-1>", self.on_tree_drag_end, add="+")` |
-| 1 | `ui/main_window.py:531` | `self.bind_all("<Button-1>", self.dismiss_popup_menus, add="+")` |
-| 1 | `ui/main_window.py:728` | `dock_item.bind("<Button-1>", lambda e: self.restore_window(window))` |
-| 1 | `ui/main_window.py:729` | `lbl.bind("<Button-1>", lambda e: self.restore_window(window))` |
-| 1 | `ui/main_window.py:1603` | `lb.bind("<Double-Button-1>", lambda e: on_confirm())` |
-| 1 | `ui/material_codes_view.py:72` | `title_bar.bind("<ButtonPress-1>", self._on_title_press)` |
-| 1 | `ui/material_codes_view.py:74` | `self.lbl_title.bind("<ButtonPress-1>", self._on_title_press)` |
-| 1 | `ui/material_codes_view.py:76` | `self.bind("<Button-1>", lambda e: self.lift(), add="+")` |
-| 1 | `ui/material_codes_view.py:197` | `self.tree.bind("<Double-1>", self.on_row_double_click)` |
-| 1 | `ui/order_view.py:46` | `title_bar.bind("<ButtonPress-1>", self._on_title_press)` |
-| 1 | `ui/order_view.py:48` | `self.lbl_title.bind("<ButtonPress-1>", self._on_title_press)` |
-| 1 | `ui/order_view.py:50` | `self.bind("<Button-1>", lambda e: self.lift(), add="+")` |
-| 1 | `ui/session_view.py:81` | `title_bar.bind("<ButtonPress-1>", self._on_title_press)` |
-| 1 | `ui/session_view.py:83` | `self.lbl_title.bind("<ButtonPress-1>", self._on_title_press)` |
-| 1 | `ui/session_view.py:85` | `self.bind("<Button-1>", lambda e: self.lift(), add="+")` |
-| 1 | `ui/session_view.py:396` | `self.tree_shapes.bind("<Button-1>", self.on_tree_shape_cell_click, add="+")` |
-| 1 | `ui/session_view.py:397` | `self.tree_shapes.bind("<Double-1>", self.on_tree_shape_double_click)` |
-| 1 | `ui/session_view.py:410` | `self.preview_canvas.bind("<Double-1>", self.on_tree_shape_double_click)` |
-| 1 | `ui/session_view.py:528` | `self.tree_mat.bind("<Double-1>", self.on_mat_double_click)` |
-| 1 | `ui/session_view.py:529` | `self.tree_mat.bind("<Button-1>", self.on_mat_single_click)` |
-| 1 | `ui/session_view.py:613` | `self.tree_lays.bind("<Double-1>", self.on_layout_row_double_click)` |
-| 1 | `ui/session_view.py:622` | `self.mini_layout_canvas.bind("<Double-1>", self.on_layout_row_double_click)` |
-| 1 | `ui/session_view.py:623` | `self.mini_layout_canvas.bind("<Button-1>", self.on_layout_row_double_click)` |
-| 1 | `ui/shape_editor_view.py:124` | `title_bar.bind("<ButtonPress-1>", self._on_title_press)` |
-| 1 | `ui/shape_editor_view.py:126` | `self.lbl_title.bind("<ButtonPress-1>", self._on_title_press)` |
-| 1 | `ui/shape_editor_view.py:128` | `self.bind("<Button-1>", lambda e: self.lift(), add="+")` |
-| 1 | `ui/shape_editor_view.py:190` | `self.canvas.bind("<ButtonPress-1>", self.on_canvas_click)` |
-| 1 | `ui/shape_editor_view.py:192` | `self.canvas.bind("<ButtonRelease-1>", self.on_canvas_release)` |
-| 2 | `ui/cad_canvas.py:52` | `self.bind("<ButtonPress-2>", self.on_pan_start)` |
-| 2 | `ui/cad_canvas.py:54` | `self.bind("<ButtonRelease-2>", self.on_pan_end)` |
-| 2 | `ui/main_window.py:532` | `self.bind_all("<Button-2>", self.dismiss_popup_menus, add="+")` |
-| 2 | `ui/shape_editor_view.py:194` | `self.canvas.bind("<ButtonPress-2>", self.on_pan_start)` |
-| 2 | `ui/shape_editor_view.py:196` | `self.canvas.bind("<ButtonRelease-2>", self.on_pan_end)` |
-| 3 | `ui/cad_canvas.py:56` | `self.bind("<ButtonPress-3>", self.on_pan_start)` |
-| 3 | `ui/cad_canvas.py:58` | `self.bind("<ButtonRelease-3>", self.on_pan_end)` |
-| 3 | `ui/main_window.py:406` | `self.btn_mode_materials.bind("<Button-3>", lambda e: self.show_popup_menu(self.m` |
-| 3 | `ui/main_window.py:420` | `self.tree_main.bind("<Button-3>", self.show_tree_context_menu)` |
-| 3 | `ui/main_window.py:464` | `self.grid_lower.bind("<Button-3>", self.show_grid_context_menu)` |
-| 3 | `ui/main_window.py:533` | `self.bind_all("<Button-3>", self.dismiss_popup_menus, add="+")` |
-| 3 | `ui/material_codes_view.py:198` | `self.tree.bind("<Button-3>", self.show_context_menu)` |
-| 3 | `ui/session_view.py:398` | `self.tree_shapes.bind("<Button-3>", self.show_shapes_context_menu)` |
-| 3 | `ui/session_view.py:411` | `self.preview_canvas.bind("<Button-3>", self.show_shapes_context_menu)` |
-| 3 | `ui/session_view.py:533` | `self.tree_mat.bind("<Button-3>", self.show_mat_context_menu)` |
-| 3 | `ui/session_view.py:610` | `self.tree_lays.bind("<Button-3>", self.show_lays_context_menu)` |
-| 3 | `ui/shape_editor_view.py:198` | `self.canvas.bind("<ButtonPress-3>", self.on_right_click)` |
-| 3 | `ui/shape_editor_view.py:200` | `self.canvas.bind("<ButtonRelease-3>", self.on_pan_end)` |
-| 4 | `ui/cad_canvas.py:62` | `self.bind("<Button-4>", lambda e: self.zoom_step(1.1, e.x, e.y))` |
-| 4 | `ui/layout_print_dialog.py:216` | `self.canvas.bind("<Button-4>", lambda e: self.canvas.yview_scroll(-2, "units"))` |
-| 4 | `ui/shape_editor_view.py:204` | `self.canvas.bind("<Button-4>", lambda e: self.zoom_step(1.15, e.x, e.y))` |
-| 5 | `ui/cad_canvas.py:63` | `self.bind("<Button-5>", lambda e: self.zoom_step(0.9, e.x, e.y))` |
-| 5 | `ui/layout_print_dialog.py:217` | `self.canvas.bind("<Button-5>", lambda e: self.canvas.yview_scroll(2, "units"))` |
-| 5 | `ui/shape_editor_view.py:205` | `self.canvas.bind("<Button-5>", lambda e: self.zoom_step(0.85, e.x, e.y))` |
-| <KeyPress> | `ui/session_view.py:532` | `self.tree_mat.bind("<KeyPress>", self.on_mat_key_press)` |
 | Backspace | `ui/cad_canvas.py:69` | `self.master.bind("<BackSpace>", lambda e: self.delete_selected())` |
 | Backspace | `ui/main_window.py:536` | `self.bind_all("<BackSpace>", self.on_global_delete_key, add="+")` |
-| Configure | `ui/cad_canvas.py:47` | `self.bind("<Configure>", lambda e: self.redraw())` |
-| Configure | `ui/layout_editor_view.py:375` | `self.canvas.bind("<Configure>", lambda e: self.redraw())` |
-| Configure | `ui/layout_print_dialog.py:211` | `self.canvas.bind("<Configure>", lambda e: self.redraw())` |
-| Configure | `ui/session_view.py:409` | `self.preview_canvas.bind("<Configure>", lambda e: self._on_preview_resize())` |
-| Configure | `ui/session_view.py:624` | `self.mini_layout_canvas.bind("<Configure>", lambda e: self.draw_mini_layout_prev` |
-| Configure | `ui/shape_editor_view.py:189` | `self.canvas.bind("<Configure>", lambda e: self.redraw())` |
 | Ctrl+A | `ui/main_window.py:251` | `edit_menu.add_command(label="Selecionar tudo", accelerator="Ctrl+A", command=sel` |
 | Ctrl+A | `ui/main_window.py:537` | `self.bind_all("<Control-a>", self.on_select_all, add="+")` |
 | Ctrl+A | `ui/main_window.py:538` | `self.bind_all("<Control-A>", self.on_select_all, add="+")` |
 | Ctrl+A | `ui/main_window.py:539` | `self.bind_all("<Control-Key-a>", self.on_select_all, add="+")` |
 | Ctrl+A | `ui/main_window.py:540` | `self.bind_all("<Control-Key-A>", self.on_select_all, add="+")` |
 | Ctrl+C | `ui/main_window.py:247` | `edit_menu.add_command(label="Copiar", accelerator="Ctrl+C")` |
-| Ctrl+Mousewheel | `ui/layout_print_dialog.py:214` | `self.bind("<Control-MouseWheel>", self._on_ctrl_wheel)` |
 | Ctrl+O | `ui/layout_editor_view.py:401` | `self.canvas.bind("<Control-o>", self.open_layout_dialog)` |
 | Ctrl+O | `ui/layout_editor_view.py:402` | `self.canvas.bind("<Control-O>", self.open_layout_dialog)` |
 | Ctrl+O | `ui/layout_editor_view.py:403` | `self.bind("<Control-o>", self.open_layout_dialog)` |
@@ -601,7 +947,6 @@ A ordem de corte do `.lay` para a mesa **não pode** ser aleatória:
 | Ctrl+S | `ui/main_window.py:64` | `self.bind("<Control-S>", self.handle_ctrl_s)` |
 | Ctrl+V | `ui/main_window.py:248` | `edit_menu.add_command(label="Colar", accelerator="Ctrl+V")` |
 | Ctrl+X | `ui/main_window.py:246` | `edit_menu.add_command(label="Recortar", accelerator="Ctrl+X")` |
-| Ctrl+Y | `tests/test_layout_editor_shortcuts.py:302` | `cb_ctrl_y = self.view.bind("<Control-y>")` |
 | Ctrl+Y | `ui/layout_editor_view.py:390` | `self.canvas.bind("<Control-y>", lambda e: "break")` |
 | Ctrl+Y | `ui/layout_editor_view.py:391` | `self.canvas.bind("<Control-Y>", lambda e: "break")` |
 | Ctrl+Y | `ui/layout_editor_view.py:392` | `self.bind("<Control-y>", lambda e: "break")` |
@@ -623,9 +968,9 @@ A ordem de corte do `.lay` para a mesa **não pode** ser aleatória:
 | Ctrl+Z | `ui/shape_editor_view.py:213` | `self.canvas.bind("<Control-Z>", self.undo_or_revert)` |
 | Ctrl+Z | `ui/shape_editor_view.py:214` | `self.canvas.bind("<Control-Key-z>", self.undo_or_revert)` |
 | Ctrl+Z | `ui/shape_editor_view.py:215` | `self.canvas.bind("<Control-Key-Z>", self.undo_or_revert)` |
-| Del | `ui/main_window.py:249` | `edit_menu.add_command(label="Excluir", accelerator="Del", command=self.on_global` |
 | Delete | `ui/cad_canvas.py:68` | `self.master.bind("<Delete>", lambda e: self.delete_selected())` |
 | Delete | `ui/layout_editor_view.py:430` | `self.bind_all("<Delete>", lambda e: self.delete_selected())` |
+| Delete | `ui/main_window.py:249` | `edit_menu.add_command(label="Excluir", accelerator="Del", command=self.on_global` |
 | Delete | `ui/main_window.py:535` | `self.bind_all("<Delete>", self.on_global_delete_key, add="+")` |
 | Delete | `ui/session_view.py:399` | `self.tree_shapes.bind("<Delete>", lambda e: self.delete_selected_shape())` |
 | Down | `ui/layout_editor_view.py:434` | `self.bind_all("<Down>", lambda e: self.nudge_selected(0, -5))` |
@@ -641,53 +986,17 @@ A ordem de corte do `.lay` para a mesa **não pode** ser aleatória:
 | Escape | `ui/session_view.py:1632` | `entry.bind("<Escape>", cancel_edit)` |
 | F1 | `ui/layout_editor_view.py:408` | `w.bind("<F1>", self.on_f1_press)` |
 | F1 | `ui/layout_editor_view.py:409` | `w.bind("<Key-F1>", self.on_f1_press)` |
-| F1 | `ui/layout_editor_view.py:410` | `w.bind("<KeyRelease-F1>", self.on_f1_release)` |
 | F11 | `ui/main_window.py:61` | `self.bind("<F11>", self.toggle_fullscreen)` |
 | F2 | `ui/layout_editor_view.py:412` | `w.bind("<F2>", self.on_f2_press)` |
 | F2 | `ui/layout_editor_view.py:413` | `w.bind("<Key-F2>", self.on_f2_press)` |
-| F2 | `ui/layout_editor_view.py:414` | `w.bind("<KeyRelease-F2>", self.on_f2_release)` |
 | F2 | `ui/session_view.py:531` | `self.tree_mat.bind("<F2>", self.on_mat_f2_key)` |
 | F3 | `ui/layout_editor_view.py:416` | `w.bind("<F3>", self.on_f3_press)` |
 | F3 | `ui/layout_editor_view.py:417` | `w.bind("<Key-F3>", self.on_f3_press)` |
-| F3 | `ui/layout_editor_view.py:418` | `w.bind("<KeyRelease-F3>", self.on_f3_release)` |
 | F4 | `ui/layout_editor_view.py:424` | `w.bind("<F4>", self.on_f4_press)` |
 | F4 | `ui/layout_editor_view.py:425` | `w.bind("<Key-F4>", self.on_f4_press)` |
-| F4 | `ui/layout_editor_view.py:426` | `w.bind("<KeyRelease-F4>", self.on_f4_release)` |
 | F5 | `ui/main_window.py:102` | `self.bind_all("<F5>", lambda e: self.on_refresh_f5())` |
 | F5 | `ui/main_window.py:267` | `tools_menu.add_command(label="Atualizar", accelerator="F5", command=self.on_refr` |
-| Focusout | `ui/session_view.py:1377` | `entry.bind("<FocusOut>", lambda e: commit())` |
-| Focusout | `ui/session_view.py:1631` | `entry.bind("<FocusOut>", save_and_close)` |
-| Focusout | `ui/shape_editor_view.py:277` | `self.entry_name.bind("<FocusOut>", lambda e: self.on_name_change())` |
-| Keyrelease | `ui/add_shapes_dialog.py:64` | `self.entry_search.bind("<KeyRelease>", lambda e: self.filter_tree())` |
-| Keyrelease | `ui/material_codes_view.py:140` | `self.ent_search.bind("<KeyRelease>", lambda e: self.filter_table(self.ent_search` |
-| Keyrelease | `ui/options_dialog.py:186` | `self.entry_xfer_login.bind("<KeyRelease>", self.mark_changed)` |
-| Keyrelease | `ui/options_dialog.py:191` | `self.entry_xfer_pass.bind("<KeyRelease>", self.mark_changed)` |
-| Keyrelease | `ui/options_dialog.py:196` | `self.entry_xfer_root.bind("<KeyRelease>", self.mark_changed)` |
 | Left | `ui/layout_editor_view.py:431` | `self.bind_all("<Left>", lambda e: self.nudge_selected(-5, 0))` |
-| Motion | `ui/cad_canvas.py:49` | `self.bind("<B1-Motion>", self.on_button1_motion)` |
-| Motion | `ui/cad_canvas.py:53` | `self.bind("<B2-Motion>", self.on_pan_motion)` |
-| Motion | `ui/cad_canvas.py:57` | `self.bind("<B3-Motion>", self.on_pan_motion)` |
-| Motion | `ui/layout_editor_view.py:270` | `title_bar.bind("<B1-Motion>", self._on_title_motion)` |
-| Motion | `ui/layout_editor_view.py:273` | `self.lbl_title.bind("<B1-Motion>", self._on_title_motion)` |
-| Motion | `ui/layout_editor_view.py:378` | `self.canvas.bind("<B1-Motion>", self.on_canvas_drag)` |
-| Motion | `ui/layout_editor_view.py:380` | `self.canvas.bind("<Motion>", self.on_mouse_move)` |
-| Motion | `ui/main_window.py:422` | `self.tree_main.bind("<B1-Motion>", self.on_tree_drag_motion, add="+")` |
-| Motion | `ui/main_window.py:466` | `self.grid_lower.bind("<B1-Motion>", self.on_tree_drag_motion, add="+")` |
-| Motion | `ui/material_codes_view.py:73` | `title_bar.bind("<B1-Motion>", self._on_title_motion)` |
-| Motion | `ui/material_codes_view.py:75` | `self.lbl_title.bind("<B1-Motion>", self._on_title_motion)` |
-| Motion | `ui/order_view.py:47` | `title_bar.bind("<B1-Motion>", self._on_title_motion)` |
-| Motion | `ui/order_view.py:49` | `self.lbl_title.bind("<B1-Motion>", self._on_title_motion)` |
-| Motion | `ui/session_view.py:82` | `title_bar.bind("<B1-Motion>", self._on_title_motion)` |
-| Motion | `ui/session_view.py:84` | `self.lbl_title.bind("<B1-Motion>", self._on_title_motion)` |
-| Motion | `ui/shape_editor_view.py:125` | `title_bar.bind("<B1-Motion>", self._on_title_motion)` |
-| Motion | `ui/shape_editor_view.py:127` | `self.lbl_title.bind("<B1-Motion>", self._on_title_motion)` |
-| Motion | `ui/shape_editor_view.py:191` | `self.canvas.bind("<B1-Motion>", self.on_canvas_drag)` |
-| Motion | `ui/shape_editor_view.py:195` | `self.canvas.bind("<B2-Motion>", self.on_pan_motion)` |
-| Motion | `ui/shape_editor_view.py:199` | `self.canvas.bind("<B3-Motion>", self.on_pan_motion)` |
-| Motion | `ui/shape_editor_view.py:202` | `self.canvas.bind("<Motion>", self.on_canvas_mouse_move)` |
-| Mousewheel | `ui/cad_canvas.py:61` | `self.bind("<MouseWheel>", self.on_zoom_windows)` |
-| Mousewheel | `ui/layout_print_dialog.py:215` | `self.canvas.bind("<MouseWheel>", self._on_wheel)` |
-| Mousewheel | `ui/shape_editor_view.py:203` | `self.canvas.bind("<MouseWheel>", self.on_zoom_wheel)` |
 | R | `ui/cad_canvas.py:66` | `self.master.bind("<r>", lambda e: self.rotate_selected(45))` |
 | R | `ui/cad_canvas.py:67` | `self.master.bind("<R>", lambda e: self.rotate_selected(45))` |
 | R | `ui/layout_editor_view.py:428` | `self.bind_all("<Key-r>", lambda e: self.rotate_selected(45))` |
@@ -704,7 +1013,6 @@ A ordem de corte do `.lay` para a mesa **não pode** ser aleatória:
 | Return | `ui/shape_editor_view.py:309` | `self.entry_vx.bind("<Return>", self.on_vertex_entry_change)` |
 | Return | `ui/shape_editor_view.py:314` | `self.entry_vy.bind("<Return>", self.on_vertex_entry_change)` |
 | Right | `ui/layout_editor_view.py:432` | `self.bind_all("<Right>", lambda e: self.nudge_selected(5, 0))` |
-| Shift+F3 | `tests/test_layout_editor_shortcuts.py:299` | `cb_shift_f3 = self.view.bind("<Shift-F3>")` |
 | Shift+F3 | `ui/layout_editor_view.py:421` | `w.bind("<Shift-F3>", lambda e: "break")` |
 | Shift+F3 | `ui/layout_editor_view.py:422` | `w.bind("<Shift-Key-F3>", lambda e: "break")` |
 | Shift+Tab | `ui/session_view.py:1380` | `entry.bind("<Shift-Tab>", on_shift_tab)` |
@@ -712,19 +1020,76 @@ A ordem de corte do `.lay` para a mesa **não pode** ser aleatória:
 | Tab | `ui/session_view.py:1379` | `entry.bind("<Tab>", on_tab)` |
 | Up | `ui/layout_editor_view.py:433` | `self.bind_all("<Up>", lambda e: self.nudge_selected(0, 5))` |
 
-**Mesma tecla em mais de um arquivo (verificar conflito):** 1, 2, 3, 4, 5, Backspace, Configure, Ctrl+S, Ctrl+Y, Ctrl+Z, Delete, Escape, F2, Focusout, Keyrelease, Motion, Mousewheel, R, Return, Shift+F3
+**Conflitos reais detectados:**
 
-_Detecção por texto (QShortcut, setShortcut, bind, accelerator, Key_*). Atalhos montados dinamicamente podem não aparecer._
+- `Delete`: múltiplos `bind_all` concorrentes em arquivos distintos (`ui/layout_editor_view.py`, `ui/main_window.py`).
+
+_Detecção por texto (QShortcut, setShortcut, bind, accelerator, Key_*). Eventos de mouse (Button, Motion, Wheel) e de ciclo de vida (Configure, Focus) são ignorados._
 <!-- AUTO:shortcuts:end -->
 
-> **DIVERGÊNCIA / Observação sobre Shift+F3 e Ctrl+Y:**
-> O scanner de atalhos de `tools/sync_project_doc.py` reporta `Shift+F3` e `Ctrl+Y` como `PRESENTE, mas deveria NÃO existir` devido a:
-> 1. `ui/layout_editor_view.py:386-389, 417-418`: onde bindings explícitos foram adicionados retornando `"break"` (`lambda e: "break"`) para interceptar e engolir qualquer evento padrão residual do Tkinter ou sistema operacional, garantindo que nada seja executado.
-> 2. `tests/test_layout_editor_shortcuts.py:293, 296`: onde os testes unitários verificam que os eventos retornam break e que não existem os atributos `redo_stack` e `redo_action`.
+> **Observação sobre Shift+F3 e Ctrl+Y:**
+> O scanner de atalhos de `tools/sync_project_doc.py` reporta `Shift+F3` e `Ctrl+Y` como `bloqueado (correto)`:
+> 1. `ui/layout_editor_view.py:390-393, 421-422`: bindings explícitos retornam `"break"` (`lambda e: "break"`) para interceptar e engolir qualquer evento padrão residual do Tkinter ou sistema operacional, garantindo que nada seja executado.
+> 2. `tests/test_layout_editor_shortcuts.py:299, 302`: testes unitários confirmam que os eventos retornam break e que não existem os atributos `redo_stack` e `redo_action`.
 > Portanto, no sistema real **NÃO existe** funcionalidade de Shift+F3 (giro inverso) e **NÃO existe** funcionalidade de Ctrl+Y (refazer/redo).
 
-### 7.5 Atalhos ainda não levantados
-Setas (mover peça), Del, espelhar, zoom, Ctrl+C/V, seleção múltipla. Origem possível: menus do `Layout.exe` original, tabela `ACCELERATORS` do executável (Resource Hacker), arquivo de ajuda. `[PREENCHER quando houver informação]`
+### 7.5 Atalhos adicionais detectados no código (além dos 6 confirmados)
+
+**Texto original (histórico):**
+> Setas (mover peça), Del, espelhar, zoom, Ctrl+C/V, seleção múltipla. Origem possível: menus do `Layout.exe` original, tabela `ACCELERATORS` do executável (Resource Hacker), arquivo de ajuda. `[PREENCHER quando houver informação]`
+
+**Levantamento dos atalhos de teclado e canvas implementados no código:**
+
+Abaixo estão listados todos os atalhos reais de teclado e manipuladores interativos presentes no código além dos 6 atalhos CAM confirmados (`F1`, `F2`, `F3`, `F4`, `Ctrl+Z`, `Ctrl+S`). Cada um deles está marcado como `[NÃO CONFIRMADO pelo usuário]`:
+
+1. **Movimentação Fina por Setas Direcionais (Nudge):**
+   - `<Left>` (`ui/layout_editor_view.py:431`): Move peça selecionada em -5 mm no eixo X (`lambda e: self.nudge_selected(-5, 0)`) `[NÃO CONFIRMADO pelo usuário]`
+   - `<Right>` (`ui/layout_editor_view.py:432`): Move peça selecionada em +5 mm no eixo X (`lambda e: self.nudge_selected(5, 0)`) `[NÃO CONFIRMADO pelo usuário]`
+   - `<Up>` (`ui/layout_editor_view.py:433`): Move peça selecionada em +5 mm no eixo Y (`lambda e: self.nudge_selected(0, 5)`) `[NÃO CONFIRMADO pelo usuário]`
+   - `<Down>` (`ui/layout_editor_view.py:434`): Move peça selecionada em -5 mm no eixo Y (`lambda e: self.nudge_selected(0, -5)`) `[NÃO CONFIRMADO pelo usuário]`
+
+2. **Exclusão de Peças, Moldes e Sessões (`Delete` / `BackSpace`):**
+   - `<Delete>` (`ui/layout_editor_view.py:430`): Exclui peça selecionada no layout (`lambda e: self.delete_selected()`) `[NÃO CONFIRMADO pelo usuário]`
+   - `<Delete>`, `<BackSpace>` (`ui/main_window.py:535-536`): Exclusão global de sessão ou pasta selecionada na árvore/grid (`self.on_global_delete_key`) `[NÃO CONFIRMADO pelo usuário]`
+   - `<Delete>` (`ui/session_view.py:399`): Exclui molde selecionado da sessão (`self.delete_selected_shape()`) `[NÃO CONFIRMADO pelo usuário]`
+   - `<Delete>`, `<BackSpace>` (`ui/cad_canvas.py:68-69`): Exclui peça selecionada no canvas CAD legado `[NÃO CONFIRMADO pelo usuário]`
+
+3. **Rotação Rápida de 45° (`R` / `Key-r`):**
+   - `<Key-r>`, `<Key-R>` (`ui/layout_editor_view.py:428-429`): Gira a peça selecionada em +45° anti-horário (`lambda e: self.rotate_selected(45)`) `[NÃO CONFIRMADO pelo usuário]`
+   - `<r>`, `<R>` (`ui/cad_canvas.py:66-67`): Gira a peça selecionada em +45° no canvas CAD legado `[NÃO CONFIRMADO pelo usuário]`
+
+4. **Fechamento e Saída de Modais (`Escape`):**
+   - `<Escape>` (`ui/main_window.py:62`): Sai do modo tela cheia (`self.exit_fullscreen`) `[NÃO CONFIRMADO pelo usuário]`
+   - `<Escape>` (`ui/main_window.py:534`): Fecha menus de contexto abertos (`self.dismiss_popup_menus`) `[NÃO CONFIRMADO pelo usuário]`
+   - `<Escape>` (`ui/options_dialog.py:40`): Fecha janela de opções sem salvar (`self.on_cancel`) `[NÃO CONFIRMADO pelo usuário]`
+   - `<Escape>` (`ui/material_codes_view.py:466`): Fecha modal de edição de materiais `[NÃO CONFIRMADO pelo usuário]`
+   - `<Escape>` (`ui/session_view.py:1378, 1453, 1632`): Cancela edição inline no grid de materiais e fecha modais de sessão `[NÃO CONFIRMADO pelo usuário]`
+   - `<Escape>` (`ui/dieproc_dialog.py:39`, `ui/edit_shape_in_session_dialog.py:147`, `ui/main_window.py:2458`): Destrói modal ativo `[NÃO CONFIRMADO pelo usuário]`
+
+5. **Zoom e Navegação via Mouse Wheel:**
+   - `<MouseWheel>`, `<Button-4>`, `<Button-5>` (`ui/layout_editor_view.py:203-205, 378-380`): Zoom in/out centrado nas coordenadas do cursor no canvas vetorial `[NÃO CONFIRMADO pelo usuário]`
+   - `<MouseWheel>`, `<Button-4>`, `<Button-5>` (`ui/cad_canvas.py:61-63`): Zoom no canvas CAD `[NÃO CONFIRMADO pelo usuário]`
+   - `<Control-MouseWheel>` (`ui/layout_print_dialog.py:214`): Zoom na folha de impressão A4 `[NÃO CONFIRMADO pelo usuário]`
+   - `<MouseWheel>`, `<Button-4>`, `<Button-5>` (`ui/layout_print_dialog.py:215-217`): Rolagem vertical da folha A4 `[NÃO CONFIRMADO pelo usuário]`
+
+6. **Seleção e Operações de Clipboard (`Ctrl+A`, `Ctrl+C`, `Ctrl+V`, `Ctrl+X`):**
+   - `<Control-a>`, `<Control-A>` (`ui/main_window.py:537-540`): Seleciona todas as sessões ou moldes no grid/árvore ativo (`self.on_select_all`) `[NÃO CONFIRMADO pelo usuário]`
+   - `Ctrl+C`, `Ctrl+V`, `Ctrl+X` (`ui/main_window.py:246-248`): Aceleradores do menu Editar `[NÃO CONFIRMADO pelo usuário]`
+
+7. **Abertura e Impressão de Layouts (`Ctrl+O`, `Ctrl+P`):**
+   - `<Control-o>`, `<Control-O>` (`ui/layout_editor_view.py:401-404`): Abre caixa de diálogo para carregar arquivo `.lay` (`self.open_layout_dialog`) `[NÃO CONFIRMADO pelo usuário]`
+   - `<Control-p>`, `<Control-P>` (`ui/layout_editor_view.py:276-277`): Abre relatório de impressão A4 `LayoutPrintDialog` (`self.print_layout`) `[NÃO CONFIRMADO pelo usuário]`
+
+8. **Comandos de Sistema (`F5`, `F11`):**
+   - `<F5>` (`ui/main_window.py:102, 267`): Recarrega árvore de navegação e grids a partir do banco de dados (`self.on_refresh_f5`) `[NÃO CONFIRMADO pelo usuário]`
+   - `<F11>` (`ui/main_window.py:61`): Alterna janela principal entre tela cheia e modo janela (`self.toggle_fullscreen`) `[NÃO CONFIRMADO pelo usuário]`
+
+9. **Navegação e Confirmação em Formulários (`Return`, `Space`, `Tab`, `Shift+Tab`):**
+   - `<Return>` (`ui/material_codes_view.py:199, 465`): Confirma diálogo / abre edição de material `[NÃO CONFIRMADO pelo usuário]`
+   - `<Return>` (`ui/session_view.py:530, 1376, 1452, 1630`): Confirma edição de célula e submete diálogos de sessão `[NÃO CONFIRMADO pelo usuário]`
+   - `<Tab>`, `<Shift-Tab>` (`ui/session_view.py:1379-1380`): Navega entre células adjacentes editáveis no grid `[NÃO CONFIRMADO pelo usuário]`
+   - `<space>` (`ui/add_shapes_dialog.py:134`): Marca/desmarca checkbox de seleção do molde na lista `[NÃO CONFIRMADO pelo usuário]`
+   - `<Return>` (`ui/shape_editor_view.py:276, 309, 314`): Aplica nome e coordenadas de vértices digitadas `[NÃO CONFIRMADO pelo usuário]`
 
 ---
 
@@ -806,12 +1171,14 @@ Local: `/home/dola/Documentos/clone do job/antigo/arquivos pos instalacao/Common
 | Dom, 18/10/2026 | 01:17 | Antigravity | Formatação explícita com Dia da Semana, Data e Horário em todas as entradas do Changelog e espelhamento automático sincronizado de `PROJETO_ATOM_JOBMANAGER.md` e `PROJETO_ATOM_JOBMANAGER ` na raiz do repositório pai | `tools/sync_project_doc.py`, `PROJETO_ATOM_JOBMANAGER.md` |
 | Dom, 18/10/2026 | 01:21 | Antigravity | Resiliência de chave estrangeira em `create_shape` e `on_import_die`: auto-recuperação/criação de artigos e ordens no MySQL quando inexistentes, eliminando erro 1216 na importação de moldes `.die`; 1 novo teste unitário (45/45 passando) e recompilação do executável | `database.py`, `ui/main_window.py`, `tests/test_session_monotonic.py`, `PROJETO_ATOM_JOBMANAGER.md` |
 | Dom, 18/10/2026 | 01:39 | Antigravity | Suporte completo à exclusão, renomeação e criação persistente de pastas de produção (`job_folders`): adição de tabela e operações CRUD no `DatabaseManager` (MySQL e SQLite), detecção resiliente de nós de pasta na árvore, confirmação e exclusão em lote/cascata de pastas vazias ou com sessões via teclado (Delete/Backspace) e menus de contexto, proteção contra reaparecimento de pastas excluídas no restart (`job_folders_initialized`), simplificação no diálogo de pastas de moldes vazias; 2 novos testes unitários (47/47 passando) e recompilação do executável standalone | `database.py`, `ui/main_window.py`, `db/schema_mysql.sql`, `db/migrations/001_initial_mysql_schema.sql`, `tests/test_session_monotonic.py`, `dist/teste_dola`, `teste_dola_linux` |
+| Dom, 18/10/2026 | 02:00 | Antigravity | Aprimoramento do scanner `tools/sync_project_doc.py` e conciliação do documento de especificação: exibição prioritária do schema MySQL 8.0 (`db/schema_mysql.sql`, `db/migrations/*.sql`) e SQLite de contingência (`jobmanager.db`) com alerta de desatualização de tabelas/colunas; filtragem de eventos restrita a teclado (exclusão de mouse/ciclo de vida e dígitos soltos); marcação de teclas proibidas (`Shift+F3`, `Ctrl+Y`) como `bloqueado (correto)`; redução a conflitos reais de concorrência global (`bind_all`); atualização manual das Seções 3.1 (`database.py`, `PrintPreviewDialog`, `anp_client.py`), 7.5 (28 atalhos reais marcados como `[NÃO CONFIRMADO pelo usuário]`) e Seção 11 como `[CONCLUÍDA]` | `tools/sync_project_doc.py`, `PROJETO_ATOM_JOBMANAGER.md` |
 
 **Commits recentes (automático):**
 
 <!-- AUTO:gitlog:start -->
 | Commit | Data | Autor | Mensagem |
 |---|---|---|---|
+| `eedf717` | 2026-10-18 | Doletabgi | docs: atualizar gitlog e header com novo commit |
 | `e6d1a1f` | 2026-10-18 | Doletabgi | feat(ui): permitir excluir, renomear e persistir pastas de producao e moldes |
 | `9aaa8be` | 2026-10-18 | Doletabgi | fix(cad): adicionar resiliencia de FK ao importar moldes .die no MySQL |
 | `ec861d1` | 2026-10-18 | Doletabgi | docs: registrar dia, data e hora nas atualizacoes do changelog e espelhar na raiz |
@@ -826,7 +1193,10 @@ Local: `/home/dola/Documentos/clone do job/antigo/arquivos pos instalacao/Common
 
 ---
 
-## 11. Prompt para o Antigravity: instalar a sincronização automática
+## 11. Prompt para o Antigravity: instalar a sincronização automática `[CONCLUÍDA]`
+
+> **STATUS DA TAREFA: [CONCLUÍDA]**
+> A sincronização automática via `tools/sync_project_doc.py` e `.githooks/pre-commit` foi instalada com sucesso, validada em commits reais com pre-commit hook ativo e verificador `--check`.
 
 ```
 # TAREFA: Instalar a sincronização automática do PROJETO_ATOM_JOBMANAGER.md
