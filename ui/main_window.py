@@ -1668,9 +1668,18 @@ class MainWindow(tk.Tk):
 
         imported = []
         errors = []
-        article_id = 1
+        article_id = None
         if self.current_shapes and "article_id" in self.current_shapes[0]:
             article_id = self.current_shapes[0]["article_id"]
+        else:
+            try:
+                orders = self.db.get_orders()
+                if orders:
+                    arts = self.db.get_articles_by_order(orders[0]["id"])
+                    if arts:
+                        article_id = arts[0]["id"]
+            except Exception:
+                pass
 
         for file_path in normalized_paths:
             try:

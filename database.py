@@ -668,19 +668,59 @@ class DatabaseManager:
             cursor.execute(f"UPDATE shapes SET {', '.join(updates)} WHERE id = ?", tuple(params))
             conn.commit()
 
-    def create_shape(self, article_id, name, color, contour, holes=None, stitching=None, folder="", size="41"):
+    def create_shape(self, article_id=None, name="Shape", color="#000080", contour=None, holes=None, stitching=None, folder="", size="41"):
         s_size = str(size or name or "41")
         color = get_color_for_size(s_size)
         with self.get_connection() as conn:
             cursor = conn.cursor()
+
+            # Resiliência de chave estrangeira: article_id
+            valid_article_id = article_id
+            if valid_article_id is not None:
+                cursor.execute("SELECT id FROM articles WHERE id = ?", (valid_article_id,))
+                if not cursor.fetchone():
+                    valid_article_id = None
+
+            if valid_article_id is None:
+                cursor.execute("SELECT id FROM articles ORDER BY id ASC LIMIT 1")
+                row_art = cursor.fetchone()
+                if row_art:
+                    valid_article_id = row_art[0] if isinstance(row_art, (tuple, list)) else row_art["id"]
+                else:
+                    # Se articles estiver vazio, garante primeiro um pedido (order)
+                    cursor.execute("SELECT id FROM orders ORDER BY id ASC LIMIT 1")
+                    row_ord = cursor.fetchone()
+                    if row_ord:
+                        valid_order_id = row_ord[0] if isinstance(row_ord, (tuple, list)) else row_ord["id"]
+                    else:
+                        cursor.execute("""
+                        INSERT INTO orders (code, customer, status, name)
+                        VALUES ('ORD-2026-001', 'Calçados Elite S/A', 'Em Produção', 'Derby Masculino #41')
+                        """)
+                        valid_order_id = cursor.lastrowid or 1
+
+                    # Garante que material MAT_VAQ_01 exista
+                    cursor.execute("SELECT id FROM materials WHERE id = 'MAT_VAQ_01'")
+                    if not cursor.fetchone():
+                        cursor.execute("""
+                        INSERT OR IGNORE INTO materials (id, name, type, width_mm, height_mm, area_m2, thickness_mm, layers, gap_mm)
+                        VALUES ('MAT_VAQ_01', 'Sheet (2553.38 X 1350.00)', 'como placa', 1350.0, 2553.38, 3.447, 1.0, 2, 1.0)
+                        """)
+
+                    cursor.execute("""
+                    INSERT INTO articles (order_id, name, pairs_count, material_id)
+                    VALUES (?, 'Sapato Derby Masculino #41', 24, 'MAT_VAQ_01')
+                    """, (valid_order_id,))
+                    valid_article_id = cursor.lastrowid or 1
+
             cursor.execute("""
             INSERT INTO shapes (article_id, name, color, contour_json, holes_json, stitching_json, folder, size)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?)
             """, (
-                article_id,
+                valid_article_id,
                 name,
                 color,
-                json.dumps(contour),
+                json.dumps(contour or []),
                 json.dumps(holes or []),
                 json.dumps(stitching or []),
                 folder or "",

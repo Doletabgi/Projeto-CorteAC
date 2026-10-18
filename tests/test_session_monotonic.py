@@ -81,5 +81,26 @@ class TestSessionMonotonic(unittest.TestCase):
         self.assertEqual(len(db2.get_shapes()), 0, "Moldes apagados não devem reaparecer ao reiniciar")
 
 
+    def test_create_shape_fk_resilience(self):
+        """Testa que create_shape com article_id inválido ou None não falha com erro de chave estrangeira."""
+        sid1 = self.db.create_shape(
+            article_id=9999,
+            name="Molde_FK_Invalido",
+            color="#ff0000",
+            contour=[{"x": 0, "y": 0}, {"x": 50, "y": 0}, {"x": 50, "y": 50}, {"x": 0, "y": 0}]
+        )
+        self.assertIsNotNone(sid1)
+        self.assertGreater(sid1, 0)
+
+        sid2 = self.db.create_shape(
+            article_id=None,
+            name="Molde_FK_None",
+            color="#00ff00",
+            contour=[{"x": 0, "y": 0}, {"x": 60, "y": 0}, {"x": 60, "y": 60}, {"x": 0, "y": 0}]
+        )
+        self.assertIsNotNone(sid2)
+        self.assertGreater(sid2, 0)
+
+
 if __name__ == "__main__":
     unittest.main()
