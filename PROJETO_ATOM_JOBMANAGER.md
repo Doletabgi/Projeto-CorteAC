@@ -4,7 +4,7 @@
 > **Regra de ouro:** o que está marcado `[CONFIRMADO]` veio do relatório, do código ou do usuário. O que está `[NÃO CONFIRMADO]` é suposição e não deve virar "fato" sem validação. O que está `[PREENCHER]` o Antigravity deve completar lendo o código real.
 
 <!-- AUTO:header:start -->
-**Última sincronização com o código:** 2026-10-18 02:11 (HEAD ao gerar: `c3317da`; 31 arquivos Python, ~19585 linhas)
+**Última sincronização com o código:** 2026-10-18 02:11 (HEAD ao gerar: `4a3f696`; 31 arquivos Python, ~19585 linhas)
 <!-- AUTO:header:end -->
 **Versão deste documento:** 1
 
@@ -1180,6 +1180,7 @@ Local: `/home/dola/Documentos/clone do job/antigo/arquivos pos instalacao/Common
 <!-- AUTO:gitlog:start -->
 | Commit | Data | Autor | Mensagem |
 |---|---|---|---|
+| `4a3f696` | 2026-10-18 | Doletabgi | feat(ui): suporte a subpastas hierarquicas em moldes e auditoria de atalhos CAM |
 | `c3317da` | 2026-10-18 | Doletabgi | docs: aprimorar scanner de atalhos e schema no sync_project_doc e conciliar PROJETO_ATOM_JOBMANAGER |
 | `eedf717` | 2026-10-18 | Doletabgi | docs: atualizar gitlog e header com novo commit |
 | `e6d1a1f` | 2026-10-18 | Doletabgi | feat(ui): permitir excluir, renomear e persistir pastas de producao e moldes |
