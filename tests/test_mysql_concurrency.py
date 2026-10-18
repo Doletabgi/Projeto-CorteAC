@@ -41,7 +41,7 @@ class TestMySQLConcurrency(unittest.TestCase):
         )
         import db.connection as dbc
         dbc._mysql_pool = cls.pool
-        cls.db_mgr = DatabaseManager(backend="mysql")
+        cls.db_mgr = DatabaseManager(db_path=TEST_DB_NAME, backend="mysql")
 
         # Limpa dados de testes anteriores em jobmanager_test
         conn = cls.pool.get()
@@ -49,6 +49,14 @@ class TestMySQLConcurrency(unittest.TestCase):
             cur = conn.cursor()
             cur.execute("DELETE FROM layout_pieces")
             cur.execute("DELETE FROM layouts")
+            cur.execute("""
+            INSERT IGNORE INTO materials (id, name, type, width_mm, height_mm, area_m2, thickness_mm, layers, gap_mm)
+            VALUES ('MAT_VAQ_01', 'Vaqueta Bovino Preto 1.4mm', 'como placa', 1380.0, 1080.0, 1.4904, 1.4, 2, 1.0)
+            """)
+            cur.execute("""
+            INSERT IGNORE INTO orders (id, code, customer, status, name)
+            VALUES (1, 'ORD-2026-001', 'Calçados Elite S/A', 'Em Produção', 'Derby Masculino #41')
+            """)
             # Cria 8 sessões independentes para os 8 PCs da fábrica
             for sid in range(9001, 9009):
                 cur.execute("""

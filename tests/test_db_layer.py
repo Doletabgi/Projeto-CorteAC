@@ -31,7 +31,7 @@ class TestDBLayer(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         # Garante que usamos o banco de testes separado
-        cls.db = DatabaseManager(backend="mysql")
+        cls.db = DatabaseManager(db_path=TEST_DB_NAME, backend="mysql")
         cls.original_backend = get_active_backend()
 
     @classmethod
@@ -51,6 +51,23 @@ class TestDBLayer(unittest.TestCase):
             cur.execute("TRUNCATE TABLE articles")
             cur.execute("TRUNCATE TABLE orders")
             cur.execute("TRUNCATE TABLE materials")
+            cur.execute("TRUNCATE TABLE sessions")
+            cur.execute("""
+            INSERT INTO materials (id, name, type, width_mm, height_mm, area_m2, thickness_mm, layers, gap_mm)
+            VALUES ('MAT_VAQ_01', 'Vaqueta Bovino Preto 1.4mm', 'como placa', 1380.0, 1080.0, 1.4904, 1.4, 2, 1.0)
+            """)
+            cur.execute("""
+            INSERT INTO orders (id, code, customer, status, name)
+            VALUES (1, 'ORD-2026-001', 'Calçados Elite S/A', 'Em Produção', 'Derby Masculino #41')
+            """)
+            cur.execute("""
+            INSERT INTO articles (id, order_id, name, pairs_count, material_id)
+            VALUES (1, 1, 'Sapato Derby Masculino #41', 24, 'MAT_VAQ_01')
+            """)
+            cur.execute("""
+            INSERT INTO sessions (id, code, order_id, material_id, name, job, status)
+            VALUES (1, 'SESS-001', 1, 'MAT_VAQ_01', 'Sessão Teste #1', 'ProduçãoNova', 'Stand by')
+            """)
             cur.execute("SET FOREIGN_KEY_CHECKS = 1")
             conn.commit()
 
@@ -87,7 +104,7 @@ class TestDBLayer(unittest.TestCase):
 
     def test_crud_operations_mysql(self):
         """Testa operações completas de CRUD nas tabelas principais usando DatabaseManager."""
-        mgr = DatabaseManager(backend="mysql")
+        mgr = DatabaseManager(db_path=TEST_DB_NAME, backend="mysql")
 
         # 1. Inserir Material
         mgr.create_material(
@@ -163,7 +180,7 @@ class TestDBLayer(unittest.TestCase):
         Dois clientes tentam salvar o mesmo layout partindo da versão 1.
         O primeiro tem sucesso e avança para a versão 2; o segundo recebe VersionConflictError.
         """
-        mgr = DatabaseManager(backend="mysql")
+        mgr = DatabaseManager(db_path=TEST_DB_NAME, backend="mysql")
 
         # Cria layout inicial (versão 1)
         lay_initial = LayoutData(
@@ -237,6 +254,41 @@ class TestDBLayer(unittest.TestCase):
             self.assertGreater(len(materials), 0)
         finally:
             set_active_backend("mysql")
+
+    def test_database_manager_backend_property(self):
+        """Testa se a propriedade backend expõe corretamente o backend ativo."""
+        mgr = DatabaseManager(db_path=TEST_DB_NAME, backend="mysql")
+        self.assertEqual(mgr.backend, "mysql")
+
+    def test_create_session_with_foreign_key_resilience(self):
+        """Testa se create_session recupera graciosamente quando order_id ou material_id são inválidos."""
+        mgr = DatabaseManager(db_path=TEST_DB_NAME, backend="mysql")
+        sid = mgr.create_session(
+            session_id=2001,
+            name="Sessão Resiliente FK",
+            order_id=99999,
+            material_id="NON_EXISTENT_MAT"
+        )
+        self.assertEqual(sid, 2001)
+        sess = mgr.get_session(2001)
+        self.assertIsNotNone(sess)
+        self.assertEqual(sess["name"], "Sessão Resiliente FK")
+        self.assertEqual(sess["order_id"], 1)
+        self.assertEqual(sess["material_id"], "MAT_VAQ_01")
+
+    def test_create_session_auto_id_and_unique_code(self):
+        """Testa criação de sessão com ID automático e garantia de código único."""
+        mgr = DatabaseManager(db_path=TEST_DB_NAME, backend="mysql")
+        sid1 = mgr.create_session(name="Sessão Auto 1")
+        self.assertGreater(sid1, 0)
+        sess1 = mgr.get_session(sid1)
+        self.assertIsNotNone(sess1)
+
+        sid2 = mgr.create_session(name="Sessão Auto 2")
+        self.assertGreater(sid2, sid1)
+        sess2 = mgr.get_session(sid2)
+        self.assertIsNotNone(sess2)
+        self.assertNotEqual(sess1["code"], sess2["code"])
 
 if __name__ == "__main__":
     unittest.main()

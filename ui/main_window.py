@@ -1011,7 +1011,11 @@ class MainWindow(tk.Tk):
 
     def get_next_session_number(self):
         """Calcula o próximo número sequencial de sessão: #1, #2, #3..."""
-        existing_ids = {s["id"] for s in self.sessions if isinstance(s.get("id"), int)}
+        try:
+            sessions = self.db.get_sessions()
+        except Exception:
+            sessions = getattr(self, "sessions", [])
+        existing_ids = {s["id"] for s in sessions if isinstance(s.get("id"), int)}
         num = 1
         while num in existing_ids:
             num += 1
@@ -3309,23 +3313,34 @@ class MainWindow(tk.Tk):
         if def_params == "Padrao":
             def_params = "stdNOTFill"
 
-        # 3. Cria no banco de dados SQLite com mesa vazia (em branco)
-        mat_id = self.current_material["id"] if self.current_material else "MAT_VAQ_01"
-        self.db.create_session(
-            session_id=next_id,
-            name=sess_name,
-            job=sess_job,
-            order_id=1,
-            material_id=mat_id,
-            status="Stand by",
-            placed_pieces=[],
-            strategy=def_strat,
-            params=def_params,
-            shapes=[]
-        )
+        # 3. Cria no banco de dados com mesa vazia (em branco)
+        mat_id = self.current_material["id"] if (self.current_material and "id" in self.current_material) else "MAT_VAQ_01"
+        try:
+            orders = self.db.get_orders()
+            order_id = orders[0]["id"] if orders else 1
+        except Exception:
+            order_id = 1
 
-        self.sessions = self.db.get_sessions()
-        self.current_session = next((s for s in self.sessions if s["id"] == next_id), None)
+        try:
+            self.db.create_session(
+                session_id=next_id,
+                name=sess_name,
+                job=sess_job,
+                order_id=order_id,
+                material_id=mat_id,
+                status="Stand by",
+                placed_pieces=[],
+                strategy=def_strat,
+                params=def_params,
+                shapes=[]
+            )
+            self.sessions = self.db.get_sessions()
+            self.current_session = next((s for s in self.sessions if s["id"] == next_id), None)
+        except Exception as e:
+            from tkinter import messagebox
+            messagebox.showerror("Erro ao Criar Sessão", f"Não foi possível criar a sessão no banco de dados:\n{e}")
+            self.lbl_status_msg.config(text=f"Erro ao criar sessão: {e}")
+            return
 
         # 4. Limpa completamente a mesa CAD (em branco)
         self.canvas.clear_bed()

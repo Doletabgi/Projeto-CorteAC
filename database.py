@@ -48,6 +48,11 @@ class DatabaseManager:
             self._memory_conn = get_memory_connection()
         self.init_db()
 
+    @property
+    def backend(self) -> str:
+        """Retorna o backend de banco de dados ativo ('mysql' ou 'sqlite')."""
+        return get_active_backend()
+
     def get_connection(self) -> DBConnection:
         if self._memory_conn is not None:
             return self._memory_conn
@@ -774,10 +779,85 @@ class DatabaseManager:
                 results.append(d)
             return results
 
-    def create_session(self, session_id, name, job="ProduçãoNova", order_id=1, material_id="MAT_VAQ_01", status="Stand by", placed_pieces=None, strategy="flashnestsheet", params="stdNOTFill", machine="ATOM FlashCut Flex 3020", shapes=None):
+    def get_session(self, session_id: int) -> Optional[Dict[str, Any]]:
+        """Retorna os dados de uma única sessão pelo seu ID."""
         with self.get_connection() as conn:
             cursor = conn.cursor()
+            cursor.execute("SELECT * FROM sessions WHERE id = ?", (session_id,))
+            row = cursor.fetchone()
+            if not row:
+                return None
+            d = dict(row)
+            d["placed_pieces"] = json.loads(d.get("placed_pieces_json") or "[]")
+            for p in d["placed_pieces"]:
+                p_sz = p.get("size", "41")
+                p_col = get_color_for_size(p_sz)
+                p["color"] = p_col
+                if isinstance(p.get("shape"), dict):
+                    p["shape"]["color"] = p_col
+                    p["shape"]["size"] = p_sz
+            return d
+
+    def create_session(
+        self,
+        session_id: Optional[int] = None,
+        name: str = "Nova Sessão",
+        job: str = "ProduçãoNova",
+        order_id: int = 1,
+        material_id: str = "MAT_VAQ_01",
+        status: str = "Stand by",
+        placed_pieces: Optional[List[Dict[str, Any]]] = None,
+        strategy: str = "flashnestsheet",
+        params: str = "stdNOTFill",
+        machine: str = "ATOM FlashCut Flex 3020",
+        shapes: Optional[List[Dict[str, Any]]] = None
+    ) -> int:
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+
+            # 1. Se session_id não for informado, busca próximo id sequencial
+            if session_id is None or session_id <= 0:
+                cursor.execute("SELECT COALESCE(MAX(id), 0) + 1 FROM sessions")
+                row_max = cursor.fetchone()
+                session_id = row_max[0] if isinstance(row_max, (tuple, list)) else row_max[list(row_max.keys())[0]]
+
+            # 2. Resiliência de chave estrangeira: order_id
+            valid_order_id = order_id
+            cursor.execute("SELECT id FROM orders WHERE id = ?", (valid_order_id,))
+            if not cursor.fetchone():
+                cursor.execute("SELECT id FROM orders ORDER BY id ASC LIMIT 1")
+                row_ord = cursor.fetchone()
+                if row_ord:
+                    valid_order_id = row_ord[0] if isinstance(row_ord, (tuple, list)) else row_ord["id"]
+                else:
+                    valid_order_id = 1
+                    cursor.execute("""
+                        INSERT INTO orders (id, code, customer, status, name)
+                        VALUES (?, ?, ?, ?, ?)
+                    """, (1, "ORD-2026-001", "Calçados Elite S/A", "Em Produção", "Derby Masculino #41"))
+
+            # 3. Resiliência de chave estrangeira: material_id
+            valid_mat_id = material_id
+            cursor.execute("SELECT id FROM materials WHERE id = ?", (valid_mat_id,))
+            if not cursor.fetchone():
+                cursor.execute("SELECT id FROM materials ORDER BY id ASC LIMIT 1")
+                row_mat = cursor.fetchone()
+                if row_mat:
+                    valid_mat_id = row_mat[0] if isinstance(row_mat, (tuple, list)) else row_mat["id"]
+                else:
+                    valid_mat_id = "MAT_VAQ_01"
+                    cursor.execute("""
+                        INSERT INTO materials (id, name, type, width_mm, height_mm, area_m2, thickness_mm, layers, gap_mm)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """, ("MAT_VAQ_01", "Vaqueta Bovino Preto 1.4mm", "como placa", 1380.0, 1080.0, 1.4904, 1.4, 2, 1.0))
+
+            # 4. Garante unicidade do code SESS-xxx
             code = f"SESS-{session_id:03d}"
+            cursor.execute("SELECT id FROM sessions WHERE code = ? AND id != ?", (code, session_id))
+            if cursor.fetchone():
+                code = f"SESS-{session_id:03d}-{int(time.time()) % 10000}"
+
+            # 5. Gravação da sessão
             if conn.backend == "mysql":
                 cursor.execute("""
                 INSERT INTO sessions (id, code, order_id, material_id, name, job, status, yield_percent, cutting_time_sec, placed_pieces_json, strategy, params, machine, shapes_json)
@@ -787,7 +867,7 @@ class DatabaseManager:
                     material_id = VALUES(material_id), placed_pieces_json = VALUES(placed_pieces_json),
                     strategy = VALUES(strategy), params = VALUES(params), machine = VALUES(machine), shapes_json = VALUES(shapes_json)
                 """, (
-                    session_id, code, order_id, material_id, name, job, status,
+                    session_id, code, valid_order_id, valid_mat_id, name, job, status,
                     json.dumps(placed_pieces or []), strategy, params, machine, json.dumps(shapes or [])
                 ))
             else:
@@ -795,7 +875,7 @@ class DatabaseManager:
                 REPLACE INTO sessions (id, code, order_id, material_id, name, job, status, yield_percent, cutting_time_sec, placed_pieces_json, strategy, params, machine, shapes_json)
                 VALUES (?, ?, ?, ?, ?, ?, ?, 0.0, 0.0, ?, ?, ?, ?, ?)
                 """, (
-                    session_id, code, order_id, material_id, name, job, status,
+                    session_id, code, valid_order_id, valid_mat_id, name, job, status,
                     json.dumps(placed_pieces or []), strategy, params, machine, json.dumps(shapes or [])
                 ))
             conn.commit()

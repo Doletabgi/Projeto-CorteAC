@@ -4,7 +4,7 @@
 > **Regra de ouro:** o que está marcado `[CONFIRMADO]` veio do relatório, do código ou do usuário. O que está `[NÃO CONFIRMADO]` é suposição e não deve virar "fato" sem validação. O que está `[PREENCHER]` o Antigravity deve completar lendo o código real.
 
 <!-- AUTO:header:start -->
-**Última sincronização com o código:** 2026-10-17 23:53 (HEAD ao gerar: `520f7eb`; 30 arquivos Python, ~18206 linhas)
+**Última sincronização com o código:** 2026-10-18 00:19 (HEAD ao gerar: `7d0a875`; 30 arquivos Python, ~18361 linhas)
 <!-- AUTO:header:end -->
 **Versão deste documento:** 1
 
@@ -115,7 +115,7 @@ ui/shape_editor_view.py                     # JobManager 2000 (Python Edition)
 
 <!-- AUTO:symbols:start -->
 ### `database.py`
-- `class DatabaseManager` (linha 41, 46 métodos)
+- `class DatabaseManager` (linha 41, 48 métodos)
 - funções: `get_current_operator`
 
 ### `main.py`
@@ -157,7 +157,7 @@ ui/shape_editor_view.py                     # JobManager 2000 (Python Edition)
 - funções: `translate_query_for_mysql`, `get_active_backend`, `set_active_backend`, `get_connection`, `get_memory_connection`
 
 ### `tests/test_db_layer.py`
-- `class TestDBLayer` (linha 30, 10 métodos)
+- `class TestDBLayer` (linha 30, 13 métodos)
 
 ### `tests/test_lay_parser.py`
 - `class TestLayParser` (linha 33, 14 métodos)
@@ -517,7 +517,7 @@ A ordem de corte do `.lay` para a mesa **não pode** ser aleatória:
 | 1 | `ui/main_window.py:529` | `self.bind_all("<Button-1>", self.dismiss_popup_menus, add="+")` |
 | 1 | `ui/main_window.py:720` | `dock_item.bind("<Button-1>", lambda e: self.restore_window(window))` |
 | 1 | `ui/main_window.py:721` | `lbl.bind("<Button-1>", lambda e: self.restore_window(window))` |
-| 1 | `ui/main_window.py:1584` | `lb.bind("<Double-Button-1>", lambda e: on_confirm())` |
+| 1 | `ui/main_window.py:1588` | `lb.bind("<Double-Button-1>", lambda e: on_confirm())` |
 | 1 | `ui/material_codes_view.py:72` | `title_bar.bind("<ButtonPress-1>", self._on_title_press)` |
 | 1 | `ui/material_codes_view.py:74` | `self.lbl_title.bind("<ButtonPress-1>", self._on_title_press)` |
 | 1 | `ui/material_codes_view.py:76` | `self.bind("<Button-1>", lambda e: self.lift(), add="+")` |
@@ -624,7 +624,7 @@ A ordem de corte do `.lay` para a mesa **não pode** ser aleatória:
 | Escape | `ui/edit_shape_in_session_dialog.py:147` | `self.bind("<Escape>", lambda e: self.destroy())` |
 | Escape | `ui/main_window.py:62` | `self.bind("<Escape>", self.exit_fullscreen)` |
 | Escape | `ui/main_window.py:532` | `self.bind_all("<Escape>", self.dismiss_popup_menus, add="+")` |
-| Escape | `ui/main_window.py:2371` | `dialog.bind("<Escape>", lambda e: dialog.destroy())` |
+| Escape | `ui/main_window.py:2375` | `dialog.bind("<Escape>", lambda e: dialog.destroy())` |
 | Escape | `ui/material_codes_view.py:466` | `dlg.bind("<Escape>", lambda e: dlg.destroy())` |
 | Escape | `ui/options_dialog.py:40` | `self.bind("<Escape>", lambda e: self.on_cancel())` |
 | Escape | `ui/session_view.py:1378` | `entry.bind("<Escape>", cancel)` |
@@ -684,7 +684,7 @@ A ordem de corte do `.lay` para a mesa **não pode** ser aleatória:
 | R | `ui/layout_editor_view.py:428` | `self.bind_all("<Key-r>", lambda e: self.rotate_selected(45))` |
 | R | `ui/layout_editor_view.py:429` | `self.bind_all("<Key-R>", lambda e: self.rotate_selected(45))` |
 | Return | `ui/edit_shape_in_session_dialog.py:146` | `self.bind("<Return>", lambda e: self.on_save())` |
-| Return | `ui/main_window.py:2370` | `dialog.bind("<Return>", lambda e: save())` |
+| Return | `ui/main_window.py:2374` | `dialog.bind("<Return>", lambda e: save())` |
 | Return | `ui/material_codes_view.py:199` | `self.tree.bind("<Return>", lambda e: self.open_edit_selected_dialog())` |
 | Return | `ui/material_codes_view.py:465` | `dlg.bind("<Return>", lambda e: save_action())` |
 | Return | `ui/session_view.py:530` | `self.tree_mat.bind("<Return>", self.on_mat_enter_key)` |
@@ -788,13 +788,14 @@ Local: `/home/dola/Documentos/clone do job/antigo/arquivos pos instalacao/Common
 | 2026-10-17 | Antigravity | Implementação dos atalhos CAM no LayoutEditorView (F1/F2 giro fino 2°, F3 giro 90° ciclo 4 estados, F4 flip 180°, Ctrl+Z undo 100 níveis, Ctrl+S salvamento atômico DB+disco), bloqueio estrito de Shift+F3 e Ctrl+Y, indicador de modificado (`*`), validação não-bloqueante na barra de status; 13 testes unitários | `ui/layout_editor_view.py`, `tests/test_layout_editor_shortcuts.py` |
 | 2026-10-17 | Antigravity | Instalação da sincronização automática via Git pre-commit hook (`tools/sync_project_doc.py`, `.githooks/pre-commit`), inicialização do versionamento Git e atualização geral das seções manuais | `tools/sync_project_doc.py`, `.githooks/pre-commit`, `PROJETO_ATOM_JOBMANAGER.md` |
 | 2026-10-18 | Antigravity | Migração completa para MySQL 8.0 Central (8 PCs simultâneos, >1000 layouts/dia): criação do pacote `db/` (pool thread-safe `SimpleMySQLPool`, reconexão automática, conversão transparente de dialetos SQL), DDL MySQL 8.0 (`db/schema_mysql.sql`), refatoração de `database.py` (auditoria `operator_info`, paginação, concorrência otimista com versioning), modal de resolução de concorrência no `LayoutEditorView` (Salvar Cópia / Recarregar), script de migração idempotente `tools/migrate_sqlite_to_mysql.py` (100% de conciliação de linhas nas 10 tabelas), testes de carga com 8 threads concorrentes e 1000 salvamentos (>360 layouts/s, zero erros de rede, integridade referencial confirmada); suporte a caching_sha2_password empacotado no standalone Linux e Windows pendrive | `db/`, `database.py`, `ui/layout_editor_view.py`, `tools/migrate_sqlite_to_mysql.py`, `tests/test_db_layer.py`, `tests/test_mysql_concurrency.py`, `teste_dola.spec`, `build_linux.sh`, `README.md` |
+| 2026-10-18 | Antigravity | Correção de integridade referencial e resiliência na criação de sessões: auto-recuperação de foreign keys (order_id/material_id) e garantia de unicidade de code em `create_session`, adição de propriedade `backend` e método `get_session` em `DatabaseManager`, tratamento de exceção amigável e busca dinâmica de pedidos ativos em `MainWindow.on_new_session`, isolamento total da suíte de testes contra banco de produção (`TEST_DB_NAME`, 38/38 testes passando), conciliação 1:1 no MySQL de produção e recompilação do executável standalone | `database.py`, `ui/main_window.py`, `tests/test_db_layer.py`, `tests/test_mysql_concurrency.py`, `dist/teste_dola`, `teste_dola_linux` |
 
 **Commits recentes (automático):**
 
 <!-- AUTO:gitlog:start -->
 | Commit | Data | Autor | Mensagem |
 |---|---|---|---|
-| `520f7eb` | 2026-10-17 | Doletabgi | feat(db): migrar cliente desktop para MySQL 8.0 central com pool e concorrencia otimista |
+| `7d0a875` | 2026-10-17 | Doletabgi | feat(db): migrar cliente desktop para MySQL 8.0 central com pool e concorrencia otimista |
 | `729774f` | 2026-10-17 | Doletabgi | docs: sincronizar blocos AUTO com primeiro commit e historico git |
 | `374dfbb` | 2026-10-17 | Doletabgi | feat: implementar suporte a .lay, atalhos CAM do LayoutEditorView e sincronizacao automatica |
 <!-- AUTO:gitlog:end -->
