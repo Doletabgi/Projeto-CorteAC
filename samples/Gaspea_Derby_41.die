@@ -1,0 +1,32 @@
+$$FUSTELLA.v3$$
+name_of_die = MODEL Gaspea_Derby_41
+type_of_die=S
+descrizione=Gaspea_Derby_41
+codart=Gaspea_Derby_41
+taglia=41
+piatto_dim_x=240.00
+piatto_dim_y=140.00
+altezza=140.00
+area=27912.50
+perimetro=661.06
+num_of_shapes=1
+SAGOMA 1
+name_of_shape=Gaspea_Derby_41
+def_quality=1
+num_of_points= 7
+point=0.00 0.00
+point=210.00 0.00
+point=240.00 45.00
+point=220.00 125.00
+point=80.00 140.00
+point=15.00 90.00
+point=0.00 25.00
+num_of_holes=2
+num_of_hpoints=2
+hpoint=55.00 60.00
+drill=55.00 60.00 3.00 1 DRILL
+hpoint=155.00 60.00
+drill=155.00 60.00 3.00 1 DRILL
+num_of_drills=2
+num_of_cuts=0
+num_of_qarea=0

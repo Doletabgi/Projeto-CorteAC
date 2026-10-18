@@ -1,0 +1,29 @@
+$$FUSTELLA.v3$$
+name_of_die = MODEL Biqueira_Esportiva_40
+type_of_die=S
+descrizione=Biqueira_Esportiva_40
+codart=Biqueira_Esportiva_40
+taglia=40
+piatto_dim_x=185.00
+piatto_dim_y=75.00
+altezza=75.00
+area=11237.50
+perimetro=448.93
+num_of_shapes=1
+SAGOMA 1
+name_of_shape=Biqueira_Esportiva_40
+def_quality=1
+num_of_points= 6
+point=10.00 10.00
+point=160.00 10.00
+point=195.00 40.00
+point=150.00 85.00
+point=40.00 80.00
+point=10.00 35.00
+num_of_holes=1
+num_of_hpoints=1
+hpoint=100.00 45.00
+drill=100.00 45.00 2.50 1 DRILL
+num_of_drills=1
+num_of_cuts=0
+num_of_qarea=0

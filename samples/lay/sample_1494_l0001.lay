@@ -1,0 +1,93 @@
+$$LAYOUT.v3$$
+\\lab-inf\NSDATAV1\Compiti\SEM 34-UP060\151.060\1494 l0001.lay
+desc=fn98 - v1.2.36 - 12.09.2012
+gap=1.000000
+codR=837222 - LAM 1.3 VERN BRIL+PU100+ESP2D60+PU100+SP40 -  ( 2 layer(s) )
+risW=617.914517
+risL=181.981466
+Y_max=0.000000
+Y_last=0.000000
+area=81032.451533
+no_dies=9
+TG 1
+dLib=\\lab-inf\NSDATAV1\Shapes\151\060\151167000000001\837222
+dCode=151_167_Trase_36a.die
+dId=2308
+dQta=0, 0
+dSingle=0, 0
+dIsFiller=0
+dTarg=2, 2
+TG 2
+dLib=\\lab-inf\NSDATAV1\Shapes\151\060\151167000000001\837222
+dCode=151_167_Trase_35a.die
+dId=2307
+dQta=0, 0
+dSingle=0, 0
+dIsFiller=0
+dTarg=2, 2
+TG 3
+dLib=\\lab-inf\NSDATAV1\Shapes\151\060\151167000000001\837222
+dCode=151_167_Trase_34a.die
+dId=2306
+dQta=0, 0
+dSingle=0, 0
+dIsFiller=0
+dTarg=4, 4
+TG 4
+dLib=\\lab-inf\NSDATAV1\Shapes\151\060\151167000000001\837222
+dCode=151_167_Trase_33a.die
+dId=2305
+dQta=0, 0
+dSingle=0, 0
+dIsFiller=0
+dTarg=4, 4
+TG 5
+dLib=\\lab-inf\NSDATAV1\Shapes\151\060\151167000000001\837222
+dCode=151_167_Trase_32a.die
+dId=2304
+dQta=0, 0
+dSingle=0, 0
+dIsFiller=0
+dTarg=6, 6
+TG 6
+dLib=\\lab-inf\NSDATAV1\Shapes\151\060\151167000000001\837222
+dCode=151_167_Trase_31a.die
+dId=2303
+dQta=0, 0
+dSingle=0, 0
+dIsFiller=0
+dTarg=6, 6
+TG 7
+dLib=\\lab-inf\NSDATAV1\Shapes\151\060\151167000000001\837222
+dCode=151_167_Trase_30a.die
+dId=2311
+dQta=4, 0
+dSingle=0, 0
+dIsFiller=0
+dTarg=7, 7
+TG 8
+dLib=\\lab-inf\NSDATAV1\Shapes\151\060\151167000000001\837222
+dCode=151_167_Trase_29a.die
+dId=2310
+dQta=5, 0
+dSingle=0, 0
+dIsFiller=0
+dTarg=7, 7
+TG 9
+dLib=\\lab-inf\NSDATAV1\Shapes\151\060\151167000000001\837222
+dCode=151_167_Trase_28a.die
+dId=2309
+dQta=0, 0
+dSingle=0, 0
+dIsFiller=0
+dTarg=7, 7
+num_of_items=9
+I 1 6 12 0 33.139061 91.440531 3.159046 -65536 fn98M
+I 2 6 14 0 101.999061 91.440531 3.159046 -65536 fn98M
+I 3 6 16 0 170.859061 91.440531 3.159046 -65536 fn98M
+I 4 6 18 0 239.719061 91.440531 3.159046 -65536 fn98M
+I 5 7 40 0 445.878438 96.717176 3.159046 -65536 fn98-1MRM
+I 6 7 41 0 309.756159 91.391702 3.159046 -65536 fn98-1M
+I 7 7 42 0 514.738438 96.717176 3.159046 -65536 fn98-1MRM
+I 8 7 43 0 378.616159 91.391702 3.159046 -65536 fn98-1M
+I 9 7 44 0 583.598438 96.717176 3.159046 -65536 fn98-1MRM

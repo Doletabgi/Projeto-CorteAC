@@ -1,0 +1,33 @@
+$$FUSTELLA.v3$$
+name_of_die = MODEL Lateral_Sapato_42
+type_of_die=S
+descrizione=Lateral_Sapato_42
+codart=Lateral_Sapato_42
+taglia=42
+piatto_dim_x=290.00
+piatto_dim_y=120.00
+altezza=120.00
+area=27625.00
+perimetro=707.17
+num_of_shapes=1
+SAGOMA 1
+name_of_shape=Lateral_Sapato_42
+def_quality=1
+num_of_points= 6
+point=0.00 0.00
+point=260.00 0.00
+point=290.00 55.00
+point=250.00 110.00
+point=120.00 120.00
+point=10.00 60.00
+num_of_holes=3
+num_of_hpoints=3
+hpoint=70.00 40.00
+drill=70.00 40.00 3.00 1 DRILL
+hpoint=180.00 40.00
+drill=180.00 40.00 3.00 1 DRILL
+hpoint=220.00 40.00
+drill=220.00 40.00 3.00 1 DRILL
+num_of_drills=3
+num_of_cuts=0
+num_of_qarea=0
