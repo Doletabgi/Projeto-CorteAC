@@ -9,6 +9,7 @@ import tempfile
 import os
 from pathlib import Path
 import tkinter as tk
+from tkinter import ttk
 
 from ui.layout_editor_view import (
     LayoutEditorView,
@@ -1051,6 +1052,116 @@ class TestLayoutEditorShortcuts(unittest.TestCase):
         remaining = fm.tree_main.get_children(updated_job_node)
         self.assertEqual(len(remaining), 1)
         self.assertEqual(fm.tree_main.item(remaining[0], "text").strip(), "121805")
+
+    def test_delete_material_context_menu_and_actions(self):
+        """Valida que o clique com botão direito na árvore e grid de materiais exibe 'Excluir Material', e que a exclusão remove o material."""
+        from unittest.mock import patch
+        from ui.main_window import MainWindow
+
+        class FakeDBMat:
+            def __init__(self):
+                self.deleted_materials = []
+            def get_materials(self):
+                return [m for m in [{"id": "MAT_CAM_02", "name": "Camurça"}] if m["id"] not in self.deleted_materials]
+            def delete_material(self, mat_id):
+                self.deleted_materials.append(mat_id)
+
+        class DummyBtn:
+            def config(self, **kwargs):
+                pass
+
+        class FakeMainMat:
+            def __init__(self, root):
+                self.root = root
+                self.tree_main = ttk.Treeview(root)
+                self.grid_lower = ttk.Treeview(root)
+                self.current_mode = "materials"
+                self.icons = {}
+                self.db = FakeDBMat()
+                self.materials = self.db.get_materials()
+                self.current_material = self.materials[0] if self.materials else None
+                self.btn_mode_jobs = DummyBtn()
+                self.btn_mode_shapes = DummyBtn()
+                self.btn_mode_materials = DummyBtn()
+                self.materials_menu = tk.Menu(root, tearoff=0)
+                self.lbl_status_msg = DummyBtn()
+                self.active_child = None
+                self.open_sessions = {}
+                self.sort_grid_lower = lambda col: None
+                self.on_create_material = lambda: None
+                self.show_material_codes_window = lambda: None
+                self.apply_material_to_session = lambda m: None
+                self.dismiss_popup_menus = lambda: None
+                self._active_popup_menu = None
+                self._last_popup_time = 0
+
+            def switch_tree_mode(self, mode="materials"):
+                MainWindow.switch_tree_mode(self, mode=mode)
+
+            def show_popup_menu(self, menu, x, y):
+                pass
+
+            def show_tree_context_menu(self, event):
+                MainWindow.show_tree_context_menu(self, event)
+
+            def show_grid_context_menu(self, event):
+                MainWindow.show_grid_context_menu(self, event)
+
+            def on_delete_tree_item(self):
+                MainWindow.on_delete_tree_item(self)
+
+            def on_delete_grid_item(self):
+                MainWindow.on_delete_grid_item(self)
+
+            def refresh_materials_everywhere(self):
+                MainWindow.refresh_materials_everywhere(self)
+
+        fm = FakeMainMat(self.root)
+        fm.switch_tree_mode("materials")
+
+        # Verifica nó do material na árvore
+        root_node = fm.tree_main.get_children("")[0]
+        children = fm.tree_main.get_children(root_node)
+        self.assertEqual(len(children), 1)
+        mat_node = children[0]
+        self.assertEqual(fm.tree_main.item(mat_node, "values")[1], "MAT_CAM_02")
+
+        # Seleciona nó e simula clique com botão direito do mouse
+        fm.tree_main.selection_set(mat_node)
+        class DummyEvent:
+            x_root = 100
+            y_root = 100
+            y = -1
+        fm.show_tree_context_menu(DummyEvent())
+
+        # Verifica comandos presentes no menu de contexto
+        labels = [fm.materials_menu.entrycget(i, "label") for i in range(fm.materials_menu.index("end") + 1) if fm.materials_menu.type(i) == "command"]
+        self.assertIn("Excluir Material", labels)
+        self.assertIn("Excluir", labels)
+
+        # Simula exclusão pela árvore
+        with patch("tkinter.messagebox.askyesno", return_value=True):
+            fm.on_delete_tree_item()
+
+        self.assertIn("MAT_CAM_02", fm.db.deleted_materials)
+        self.assertEqual(len(fm.materials), 0)
+
+        # Testa menu de contexto do grid inferior
+        fm2 = FakeMainMat(self.root)
+        fm2.switch_tree_mode("materials")
+        grid_items = fm2.grid_lower.get_children("")
+        self.assertIn("MAT_CAM_02", grid_items)
+        fm2.grid_lower.selection_set("MAT_CAM_02")
+
+        fm2.show_grid_context_menu(DummyEvent())
+        grid_labels = [fm2.materials_menu.entrycget(i, "label") for i in range(fm2.materials_menu.index("end") + 1) if fm2.materials_menu.type(i) == "command"]
+        self.assertIn("Excluir Material", grid_labels)
+        self.assertIn("Excluir", grid_labels)
+
+        # Simula exclusão pelo grid
+        with patch("tkinter.messagebox.askyesno", return_value=True):
+            fm2.on_delete_grid_item()
+        self.assertIn("MAT_CAM_02", fm2.db.deleted_materials)
 
 
 if __name__ == "__main__":

@@ -319,5 +319,25 @@ class TestDBLayer(unittest.TestCase):
         # Chamada com lista vazia não deve quebrar
         mgr.delete_sessions([])
 
+    def test_delete_material_unlinks_sessions_and_articles(self):
+        """Valida que delete_material desassocia com segurança sessions (material_id = NULL) e remove o material sem violação de FK."""
+        mgr = DatabaseManager(db_path=TEST_DB_NAME, backend="mysql")
+        temp_mat_id = "MAT_TEST_DEL_01"
+        mgr.create_material(temp_mat_id, "Material Temporário Teste")
+        self.assertIsNotNone(mgr.get_material(temp_mat_id))
+
+        sid = mgr.create_session(session_id=9876, material_id=temp_mat_id, name="Sessão com Material Teste")
+        sess = mgr.get_session(sid)
+        self.assertEqual(sess["material_id"], temp_mat_id)
+
+        mgr.delete_material(temp_mat_id)
+
+        self.assertIsNone(mgr.get_material(temp_mat_id))
+        sess_after = mgr.get_session(sid)
+        self.assertIsNotNone(sess_after)
+        self.assertIsNone(sess_after["material_id"])
+
+        mgr.delete_sessions([sid])
+
 if __name__ == "__main__":
     unittest.main()

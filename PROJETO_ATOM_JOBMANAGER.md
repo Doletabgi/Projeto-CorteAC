@@ -4,7 +4,7 @@
 > **Regra de ouro:** o que está marcado `[CONFIRMADO]` veio do relatório, do código ou do usuário. O que está `[NÃO CONFIRMADO]` é suposição e não deve virar "fato" sem validação. O que está `[PREENCHER]` o Antigravity deve completar lendo o código real.
 
 <!-- AUTO:header:start -->
-**Última sincronização com o código:** 2026-10-18 19:40 (HEAD ao gerar: `9a41755`; 33 arquivos Python, ~21781 linhas)
+**Última sincronização com o código:** 2026-10-18 20:02 (HEAD ao gerar: `0cb99e0`; 33 arquivos Python, ~22065 linhas)
 <!-- AUTO:header:end -->
 **Versão deste documento:** 1
 
@@ -160,14 +160,14 @@ ui/sort_utils.py                            # JobManager 2000 (Python Edition)
 - funções: `translate_query_for_mysql`, `get_active_backend`, `set_active_backend`, `get_connection`, `get_memory_connection`
 
 ### `tests/test_db_layer.py`
-- `class TestDBLayer` (linha 30, 14 métodos)
+- `class TestDBLayer` (linha 30, 15 métodos)
 
 ### `tests/test_lay_parser.py`
 - `class TestLayParser` (linha 33, 14 métodos)
 
 ### `tests/test_layout_editor_shortcuts.py`
-- `class DummyEvent` (linha 30, 1 métodos)
-- `class TestLayoutEditorShortcuts` (linha 36, 34 métodos)
+- `class DummyEvent` (linha 31, 1 métodos)
+- `class TestLayoutEditorShortcuts` (linha 37, 35 métodos)
 
 ### `tests/test_mysql_concurrency.py`
 - `class TestMySQLConcurrency` (linha 29, 4 métodos)
@@ -203,7 +203,7 @@ ui/sort_utils.py                            # JobManager 2000 (Python Edition)
 - `class LayoutPrintDialog` (linha 20, 17 métodos): Janela modal de Visualização de Impressão (Print Preview) do Layout Editor.
 
 ### `ui/main_window.py`
-- `class MainWindow` (linha 43, 113 métodos)
+- `class MainWindow` (linha 43, 114 métodos)
 - funções: `get_assets_dir`
 
 ### `ui/material_codes_view.py`
@@ -303,9 +303,9 @@ CREATE TABLE IF NOT EXISTS articles (
     order_id INT NOT NULL,
     name VARCHAR(150) NOT NULL,
     pairs_count INT NOT NULL DEFAULT 1,
-    material_id VARCHAR(50) NOT NULL,
+    material_id VARCHAR(50) NULL DEFAULT NULL,
     FOREIGN KEY (order_id) REFERENCES orders(id) ON DELETE CASCADE,
-    FOREIGN KEY (material_id) REFERENCES materials(id) ON DELETE RESTRICT,
+    FOREIGN KEY (material_id) REFERENCES materials(id) ON DELETE SET NULL,
     INDEX idx_articles_order (order_id),
     INDEX idx_articles_material (material_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
@@ -344,7 +344,7 @@ CREATE TABLE IF NOT EXISTS sessions (
     id INT AUTO_INCREMENT PRIMARY KEY,
     code VARCHAR(100) UNIQUE NOT NULL,
     order_id INT NULL DEFAULT NULL,
-    material_id VARCHAR(50) NOT NULL,
+    material_id VARCHAR(50) NULL DEFAULT NULL,
     name VARCHAR(150) NOT NULL DEFAULT '',
     job VARCHAR(100) NOT NULL DEFAULT 'ProduçãoNova',
     status VARCHAR(50) NOT NULL DEFAULT 'Planejado',
@@ -357,7 +357,7 @@ CREATE TABLE IF NOT EXISTS sessions (
     shapes_json LONGTEXT NULL,
     created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (order_id) REFERENCES orders(id) ON DELETE SET NULL,
-    FOREIGN KEY (material_id) REFERENCES materials(id) ON DELETE RESTRICT,
+    FOREIGN KEY (material_id) REFERENCES materials(id) ON DELETE SET NULL,
     INDEX idx_sessions_order (order_id),
     INDEX idx_sessions_created (created_at),
     INDEX idx_sessions_status (status)
@@ -502,9 +502,9 @@ CREATE TABLE IF NOT EXISTS articles (
     order_id INT NOT NULL,
     name VARCHAR(150) NOT NULL,
     pairs_count INT NOT NULL DEFAULT 1,
-    material_id VARCHAR(50) NOT NULL,
+    material_id VARCHAR(50) NULL DEFAULT NULL,
     FOREIGN KEY (order_id) REFERENCES orders(id) ON DELETE CASCADE,
-    FOREIGN KEY (material_id) REFERENCES materials(id) ON DELETE RESTRICT,
+    FOREIGN KEY (material_id) REFERENCES materials(id) ON DELETE SET NULL,
     INDEX idx_articles_order (order_id),
     INDEX idx_articles_material (material_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
@@ -543,7 +543,7 @@ CREATE TABLE IF NOT EXISTS sessions (
     id INT AUTO_INCREMENT PRIMARY KEY,
     code VARCHAR(100) UNIQUE NOT NULL,
     order_id INT NULL DEFAULT NULL,
-    material_id VARCHAR(50) NOT NULL,
+    material_id VARCHAR(50) NULL DEFAULT NULL,
     name VARCHAR(150) NOT NULL DEFAULT '',
     job VARCHAR(100) NOT NULL DEFAULT 'ProduçãoNova',
     status VARCHAR(50) NOT NULL DEFAULT 'Planejado',
@@ -556,7 +556,7 @@ CREATE TABLE IF NOT EXISTS sessions (
     shapes_json LONGTEXT NULL,
     created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (order_id) REFERENCES orders(id) ON DELETE SET NULL,
-    FOREIGN KEY (material_id) REFERENCES materials(id) ON DELETE RESTRICT,
+    FOREIGN KEY (material_id) REFERENCES materials(id) ON DELETE SET NULL,
     INDEX idx_sessions_order (order_id),
     INDEX idx_sessions_created (created_at),
     INDEX idx_sessions_status (status)
@@ -997,6 +997,10 @@ A ordem de corte do `.lay` para a mesa **não pode** ser aleatória:
 | Delete | `ui/layout_editor_view.py:475` | `self.bind_all("<Delete>", lambda e: self.delete_selected())` |
 | Delete | `ui/main_window.py:255` | `edit_menu.add_command(label="Excluir", accelerator="Del", command=self.on_global` |
 | Delete | `ui/main_window.py:544` | `self.bind_all("<Delete>", self.on_global_delete_key, add="+")` |
+| Delete | `ui/main_window.py:2336` | `accelerator="Del",` |
+| Delete | `ui/main_window.py:2355` | `accelerator="Del",` |
+| Delete | `ui/main_window.py:2576` | `accelerator="Del",` |
+| Delete | `ui/main_window.py:2595` | `accelerator="Del",` |
 | Delete | `ui/session_view.py:387` | `self.tree_shapes.bind("<Delete>", lambda e: self.delete_selected_shape())` |
 | Down | `ui/layout_editor_view.py:479` | `self.bind_all("<Down>", lambda e: self.nudge_selected(0, -5))` |
 | Down | `ui/session_view.py:1768` | `entry.bind("<Down>", move_down)` |
@@ -1005,7 +1009,7 @@ A ordem de corte do `.lay` para a mesa **não pode** ser aleatória:
 | Escape | `ui/layout_print_dialog.py:251` | `self.bind("<Escape>", self.on_escape)` |
 | Escape | `ui/main_window.py:63` | `self.bind("<Escape>", self.exit_fullscreen)` |
 | Escape | `ui/main_window.py:543` | `self.bind_all("<Escape>", self.dismiss_popup_menus, add="+")` |
-| Escape | `ui/main_window.py:2716` | `dialog.bind("<Escape>", lambda e: dialog.destroy())` |
+| Escape | `ui/main_window.py:2851` | `dialog.bind("<Escape>", lambda e: dialog.destroy())` |
 | Escape | `ui/material_codes_view.py:466` | `dlg.bind("<Escape>", lambda e: dlg.destroy())` |
 | Escape | `ui/options_dialog.py:40` | `self.bind("<Escape>", lambda e: self.on_cancel())` |
 | Escape | `ui/session_view.py:1409` | `entry.bind("<Escape>", cancel)` |
@@ -1035,7 +1039,7 @@ A ordem de corte do `.lay` para a mesa **não pode** ser aleatória:
 | R | `ui/layout_editor_view.py:473` | `self.bind_all("<Key-r>", lambda e: self.rotate_selected(45))` |
 | R | `ui/layout_editor_view.py:474` | `self.bind_all("<Key-R>", lambda e: self.rotate_selected(45))` |
 | Return | `ui/edit_shape_in_session_dialog.py:146` | `self.bind("<Return>", lambda e: self.on_save())` |
-| Return | `ui/main_window.py:2715` | `dialog.bind("<Return>", lambda e: save())` |
+| Return | `ui/main_window.py:2850` | `dialog.bind("<Return>", lambda e: save())` |
 | Return | `ui/material_codes_view.py:199` | `self.tree.bind("<Return>", lambda e: self.open_edit_selected_dialog())` |
 | Return | `ui/material_codes_view.py:465` | `dlg.bind("<Return>", lambda e: save_action())` |
 | Return | `ui/session_view.py:312` | `self.entry_sname.bind("<Return>", self._on_entry_sname_commit)` |
@@ -1227,12 +1231,14 @@ Local: `/home/dola/Documentos/clone do job/antigo/arquivos pos instalacao/Common
 | Dom, 18/10/2026 | 18:52 | Antigravity | Liberação para criação e gerenciamento de subpastas hierárquicas no módulo de Produção (Job Folders): suporte a caminhos com barras (ex: 'SEMANA-46/LOTE-01/CORTE') com criação automática de pastas ancestrais, renomeação em cascata e exclusão em cascata no banco de dados (`database.py`); renderização aninhada multinível na Treeview de Produção (`populate_tree`); menu de contexto dinâmico no clique com botão direito em qualquer pasta de produção ('📁 Criar Subpasta em ...', '📁 Criar Produção na Raiz...', 'Criar sessão em ...'); novas opções nos menus superiores Arquivo e Ferramentas; suporte a movimentação de sessões entre pastas/subpastas ('📁 Mover para Pasta de Produção...'); 2 novos testes unitários dedicados (68/68 testes passando) e recompilação do executável standalone Linux (`teste_dola_linux`) | `database.py`, `ui/main_window.py`, `tests/test_session_monotonic.py`, `tests/test_layout_editor_shortcuts.py`, `PROJETO_ATOM_JOBMANAGER.md`, `teste_dola_linux`, `dist/teste_dola` |
 | Dom, 18/10/2026 | 19:18 | Antigravity | Remoção de prefixo forçado de ID (#id) nos nós da árvore ao renomear sessão e preservação do SessId numérico na tabela inferior: criação de helper utilitário `clean_session_display_name` em `ui/sort_utils.py` para remoção consistente de prefixos automáticos como '(#3)' ou '( #3 )'; exibição direta do nome customizado (ex: '121805') na Treeview de Produção sem prefixos artificiais, idêntico ao software original ATOM; preenchimento automático do diálogo de renomeação (`on_rename_tree_item`) com o nome limpo e atualização no banco de dados e memória; sincronização bidirecional na edição direta pelo campo de nome da sessão (`SessionView.entry_sname`); preservação estrita do identificador numérico original da sessão na coluna `SessId` da tabela inferior (`grid_lower`); 3 novos testes unitários dedicados (71/71 testes passando) e recompilação do executável standalone Linux (`teste_dola_linux`) | `ui/sort_utils.py`, `ui/main_window.py`, `ui/session_view.py`, `tests/test_layout_editor_shortcuts.py`, `PROJETO_ATOM_JOBMANAGER.md`, `teste_dola_linux`, `dist/teste_dola` |
 | Dom, 18/10/2026 | 19:40 | Antigravity | Opção de exclusão de artigos/pedidos e desacoplamento de artigos no sistema: inclusão de comando 'Excluir Artigo' / 'Excluir' no menu de contexto com clique direito em artigos na árvore (`ui/main_window.py`) e suporte à tecla Delete/Backspace; exclusão segura em `database.py` (`delete_order` e `delete_article`) desvinculando sessões (`order_id = NULL`) e moldes (`article_id = NULL`) sem perda de geometria nem violação de integridade referencial; alteração dos esquemas MySQL 8.0 e SQLite para permitir `order_id` e `article_id` nulos com `ON DELETE SET NULL`; eliminação da recriação automática forçada de artigos de exemplo ('Derby Masculino #41') na criação de sessões; 1 novo teste unitário dedicado (72/72 testes passando) e recompilação do executável standalone Linux (`teste_dola_linux`) | `database.py`, `ui/main_window.py`, `db/schema_mysql.sql`, `db/migrations/001_initial_mysql_schema.sql`, `tests/test_layout_editor_shortcuts.py`, `PROJETO_ATOM_JOBMANAGER.md`, `teste_dola_linux`, `dist/teste_dola` |
+| Dom, 18/10/2026 | 20:02 | Antigravity | Opção de exclusão de materiais clicando com o mouse na árvore e no grid (`MainWindow`): implementação de menu de contexto dinâmico no clique com botão direito sobre materiais na Treeview (`tree_main`) e no DataGrid inferior (`grid_lower`) exibindo 'Excluir Material' (Del) e 'Excluir', além de suporte a exclusão em lote; exclusão segura em `database.py` (`delete_material`) desvinculando sessões (`material_id = NULL`) e artigos (`material_id = NULL`) sem violação de FK nem perda de dados; migração dos esquemas MySQL 8.0 e SQLite para suportar `material_id` anulável com `ON DELETE SET NULL`; sincronização e recarga imediata em cache, árvore, grid, janelas de sessão e códigos de materiais (`refresh_materials_everywhere`); 2 novos testes unitários dedicados (74/74 testes passando) e recompilação do executável standalone Linux (`teste_dola_linux`) | `database.py`, `ui/main_window.py`, `db/schema_mysql.sql`, `db/migrations/001_initial_mysql_schema.sql`, `tests/test_layout_editor_shortcuts.py`, `tests/test_db_layer.py`, `PROJETO_ATOM_JOBMANAGER.md`, `teste_dola_linux`, `dist/teste_dola` |
 
 **Commits recentes (automático):**
 
 <!-- AUTO:gitlog:start -->
 | Commit | Data | Autor | Mensagem |
 |---|---|---|---|
+| `0cb99e0` | 2026-10-18 | Doletabgi | feat(ui): opcao de exclusao de artigos e desacoplamento do uso de artigos no sistema |
 | `9a41755` | 2026-10-18 | Doletabgi | feat(ui): remover prefixo forçado de ID da árvore ao renomear sessão e preservar SessId original |
 | `83075c2` | 2026-10-18 | Doletabgi | feat(ui): suporte completo a criacao e gestao de subpastas em producao |
 | `d783e57` | 2026-10-18 | Doletabgi | feat(print): incluir grade e marcacoes de 10 em 10 cm na impressao e exportacao |
@@ -1247,7 +1253,6 @@ Local: `/home/dola/Documentos/clone do job/antigo/arquivos pos instalacao/Common
 | `9d88e22` | 2026-10-18 | Doletabgi | feat(ui): digitacao continua de pares via setas cima/baixo e enter |
 | `8ce8ae4` | 2026-10-18 | Doletabgi | docs: sincronizar header e gitlog do PROJETO_ATOM_JOBMANAGER.md |
 | `b9d44c6` | 2026-10-18 | Doletabgi | feat(ui): classificar moldes e tamanhos do maior para o menor e vice-versa |
-| `216577a` | 2026-10-18 | Doletabgi | docs: sincronizar header e gitlog do PROJETO_ATOM_JOBMANAGER.md |
 <!-- AUTO:gitlog:end -->
 
 ---

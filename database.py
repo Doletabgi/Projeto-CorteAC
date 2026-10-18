@@ -115,9 +115,9 @@ class DatabaseManager:
                     order_id INTEGER NOT NULL,
                     name TEXT NOT NULL,
                     pairs_count INTEGER NOT NULL DEFAULT 1,
-                    material_id TEXT NOT NULL,
+                    material_id TEXT NULL,
                     FOREIGN KEY (order_id) REFERENCES orders(id),
-                    FOREIGN KEY (material_id) REFERENCES materials(id)
+                    FOREIGN KEY (material_id) REFERENCES materials(id) ON DELETE SET NULL
                 )
                 """)
 
@@ -154,7 +154,7 @@ class DatabaseManager:
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     code TEXT UNIQUE NOT NULL,
                     order_id INTEGER,
-                    material_id TEXT NOT NULL,
+                    material_id TEXT NULL,
                     name TEXT NOT NULL DEFAULT '',
                     job TEXT NOT NULL DEFAULT 'ProduçãoNova',
                     status TEXT NOT NULL DEFAULT 'Planejado',
@@ -163,7 +163,7 @@ class DatabaseManager:
                     placed_pieces_json TEXT DEFAULT '[]',
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     FOREIGN KEY (order_id) REFERENCES orders(id),
-                    FOREIGN KEY (material_id) REFERENCES materials(id)
+                    FOREIGN KEY (material_id) REFERENCES materials(id) ON DELETE SET NULL
                 )
                 """)
 
@@ -638,6 +638,8 @@ class DatabaseManager:
     def delete_material(self, mat_id):
         with self.get_connection() as conn:
             cursor = conn.cursor()
+            cursor.execute("UPDATE sessions SET material_id = NULL WHERE material_id = ?", (mat_id,))
+            cursor.execute("UPDATE articles SET material_id = NULL WHERE material_id = ?", (mat_id,))
             cursor.execute("DELETE FROM materials WHERE id = ?", (mat_id,))
             conn.commit()
 

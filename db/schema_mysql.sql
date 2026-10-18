@@ -41,9 +41,9 @@ CREATE TABLE IF NOT EXISTS articles (
     order_id INT NOT NULL,
     name VARCHAR(150) NOT NULL,
     pairs_count INT NOT NULL DEFAULT 1,
-    material_id VARCHAR(50) NOT NULL,
+    material_id VARCHAR(50) NULL DEFAULT NULL,
     FOREIGN KEY (order_id) REFERENCES orders(id) ON DELETE CASCADE,
-    FOREIGN KEY (material_id) REFERENCES materials(id) ON DELETE RESTRICT,
+    FOREIGN KEY (material_id) REFERENCES materials(id) ON DELETE SET NULL,
     INDEX idx_articles_order (order_id),
     INDEX idx_articles_material (material_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
@@ -82,7 +82,7 @@ CREATE TABLE IF NOT EXISTS sessions (
     id INT AUTO_INCREMENT PRIMARY KEY,
     code VARCHAR(100) UNIQUE NOT NULL,
     order_id INT NULL DEFAULT NULL,
-    material_id VARCHAR(50) NOT NULL,
+    material_id VARCHAR(50) NULL DEFAULT NULL,
     name VARCHAR(150) NOT NULL DEFAULT '',
     job VARCHAR(100) NOT NULL DEFAULT 'ProduçãoNova',
     status VARCHAR(50) NOT NULL DEFAULT 'Planejado',
@@ -95,7 +95,7 @@ CREATE TABLE IF NOT EXISTS sessions (
     shapes_json LONGTEXT NULL,
     created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (order_id) REFERENCES orders(id) ON DELETE SET NULL,
-    FOREIGN KEY (material_id) REFERENCES materials(id) ON DELETE RESTRICT,
+    FOREIGN KEY (material_id) REFERENCES materials(id) ON DELETE SET NULL,
     INDEX idx_sessions_order (order_id),
     INDEX idx_sessions_created (created_at),
     INDEX idx_sessions_status (status)

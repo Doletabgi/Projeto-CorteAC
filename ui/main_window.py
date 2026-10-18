@@ -412,7 +412,7 @@ class MainWindow(tk.Tk):
             command=lambda: self.switch_tree_mode("materials")
         )
         self.btn_mode_materials.pack(side="left", padx=1)
-        self.btn_mode_materials.bind("<Button-3>", lambda e: self.show_popup_menu(self.materials_menu, e.x_root, e.y_root))
+        self.btn_mode_materials.bind("<Button-3>", self.show_materials_button_menu)
 
         # Divisão vertical esquerda: Árvore no topo e Grid embaixo
         v_paned = tk.PanedWindow(left_box, orient="vertical", bg=THEME["bg_surface"], sashwidth=4, sashrelief="raised")
@@ -2283,6 +2283,14 @@ class MainWindow(tk.Tk):
             except Exception:
                 pass
 
+    def show_materials_button_menu(self, event):
+        self.materials_menu.delete(0, "end")
+        self.materials_menu.add_command(label="Criar material...", command=self.on_create_material)
+        self.materials_menu.add_command(label="Listagem de materiais...", command=self.show_material_codes_window)
+        self.materials_menu.add_separator()
+        self.materials_menu.add_command(label="Atualizar Estoque", command=lambda: self.switch_tree_mode("materials"))
+        self.show_popup_menu(self.materials_menu, event.x_root, event.y_root)
+
     def show_tree_context_menu(self, event):
         iid = self.tree_main.identify_row(event.y)
         sel = self.tree_main.selection()
@@ -2299,8 +2307,73 @@ class MainWindow(tk.Tk):
                 vals = ()
 
         # Se estiver no modo Estoque de material ou o nó selecionado for do estoque de material:
-        # Exibe SOMENTE a opção 'Criar material' conforme solicitado
         if self.current_mode == "materials" or (vals and vals[0] in ("root_materials", "material")):
+            self.materials_menu.delete(0, "end")
+            mats_sel = []
+            for item_id in sel:
+                v = self.tree_main.item(item_id, "values")
+                if v and len(v) >= 2 and v[0] == "material":
+                    mats_sel.append((item_id, str(v[1])))
+
+            if mats_sel:
+                if len(mats_sel) == 1:
+                    mat_id = mats_sel[0][1]
+                    self.materials_menu.add_command(
+                        label="Aplicar à Sessão",
+                        command=lambda m=mat_id: self.apply_material_to_session(m)
+                    )
+                    self.materials_menu.add_command(
+                        label="Criar material...",
+                        command=self.on_create_material
+                    )
+                    self.materials_menu.add_command(
+                        label="Listagem de materiais...",
+                        command=self.show_material_codes_window
+                    )
+                    self.materials_menu.add_separator()
+                    self.materials_menu.add_command(
+                        label="Excluir Material",
+                        accelerator="Del",
+                        command=self.on_delete_tree_item
+                    )
+                    self.materials_menu.add_command(
+                        label="Excluir",
+                        command=self.on_delete_tree_item
+                    )
+                else:
+                    self.materials_menu.add_command(
+                        label="Criar material...",
+                        command=self.on_create_material
+                    )
+                    self.materials_menu.add_command(
+                        label="Listagem de materiais...",
+                        command=self.show_material_codes_window
+                    )
+                    self.materials_menu.add_separator()
+                    self.materials_menu.add_command(
+                        label=f"Excluir ({len(mats_sel)} materiais)",
+                        accelerator="Del",
+                        command=self.on_delete_tree_item
+                    )
+                    self.materials_menu.add_command(
+                        label="Excluir",
+                        command=self.on_delete_tree_item
+                    )
+            else:
+                self.materials_menu.add_command(
+                    label="Criar material...",
+                    command=self.on_create_material
+                )
+                self.materials_menu.add_command(
+                    label="Listagem de materiais...",
+                    command=self.show_material_codes_window
+                )
+                self.materials_menu.add_separator()
+                self.materials_menu.add_command(
+                    label="Atualizar Estoque",
+                    command=lambda: self.switch_tree_mode("materials")
+                )
+
             self.show_popup_menu(self.materials_menu, event.x_root, event.y_root)
             return
 
@@ -2479,7 +2552,69 @@ class MainWindow(tk.Tk):
                 self.grid_lower.selection_set(iid)
                 sel = (iid,)
         if self.current_mode == "materials":
+            self.materials_menu.delete(0, "end")
+            sel = self.grid_lower.selection()
+            if sel:
+                if len(sel) == 1:
+                    gvals = self.grid_lower.item(sel[0], "values")
+                    mat_id = str(gvals[0]) if gvals else str(sel[0])
+                    self.materials_menu.add_command(
+                        label="Aplicar à Sessão",
+                        command=lambda m=mat_id: self.apply_material_to_session(m)
+                    )
+                    self.materials_menu.add_command(
+                        label="Criar material...",
+                        command=self.on_create_material
+                    )
+                    self.materials_menu.add_command(
+                        label="Listagem de materiais...",
+                        command=self.show_material_codes_window
+                    )
+                    self.materials_menu.add_separator()
+                    self.materials_menu.add_command(
+                        label="Excluir Material",
+                        accelerator="Del",
+                        command=self.on_delete_grid_item
+                    )
+                    self.materials_menu.add_command(
+                        label="Excluir",
+                        command=self.on_delete_grid_item
+                    )
+                else:
+                    self.materials_menu.add_command(
+                        label="Criar material...",
+                        command=self.on_create_material
+                    )
+                    self.materials_menu.add_command(
+                        label="Listagem de materiais...",
+                        command=self.show_material_codes_window
+                    )
+                    self.materials_menu.add_separator()
+                    self.materials_menu.add_command(
+                        label=f"Excluir ({len(sel)} materiais)",
+                        accelerator="Del",
+                        command=self.on_delete_grid_item
+                    )
+                    self.materials_menu.add_command(
+                        label="Excluir",
+                        command=self.on_delete_grid_item
+                    )
+            else:
+                self.materials_menu.add_command(
+                    label="Criar material...",
+                    command=self.on_create_material
+                )
+                self.materials_menu.add_command(
+                    label="Listagem de materiais...",
+                    command=self.show_material_codes_window
+                )
+                self.materials_menu.add_separator()
+                self.materials_menu.add_command(
+                    label="Atualizar Estoque",
+                    command=lambda: self.switch_tree_mode("materials")
+                )
             self.show_popup_menu(self.materials_menu, event.x_root, event.y_root)
+            return
         elif self.current_mode == "shapes":
             sel = self.grid_lower.selection()
             if sel:
@@ -3642,17 +3777,19 @@ class MainWindow(tk.Tk):
                 if messagebox.askyesno("Excluir Material", f"Deseja realmente excluir o material '{mat_id}'?", parent=self):
                     self.db.delete_material(mat_id)
                     self.materials = [m for m in self.materials if m.get("id") != mat_id]
-                    if self.current_mode == "materials":
-                        self.switch_tree_mode("materials")
-                    self.lbl_status_msg.config(text=f"Material '{mat_id}' excluído.")
+                    if self.current_material and self.current_material.get("id") == mat_id:
+                        self.current_material = self.materials[0] if self.materials else None
+                    self.refresh_materials_everywhere()
+                    self.lbl_status_msg.config(text=f"Material '{mat_id}' excluído com sucesso.")
             else:
                 if messagebox.askyesno("Excluir Materiais", f"Deseja realmente excluir os {num} materiais selecionados?", parent=self):
                     for _, mat_id in materials_to_del:
                         self.db.delete_material(mat_id)
                     mat_ids = {m_id for _, m_id in materials_to_del}
                     self.materials = [m for m in self.materials if m.get("id") not in mat_ids]
-                    if self.current_mode == "materials":
-                        self.switch_tree_mode("materials")
+                    if self.current_material and self.current_material.get("id") in mat_ids:
+                        self.current_material = self.materials[0] if self.materials else None
+                    self.refresh_materials_everywhere()
                     self.lbl_status_msg.config(text=f"{num} materiais excluídos com sucesso.")
             return
 
@@ -3750,6 +3887,8 @@ class MainWindow(tk.Tk):
                     v = self.grid_lower.item(item, "values")
                     if v and len(v) >= 1:
                         mat_ids.append(str(v[0]))
+                    else:
+                        mat_ids.append(str(item))
                 if not mat_ids:
                     return
                 num = len(mat_ids)
@@ -3760,8 +3899,10 @@ class MainWindow(tk.Tk):
                     self.db.delete_material(mid)
                 del_mats = set(mat_ids)
                 self.materials = [m for m in self.materials if m.get("id") not in del_mats]
-                self.switch_tree_mode("materials")
-                self.lbl_status_msg.config(text=f"{num} material(is) excluído(s).")
+                if self.current_material and self.current_material.get("id") in del_mats:
+                    self.current_material = self.materials[0] if self.materials else None
+                self.refresh_materials_everywhere()
+                self.lbl_status_msg.config(text=f"Material '{mat_ids[0]}' excluído com sucesso." if num == 1 else f"{num} materiais excluídos com sucesso.")
             except Exception as e:
                 messagebox.showerror("Erro ao Excluir", f"Falha ao excluir material: {e}", parent=self)
 
@@ -3967,6 +4108,16 @@ class MainWindow(tk.Tk):
                     self.show_order_window(order_id)
                 except (ValueError, TypeError):
                     self.show_order_window()
+        elif self.current_mode == "materials":
+            node_type = vals[0] if vals else ""
+            if node_type == "material" and len(vals) >= 2:
+                mat_id = str(vals[1])
+                self.lbl_status_msg.config(text=f"Material selecionado: '{mat_id}'")
+                if self.grid_lower.exists(mat_id):
+                    self.grid_lower.selection_set(mat_id)
+                    self.grid_lower.see(mat_id)
+            elif node_type == "root_materials":
+                self.lbl_status_msg.config(text="Estoque de material (Raiz)")
 
     def on_tree_double_click(self, event):
         sel = self.tree_main.selection()
