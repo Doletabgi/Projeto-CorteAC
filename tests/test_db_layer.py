@@ -290,5 +290,34 @@ class TestDBLayer(unittest.TestCase):
         self.assertIsNotNone(sess2)
         self.assertNotEqual(sess1["code"], sess2["code"])
 
+    def test_delete_sessions_batch(self):
+        """Testa exclusão em lote de múltiplas sessões com integridade referencial."""
+        mgr = DatabaseManager(db_path=TEST_DB_NAME, backend="mysql")
+        sids = []
+        for i in range(1, 6):
+            sid = mgr.create_session(session_id=3000 + i, name=f"Sessão Lote #{i}")
+            sids.append(sid)
+
+        self.assertEqual(len(sids), 5)
+        for sid in sids:
+            self.assertIsNotNone(mgr.get_session(sid))
+
+        # Exclui lote de 3 sessões: 3001, 3003, 3005
+        mgr.delete_sessions([3001, 3003, 3005])
+
+        self.assertIsNone(mgr.get_session(3001))
+        self.assertIsNotNone(mgr.get_session(3002))
+        self.assertIsNone(mgr.get_session(3003))
+        self.assertIsNotNone(mgr.get_session(3004))
+        self.assertIsNone(mgr.get_session(3005))
+
+        # Exclui as restantes
+        mgr.delete_sessions([3002, 3004])
+        self.assertIsNone(mgr.get_session(3002))
+        self.assertIsNone(mgr.get_session(3004))
+
+        # Chamada com lista vazia não deve quebrar
+        mgr.delete_sessions([])
+
 if __name__ == "__main__":
     unittest.main()

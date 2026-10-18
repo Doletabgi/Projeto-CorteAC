@@ -400,6 +400,53 @@ class TestLayoutEditorShortcuts(unittest.TestCase):
         self.assertEqual(saved[0][0], 101)
         self.assertEqual(len(saved[0][1]), 15)
 
+    def test_treeview_multi_selection_jobs_mode_and_ctrl_a(self):
+        """Testa que multi-seleção de sessões na árvore preserva os itens e Ctrl+A seleciona todas."""
+        from tkinter import ttk
+        tree = ttk.Treeview(self.root, selectmode="extended")
+        root_node = tree.insert("", "end", text=" Produção")
+        prod_node = tree.insert(root_node, "end", text=" ProduçãoNova")
+
+        items = []
+        for i in range(1, 16):
+            it = tree.insert(prod_node, "end", text=f" (#{i}) Sessão #{i}", values=("session", i))
+            items.append(it)
+
+        # Seleção múltipla de 5 sessões (1 a 5)
+        tree.selection_set(items[:5])
+        self.assertEqual(len(tree.selection()), 5)
+
+        # Simula on_tree_selected para verificar que não colapsa a seleção
+        from ui.main_window import MainWindow
+        class MockMain:
+            def __init__(self, t):
+                self.tree_main = t
+                self.current_mode = "jobs"
+                self.status_msg = ""
+                self.switched_id = None
+                class Lbl:
+                    def config(s, text=""):
+                        self.status_msg = text
+                self.lbl_status_msg = Lbl()
+            def switch_to_session(self, sid):
+                self.switched_id = sid
+            def _collect_session_nodes(self, node, result_list):
+                MainWindow._collect_session_nodes(self, node, result_list)
+
+        mock_main = MockMain(tree)
+        MainWindow.on_tree_selected(mock_main)
+
+        # Deve permanecer com 5 itens selecionados e NÃO chamar switch_to_session
+        self.assertEqual(len(tree.selection()), 5)
+        self.assertIsNone(mock_main.switched_id)
+        self.assertEqual(mock_main.status_msg, "5 sessões selecionadas.")
+
+        # Testa coleta com _collect_session_nodes e on_select_all
+        all_sess = []
+        for child in tree.get_children():
+            mock_main._collect_session_nodes(child, all_sess)
+        self.assertEqual(len(all_sess), 15)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -939,11 +939,24 @@ class DatabaseManager:
             cursor.execute("UPDATE sessions SET shapes_json = ? WHERE id = ?", (json.dumps(shapes or []), session_id))
             conn.commit()
 
-    def delete_session(self, session_id):
+    def delete_sessions(self, session_ids):
+        """Exclui múltiplas sessões e seus layouts/peças associadas em lote de forma atômica."""
+        if not session_ids:
+            return
+        valid_ids = [int(sid) for sid in session_ids if sid is not None]
+        if not valid_ids:
+            return
         with self.get_connection() as conn:
             cursor = conn.cursor()
-            cursor.execute("DELETE FROM sessions WHERE id = ?", (session_id,))
+            placeholders = ",".join(["?"] * len(valid_ids))
+            # Garante limpeza em cascata inclusive se foreign keys estiverem desabilitadas
+            cursor.execute(f"DELETE FROM layout_pieces WHERE layout_id IN (SELECT id FROM layouts WHERE session_id IN ({placeholders}))", tuple(valid_ids))
+            cursor.execute(f"DELETE FROM layouts WHERE session_id IN ({placeholders})", tuple(valid_ids))
+            cursor.execute(f"DELETE FROM sessions WHERE id IN ({placeholders})", tuple(valid_ids))
             conn.commit()
+
+    def delete_session(self, session_id):
+        self.delete_sessions([session_id])
 
     # -------------------------------------------------------------
     # Gestão de Opções / Configurações (Ferramentas -> Opções)

@@ -247,6 +247,8 @@ class MainWindow(tk.Tk):
         edit_menu.add_command(label="Copiar", accelerator="Ctrl+C")
         edit_menu.add_command(label="Colar", accelerator="Ctrl+V")
         edit_menu.add_command(label="Excluir", accelerator="Del", command=self.on_global_delete_key)
+        edit_menu.add_separator()
+        edit_menu.add_command(label="Selecionar tudo", accelerator="Ctrl+A", command=self.on_select_all)
         self.edit_menu = edit_menu
         menubar.add_cascade(label="Editar", menu=edit_menu)
 
@@ -456,7 +458,7 @@ class MainWindow(tk.Tk):
         grid_frame = tk.Frame(v_paned, bg=THEME["bg_surface"], relief="sunken", bd=2)
         v_paned.add(grid_frame, minsize=130)
 
-        self.grid_lower = ttk.Treeview(grid_frame, show="headings", height=5)
+        self.grid_lower = ttk.Treeview(grid_frame, show="headings", height=5, selectmode="extended")
         self.grid_lower.pack(fill="both", expand=True)
         self.grid_lower.bind("<Double-1>", self.on_grid_double_click)
         self.grid_lower.bind("<Button-3>", self.show_grid_context_menu)
@@ -532,6 +534,10 @@ class MainWindow(tk.Tk):
         self.bind_all("<Escape>", self.dismiss_popup_menus, add="+")
         self.bind_all("<Delete>", self.on_global_delete_key, add="+")
         self.bind_all("<BackSpace>", self.on_global_delete_key, add="+")
+        self.bind_all("<Control-a>", self.on_select_all, add="+")
+        self.bind_all("<Control-A>", self.on_select_all, add="+")
+        self.bind_all("<Control-Key-a>", self.on_select_all, add="+")
+        self.bind_all("<Control-Key-A>", self.on_select_all, add="+")
         self.bind_all("<Control-z>", self.on_global_undo, add="+")
         self.bind_all("<Control-Z>", self.on_global_undo, add="+")
         self.bind_all("<Control-Key-z>", self.on_global_undo, add="+")
@@ -1079,6 +1085,8 @@ class MainWindow(tk.Tk):
             try:
                 if int(vals[1]) == int(sess_id):
                     current_sel = self.tree_main.selection()
+                    if len(current_sel) > 1 and node in current_sel:
+                        return True
                     if current_sel != (node,):
                         self.tree_main.selection_set(node)
                     self.tree_main.see(node)
@@ -1095,6 +1103,8 @@ class MainWindow(tk.Tk):
             vals = self.grid_lower.item(item, "values")
             if vals and len(vals) >= 1 and str(vals[0]) == str(sess_id):
                 current_sel = self.grid_lower.selection()
+                if len(current_sel) > 1 and item in current_sel:
+                    return
                 if current_sel != (item,):
                     self.grid_lower.selection_set(item)
                 self.grid_lower.see(item)
@@ -2101,11 +2111,13 @@ class MainWindow(tk.Tk):
 
     def show_tree_context_menu(self, event):
         iid = self.tree_main.identify_row(event.y)
+        sel = self.tree_main.selection()
         if iid:
-            self.tree_main.selection_set(iid)
+            if iid not in sel:
+                self.tree_main.selection_set(iid)
+                sel = (iid,)
             vals = self.tree_main.item(iid, "values")
         else:
-            sel = self.tree_main.selection()
             if sel:
                 iid = sel[0]
                 vals = self.tree_main.item(iid, "values")
@@ -2168,11 +2180,11 @@ class MainWindow(tk.Tk):
                 )
                 self.moldes_menu.add_command(
                     label="🗑️ Excluir Molde...",
-                    command=lambda s=shape_id: self.on_delete_shape(s)
+                    command=self.on_delete_tree_item
                 )
                 self.moldes_menu.add_command(
                     label="Excluir\tDel",
-                    command=lambda s=shape_id: self.on_delete_shape(s)
+                    command=self.on_delete_tree_item
                 )
                 self.moldes_menu.add_separator()
                 self.moldes_menu.add_command(
@@ -2199,13 +2211,26 @@ class MainWindow(tk.Tk):
 
         else:
             # Modo Produção (Print 1)
-            self.tree_menu.entryconfig("Abrir", state="normal", label="Abrir", command=self.on_tree_menu_open)
+            sel = self.tree_main.selection()
+            if len(sel) > 1:
+                sess_count = sum(1 for item in sel if self.tree_main.item(item, "values") and len(self.tree_main.item(item, "values")) >= 2 and self.tree_main.item(item, "values")[0] == "session")
+                lbl_del = f"Excluir ({sess_count} sessões)" if sess_count > 0 else f"Excluir ({len(sel)} selecionados)"
+                self.tree_menu.entryconfig("Abrir", state="disabled")
+                self.tree_menu.entryconfig("Renomear", state="disabled")
+                self.tree_menu.entryconfig("Excluir", state="normal", label=lbl_del, command=self.on_delete_tree_item)
+            else:
+                self.tree_menu.entryconfig("Abrir", state="normal", label="Abrir", command=self.on_tree_menu_open)
+                self.tree_menu.entryconfig("Renomear", state="normal")
+                self.tree_menu.entryconfig("Excluir", state="normal", label="Excluir", command=self.on_delete_tree_item)
             self.show_popup_menu(self.tree_menu, event.x_root, event.y_root)
 
     def show_grid_context_menu(self, event):
         iid = self.grid_lower.identify_row(event.y)
+        sel = self.grid_lower.selection()
         if iid:
-            self.grid_lower.selection_set(iid)
+            if iid not in sel:
+                self.grid_lower.selection_set(iid)
+                sel = (iid,)
         if self.current_mode == "materials":
             self.show_popup_menu(self.materials_menu, event.x_root, event.y_root)
         elif self.current_mode == "shapes":
@@ -2250,6 +2275,15 @@ class MainWindow(tk.Tk):
                         pass
             self.show_popup_menu(self.moldes_menu, event.x_root, event.y_root)
         elif self.current_mode == "jobs":
+            sel = self.grid_lower.selection()
+            if len(sel) > 1:
+                self.tree_menu.entryconfig("Abrir", state="disabled")
+                self.tree_menu.entryconfig("Renomear", state="disabled")
+                self.tree_menu.entryconfig("Excluir", state="normal", label=f"Excluir ({len(sel)} sessões)", command=self.on_delete_grid_item)
+            else:
+                self.tree_menu.entryconfig("Abrir", state="normal", label="Abrir", command=self.on_tree_menu_open)
+                self.tree_menu.entryconfig("Renomear", state="normal")
+                self.tree_menu.entryconfig("Excluir", state="normal", label="Excluir", command=self.on_delete_grid_item)
             self.show_popup_menu(self.tree_menu, event.x_root, event.y_root)
 
     def on_create_material(self):
@@ -2389,6 +2423,16 @@ class MainWindow(tk.Tk):
                 self._drag_data = None
                 return
 
+        # Verifica teclas modificadoras (Shift ou Control)
+        is_shift = bool(event.state & 0x0001)
+        is_ctrl = bool(event.state & 0x0004)
+
+        if is_shift or is_ctrl:
+            # Usuário está montando seleção múltipla (Shift ou Ctrl)
+            self._drag_data = None
+            self._pending_single_select = None
+            return
+
         curr_sel = list(self.tree_main.selection())
         # Se o item clicado já faz parte de uma seleção múltipla, mantemos toda a grade selecionada!
         if iid in curr_sel and len(curr_sel) > 1:
@@ -2399,6 +2443,7 @@ class MainWindow(tk.Tk):
             self._pending_single_select = None
             try:
                 self.tree_main.selection_set(iid)
+                self.tree_main.focus(iid)
             except Exception:
                 pass
 
@@ -2474,6 +2519,8 @@ class MainWindow(tk.Tk):
             self._drag_data = None
 
     def on_grid_drag_start(self, event):
+        if (event.state & 1) or (event.state & 4):
+            return
         if self.current_mode == "materials":
             iid = self.grid_lower.identify_row(event.y)
             if not iid:
@@ -2914,98 +2961,231 @@ class MainWindow(tk.Tk):
         sel = self.tree_main.selection()
         if not sel:
             return
-        curr = self.tree_main.item(sel[0], "text").strip()
-        vals = self.tree_main.item(sel[0], "values")
-        if not vals:
-            return
 
-        node_type = vals[0]
-        if node_type == "shape":
-            shape_id = int(vals[1])
-            self.on_delete_shape(shape_id)
-            return
-        elif node_type == "folder":
-            folder_name = str(vals[1])
-            self.on_delete_shape_folder(folder_name)
-            return
-        elif node_type == "material":
-            mat_id = str(vals[1])
-            if messagebox.askyesno("Excluir Material", f"Deseja realmente excluir o material '{mat_id}'?", parent=self):
-                self.db.delete_material(mat_id)
-                self.materials = [m for m in self.materials if m.get("id") != mat_id]
-                self.tree_main.delete(sel[0])
-                if self.current_mode == "materials":
-                    self.switch_tree_mode("materials")
-                self.lbl_status_msg.config(text=f"Material '{mat_id}' excluído.")
-            return
+        # Agrupa itens selecionados por tipo
+        sessions_to_del = []
+        shapes_to_del = []
+        folders_to_del = []
+        orders_to_del = []
+        materials_to_del = []
 
-        if messagebox.askyesno("Excluir", f"Deseja realmente excluir '{curr}'?", parent=self):
-            if vals and len(vals) >= 2 and vals[0] == "session":
-                sess_id = int(vals[1])
-                self.db.delete_session(sess_id)
-                self.sessions = [s for s in self.sessions if s.get("id") != sess_id]
-                if self.current_session and self.current_session.get("id") == sess_id:
-                    if self.sessions:
-                        self.switch_to_session(self.sessions[0]["id"])
-                    else:
-                        self.current_session = None
-                        self.canvas.clear_bed()
-            elif vals and len(vals) >= 2 and vals[0] == "order":
-                order_id = int(vals[1])
-                self.db.delete_order(order_id)
-                self.orders = [o for o in self.orders if o.get("id") != order_id]
-                if self.current_order and self.current_order.get("id") == order_id:
-                    self.current_order = self.orders[0] if self.orders else None
-                    if self.active_child == self.order_view:
-                        if self.current_order:
-                            self.order_view.load_order(self.current_order)
-                        else:
-                            self.close_child_window()
+        for iid in sel:
+            vals = self.tree_main.item(iid, "values")
+            name = self.tree_main.item(iid, "text").strip()
+            if not vals:
+                continue
+            node_type = vals[0]
+            if node_type == "session" and len(vals) >= 2:
+                try:
+                    sessions_to_del.append((iid, int(vals[1]), name))
+                except (ValueError, TypeError):
+                    pass
+            elif node_type == "shape" and len(vals) >= 2:
+                try:
+                    shapes_to_del.append((iid, int(vals[1]), name))
+                except (ValueError, TypeError):
+                    pass
+            elif node_type == "folder" and len(vals) >= 2:
+                folders_to_del.append((iid, str(vals[1])))
+            elif node_type == "order" and len(vals) >= 2:
+                try:
+                    orders_to_del.append((iid, int(vals[1]), name))
+                except (ValueError, TypeError):
+                    pass
+            elif node_type == "material" and len(vals) >= 2:
+                materials_to_del.append((iid, str(vals[1])))
 
-            self.tree_main.delete(sel[0])
+        # 1. Trata sessões selecionadas
+        if sessions_to_del:
+            num = len(sessions_to_del)
+            if num == 1:
+                confirm_msg = f"Deseja realmente excluir a {sessions_to_del[0][2]}?"
+            else:
+                confirm_msg = f"Deseja realmente excluir as {num} sessões selecionadas?"
+            if not messagebox.askyesno("Excluir Sessões" if num > 1 else "Excluir Sessão", confirm_msg, parent=self):
+                return
+
+            sess_ids = [s_id for _, s_id, _ in sessions_to_del]
+            try:
+                self.db.delete_sessions(sess_ids)
+            except Exception as e:
+                messagebox.showerror("Erro ao Excluir", f"Falha ao excluir sessões no banco de dados: {e}", parent=self)
+                return
+
+            for sid in sess_ids:
+                if sid in self.open_sessions:
+                    self.close_session_window(sid)
+
+            del_set = set(sess_ids)
+            self.sessions = [s for s in self.sessions if s.get("id") not in del_set]
+            if self.current_session and self.current_session.get("id") in del_set:
+                if self.sessions:
+                    self.switch_to_session(self.sessions[0]["id"])
+                else:
+                    self.current_session = None
+                    self.canvas.clear_bed()
+                    if self.active_child == self.session_view:
+                        self.close_child_window()
+
             if self.current_mode == "jobs":
                 self.switch_tree_mode("jobs")
-            self.lbl_status_msg.config(text=f"Item '{curr}' excluído com sucesso.")
+            else:
+                for iid, _, _ in sessions_to_del:
+                    try:
+                        self.tree_main.delete(iid)
+                    except Exception:
+                        pass
+
+            self.lbl_status_msg.config(
+                text=f"{sessions_to_del[0][2]} excluída com sucesso." if num == 1
+                else f"{num} sessões excluídas com sucesso."
+            )
+            return
+
+        # 2. Trata moldes selecionados
+        if shapes_to_del:
+            num = len(shapes_to_del)
+            if num == 1:
+                self.on_delete_shape(shapes_to_del[0][1])
+            else:
+                if messagebox.askyesno("Excluir Moldes", f"Deseja realmente excluir os {num} moldes selecionados?", parent=self):
+                    for _, shp_id, _ in shapes_to_del:
+                        self.db.delete_shape(shp_id)
+                    shp_ids = {s_id for _, s_id, _ in shapes_to_del}
+                    self.current_shapes = [s for s in self.current_shapes if s.get("id") not in shp_ids]
+                    self.switch_tree_mode("shapes")
+                    self.lbl_status_msg.config(text=f"{num} moldes excluídos com sucesso.")
+            return
+
+        # 3. Trata pastas de moldes selecionadas
+        if folders_to_del:
+            for _, f_name in folders_to_del:
+                self.on_delete_shape_folder(f_name)
+            return
+
+        # 4. Trata materiais selecionados
+        if materials_to_del:
+            num = len(materials_to_del)
+            if num == 1:
+                mat_id = materials_to_del[0][1]
+                if messagebox.askyesno("Excluir Material", f"Deseja realmente excluir o material '{mat_id}'?", parent=self):
+                    self.db.delete_material(mat_id)
+                    self.materials = [m for m in self.materials if m.get("id") != mat_id]
+                    if self.current_mode == "materials":
+                        self.switch_tree_mode("materials")
+                    self.lbl_status_msg.config(text=f"Material '{mat_id}' excluído.")
+            else:
+                if messagebox.askyesno("Excluir Materiais", f"Deseja realmente excluir os {num} materiais selecionados?", parent=self):
+                    for _, mat_id in materials_to_del:
+                        self.db.delete_material(mat_id)
+                    mat_ids = {m_id for _, m_id in materials_to_del}
+                    self.materials = [m for m in self.materials if m.get("id") not in mat_ids]
+                    if self.current_mode == "materials":
+                        self.switch_tree_mode("materials")
+                    self.lbl_status_msg.config(text=f"{num} materiais excluídos com sucesso.")
+            return
+
+        # 5. Trata pedidos/ordens
+        if orders_to_del:
+            for iid, o_id, o_name in orders_to_del:
+                if messagebox.askyesno("Excluir Pedido", f"Deseja realmente excluir o pedido '{o_name}'?", parent=self):
+                    self.db.delete_order(o_id)
+                    self.orders = [o for o in self.orders if o.get("id") != o_id]
+                    if self.current_order and self.current_order.get("id") == o_id:
+                        self.current_order = self.orders[0] if self.orders else None
+                        if self.active_child == self.order_view:
+                            if self.current_order:
+                                self.order_view.load_order(self.current_order)
+                            else:
+                                self.close_child_window()
+            if self.current_mode == "jobs":
+                self.switch_tree_mode("jobs")
+            return
 
     def on_delete_grid_item(self):
         sel = self.grid_lower.selection()
         if not sel:
             return
-        vals = self.grid_lower.item(sel[0], "values")
-        if not vals:
-            return
         if self.current_mode == "shapes":
             try:
-                shp_id = int(vals[0])
-                self.on_delete_shape(shp_id)
+                shp_ids = []
+                for item in sel:
+                    v = self.grid_lower.item(item, "values")
+                    if v and len(v) >= 1:
+                        shp_ids.append(int(v[0]))
+                if not shp_ids:
+                    return
+                if len(shp_ids) == 1:
+                    self.on_delete_shape(shp_ids[0])
+                else:
+                    if messagebox.askyesno("Excluir Moldes", f"Deseja realmente excluir os {len(shp_ids)} moldes selecionados?", parent=self):
+                        for sid in shp_ids:
+                            self.db.delete_shape(sid)
+                        del_shps = set(shp_ids)
+                        self.current_shapes = [s for s in self.current_shapes if s.get("id") not in del_shps]
+                        self.switch_tree_mode("shapes")
+                        self.lbl_status_msg.config(text=f"{len(shp_ids)} moldes excluídos com sucesso.")
             except Exception:
                 pass
         elif self.current_mode == "jobs":
             try:
-                sess_id = int(vals[0])
-                if messagebox.askyesno("Excluir Sessão", f"Deseja realmente excluir a Sessão #{sess_id}?", parent=self):
-                    self.db.delete_session(sess_id)
-                    self.sessions = [s for s in self.sessions if s.get("id") != sess_id]
-                    if self.current_session and self.current_session.get("id") == sess_id:
-                        if self.sessions:
-                            self.switch_to_session(self.sessions[0]["id"])
-                        else:
-                            self.current_session = None
-                            self.canvas.clear_bed()
-                    self.switch_tree_mode("jobs")
-                    self.lbl_status_msg.config(text=f"Sessão #{sess_id} excluída.")
-            except Exception:
-                pass
+                sess_ids = []
+                for item in sel:
+                    v = self.grid_lower.item(item, "values")
+                    if v and len(v) >= 1:
+                        try:
+                            sess_ids.append(int(v[0]))
+                        except (ValueError, TypeError):
+                            pass
+                if not sess_ids:
+                    return
+                num = len(sess_ids)
+                prompt = f"Deseja realmente excluir a Sessão #{sess_ids[0]}?" if num == 1 else f"Deseja realmente excluir as {num} sessões selecionadas?"
+                if not messagebox.askyesno("Excluir Sessões" if num > 1 else "Excluir Sessão", prompt, parent=self):
+                    return
+                try:
+                    self.db.delete_sessions(sess_ids)
+                except Exception as e:
+                    messagebox.showerror("Erro ao Excluir", f"Falha ao excluir sessões: {e}", parent=self)
+                    return
+                for sid in sess_ids:
+                    if sid in self.open_sessions:
+                        self.close_session_window(sid)
+                del_set = set(sess_ids)
+                self.sessions = [s for s in self.sessions if s.get("id") not in del_set]
+                if self.current_session and self.current_session.get("id") in del_set:
+                    if self.sessions:
+                        self.switch_to_session(self.sessions[0]["id"])
+                    else:
+                        self.current_session = None
+                        self.canvas.clear_bed()
+                        if self.active_child == self.session_view:
+                            self.close_child_window()
+                self.switch_tree_mode("jobs")
+                self.lbl_status_msg.config(text=f"{num} sessão(ões) excluída(s) com sucesso.")
+            except Exception as e:
+                messagebox.showerror("Erro ao Excluir", f"Falha ao excluir sessão(ões): {e}", parent=self)
         elif self.current_mode == "materials":
             try:
-                mat_id = str(vals[0])
-                if messagebox.askyesno("Excluir Material", f"Deseja realmente excluir o material '{mat_id}'?", parent=self):
-                    self.db.delete_material(mat_id)
-                    self.materials = [m for m in self.materials if m.get("id") != mat_id]
-                    self.switch_tree_mode("materials")
-                    self.lbl_status_msg.config(text=f"Material '{mat_id}' excluído.")
-            except Exception:
-                pass
+                mat_ids = []
+                for item in sel:
+                    v = self.grid_lower.item(item, "values")
+                    if v and len(v) >= 1:
+                        mat_ids.append(str(v[0]))
+                if not mat_ids:
+                    return
+                num = len(mat_ids)
+                prompt = f"Deseja realmente excluir o material '{mat_ids[0]}'?" if num == 1 else f"Deseja realmente excluir os {num} materiais selecionados?"
+                if not messagebox.askyesno("Excluir Materiais" if num > 1 else "Excluir Material", prompt, parent=self):
+                    return
+                for mid in mat_ids:
+                    self.db.delete_material(mid)
+                del_mats = set(mat_ids)
+                self.materials = [m for m in self.materials if m.get("id") not in del_mats]
+                self.switch_tree_mode("materials")
+                self.lbl_status_msg.config(text=f"{num} material(is) excluído(s).")
+            except Exception as e:
+                messagebox.showerror("Erro ao Excluir", f"Falha ao excluir material: {e}", parent=self)
 
     def on_global_delete_key(self, event=None):
         widget = self.focus_get()
@@ -3018,6 +3198,12 @@ class MainWindow(tk.Tk):
         if hasattr(self, "shape_editor_view") and self.shape_editor_view and self.shape_editor_view.winfo_ismapped():
             if widget and str(widget).startswith(str(self.shape_editor_view)):
                 return
+
+        if widget == self.grid_lower:
+            sel_grid = self.grid_lower.selection()
+            if sel_grid:
+                self.on_delete_grid_item()
+                return "break"
 
         sel_tree = self.tree_main.selection()
         if sel_tree:
@@ -3035,6 +3221,61 @@ class MainWindow(tk.Tk):
                 if sel_shp:
                     sv.delete_selected_shape()
                     return "break"
+
+    def on_select_all(self, event=None):
+        widget = self.focus_get()
+        if isinstance(widget, (tk.Entry, ttk.Entry, tk.Text, ttk.Combobox, ttk.Spinbox)):
+            try:
+                widget.selection_range(0, 'end')
+            except Exception:
+                pass
+            return "break"
+
+        if widget == self.grid_lower:
+            children = self.grid_lower.get_children()
+            if children:
+                self.grid_lower.selection_set(children)
+                self.lbl_status_msg.config(text=f"{len(children)} itens selecionados no grid.")
+            return "break"
+
+        # No tree_main
+        if self.current_mode == "jobs":
+            sess_nodes = []
+            for item in self.tree_main.get_children():
+                self._collect_session_nodes(item, sess_nodes)
+            if sess_nodes:
+                self.tree_main.selection_set(sess_nodes)
+                self.lbl_status_msg.config(text=f"{len(sess_nodes)} sessões selecionadas.")
+                return "break"
+        elif self.current_mode == "shapes":
+            shape_nodes = []
+            for item in self.tree_main.get_children():
+                self._collect_shape_nodes(item, shape_nodes)
+            if shape_nodes:
+                self.tree_main.selection_set(shape_nodes)
+                self.lbl_status_msg.config(text=f"{len(shape_nodes)} moldes selecionados.")
+                return "break"
+
+        all_children = []
+        for item in self.tree_main.get_children():
+            all_children.extend(self.tree_main.get_children(item))
+        if all_children:
+            self.tree_main.selection_set(all_children)
+        return "break"
+
+    def _collect_session_nodes(self, node, result_list):
+        vals = self.tree_main.item(node, "values")
+        if vals and len(vals) >= 2 and vals[0] == "session":
+            result_list.append(node)
+        for child in self.tree_main.get_children(node):
+            self._collect_session_nodes(child, result_list)
+
+    def _collect_shape_nodes(self, node, result_list):
+        vals = self.tree_main.item(node, "values")
+        if vals and len(vals) >= 2 and vals[0] == "shape":
+            result_list.append(node)
+        for child in self.tree_main.get_children(node):
+            self._collect_shape_nodes(child, result_list)
 
     def on_global_undo(self, event=None):
         widget = self.focus_get()
@@ -3072,6 +3313,36 @@ class MainWindow(tk.Tk):
         sel = self.tree_main.selection()
         if not sel:
             return
+
+        if len(sel) > 1:
+            # Multi-seleção ativa: NÃO alternar de sessão para não colapsar a seleção
+            if self.current_mode == "jobs":
+                sess_ids = []
+                for item in sel:
+                    v = self.tree_main.item(item, "values")
+                    if v and len(v) >= 2 and v[0] == "session":
+                        try:
+                            sess_ids.append(int(v[1]))
+                        except (ValueError, TypeError):
+                            pass
+                if sess_ids:
+                    self.lbl_status_msg.config(text=f"{len(sess_ids)} sessões selecionadas.")
+                    return
+            elif self.current_mode == "shapes":
+                shape_ids = []
+                for item in sel:
+                    v = self.tree_main.item(item, "values")
+                    if v and len(v) >= 2 and v[0] == "shape":
+                        try:
+                            shape_ids.append(int(v[1]))
+                        except (ValueError, TypeError):
+                            pass
+                if shape_ids:
+                    self.lbl_status_msg.config(text=f"{len(shape_ids)} moldes selecionados.")
+                    return
+            self.lbl_status_msg.config(text=f"{len(sel)} itens selecionados.")
+            return
+
         vals = self.tree_main.item(sel[0], "values")
         if not vals:
             return
