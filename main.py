@@ -26,6 +26,19 @@ import multiprocessing
 from ui.main_window import MainWindow
 
 def main():
+    if "--check-db" in sys.argv:
+        import db
+        print(f"Backend ativo: {db.get_active_backend()}")
+        try:
+            with db.get_connection() as conn:
+                cur = conn.cursor()
+                cur.execute("SELECT 1")
+                print(f"Conexão com banco bem-sucedida! Backend: {conn.backend}")
+            sys.exit(0)
+        except Exception as e:
+            print(f"Erro ao conectar com banco: {e}", file=sys.stderr)
+            sys.exit(1)
+
     print("=" * 60)
     print("  teste dola (Edição Python para Windows 10 / 11)")
     print("  Recriação Moderna do Sistema Jm2k & ATOM Nesting")

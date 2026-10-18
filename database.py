@@ -1,263 +1,305 @@
 """
 JobManager 2000 (Python Edition)
-SQLite Database Manager (Substitui os antigos arquivos DAO/Jet MDB)
+Database Manager - Conexão Central MySQL 8.0 & Reserva SQLite
 """
 
-import sqlite3
 import json
+import time
+import random
+import getpass
+import socket
+from pathlib import Path
 from typing import Optional, List, Dict, Any
 from config import DATABASE_PATH, DEFAULT_MATERIALS
 from cad.colors import get_color_for_size
+from db import (
+    get_connection as db_get_connection,
+    get_memory_connection,
+    DBConnection,
+    DBCursor,
+    DBRow,
+    ServerUnreachableError,
+    VersionConflictError,
+    get_active_backend,
+    set_active_backend,
+    DB_BACKEND
+)
+
+def get_current_operator() -> str:
+    """Retorna identificação do operador e terminal (usuário@computador)."""
+    try:
+        user = getpass.getuser()
+    except Exception:
+        user = "operator"
+    try:
+        host = socket.gethostname()
+    except Exception:
+        host = "pc"
+    return f"{user}@{host}"
+
 
 class DatabaseManager:
-    def __init__(self, db_path=DATABASE_PATH):
-        self.db_path = str(db_path)
+    def __init__(self, db_path=None, backend=None):
+        if backend:
+            set_active_backend(backend)
+        self.db_path = str(db_path) if db_path is not None else None
         self._memory_conn = None
         if self.db_path == ":memory:":
-            self._memory_conn = sqlite3.connect(":memory:")
-            self._memory_conn.row_factory = sqlite3.Row
+            self._memory_conn = get_memory_connection()
         self.init_db()
 
-    def get_connection(self):
+    def get_connection(self) -> DBConnection:
         if self._memory_conn is not None:
             return self._memory_conn
-        conn = sqlite3.connect(self.db_path)
-        conn.row_factory = sqlite3.Row
-        return conn
+        if self.db_path and self.db_path != ":memory:":
+            return db_get_connection(database_override=self.db_path)
+        return db_get_connection()
 
     def init_db(self):
         with self.get_connection() as conn:
             cursor = conn.cursor()
 
-            # Tabela de Materiais
-            cursor.execute("""
-            CREATE TABLE IF NOT EXISTS materials (
-                id TEXT PRIMARY KEY,
-                name TEXT NOT NULL,
-                type TEXT NOT NULL,
-                width_mm REAL NOT NULL,
-                height_mm REAL NOT NULL,
-                area_m2 REAL NOT NULL,
-                thickness_mm REAL NOT NULL,
-                layers INTEGER DEFAULT 2,
-                gap_mm REAL DEFAULT 1.0
-            )
-            """)
+            if conn.backend == "mysql":
+                # Verifica se as tabelas já foram criadas
+                cursor.execute("SHOW TABLES LIKE 'materials'")
+                if not cursor.fetchone():
+                    schema_path = Path(__file__).resolve().parent / "db" / "schema_mysql.sql"
+                    if schema_path.exists():
+                        for stmt in schema_path.read_text(encoding="utf-8").split(";"):
+                            stmt = stmt.strip()
+                            if stmt:
+                                cursor.execute(stmt)
+                        conn.commit()
+            else:
+                # Backend SQLite (reserva / testes)
+                cursor.execute("""
+                CREATE TABLE IF NOT EXISTS materials (
+                    id TEXT PRIMARY KEY,
+                    name TEXT NOT NULL,
+                    type TEXT NOT NULL,
+                    width_mm REAL NOT NULL,
+                    height_mm REAL NOT NULL,
+                    area_m2 REAL NOT NULL,
+                    thickness_mm REAL NOT NULL,
+                    layers INTEGER DEFAULT 2,
+                    gap_mm REAL DEFAULT 1.0
+                )
+                """)
+                try:
+                    cursor.execute("ALTER TABLE materials ADD COLUMN layers INTEGER DEFAULT 2")
+                except Exception:
+                    pass
+                try:
+                    cursor.execute("ALTER TABLE materials ADD COLUMN gap_mm REAL DEFAULT 1.0")
+                except Exception:
+                    pass
 
-            try:
-                cursor.execute("ALTER TABLE materials ADD COLUMN layers INTEGER DEFAULT 2")
-            except Exception:
-                pass
-            try:
-                cursor.execute("ALTER TABLE materials ADD COLUMN gap_mm REAL DEFAULT 1.0")
-            except Exception:
-                pass
+                cursor.execute("""
+                CREATE TABLE IF NOT EXISTS orders (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    code TEXT UNIQUE NOT NULL,
+                    customer TEXT NOT NULL,
+                    status TEXT NOT NULL DEFAULT 'Pendente',
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+                """)
 
-            # Tabela de Ordens (Orders)
-            cursor.execute("""
-            CREATE TABLE IF NOT EXISTS orders (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                code TEXT UNIQUE NOT NULL,
-                customer TEXT NOT NULL,
-                status TEXT NOT NULL DEFAULT 'Pendente',
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            )
-            """)
+                cursor.execute("""
+                CREATE TABLE IF NOT EXISTS articles (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    order_id INTEGER NOT NULL,
+                    name TEXT NOT NULL,
+                    pairs_count INTEGER NOT NULL DEFAULT 1,
+                    material_id TEXT NOT NULL,
+                    FOREIGN KEY (order_id) REFERENCES orders(id),
+                    FOREIGN KEY (material_id) REFERENCES materials(id)
+                )
+                """)
 
-            # Tabela de Artigos (Articles)
-            cursor.execute("""
-            CREATE TABLE IF NOT EXISTS articles (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                order_id INTEGER NOT NULL,
-                name TEXT NOT NULL,
-                pairs_count INTEGER NOT NULL DEFAULT 1,
-                material_id TEXT NOT NULL,
-                FOREIGN KEY (order_id) REFERENCES orders(id),
-                FOREIGN KEY (material_id) REFERENCES materials(id)
-            )
-            """)
+                cursor.execute("""
+                CREATE TABLE IF NOT EXISTS shape_folders (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    name TEXT UNIQUE NOT NULL
+                )
+                """)
 
-            # Tabela de Pastas de Moldes (Shape Folders)
-            cursor.execute("""
-            CREATE TABLE IF NOT EXISTS shape_folders (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                name TEXT UNIQUE NOT NULL
-            )
-            """)
+                cursor.execute("""
+                CREATE TABLE IF NOT EXISTS shapes (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    article_id INTEGER NOT NULL,
+                    name TEXT NOT NULL,
+                    color TEXT NOT NULL,
+                    contour_json TEXT NOT NULL,
+                    holes_json TEXT DEFAULT '[]',
+                    stitching_json TEXT DEFAULT '[]',
+                    folder TEXT DEFAULT '',
+                    FOREIGN KEY (article_id) REFERENCES articles(id)
+                )
+                """)
 
-            # Tabela de Peças / Moldes (Shapes / Dies)
-            cursor.execute("""
-            CREATE TABLE IF NOT EXISTS shapes (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                article_id INTEGER NOT NULL,
-                name TEXT NOT NULL,
-                color TEXT NOT NULL,
-                contour_json TEXT NOT NULL,
-                holes_json TEXT DEFAULT '[]',
-                stitching_json TEXT DEFAULT '[]',
-                folder TEXT DEFAULT '',
-                FOREIGN KEY (article_id) REFERENCES articles(id)
-            )
-            """)
+                cursor.execute("PRAGMA table_info(shapes)")
+                cols = [c[1] for c in cursor.fetchall()]
+                if "folder" not in cols:
+                    cursor.execute("ALTER TABLE shapes ADD COLUMN folder TEXT DEFAULT ''")
+                if "size" not in cols:
+                    cursor.execute("ALTER TABLE shapes ADD COLUMN size TEXT DEFAULT '41'")
 
-            # Migração caso as colunas folder e size ainda não existam
-            cursor.execute("PRAGMA table_info(shapes)")
-            cols = [c[1] for c in cursor.fetchall()]
-            if "folder" not in cols:
-                cursor.execute("ALTER TABLE shapes ADD COLUMN folder TEXT DEFAULT ''")
-            if "size" not in cols:
-                cursor.execute("ALTER TABLE shapes ADD COLUMN size TEXT DEFAULT '41'")
+                cursor.execute("""
+                CREATE TABLE IF NOT EXISTS sessions (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    code TEXT UNIQUE NOT NULL,
+                    order_id INTEGER NOT NULL,
+                    material_id TEXT NOT NULL,
+                    name TEXT NOT NULL DEFAULT '',
+                    job TEXT NOT NULL DEFAULT 'ProduçãoNova',
+                    status TEXT NOT NULL DEFAULT 'Planejado',
+                    yield_percent REAL DEFAULT 0.0,
+                    cutting_time_sec REAL DEFAULT 0.0,
+                    placed_pieces_json TEXT DEFAULT '[]',
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY (order_id) REFERENCES orders(id),
+                    FOREIGN KEY (material_id) REFERENCES materials(id)
+                )
+                """)
 
+                cursor.execute("PRAGMA table_info(sessions)")
+                s_cols = [c[1] for c in cursor.fetchall()]
+                if "name" not in s_cols:
+                    cursor.execute("ALTER TABLE sessions ADD COLUMN name TEXT DEFAULT ''")
+                if "job" not in s_cols:
+                    cursor.execute("ALTER TABLE sessions ADD COLUMN job TEXT DEFAULT 'ProduçãoNova'")
+                if "placed_pieces_json" not in s_cols:
+                    cursor.execute("ALTER TABLE sessions ADD COLUMN placed_pieces_json TEXT DEFAULT '[]'")
+                if "strategy" not in s_cols:
+                    cursor.execute("ALTER TABLE sessions ADD COLUMN strategy TEXT DEFAULT 'flashnestsheet'")
+                if "params" not in s_cols:
+                    cursor.execute("ALTER TABLE sessions ADD COLUMN params TEXT DEFAULT 'stdNOTFill'")
+                if "machine" not in s_cols:
+                    cursor.execute("ALTER TABLE sessions ADD COLUMN machine TEXT DEFAULT 'ATOM FlashCut Flex 3020'")
+                if "shapes_json" not in s_cols:
+                    cursor.execute("ALTER TABLE sessions ADD COLUMN shapes_json TEXT DEFAULT '[]'")
 
-            # Tabela de Sessões de Nesting (Sessions)
-            cursor.execute("""
-            CREATE TABLE IF NOT EXISTS sessions (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                code TEXT UNIQUE NOT NULL,
-                order_id INTEGER NOT NULL,
-                material_id TEXT NOT NULL,
-                name TEXT NOT NULL DEFAULT '',
-                job TEXT NOT NULL DEFAULT 'ProduçãoNova',
-                status TEXT NOT NULL DEFAULT 'Planejado',
-                yield_percent REAL DEFAULT 0.0,
-                cutting_time_sec REAL DEFAULT 0.0,
-                placed_pieces_json TEXT DEFAULT '[]',
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                FOREIGN KEY (order_id) REFERENCES orders(id),
-                FOREIGN KEY (material_id) REFERENCES materials(id)
-            )
-            """)
+                cursor.execute("PRAGMA table_info(orders)")
+                o_cols = [c[1] for c in cursor.fetchall()]
+                if "name" not in o_cols:
+                    cursor.execute("ALTER TABLE orders ADD COLUMN name TEXT DEFAULT 'Derby Masculino #41'")
 
-            # Migração caso as colunas name, job, placed_pieces_json, strategy, params, machine ainda não existam em sessions
-            cursor.execute("PRAGMA table_info(sessions)")
-            s_cols = [c[1] for c in cursor.fetchall()]
-            if "name" not in s_cols:
-                cursor.execute("ALTER TABLE sessions ADD COLUMN name TEXT DEFAULT ''")
-            if "job" not in s_cols:
-                cursor.execute("ALTER TABLE sessions ADD COLUMN job TEXT DEFAULT 'ProduçãoNova'")
-            if "placed_pieces_json" not in s_cols:
-                cursor.execute("ALTER TABLE sessions ADD COLUMN placed_pieces_json TEXT DEFAULT '[]'")
-            if "strategy" not in s_cols:
-                cursor.execute("ALTER TABLE sessions ADD COLUMN strategy TEXT DEFAULT 'flashnestsheet'")
-            if "params" not in s_cols:
-                cursor.execute("ALTER TABLE sessions ADD COLUMN params TEXT DEFAULT 'stdNOTFill'")
-            if "machine" not in s_cols:
-                cursor.execute("ALTER TABLE sessions ADD COLUMN machine TEXT DEFAULT 'ATOM FlashCut Flex 3020'")
-            if "shapes_json" not in s_cols:
-                cursor.execute("ALTER TABLE sessions ADD COLUMN shapes_json TEXT DEFAULT '[]'")
+                cursor.execute("""
+                CREATE TABLE IF NOT EXISTS settings (
+                    `key` TEXT PRIMARY KEY,
+                    `value` TEXT NOT NULL
+                )
+                """)
 
-            # Migração caso a coluna name ainda não exista em orders
-            cursor.execute("PRAGMA table_info(orders)")
-            o_cols = [c[1] for c in cursor.fetchall()]
-            if "name" not in o_cols:
-                cursor.execute("ALTER TABLE orders ADD COLUMN name TEXT DEFAULT 'Derby Masculino #41'")
+                cursor.execute("""
+                CREATE TABLE IF NOT EXISTS dieproc_presets (
+                    name TEXT PRIMARY KEY,
+                    coupling TEXT NOT NULL,
+                    step REAL DEFAULT 1.0,
+                    solutions INTEGER DEFAULT 30,
+                    range1_from REAL DEFAULT -3.0,
+                    range1_to REAL DEFAULT 3.0,
+                    range1_step REAL DEFAULT 1.0,
+                    range2_from REAL DEFAULT 0.0,
+                    range2_to REAL DEFAULT 0.0,
+                    range2_step REAL DEFAULT 0.0,
+                    range3_from REAL DEFAULT 0.0,
+                    range3_to REAL DEFAULT 0.0,
+                    range3_step REAL DEFAULT 0.0,
+                    gap1 REAL DEFAULT 1.0,
+                    gap2 REAL DEFAULT 0.0,
+                    gap3 REAL DEFAULT 0.0,
+                    row_interlock INTEGER DEFAULT 1,
+                    diagonal INTEGER DEFAULT 0
+                )
+                """)
 
-            # Tabela de Configurações do Sistema (Ferramentas -> Opções)
-            cursor.execute("""
-            CREATE TABLE IF NOT EXISTS settings (
-                key TEXT PRIMARY KEY,
-                value TEXT NOT NULL
-            )
-            """)
+                cursor.execute("""
+                CREATE TABLE IF NOT EXISTS layouts (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    session_id INTEGER NOT NULL,
+                    name TEXT NOT NULL DEFAULT 'l0000.lay',
+                    code TEXT NOT NULL DEFAULT 'l0000.lay',
+                    path TEXT DEFAULT '',
+                    `desc` TEXT DEFAULT '',
+                    material_code TEXT DEFAULT '',
+                    material_name TEXT DEFAULT '',
+                    gap_mm REAL DEFAULT 1.0,
+                    ris_w REAL DEFAULT 0.0,
+                    width_mm REAL DEFAULT 0.0,
+                    ris_l REAL DEFAULT 0.0,
+                    height_mm REAL DEFAULT 0.0,
+                    area_mm2 REAL DEFAULT 0.0,
+                    yield_percent REAL DEFAULT 0.0,
+                    yield_pct REAL DEFAULT 0.0,
+                    num_items INTEGER DEFAULT 0,
+                    num_dies INTEGER DEFAULT 0,
+                    version INTEGER DEFAULT 1,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    created_by TEXT DEFAULT '',
+                    updated_by TEXT DEFAULT '',
+                    FOREIGN KEY (session_id) REFERENCES sessions(id) ON DELETE CASCADE
+                )
+                """)
 
-            # Tabela de Presets DieProc (Configuração de Rotação / Sintéticos dp98)
-            cursor.execute("""
-            CREATE TABLE IF NOT EXISTS dieproc_presets (
-                name TEXT PRIMARY KEY,
-                coupling TEXT NOT NULL,
-                step REAL DEFAULT 1.0,
-                solutions INTEGER DEFAULT 30,
-                range1_from REAL DEFAULT -3.0,
-                range1_to REAL DEFAULT 3.0,
-                range1_step REAL DEFAULT 1.0,
-                range2_from REAL DEFAULT 0.0,
-                range2_to REAL DEFAULT 0.0,
-                range2_step REAL DEFAULT 0.0,
-                range3_from REAL DEFAULT 0.0,
-                range3_to REAL DEFAULT 0.0,
-                range3_step REAL DEFAULT 0.0,
-                gap1 REAL DEFAULT 1.0,
-                gap2 REAL DEFAULT 0.0,
-                gap3 REAL DEFAULT 0.0,
-                row_interlock INTEGER DEFAULT 1,
-                diagonal INTEGER DEFAULT 0
-            )
-            """)
+                cursor.execute("""
+                CREATE TABLE IF NOT EXISTS layout_pieces (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    layout_id INTEGER NOT NULL,
+                    mold_id INTEGER,
+                    shape_id INTEGER,
+                    item_index INTEGER NOT NULL,
+                    target_index INTEGER NOT NULL,
+                    instance_id INTEGER NOT NULL,
+                    piece_name TEXT NOT NULL,
+                    size TEXT DEFAULT '',
+                    x REAL NOT NULL,
+                    y REAL NOT NULL,
+                    rotation_deg REAL NOT NULL,
+                    rotation_rad REAL NOT NULL,
+                    mirrored INTEGER DEFAULT 0,
+                    is_mirrored INTEGER DEFAULT 0,
+                    color TEXT DEFAULT '#2563eb',
+                    tag TEXT DEFAULT 'Pasted',
+                    quality_zone INTEGER DEFAULT 1,
+                    FOREIGN KEY (layout_id) REFERENCES layouts(id) ON DELETE CASCADE,
+                    FOREIGN KEY (shape_id) REFERENCES shapes(id)
+                )
+                """)
+                conn.commit()
 
-            # Tabela de Layouts de Corte (.lay)
-            cursor.execute("""
-            CREATE TABLE IF NOT EXISTS layouts (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                session_id INTEGER NOT NULL,
-                code TEXT NOT NULL DEFAULT 'l0000.lay',
-                path TEXT DEFAULT '',
-                desc TEXT DEFAULT '',
-                material_code TEXT DEFAULT '',
-                material_name TEXT DEFAULT '',
-                gap_mm REAL DEFAULT 1.0,
-                ris_w REAL DEFAULT 0.0,
-                ris_l REAL DEFAULT 0.0,
-                area_mm2 REAL DEFAULT 0.0,
-                yield_percent REAL DEFAULT 0.0,
-                num_items INTEGER DEFAULT 0,
-                num_dies INTEGER DEFAULT 0,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                FOREIGN KEY (session_id) REFERENCES sessions(id) ON DELETE CASCADE
-            )
-            """)
-
-            # Tabela de Peças Posicionadas do Layout
-            cursor.execute("""
-            CREATE TABLE IF NOT EXISTS layout_pieces (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                layout_id INTEGER NOT NULL,
-                shape_id INTEGER,
-                item_index INTEGER NOT NULL,
-                target_index INTEGER NOT NULL,
-                instance_id INTEGER NOT NULL,
-                piece_name TEXT NOT NULL,
-                size TEXT DEFAULT '',
-                x REAL NOT NULL,
-                y REAL NOT NULL,
-                rotation_deg REAL NOT NULL,
-                rotation_rad REAL NOT NULL,
-                is_mirrored INTEGER DEFAULT 0,
-                color TEXT DEFAULT '#2563eb',
-                tag TEXT DEFAULT 'Pasted',
-                quality_zone INTEGER DEFAULT 1,
-                FOREIGN KEY (layout_id) REFERENCES layouts(id) ON DELETE CASCADE,
-                FOREIGN KEY (shape_id) REFERENCES shapes(id)
-            )
-            """)
-
-            conn.commit()
-
-
-        # Seed data inicial se tabela estiver vazia
         self.seed_initial_data()
 
     def seed_initial_data(self):
         with self.get_connection() as conn:
             cursor = conn.cursor()
 
-            # Inserir materiais padrão
-            for mat in DEFAULT_MATERIALS:
+            # Inserir materiais padrão se tabela estiver vazia
+            cursor.execute("SELECT COUNT(*) FROM materials")
+            if cursor.fetchone()[0] == 0:
+                for mat in DEFAULT_MATERIALS:
+                    cursor.execute("""
+                    INSERT OR IGNORE INTO materials (id, name, type, width_mm, height_mm, area_m2, thickness_mm, layers, gap_mm)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """, (
+                        mat["id"],
+                        mat["name"],
+                        mat.get("type", "como placa"),
+                        mat.get("width_mm", 1380.0),
+                        mat.get("height_mm", 2980.0),
+                        mat.get("area_m2", 4.1124),
+                        mat.get("thickness_mm", 1.0),
+                        mat.get("layers", 2),
+                        mat.get("gap_mm", 1.0)
+                    ))
+                # Garante que material padrão das sessões de exemplo exista
                 cursor.execute("""
                 INSERT OR IGNORE INTO materials (id, name, type, width_mm, height_mm, area_m2, thickness_mm, layers, gap_mm)
-                VALUES (:id, :name, :type, :width_mm, :height_mm, :area_m2, :thickness_mm, :layers, :gap_mm)
-                """, {
-                    "id": mat["id"],
-                    "name": mat["name"],
-                    "type": mat.get("type", "como placa"),
-                    "width_mm": mat.get("width_mm", 1380.0),
-                    "height_mm": mat.get("height_mm", 2980.0),
-                    "area_m2": mat.get("area_m2", 4.1124),
-                    "thickness_mm": mat.get("thickness_mm", 1.0),
-                    "layers": mat.get("layers", 2),
-                    "gap_mm": mat.get("gap_mm", 1.0)
-                })
+                VALUES ('MAT_VAQ_01', 'Sheet (2553.38 X 1350.00)', 'como placa', 1350.0, 2553.38, 3.447, 1.0, 2, 1.0)
+                """)
 
-            # Inserir configurações padrão (Ferramentas -> Opções)
+            # Inserir configurações padrão
             default_settings = {
                 "ask_session_name": "1",
                 "start_maximized": "1",
@@ -283,9 +325,9 @@ class DatabaseManager:
                 "language": "Português (Brasil)"
             }
             for k, v in default_settings.items():
-                cursor.execute("INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)", (k, str(v)))
+                cursor.execute("REPLACE INTO settings (`key`, `value`) VALUES (?, ?)", (k, str(v)))
 
-            # Inserir presets padrão DieProc (ATOM dp98)
+            # Inserir presets padrão DieProc
             default_dieproc_presets = [
                 ("ALTERNADO", "0/0 0/180", 1.0, 30, -3.0, 3.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 1, 0),
                 ("DIREITA", "0/0", 1.0, 30, -3.0, 3.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 1, 0),
@@ -302,14 +344,12 @@ class DatabaseManager:
             # Verificar se já existem ordens
             cursor.execute("SELECT COUNT(*) FROM orders")
             if cursor.fetchone()[0] == 0:
-                # Criar Ordem Modelo
                 cursor.execute("""
                 INSERT INTO orders (code, customer, status)
                 VALUES ('ORD-2026-001', 'Calçados Elite S/A', 'Em Produção')
                 """)
                 order_id = cursor.lastrowid
 
-                # Criar Artigo
                 cursor.execute("""
                 INSERT INTO articles (order_id, name, pairs_count, material_id)
                 VALUES (?, 'Sapato Derby Masculino #41', 24, 'MAT_VAQ_01')
@@ -320,7 +360,7 @@ class DatabaseManager:
                 row = cursor.fetchone()
                 article_id = row[0] if row else 1
 
-            # Moldes CAD padrão de calçados (somente se a tabela shapes estiver vazia)
+            # Moldes CAD padrão se vazia
             cursor.execute("SELECT COUNT(*) FROM shapes")
             if cursor.fetchone()[0] == 0:
                 sample_shapes = [
@@ -386,7 +426,7 @@ class DatabaseManager:
                         json.dumps(s["stitching"])
                     ))
 
-            # Verificar se já existem sessões
+            # Sessões iniciais
             cursor.execute("SELECT COUNT(*) FROM sessions")
             if cursor.fetchone()[0] == 0:
                 cursor.execute("""
@@ -515,10 +555,20 @@ class DatabaseManager:
             area_m2 = round((width_mm * height_mm) / 1_000_000.0, 4)
         with self.get_connection() as conn:
             cursor = conn.cursor()
-            cursor.execute("""
-            INSERT OR REPLACE INTO materials (id, name, type, width_mm, height_mm, area_m2, thickness_mm, layers, gap_mm)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """, (mat_id, name, type, width_mm, height_mm, area_m2, thickness_mm, layers, gap_mm))
+            if conn.backend == "mysql":
+                cursor.execute("""
+                INSERT INTO materials (id, name, type, width_mm, height_mm, area_m2, thickness_mm, layers, gap_mm)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ON DUPLICATE KEY UPDATE
+                    name=VALUES(name), type=VALUES(type), width_mm=VALUES(width_mm),
+                    height_mm=VALUES(height_mm), area_m2=VALUES(area_m2), thickness_mm=VALUES(thickness_mm),
+                    layers=VALUES(layers), gap_mm=VALUES(gap_mm)
+                """, (mat_id, name, type, width_mm, height_mm, area_m2, thickness_mm, layers, gap_mm))
+            else:
+                cursor.execute("""
+                REPLACE INTO materials (id, name, type, width_mm, height_mm, area_m2, thickness_mm, layers, gap_mm)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """, (mat_id, name, type, width_mm, height_mm, area_m2, thickness_mm, layers, gap_mm))
             conn.commit()
             return self.get_material(mat_id)
 
@@ -681,23 +731,23 @@ class DatabaseManager:
             shp_folder = row[1] if row else ""
             cursor.execute("DELETE FROM shapes WHERE id = ?", (shape_id,))
             if shp_name:
-                # Se houver duplicatas com o mesmo nome na mesma pasta, remove para evitar fantasmas
                 cursor.execute("DELETE FROM shapes WHERE name = ? AND folder = ? AND id != ?", (shp_name, shp_folder, shape_id))
             conn.commit()
 
-    def get_sessions(self, order_id=None):
+    def get_sessions(self, order_id=None, limit: Optional[int] = None, offset: int = 0):
         with self.get_connection() as conn:
             cursor = conn.cursor()
+            sql = "SELECT * FROM sessions"
+            params = []
             if order_id:
-                cursor.execute("""
-                    SELECT * FROM sessions WHERE order_id = ? 
-                    ORDER BY CASE WHEN id = 91 THEN 1 WHEN id = 38 THEN 2 ELSE 3 END, id ASC
-                """, (order_id,))
-            else:
-                cursor.execute("""
-                    SELECT * FROM sessions 
-                    ORDER BY CASE WHEN id = 91 THEN 1 WHEN id = 38 THEN 2 ELSE 3 END, id ASC
-                """)
+                sql += " WHERE order_id = ?"
+                params.append(order_id)
+            sql += " ORDER BY CASE WHEN id = 91 THEN 1 WHEN id = 38 THEN 2 ELSE 3 END, id ASC"
+            if limit is not None:
+                sql += " LIMIT ? OFFSET ?"
+                params.extend([int(limit), int(offset)])
+            
+            cursor.execute(sql, tuple(params) if params else None)
             results = []
             for row in cursor.fetchall():
                 d = dict(row)
@@ -707,12 +757,10 @@ class DatabaseManager:
                 d["params"] = d.get("params") or "stdNOTFill"
                 d["machine"] = d.get("machine") or "ATOM FlashCut Flex 3020"
 
-                # Garante que todo molde tenha sua respectiva cor exclusiva por número (sem repetições)
                 for idx, s in enumerate(d["shapes"], start=1):
                     s_sz = str(s.get("size") or s.get("name") or "41")
                     s["color"] = get_color_for_size(s_sz, idx)
 
-                # Garante que cada peça posicionada tenha sua cor resolvida exclusivamente por tamanho
                 for idx, p in enumerate(d["placed_pieces"], start=1):
                     shp = p.get("shape", {}) if isinstance(p.get("shape"), dict) else {}
                     p_sz = str(p.get("size") or shp.get("size") or p.get("name") or shp.get("name") or "41")
@@ -730,23 +778,26 @@ class DatabaseManager:
         with self.get_connection() as conn:
             cursor = conn.cursor()
             code = f"SESS-{session_id:03d}"
-            cursor.execute("""
-            INSERT OR REPLACE INTO sessions (id, code, order_id, material_id, name, job, status, yield_percent, cutting_time_sec, placed_pieces_json, strategy, params, machine, shapes_json)
-            VALUES (?, ?, ?, ?, ?, ?, ?, 0.0, 0.0, ?, ?, ?, ?, ?)
-            """, (
-                session_id,
-                code,
-                order_id,
-                material_id,
-                name,
-                job,
-                status,
-                json.dumps(placed_pieces or []),
-                strategy,
-                params,
-                machine,
-                json.dumps(shapes or [])
-            ))
+            if conn.backend == "mysql":
+                cursor.execute("""
+                INSERT INTO sessions (id, code, order_id, material_id, name, job, status, yield_percent, cutting_time_sec, placed_pieces_json, strategy, params, machine, shapes_json)
+                VALUES (?, ?, ?, ?, ?, ?, ?, 0.0, 0.0, ?, ?, ?, ?, ?)
+                ON DUPLICATE KEY UPDATE
+                    code = VALUES(code), name = VALUES(name), job = VALUES(job), status = VALUES(status),
+                    material_id = VALUES(material_id), placed_pieces_json = VALUES(placed_pieces_json),
+                    strategy = VALUES(strategy), params = VALUES(params), machine = VALUES(machine), shapes_json = VALUES(shapes_json)
+                """, (
+                    session_id, code, order_id, material_id, name, job, status,
+                    json.dumps(placed_pieces or []), strategy, params, machine, json.dumps(shapes or [])
+                ))
+            else:
+                cursor.execute("""
+                REPLACE INTO sessions (id, code, order_id, material_id, name, job, status, yield_percent, cutting_time_sec, placed_pieces_json, strategy, params, machine, shapes_json)
+                VALUES (?, ?, ?, ?, ?, ?, ?, 0.0, 0.0, ?, ?, ?, ?, ?)
+                """, (
+                    session_id, code, order_id, material_id, name, job, status,
+                    json.dumps(placed_pieces or []), strategy, params, machine, json.dumps(shapes or [])
+                ))
             conn.commit()
             return session_id
 
@@ -820,27 +871,27 @@ class DatabaseManager:
     def get_setting(self, key, default=None):
         with self.get_connection() as conn:
             cursor = conn.cursor()
-            cursor.execute("SELECT value FROM settings WHERE key = ?", (key,))
+            cursor.execute("SELECT `value` FROM settings WHERE `key` = ?", (key,))
             row = cursor.fetchone()
             return row["value"] if row else default
 
     def set_setting(self, key, value):
         with self.get_connection() as conn:
             cursor = conn.cursor()
-            cursor.execute("INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)", (key, str(value)))
+            cursor.execute("REPLACE INTO settings (`key`, `value`) VALUES (?, ?)", (key, str(value)))
             conn.commit()
 
     def get_all_settings(self):
         with self.get_connection() as conn:
             cursor = conn.cursor()
-            cursor.execute("SELECT key, value FROM settings")
+            cursor.execute("SELECT `key`, `value` FROM settings")
             return {row["key"]: row["value"] for row in cursor.fetchall()}
 
     def save_settings(self, settings_dict):
         with self.get_connection() as conn:
             cursor = conn.cursor()
             for k, v in settings_dict.items():
-                cursor.execute("INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)", (k, str(v)))
+                cursor.execute("REPLACE INTO settings (`key`, `value`) VALUES (?, ?)", (k, str(v)))
             conn.commit()
 
     # -------------------------------------------------------------
@@ -868,7 +919,7 @@ class DatabaseManager:
         with self.get_connection() as conn:
             cursor = conn.cursor()
             cursor.execute("""
-            INSERT OR REPLACE INTO dieproc_presets 
+            REPLACE INTO dieproc_presets 
             (name, coupling, step, solutions, range1_from, range1_to, range1_step, range2_from, range2_to, range2_step, range3_from, range3_to, range3_step, gap1, gap2, gap3, row_interlock, diagonal)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """, (
@@ -899,108 +950,250 @@ class DatabaseManager:
             cursor.execute("DELETE FROM dieproc_presets WHERE name = ?", (name,))
             conn.commit()
 
-    def save_layout(self, session_id: int, layout_data) -> int:
+    # -------------------------------------------------------------
+    # Gestão de Layouts de Corte (.lay) com Concorrência Otimista
+    # -------------------------------------------------------------
+    def save_layout(self, session_id: int, layout_data, expected_version: Optional[int] = None, layout_id: Optional[int] = None) -> int:
         """
-        Salva um LayoutData nas tabelas layouts e layout_pieces do SQLite,
-        atualizando também a sessão correspondente com o rendimento e peças em JSON.
+        Salva um LayoutData nas tabelas layouts e layout_pieces, atualizando a sessão.
+        Suporta controle de versão otimista (expected_version) e auditoria de operador (created_by/updated_by).
         """
+        operator_info = get_current_operator()
+        max_retries = 5
+
+        for attempt in range(max_retries):
+            try:
+                with self.get_connection() as conn:
+                    cursor = conn.cursor()
+                    yield_pct = layout_data.calculate_yield()
+                    now_sql = "NOW()" if conn.backend == "mysql" else "CURRENT_TIMESTAMP"
+
+                    target_lid = layout_id or getattr(layout_data, "id", None)
+                    if target_lid:
+                        # UPDATE em layout existente com controle otimista de versão
+                        if expected_version is not None:
+                            sql_upd = f"""
+                            UPDATE layouts
+                            SET version = version + 1,
+                                updated_at = {now_sql},
+                                updated_by = ?,
+                                name = ?,
+                                code = ?,
+                                path = ?,
+                                `desc` = ?,
+                                material_code = ?,
+                                material_name = ?,
+                                gap_mm = ?,
+                                ris_w = ?,
+                                width_mm = ?,
+                                ris_l = ?,
+                                height_mm = ?,
+                                area_mm2 = ?,
+                                yield_percent = ?,
+                                yield_pct = ?,
+                                num_items = ?,
+                                num_dies = ?
+                            WHERE id = ? AND version = ?
+                            """
+                            cursor.execute(sql_upd, (
+                                operator_info,
+                                layout_data.filename or "l0000.lay",
+                                layout_data.filename or "l0000.lay",
+                                layout_data.path or "",
+                                layout_data.desc or "",
+                                layout_data.cod_r or "",
+                                layout_data.cod_r or "",
+                                float(layout_data.gap),
+                                float(layout_data.ris_w),
+                                float(layout_data.ris_w),
+                                float(layout_data.ris_l),
+                                float(layout_data.ris_l),
+                                float(layout_data.area),
+                                float(yield_pct),
+                                float(yield_pct),
+                                len(layout_data.items),
+                                len(layout_data.target_dies),
+                                target_lid,
+                                expected_version
+                            ))
+                            if cursor.rowcount == 0:
+                                raise VersionConflictError(
+                                    f"Conflito de versão concorrente no layout {target_lid}: outro operador já salvou uma versão mais recente (esperada: {expected_version})."
+                                )
+                        else:
+                            sql_upd = f"""
+                            UPDATE layouts
+                            SET version = version + 1,
+                                updated_at = {now_sql},
+                                updated_by = ?,
+                                name = ?,
+                                code = ?,
+                                path = ?,
+                                `desc` = ?,
+                                material_code = ?,
+                                material_name = ?,
+                                gap_mm = ?,
+                                ris_w = ?,
+                                width_mm = ?,
+                                ris_l = ?,
+                                height_mm = ?,
+                                area_mm2 = ?,
+                                yield_percent = ?,
+                                yield_pct = ?,
+                                num_items = ?,
+                                num_dies = ?
+                            WHERE id = ?
+                            """
+                            cursor.execute(sql_upd, (
+                                operator_info,
+                                layout_data.filename or "l0000.lay",
+                                layout_data.filename or "l0000.lay",
+                                layout_data.path or "",
+                                layout_data.desc or "",
+                                layout_data.cod_r or "",
+                                layout_data.cod_r or "",
+                                float(layout_data.gap),
+                                float(layout_data.ris_w),
+                                float(layout_data.ris_w),
+                                float(layout_data.ris_l),
+                                float(layout_data.ris_l),
+                                float(layout_data.area),
+                                float(yield_pct),
+                                float(yield_pct),
+                                len(layout_data.items),
+                                len(layout_data.target_dies),
+                                target_lid
+                            ))
+                        actual_lid = target_lid
+                        cursor.execute("DELETE FROM layout_pieces WHERE layout_id = ?", (actual_lid,))
+                    else:
+                        # INSERT de novo layout
+                        sql_ins = f"""
+                        INSERT INTO layouts (
+                            session_id, name, code, path, `desc`, material_code, material_name,
+                            gap_mm, ris_w, width_mm, ris_l, height_mm, area_mm2, yield_percent, yield_pct,
+                            num_items, num_dies, version, created_at, updated_at, created_by, updated_by
+                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, {now_sql}, {now_sql}, ?, ?)
+                        """
+                        cursor.execute(sql_ins, (
+                            session_id,
+                            layout_data.filename or "l0000.lay",
+                            layout_data.filename or "l0000.lay",
+                            layout_data.path or "",
+                            layout_data.desc or "",
+                            layout_data.cod_r or "",
+                            layout_data.cod_r or "",
+                            float(layout_data.gap),
+                            float(layout_data.ris_w),
+                            float(layout_data.ris_w),
+                            float(layout_data.ris_l),
+                            float(layout_data.ris_l),
+                            float(layout_data.area),
+                            float(yield_pct),
+                            float(yield_pct),
+                            len(layout_data.items),
+                            len(layout_data.target_dies),
+                            operator_info,
+                            operator_info
+                        ))
+                        actual_lid = cursor.lastrowid
+
+                    # Mapeia moldes existentes no banco para linkar FK mold_id / shape_id
+                    cursor.execute("SELECT id, name FROM shapes")
+                    shape_lookup = {row["name"].lower(): row["id"] for row in cursor.fetchall()}
+
+                    # Insere peças em lote (executemany) em UMA ÚNICA transação atômica curta
+                    pieces_data = []
+                    placed_pieces_list = []
+                    for it in layout_data.items:
+                        shp_id = shape_lookup.get(it.shape_name.lower())
+                        pieces_data.append((
+                            actual_lid,
+                            shp_id,
+                            shp_id,
+                            it.item_no,
+                            it.tg_idx,
+                            it.inst_id,
+                            it.shape_name,
+                            it.size,
+                            it.x,
+                            it.y,
+                            int(it.rot_deg) % 360,
+                            it.rot_rad,
+                            1 if it.is_mirrored else 0,
+                            1 if it.is_mirrored else 0,
+                            it.color,
+                            it.tag,
+                            getattr(it, "quality_zone", 1)
+                        ))
+
+                        placed_pieces_list.append({
+                            "id": it.item_no,
+                            "target_id": shp_id or (it.tg_idx + 1),
+                            "name": it.shape_name,
+                            "size": it.size,
+                            "color": it.color,
+                            "contour": it.contour,
+                            "holes": it.holes,
+                            "stitching": it.stitching,
+                            "x": it.x,
+                            "y": it.y,
+                            "rotation": it.rot_deg,
+                            "is_mirrored": it.is_mirrored
+                        })
+
+                    if pieces_data:
+                        cursor.executemany("""
+                        INSERT INTO layout_pieces (
+                            layout_id, mold_id, shape_id, item_index, target_index, instance_id,
+                            piece_name, size, x, y, rotation_deg, rotation_rad,
+                            mirrored, is_mirrored, color, tag, quality_zone
+                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        """, pieces_data)
+
+                    # Atualiza também a tabela sessions com o layout ativo
+                    cursor.execute("""
+                    UPDATE sessions 
+                    SET placed_pieces_json = ?, yield_percent = ?, status = 'Nested'
+                    WHERE id = ?
+                    """, (json.dumps(placed_pieces_list), yield_pct, session_id))
+
+                    conn.commit()
+                    return actual_lid
+            except Exception as e:
+                if isinstance(e, VersionConflictError):
+                    raise
+                err_code = getattr(e, "args", [None])[0] if getattr(e, "args", None) else None
+                if err_code == 1213 and attempt < max_retries - 1:
+                    time.sleep(random.uniform(0.02, 0.08))
+                    continue
+                raise
+
+    def get_layout_pieces(self, layout_id: int) -> list:
+        """Retorna a lista de peças de um layout ordenadas por item_index."""
         with self.get_connection() as conn:
             cursor = conn.cursor()
+            cursor.execute("SELECT * FROM layout_pieces WHERE layout_id = ? ORDER BY item_index ASC", (layout_id,))
+            return [dict(p) for p in cursor.fetchall()]
 
-            # Calcula yield se necessário
-            yield_pct = layout_data.calculate_yield()
-
-            cursor.execute("""
-            INSERT INTO layouts (
-                session_id, code, path, desc, material_code, material_name,
-                gap_mm, ris_w, ris_l, area_mm2, yield_percent, num_items, num_dies
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """, (
-                session_id,
-                layout_data.filename or "l0000.lay",
-                layout_data.path or "",
-                layout_data.desc or "",
-                layout_data.cod_r or "",
-                layout_data.cod_r or "",
-                float(layout_data.gap),
-                float(layout_data.ris_w),
-                float(layout_data.ris_l),
-                float(layout_data.area),
-                float(yield_pct),
-                len(layout_data.items),
-                len(layout_data.target_dies)
-            ))
-            layout_id = cursor.lastrowid
-
-            # Mapeia moldes existentes no banco para linkar FK shape_id
-            cursor.execute("SELECT id, name FROM shapes")
-            shape_lookup = {row["name"].lower(): row["id"] for row in cursor.fetchall()}
-
-            # Insere peças
-            placed_pieces_list = []
-            for it in layout_data.items:
-                shp_id = shape_lookup.get(it.shape_name.lower())
-                cursor.execute("""
-                INSERT INTO layout_pieces (
-                    layout_id, shape_id, item_index, target_index, instance_id,
-                    piece_name, size, x, y, rotation_deg, rotation_rad,
-                    is_mirrored, color, tag, quality_zone
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                """, (
-                    layout_id,
-                    shp_id,
-                    it.item_no,
-                    it.tg_idx,
-                    it.inst_id,
-                    it.shape_name,
-                    it.size,
-                    it.x,
-                    it.y,
-                    it.rot_deg,
-                    it.rot_rad,
-                    1 if it.is_mirrored else 0,
-                    it.color,
-                    it.tag,
-                    getattr(it, "quality_zone", 1)
-                ))
-
-                placed_pieces_list.append({
-                    "id": it.item_no,
-                    "target_id": shp_id or (it.tg_idx + 1),
-                    "name": it.shape_name,
-                    "size": it.size,
-                    "color": it.color,
-                    "contour": it.contour,
-                    "holes": it.holes,
-                    "stitching": it.stitching,
-                    "x": it.x,
-                    "y": it.y,
-                    "rotation": it.rot_deg,
-                    "is_mirrored": it.is_mirrored
-                })
-
-            # Atualiza também a tabela sessions com o layout ativo
-            cursor.execute("""
-            UPDATE sessions 
-            SET placed_pieces_json = ?, yield_percent = ?, status = 'Nested'
-            WHERE id = ?
-            """, (json.dumps(placed_pieces_list), yield_pct, session_id))
-
-            conn.commit()
-            return layout_id
-
-    def get_layouts(self, session_id: Optional[int] = None) -> list:
-        """Retorna a lista de layouts salvos para a sessão especificada."""
+    def get_layouts(self, session_id: Optional[int] = None, limit: Optional[int] = None, offset: int = 0) -> list:
+        """Retorna a lista de layouts salvos (com paginação opcional)."""
         with self.get_connection() as conn:
             cursor = conn.cursor()
+            sql = "SELECT * FROM layouts"
+            params = []
             if session_id is not None:
-                cursor.execute("SELECT * FROM layouts WHERE session_id = ? ORDER BY id ASC", (session_id,))
-            else:
-                cursor.execute("SELECT * FROM layouts ORDER BY id ASC")
+                sql += " WHERE session_id = ?"
+                params.append(session_id)
+            sql += " ORDER BY id ASC"
+            if limit is not None:
+                sql += " LIMIT ? OFFSET ?"
+                params.extend([int(limit), int(offset)])
+            cursor.execute(sql, tuple(params) if params else None)
             return [dict(row) for row in cursor.fetchall()]
 
     def get_layout_by_id(self, layout_id: int) -> Optional[dict]:
-        """Retorna os dados completos de um layout com sua lista de peças."""
+        """Retorna os dados completos de um layout com sua lista de peças em uma única consulta."""
         with self.get_connection() as conn:
             cursor = conn.cursor()
             cursor.execute("SELECT * FROM layouts WHERE id = ?", (layout_id,))
@@ -1020,7 +1213,3 @@ class DatabaseManager:
             cursor.execute("DELETE FROM layouts WHERE id = ?", (layout_id,))
             conn.commit()
             return True
-
-
-
-

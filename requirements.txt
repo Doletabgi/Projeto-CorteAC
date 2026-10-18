@@ -1,0 +1,4 @@
+# Dependências do JobManager Desktop (teste_dola)
+pymysql>=1.1.0
+cryptography>=41.0.0
+Pillow>=9.0.0

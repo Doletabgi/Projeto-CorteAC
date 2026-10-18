@@ -44,6 +44,8 @@ class TestLayoutEditorShortcuts(unittest.TestCase):
 
     @classmethod
     def tearDownClass(cls):
+        import gc
+        gc.collect()
         if cls.root:
             try:
                 cls.root.destroy()
@@ -59,10 +61,14 @@ class TestLayoutEditorShortcuts(unittest.TestCase):
 
     def tearDown(self):
         if hasattr(self, "view") and self.view:
+            if hasattr(self.view, "icons"):
+                self.view.icons.clear()
             try:
                 self.view.destroy()
             except Exception:
                 pass
+        import gc
+        gc.collect()
 
     def test_rotate_piece_in_place_math_proof(self):
         """Prova matemática: centro invariante e retorno 100% exato após 180x F1 (360°)."""

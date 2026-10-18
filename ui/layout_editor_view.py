@@ -18,6 +18,7 @@ from cad.geometry import transform_contour, point_in_polygon, rotate_point, poly
 from cad.colors import get_color_for_size, get_contrast_text_color
 from ui.layout_print_dialog import LayoutPrintDialog
 from cad.lay_parser import parse_lay, export_layout_from_pieces, validate_layout_placement
+from db.connection import VersionConflictError
 
 # -------------------------------------------------------------
 # Constantes Configuráveis de Operação CAM (Layout.exe / LayoutNT)
@@ -155,6 +156,9 @@ class LayoutEditorView(tk.Frame):
         self.layout_name = layout_name
         self.layout_filepath = kwargs.get("layout_filepath", "")
         self.db = db or getattr(parent, "db", None)
+        self.layout_id = kwargs.get("layout_id", None)
+        self.layout_version = kwargs.get("layout_version", 1)
+        self.session_id = kwargs.get("session_id", 1)
 
         # Estado da chapa (mm) - Horizontal = largura (X), Vertical = comprimento/altura (Y)
         self.sheet_width = 1380.0   # mm
@@ -1742,6 +1746,8 @@ class LayoutEditorView(tk.Frame):
         self.selected_index = -1
         self.undo_stack.clear()
         self.layout_filepath = filepath
+        self.layout_id = getattr(lay, "id", None)
+        self.layout_version = getattr(lay, "version", 1)
         self.is_modified = False
         self._saved_undo_index = 0
         self._update_window_title()
@@ -1822,9 +1828,50 @@ class LayoutEditorView(tk.Frame):
             try:
                 res = self.on_save_cb(self.placed_pieces, self.sheet_width, self.sheet_height, self.layout_name)
                 saved_db = (res is not False)
+            except VersionConflictError as e:
+                return self._handle_version_conflict(e)
             except Exception as e:
                 error_msg = str(e)
                 print(f"Erro ao salvar layout via callback: {e}")
+        elif self.db and getattr(self, "layout_id", None):
+            try:
+                from cad.lay_parser import LayoutData, PlacedItem
+                lay_data = LayoutData(
+                    filename=self.layout_name,
+                    ris_w=self.sheet_width,
+                    ris_l=self.sheet_height,
+                    gap=1.0,
+                    area=round(self.sheet_width * self.sheet_height / 1_000_000.0, 4),
+                    items=[
+                        PlacedItem(
+                            item_no=p.get("id", idx + 1),
+                            tg_idx=p.get("target_id", 1) - 1,
+                            inst_id=p.get("id", idx + 1),
+                            x=p.get("x", 0.0),
+                            y=p.get("y", 0.0),
+                            rot_deg=p.get("rotation", 0.0),
+                            color=str(p.get("color", "")),
+                            shape_name=p.get("name", ""),
+                            size=str(p.get("size", "")),
+                            is_mirrored=bool(p.get("is_mirrored", False))
+                        )
+                        for idx, p in enumerate(self.placed_pieces)
+                    ]
+                )
+                new_lid = self.db.save_layout(
+                    session_id=getattr(self, "session_id", 1),
+                    layout_data=lay_data,
+                    expected_version=self.layout_version,
+                    layout_id=self.layout_id
+                )
+                self.layout_id = new_lid
+                self.layout_version = (self.layout_version or 1) + 1
+                saved_db = True
+            except VersionConflictError as e:
+                return self._handle_version_conflict(e)
+            except Exception as e:
+                error_msg = str(e)
+                print(f"Erro ao persistir layout no banco: {e}")
 
         if "file" in SAVE_TARGET and hasattr(self, "layout_filepath") and self.layout_filepath:
             filepath = Path(self.layout_filepath)
@@ -1865,6 +1912,195 @@ class LayoutEditorView(tk.Frame):
 
         if hasattr(self, "lbl_stat_pos"):
             self.lbl_stat_pos.config(text=status_text, fg=status_color)
+
+        return "break"
+
+    def _handle_version_conflict(self, error):
+        """
+        Trata conflito de concorrência exibindo diálogo modal:
+        Oferece ao operador a opção de 'Salvar Cópia' (como novo layout) ou 'Recarregar' (descartar alterações locais e recarregar do servidor).
+        """
+        try:
+            dlg = tk.Toplevel(self)
+            dlg.title("Conflito de Concorrência - ATOM JobManager")
+            dlg.transient(self)
+            dlg.grab_set()
+            dlg.resizable(False, False)
+            dlg.configure(bg=THEME.get("bg_surface", "#ffffff"), padx=16, pady=16)
+
+            msg = (
+                "ATENÇÃO: Conflito de Concorrência Detectado!\n\n"
+                "Outro operador salvou uma versão mais recente deste layout no servidor MySQL.\n"
+                f"Detalhe: {error}\n\n"
+                "Escolha como prosseguir:\n"
+                "• 'Salvar Cópia': Mantém suas alterações e salva como um novo layout independente.\n"
+                "• 'Recarregar': Descarta alterações locais e recarrega os dados do servidor."
+            )
+
+            lbl = tk.Label(
+                dlg,
+                text=msg,
+                justify="left",
+                font=("Segoe UI", 9),
+                bg=THEME.get("bg_surface", "#ffffff"),
+                fg=THEME.get("text_main", "#000000"),
+                wraplength=420
+            )
+            lbl.pack(pady=(0, 16))
+
+            btn_frame = tk.Frame(dlg, bg=THEME.get("bg_surface", "#ffffff"))
+            btn_frame.pack(fill="x", pady=4)
+
+            result = {"action": None}
+
+            def on_copy():
+                result["action"] = "copy"
+                dlg.destroy()
+
+            def on_reload():
+                result["action"] = "reload"
+                dlg.destroy()
+
+            def on_cancel():
+                result["action"] = "cancel"
+                dlg.destroy()
+
+            btn_copy = tk.Button(
+                btn_frame,
+                text="Salvar Cópia",
+                font=("Segoe UI", 9, "bold"),
+                bg="#0284c7",
+                fg="#ffffff",
+                activebackground="#0369a1",
+                activeforeground="#ffffff",
+                relief="raised",
+                bd=1,
+                padx=12,
+                pady=4,
+                command=on_copy
+            )
+            btn_copy.pack(side="left", padx=4)
+
+            btn_reload = tk.Button(
+                btn_frame,
+                text="Recarregar do Servidor",
+                font=("Segoe UI", 9),
+                bg="#f59e0b",
+                fg="#000000",
+                activebackground="#d97706",
+                activeforeground="#000000",
+                relief="raised",
+                bd=1,
+                padx=12,
+                pady=4,
+                command=on_reload
+            )
+            btn_reload.pack(side="left", padx=4)
+
+            btn_cancel = tk.Button(
+                btn_frame,
+                text="Cancelar",
+                font=("Segoe UI", 9),
+                bg="#e5e7eb",
+                fg="#000000",
+                relief="raised",
+                bd=1,
+                padx=12,
+                pady=4,
+                command=on_cancel
+            )
+            btn_cancel.pack(side="right", padx=4)
+
+            try:
+                dlg.update_idletasks()
+                pw = self.winfo_width()
+                ph = self.winfo_height()
+                px = self.winfo_rootx()
+                py = self.winfo_rooty()
+                dw = dlg.winfo_width()
+                dh = dlg.winfo_height()
+                dlg.geometry(f"+{max(0, px + (pw - dw) // 2)}+{max(0, py + (ph - dh) // 2)}")
+            except Exception:
+                pass
+
+            self.wait_window(dlg)
+        except Exception as e:
+            # Em modo headless / sem display GUI completo, fallback para prompt simples ou cancela
+            result = {"action": "copy"}
+
+        if result.get("action") == "copy":
+            self.layout_id = None
+            self.layout_version = 1
+            if not self.layout_name.endswith("_copia"):
+                self.layout_name = f"{self.layout_name}_copia"
+            self._update_window_title()
+            return self.save_layout()
+
+        elif result.get("action") == "reload":
+            if self.db and getattr(self, "layout_id", None):
+                rec = self.db.get_layout_by_id(self.layout_id)
+                if rec:
+                    self.layout_version = rec.get("version", 1)
+                    pieces = self.db.get_layout_pieces(self.layout_id)
+                    if pieces:
+                        self.placed_pieces = [
+                            {
+                                "id": p.get("item_no", idx + 1),
+                                "target_id": p.get("target_id", 1),
+                                "name": p.get("shape_name", ""),
+                                "size": p.get("size", "41"),
+                                "color": p.get("color", "-65536"),
+                                "contour": p.get("contour", CONTOUR_CON),
+                                "holes": [],
+                                "stitching": [],
+                                "internal_cuts": [],
+                                "x": float(p.get("pos_x", 0.0)),
+                                "y": float(p.get("pos_y", 0.0)),
+                                "rotation": float(p.get("rot_deg", 0.0)),
+                                "is_mirrored": bool(p.get("is_mirrored", False)),
+                                "tag": p.get("tag", "")
+                            }
+                            for idx, p in enumerate(pieces)
+                        ]
+                    self.undo_stack.clear()
+                    self._saved_undo_index = 0
+                    self.set_modified(False)
+                    self.redraw()
+                    self.update_status()
+                    if hasattr(self, "lbl_stat_pos"):
+                        self.lbl_stat_pos.config(text="Layout recarregado com a versão mais recente do servidor.", fg="#0284c7")
+            elif hasattr(self, "layout_filepath") and self.layout_filepath:
+                try:
+                    lay = parse_lay(self.layout_filepath, db=self.db)
+                    self.layout_name = lay.filename or Path(self.layout_filepath).name
+                    self.placed_pieces = [
+                        {
+                            "id": it.item_no,
+                            "target_id": it.tg_idx + 1,
+                            "name": it.shape_name,
+                            "size": it.size or "41",
+                            "color": it.color,
+                            "contour": it.contour if it.contour else CONTOUR_CON,
+                            "holes": it.holes,
+                            "stitching": it.stitching,
+                            "internal_cuts": it.internal_cuts,
+                            "x": it.x,
+                            "y": it.y,
+                            "rotation": it.rot_deg,
+                            "is_mirrored": it.is_mirrored,
+                            "tag": it.tag
+                        }
+                        for it in lay.items
+                    ]
+                    self.undo_stack.clear()
+                    self._saved_undo_index = 0
+                    self.set_modified(False)
+                    self.redraw()
+                    self.update_status()
+                    if hasattr(self, "lbl_stat_pos"):
+                        self.lbl_stat_pos.config(text="Layout recarregado do disco.", fg="#0284c7")
+                except Exception as ex:
+                    messagebox.showerror("Erro ao Recarregar", f"Falha ao recarregar: {ex}", parent=self)
 
         return "break"
 

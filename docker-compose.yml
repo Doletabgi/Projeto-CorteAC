@@ -1,0 +1,32 @@
+version: '3.8'
+
+services:
+  mysql:
+    image: mysql:8.0
+    container_name: jobmanager_mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: rootpassword
+      MYSQL_DATABASE: jobmanager
+      MYSQL_USER: jm_app
+      MYSQL_PASSWORD: jm_factory_2026
+    ports:
+      - "3306:3306"
+    volumes:
+      - jm_mysql_data:/var/lib/mysql
+      - ./db/schema_mysql.sql:/docker-entrypoint-initdb.d/01_schema.sql:ro
+    command: >
+      --default-authentication-plugin=caching_sha2_password
+      --character-set-server=utf8mb4
+      --collation-server=utf8mb4_unicode_ci
+      --slow_query_log=1
+      --long_query_time=1.0
+      --log_output=FILE
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "jm_app", "-pjm_factory_2026"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  jm_mysql_data:
