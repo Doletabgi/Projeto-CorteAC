@@ -447,6 +447,53 @@ class TestLayoutEditorShortcuts(unittest.TestCase):
             mock_main._collect_session_nodes(child, all_sess)
         self.assertEqual(len(all_sess), 15)
 
+    def test_zoom_20_percent_tool_and_ctrl_click(self):
+        """Habilita zoom de 20% a cada clique na ferramenta + atalho CTRL + clique do mouse de ação."""
+        # 1. Estado inicial de zoom 100% (1.0)
+        self.assertEqual(self.view.zoom_factor, 1.0)
+
+        # 2. Clique na ferramenta btn_zoom (lupa na barra de ferramentas) amplia 20% (+20%, fator 1.20)
+        self.view.btn_zoom.invoke()
+        self.assertAlmostEqual(self.view.zoom_factor, 1.20, places=4)
+
+        # Segundo clique consecutivo na ferramenta amplia mais 20% (1.20 * 1.20 = 1.44)
+        self.view.btn_zoom.invoke()
+        self.assertAlmostEqual(self.view.zoom_factor, 1.44, places=4)
+
+        # 3. Botão Exibir Layout Completo (btn_zoom_fit / reset_view) restaura para 100% (1.0)
+        self.view.reset_view()
+        self.assertEqual(self.view.zoom_factor, 1.0)
+
+        # 4. Atalho CTRL + clique do mouse de ação no canvas centra o zoom exatamente sob o cursor
+        class MockCtrlClickEvent:
+            def __init__(self, x, y, state=4):
+                self.x = x
+                self.y = y
+                self.state = state
+
+        cur_x, cur_y = 300, 250
+        wx_before, wy_before = self.view.screen_to_world(cur_x, cur_y)
+        res = self.view.on_ctrl_canvas_click(MockCtrlClickEvent(cur_x, cur_y))
+        self.assertEqual(res, "break")
+        self.assertAlmostEqual(self.view.zoom_factor, 1.20, places=4)
+
+        # O ponto do mundo CAD sob o cursor permanece perfeitamente ancorado sem desvio (drift = 0)
+        if self.view.canvas.winfo_width() > 10:
+            cur_x_after, cur_y_after = self.view.world_to_screen(wx_before, wy_before)
+            self.assertAlmostEqual(cur_x_after, cur_x, places=2)
+            self.assertAlmostEqual(cur_y_after, cur_y, places=2)
+
+        # Segundo CTRL + clique consecutivo amplia mais 20% (1.44)
+        res2 = self.view.on_ctrl_canvas_click(MockCtrlClickEvent(cur_x, cur_y))
+        self.assertEqual(res2, "break")
+        self.assertAlmostEqual(self.view.zoom_factor, 1.44, places=4)
+
+        # 5. Redução de zoom (zoom_out) reduz 20%
+        self.view.zoom_out()
+        self.assertAlmostEqual(self.view.zoom_factor, 1.20, places=4)
+        self.view.zoom_out()
+        self.assertAlmostEqual(self.view.zoom_factor, 1.0, places=4)
+
 
 if __name__ == "__main__":
     unittest.main()

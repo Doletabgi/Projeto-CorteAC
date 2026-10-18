@@ -179,6 +179,18 @@ class LayoutEditorView(tk.Frame):
         self.plate_w = 365.0
         self.plate_h = 250.0
 
+        # Controle de Zoom (20% por clique / Ctrl+Clique) e Pan da Mesa CAD
+        self.zoom_factor = 1.0
+        self.pan_offset_x = 0.0
+        self.pan_offset_y = 0.0
+        self.view_center_wx = None
+        self.view_center_wy = None
+        self.view_center_sx = None
+        self.view_center_sy = None
+        self.is_panning = False
+        self.pan_start_x = 0
+        self.pan_start_y = 0
+
         # Drag & drop de peças e estado de edição / desfazer (Ctrl+Z)
         self.drag_start = (0, 0)
         self.is_modified = False
@@ -328,7 +340,8 @@ class LayoutEditorView(tk.Frame):
 
         # Grupo 4: Zoom e Enquadramento (Eye/Full View, Zoom)
         self.create_tb_btn(tb_row, "btn_zoom_fit", "Exibir Layout Completo", self.reset_view)
-        self.create_tb_btn(tb_row, "btn_zoom", "Zoom", self.zoom_in)
+        self.btn_zoom = self.create_tb_btn(tb_row, "btn_zoom", "Zoom (+20% ao clicar, Ctrl+Clique no canvas, Botão direito reduz)", self.zoom_in)
+        self.btn_zoom.bind("<Button-3>", lambda e: self.zoom_out())
 
         self.create_tb_sep(tb_row)
 
@@ -371,13 +384,40 @@ class LayoutEditorView(tk.Frame):
         self.canvas.pack(fill="both", expand=True)
 
         # Bindings do Canvas:
-        # A placa é estática e fixa. Sem zoom de roda do mouse e sem pan com botão direito.
         self.canvas.bind("<Configure>", lambda e: self.redraw())
         self.canvas.bind("<ButtonPress-1>", self.on_canvas_click)
+        self.canvas.bind("<Control-Button-1>", self.on_ctrl_canvas_click)
+        self.canvas.bind("<Control-ButtonPress-1>", self.on_ctrl_canvas_click)
+        self.canvas.bind("<Control-Button-3>", lambda e: self.zoom_out(e.x, e.y))
+        self.canvas.bind("<Control-ButtonPress-3>", lambda e: self.zoom_out(e.x, e.y))
+        self.canvas.bind("<Control-Shift-Button-1>", lambda e: self.zoom_out(e.x, e.y))
         self.canvas.bind("<Double-Button-1>", self.on_canvas_double_click)
         self.canvas.bind("<B1-Motion>", self.on_canvas_drag)
         self.canvas.bind("<ButtonRelease-1>", self.on_canvas_release)
         self.canvas.bind("<Motion>", self.on_mouse_move)
+
+        # Pan com botão do meio (roda)
+        self.canvas.bind("<ButtonPress-2>", self.on_pan_start)
+        self.canvas.bind("<B2-Motion>", self.on_pan_drag)
+        self.canvas.bind("<ButtonRelease-2>", self.on_pan_end)
+
+        # Zoom com roda do mouse segurando Ctrl
+        self.canvas.bind("<Control-MouseWheel>", self.on_ctrl_mousewheel)
+        self.canvas.bind("<Control-Button-4>", lambda e: self.zoom_in(e.x, e.y))
+        self.canvas.bind("<Control-Button-5>", lambda e: self.zoom_out(e.x, e.y))
+
+        # Atalhos de Teclado para Zoom (Ctrl+Q, Ctrl++, Ctrl+-)
+        for w in (self, self.canvas):
+            w.bind("<Control-q>", lambda e: (self.zoom_in(), "break")[1])
+            w.bind("<Control-Q>", lambda e: (self.zoom_in(), "break")[1])
+            w.bind("<Control-plus>", lambda e: (self.zoom_in(), "break")[1])
+            w.bind("<Control-equal>", lambda e: (self.zoom_in(), "break")[1])
+            w.bind("<Control-minus>", lambda e: (self.zoom_out(), "break")[1])
+            w.bind("<Control-0>", lambda e: (self.reset_view(), "break")[1])
+            w.bind("<KeyPress-Control_L>", self._on_ctrl_press)
+            w.bind("<KeyPress-Control_R>", self._on_ctrl_press)
+            w.bind("<KeyRelease-Control_L>", self._on_ctrl_release)
+            w.bind("<KeyRelease-Control_R>", self._on_ctrl_release)
 
         # Atalhos do Teclado no Canvas e na Janela
         self.canvas.config(takefocus=True)
@@ -527,6 +567,16 @@ class LayoutEditorView(tk.Frame):
             pady=1
         )
         btn.pack(side="left", padx=1)
+        if tooltip:
+            def _on_enter(e):
+                if hasattr(self, "lbl_stat_pos"):
+                    self._last_status_pos_text = self.lbl_stat_pos.cget("text")
+                    self.lbl_stat_pos.config(text=tooltip)
+            def _on_leave(e):
+                if hasattr(self, "lbl_stat_pos") and hasattr(self, "_last_status_pos_text"):
+                    self.lbl_stat_pos.config(text=self._last_status_pos_text)
+            btn.bind("<Enter>", _on_enter)
+            btn.bind("<Leave>", _on_leave)
         return btn
 
     def create_tb_sep(self, parent):
@@ -1086,15 +1136,27 @@ class LayoutEditorView(tk.Frame):
             avail_w = max(50.0, div_x - 55.0)
         else:
             avail_w = max(50.0, cw * 0.58)
+            base_tmp = min(avail_w / max(1.0, self.sheet_width), avail_h / max(1.0, self.sheet_height))
+            div_x = max(int(35.0 + self.sheet_width * base_tmp + 25), 180)
 
-        scale = min(avail_w / max(1.0, self.sheet_width), avail_h / max(1.0, self.sheet_height))
-        self.plate_scale = scale
+        self.sidebar_div_x = div_x
+
+        base_scale = min(avail_w / max(1.0, self.sheet_width), avail_h / max(1.0, self.sheet_height))
+        self.base_scale = base_scale
+        effective_scale = base_scale * getattr(self, "zoom_factor", 1.0)
+        self.plate_scale = effective_scale
+        scale = effective_scale
         plate_w = self.sheet_width * scale
         plate_h = self.sheet_height * scale
 
-        # Origem ancorada no canto inferior esquerdo (estática e fixa)
-        x1 = 35.0
-        y2 = ch - 20.0
+        # Origem e centro da chapa ancorados
+        if getattr(self, "view_center_wx", None) is not None and getattr(self, "view_center_sx", None) is not None:
+            x1 = self.view_center_sx - self.view_center_wx * scale + getattr(self, "pan_offset_x", 0.0)
+            y2 = self.view_center_sy + self.view_center_wy * scale + getattr(self, "pan_offset_y", 0.0)
+        else:
+            x1 = 35.0 + getattr(self, "pan_offset_x", 0.0)
+            y2 = ch - 20.0 + getattr(self, "pan_offset_y", 0.0)
+
         x2 = x1 + plate_w
         y1 = y2 - plate_h
 
@@ -1140,24 +1202,17 @@ class LayoutEditorView(tk.Frame):
                 self.canvas.create_line(x1, gy, x2, gy, fill="#8c8c8c", width=1)
                 cur_wy += grid_step
 
-        # 4. Divisor Vertical 3D Rebaixado (separando a mesa de trabalho da barra lateral de moldes)
-        if getattr(self, "custom_divider_ratio", None) is None and getattr(self, "custom_divider_x", None) is None:
-            div_x = max(int(x2 + 25), 180)
-        else:
-            min_div = 150
-            max_div = max(min_div + 50, cw - 80)
-            target_div = self.custom_divider_x if self.custom_divider_x is not None else int(cw * self.custom_divider_ratio)
-            div_x = max(min_div, min(max_div, target_div))
-
-        self.sidebar_div_x = div_x
-        if div_x < cw:
-            is_dragging = getattr(self, "is_dragging_divider", False)
-            div_left_col = "#2563eb" if is_dragging else "#a0a0a0"
-            div_right_col = "#60a5fa" if is_dragging else "#ffffff"
-            self.canvas.create_line(div_x, 0, div_x, ch, fill=div_left_col, width=1, tags="divider_line")
-            self.canvas.create_line(div_x + 1, 0, div_x + 1, ch, fill=div_right_col, width=1, tags="divider_line")
-            self.canvas.create_line(div_x, 0, div_x, ch, fill="", width=11, tags="divider_hitbox")
-            self.draw_sidebar(div_x, ch, cw)
+        # Indicador visual de Zoom ativo no topo da tela
+        if getattr(self, "zoom_factor", 1.0) != 1.0:
+            pct = int(round(self.zoom_factor * 100))
+            self.canvas.create_text(
+                40, 22,
+                text=f"🔍 Zoom: {pct}%",
+                fill="#1e40af",
+                font=("Segoe UI", 9, "bold"),
+                anchor="w",
+                tags="zoom_badge"
+            )
 
         # 5. Sistema de Detecção de Colisão Ativo entre Peças
         colliding_indices = set()
@@ -1245,6 +1300,18 @@ class LayoutEditorView(tk.Frame):
                     width=1.5
                 )
 
+        # 7. Divisor Vertical e Barra Lateral de Moldes (com fundo opaco para isolar do zoom da mesa)
+        div_x = self.sidebar_div_x
+        if div_x < cw:
+            is_dragging = getattr(self, "is_dragging_divider", False)
+            div_left_col = "#2563eb" if is_dragging else "#a0a0a0"
+            div_right_col = "#60a5fa" if is_dragging else "#ffffff"
+            self.canvas.create_rectangle(div_x, 0, cw, ch, fill="#ffffff", outline="", tags="sidebar_bg")
+            self.canvas.create_line(div_x, 0, div_x, ch, fill=div_left_col, width=1, tags="divider_line")
+            self.canvas.create_line(div_x + 1, 0, div_x + 1, ch, fill=div_right_col, width=1, tags="divider_line")
+            self.canvas.create_line(div_x, 0, div_x, ch, fill="", width=11, tags="divider_hitbox")
+            self.draw_sidebar(div_x, ch, cw)
+
         if colliding_indices and hasattr(self, "lbl_stat_left"):
             self.lbl_stat_left.config(text=f"⚠️ ALERTA: Colisão detectada em {len(colliding_indices)} peça(s)! Sobreposição proibida.")
 
@@ -1258,6 +1325,10 @@ class LayoutEditorView(tk.Frame):
         is_over_div = hasattr(self, "sidebar_div_x") and abs(event.x - self.sidebar_div_x) <= 6
         if is_over_div or getattr(self, "is_dragging_divider", False):
             self.canvas.config(cursor="sb_h_double_arrow")
+        elif getattr(self, "is_panning", False):
+            self.canvas.config(cursor="fleur")
+        elif bool(event.state & 0x0004) and hasattr(self, "sidebar_div_x") and event.x < self.sidebar_div_x:
+            self.canvas.config(cursor="crosshair")
         else:
             self.canvas.config(cursor="arrow")
 
@@ -1268,12 +1339,13 @@ class LayoutEditorView(tk.Frame):
             cur_x_mm = max(0.0, wx)
             cur_y_mm = max(0.0, wy)
             if hasattr(self, "lbl_stat_pos"):
+                zoom_prefix = f"[Zoom: {int(round(self.zoom_factor * 100))}%] " if getattr(self, "zoom_factor", 1.0) != 1.0 else ""
                 if 0 <= self.selected_index < len(self.placed_pieces):
                     sel_p = self.placed_pieces[self.selected_index]
                     pnm = sel_p.get("name", "Molde")
-                    self.lbl_stat_pos.config(text=f"x: {cur_x_mm:.2f} y: {cur_y_mm:.2f} - {pnm} - <Pasted>")
+                    self.lbl_stat_pos.config(text=f"{zoom_prefix}x: {cur_x_mm:.2f} y: {cur_y_mm:.2f} - {pnm} - <Pasted>")
                 else:
-                    self.lbl_stat_pos.config(text=f"x: {cur_x_mm:.2f} y: {cur_y_mm:.2f}")
+                    self.lbl_stat_pos.config(text=f"{zoom_prefix}x: {cur_x_mm:.2f} y: {cur_y_mm:.2f}")
 
     def on_canvas_click(self, event):
         # 1. Clique na linha divisória lateral (com tolerância de ±6 pixels)
@@ -1288,7 +1360,15 @@ class LayoutEditorView(tk.Frame):
             self.on_sidebar_click(event)
             return
 
-        # 3. Clique na mesa CAD (seleção e arrasto de peças)
+        # 3. Atalho: CTRL + clique do mouse de ação para Zoom de +20%
+        if bool(event.state & 0x0004):
+            self.is_dragging_piece = False
+            self._pre_drag_pieces = None
+            self.is_panning = False
+            self.zoom_in(event.x, event.y)
+            return "break"
+
+        # 4. Clique na mesa CAD (seleção e arrasto de peças)
         wx, wy = self.screen_to_world(event.x, event.y)
 
         hit_idx = -1
@@ -1308,6 +1388,11 @@ class LayoutEditorView(tk.Frame):
         else:
             self.is_dragging_piece = False
             self._pre_drag_pieces = None
+            if getattr(self, "zoom_factor", 1.0) > 1.0:
+                self.is_panning = True
+                self.pan_start_x = event.x
+                self.pan_start_y = event.y
+                self.canvas.config(cursor="fleur")
 
         self.redraw()
 
@@ -1323,7 +1408,18 @@ class LayoutEditorView(tk.Frame):
             self.redraw()
             return
 
-        # 2. Arrastar peça na mesa
+        # 2. Pan na mesa ao arrastar espaço vazio com zoom
+        if getattr(self, "is_panning", False):
+            dx = event.x - self.pan_start_x
+            dy = event.y - self.pan_start_y
+            self.pan_start_x = event.x
+            self.pan_start_y = event.y
+            self.pan_offset_x = getattr(self, "pan_offset_x", 0.0) + dx
+            self.pan_offset_y = getattr(self, "pan_offset_y", 0.0) + dy
+            self.redraw()
+            return
+
+        # 3. Arrastar peça na mesa
         if self.is_dragging_piece and 0 <= self.selected_index < len(self.placed_pieces):
             wx, wy = self.screen_to_world(event.x, event.y)
             offset_x, offset_y = self.drag_start
@@ -1334,6 +1430,10 @@ class LayoutEditorView(tk.Frame):
             self.update_status()
 
     def on_canvas_release(self, event):
+        if getattr(self, "is_panning", False):
+            self.is_panning = False
+            self.canvas.config(cursor="arrow")
+
         # 1. Conclusão do arrasto da linha divisória
         if getattr(self, "is_dragging_divider", False):
             self.is_dragging_divider = False
@@ -1396,14 +1496,115 @@ class LayoutEditorView(tk.Frame):
                 self.lbl_stat_pos.config(text="Layout: alteração desfeita (Ctrl+Z).", fg=THEME.get("text_main", "#000000"))
         return "break"
 
+    def zoom_at(self, factor, center_x=None, center_y=None):
+        """Aplica zoom com fator multiplicativo (ex: 1.20 = +20%) centrado em (center_x, center_y)."""
+        old_zoom = getattr(self, "zoom_factor", 1.0)
+        new_zoom = max(0.5, min(5.0, old_zoom * factor))
+        if abs(new_zoom - old_zoom) < 1e-4:
+            return
 
-    def zoom_in(self):
-        # A placa é estática e fixa conforme especificação
+        cw = self.canvas.winfo_width()
+        ch = self.canvas.winfo_height()
+        if cw <= 10 or ch <= 10:
+            self.zoom_factor = new_zoom
+            return
+
+        if center_x is None or center_y is None:
+            if 0 <= self.selected_index < len(self.placed_pieces):
+                p = self.placed_pieces[self.selected_index]
+                center_x, center_y = self.world_to_screen(p["x"], p["y"])
+            else:
+                center_x = (self.plate_x1 + self.plate_x2) / 2.0 if hasattr(self, "plate_x1") else cw / 2.0
+                center_y = (self.plate_y1 + self.plate_y2) / 2.0 if hasattr(self, "plate_y1") else ch / 2.0
+
+        wx, wy = self.screen_to_world(center_x, center_y)
+
+        self.zoom_factor = new_zoom
+        self.view_center_sx = center_x
+        self.view_center_sy = center_y
+        self.view_center_wx = wx
+        self.view_center_wy = wy
+        self.pan_offset_x = 0.0
+        self.pan_offset_y = 0.0
+
         self.redraw()
+        pct = int(round(self.zoom_factor * 100))
+        if hasattr(self, "lbl_stat_pos"):
+            self.lbl_stat_pos.config(text=f"Zoom: {pct}% | x: {wx:.2f} y: {wy:.2f}")
+
+    def zoom_in(self, center_x=None, center_y=None):
+        """Amplia 20% a cada clique na ferramenta ou atalho (fator 1.20)."""
+        self.zoom_at(1.20, center_x, center_y)
+
+    def zoom_out(self, center_x=None, center_y=None):
+        """Reduz 20% a cada acionamento (fator 1.0 / 1.20)."""
+        self.zoom_at(1.0 / 1.20, center_x, center_y)
 
     def reset_view(self):
-        # Restaura enquadramento estático proporcional
+        """Restaura o enquadramento total padrão da chapa (100% Fit)."""
+        self.zoom_factor = 1.0
+        self.pan_offset_x = 0.0
+        self.pan_offset_y = 0.0
+        self.view_center_wx = None
+        self.view_center_wy = None
+        self.view_center_sx = None
+        self.view_center_sy = None
         self.redraw()
+        if hasattr(self, "lbl_stat_pos"):
+            self.lbl_stat_pos.config(text="Visualização restaurada: Layout Completo (100%).")
+
+    def on_ctrl_canvas_click(self, event):
+        """Atalho: CTRL + clique do mouse de ação aplica zoom de +20% centrado no cursor."""
+        self.is_dragging_piece = False
+        self._pre_drag_pieces = None
+        self.is_panning = False
+        self.zoom_in(event.x, event.y)
+        return "break"
+
+    def _on_ctrl_press(self, event=None):
+        try:
+            cx = self.canvas.winfo_pointerx() - self.canvas.winfo_rootx()
+            if hasattr(self, "sidebar_div_x") and 0 <= cx < self.sidebar_div_x:
+                self.canvas.config(cursor="crosshair")
+        except Exception:
+            pass
+
+    def _on_ctrl_release(self, event=None):
+        try:
+            if not getattr(self, "is_panning", False) and not getattr(self, "is_dragging_divider", False):
+                self.canvas.config(cursor="arrow")
+        except Exception:
+            pass
+
+    def on_pan_start(self, event):
+        self.is_panning = True
+        self.pan_start_x = event.x
+        self.pan_start_y = event.y
+        self.canvas.config(cursor="fleur")
+        return "break"
+
+    def on_pan_drag(self, event):
+        if getattr(self, "is_panning", False):
+            dx = event.x - self.pan_start_x
+            dy = event.y - self.pan_start_y
+            self.pan_start_x = event.x
+            self.pan_start_y = event.y
+            self.pan_offset_x = getattr(self, "pan_offset_x", 0.0) + dx
+            self.pan_offset_y = getattr(self, "pan_offset_y", 0.0) + dy
+            self.redraw()
+        return "break"
+
+    def on_pan_end(self, event):
+        self.is_panning = False
+        self.canvas.config(cursor="arrow")
+        return "break"
+
+    def on_ctrl_mousewheel(self, event):
+        if event.delta > 0:
+            self.zoom_in(event.x, event.y)
+        elif event.delta < 0:
+            self.zoom_out(event.x, event.y)
+        return "break"
 
     def set_modified(self, modified: bool = True):
         self.is_modified = modified
