@@ -132,7 +132,7 @@ class SessionView(tk.Frame):
 
         self.cb_strategy = ttk.Combobox(
             col_left,
-            values=["sint", "tape_a", "flashnestsheet", "flashnestroll", "flashnestleather", "freenest"],
+            values=["sint", "tape_a", "flashnestsheet", "flashnestroll", "freenest"],
             state="readonly",
             font=("Segoe UI", 9),
             height=8
@@ -880,11 +880,13 @@ class SessionView(tk.Frame):
             cv.create_line(x1, sy, x2, sy, fill="#8c8c8c", width=1)
             gy += 300.0
 
-        # Rótulo com dimensões no topo da chapa (estilo Sheet (2553.38 X 1350.00))
+        # Rótulo com dimensões no topo da chapa (estilo Placa (298.00 X 138.00 cm))
+        h_cm = sheet_h / 10.0
+        w_cm = sheet_w / 10.0
         cv.create_text(
             cw / 2,
             max(8, y1 - 8),
-            text=f"Sheet ({sheet_h:.2f} X {sheet_w:.2f})",
+            text=f"Placa ({h_cm:.2f} X {w_cm:.2f} cm)",
             fill="#000000",
             font=("Segoe UI", 8, "bold")
         )
@@ -911,12 +913,11 @@ class SessionView(tk.Frame):
 
     def update_strategy_description(self, strategy):
         descs = {
-            "sint": "Estratégia Sint (Sintéticos): Nesting contínuo para rolos e chapas sintéticas com geminação de pares (0°/180°) e intertravamento em colmeia.",
+            "sint": "Estratégia Sint (Sintéticos): Nesting contínuo para rolos e placas sintéticas com geminação de pares (0°/180°) e intertravamento em colmeia.",
             "tape_a": "Estratégia Tape A (Tiras & Fitas): Nesting linear para faixas estreitas e correias com alinhamento longitudinal e passo compacto.",
-            "flashnestsheet": "Estratégia flashnestsheet: Otimização bidimensional para chapas e folhas retangulares com encaixe interlocking em linhas horizontais.",
-            "flashnestroll": "Estratégia flashnestroll: Otimização orientada ao avanço contínuo de rolos/bobinas (minimiza o comprimento linear desenrolado).",
-            "flashnestleather": "Estratégia flashnestleather: Otimização adaptativa para couros e peles irregulares (busca multi-angular com margem de segurança perimetral).",
-            "freenest": "Estratégia freenest: Algoritmo livre de alta densidade visando máximo aproveitamento percentual (Yield %)."
+            "flashnestsheet": "Estratégia Placa: Otimização bidimensional para placas e folhas retangulares com encaixe interlocking em linhas horizontais.",
+            "flashnestroll": "Estratégia Rolo: Otimização orientada ao avanço contínuo de rolos/bobinas (minimiza o comprimento linear desenrolado).",
+            "freenest": "Estratégia FreeNest: Algoritmo livre de alta densidade visando máximo aproveitamento percentual (Yield %)."
         }
         if hasattr(self, "lbl_strategy_desc"):
             self.lbl_strategy_desc.config(text=descs.get(strategy, ""))

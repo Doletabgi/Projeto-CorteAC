@@ -492,10 +492,10 @@ class LayoutEditorView(tk.Frame):
         self.status_bar.pack(side="bottom", fill="x")
 
         # Painéis da Direita para a Esquerda
-        # Painel 8: Sheet (2553.38 X 1350.00)
+        # Painel 8: Placa (255.34 X 135.00 cm)
         self.sheet_panel = tk.Frame(self.status_bar, relief="sunken", bd=1, bg=THEME["bg_surface"])
         self.sheet_panel.pack(side="right", padx=2, pady=1)
-        self.lbl_stat_sheet = tk.Label(self.sheet_panel, text="Sheet (2553.38 X 1350.00)", bg=THEME["bg_surface"], fg=THEME["text_main"], font=("Segoe UI", 8), padx=4)
+        self.lbl_stat_sheet = tk.Label(self.sheet_panel, text="Placa (255.34 X 135.00 cm)", bg=THEME["bg_surface"], fg=THEME["text_main"], font=("Segoe UI", 8), padx=4)
         self.lbl_stat_sheet.pack(side="left")
 
         # Painel 7: Rendimento (83.02%)
@@ -992,7 +992,9 @@ class LayoutEditorView(tk.Frame):
 
     def update_sheet_status(self):
         if hasattr(self, "lbl_stat_sheet"):
-            self.lbl_stat_sheet.config(text=f"Sheet ({self.sheet_height:.2f} X {self.sheet_width:.2f})")
+            h_cm = self.sheet_height / 10.0
+            w_cm = self.sheet_width / 10.0
+            self.lbl_stat_sheet.config(text=f"Placa ({h_cm:.2f} X {w_cm:.2f} cm)")
 
     def set_sheet_size(self, width_mm, height_mm):
         self._custom_sheet_size = (float(width_mm), float(height_mm))
@@ -1122,7 +1124,13 @@ class LayoutEditorView(tk.Frame):
         ch = self.canvas.winfo_height()
 
         if cw <= 10 or ch <= 10:
-            return
+            try:
+                cw = int(self.canvas.cget("width"))
+                ch = int(self.canvas.cget("height"))
+            except Exception:
+                cw, ch = 800, 500
+            if cw <= 10 or ch <= 10:
+                cw, ch = 800, 500
 
         # 1. Escala proporcional e limites estáticos da chapa
         top_lbl_h = 24.0
@@ -1186,12 +1194,14 @@ class LayoutEditorView(tk.Frame):
             tags="sheet_bed"
         )
 
-        # Rótulo com dimensões no topo da chapa (estilo Sheet (2553.38 X 1350.00))
+        # Rótulo com dimensões no topo da chapa (estilo Placa (298.00 X 138.00 cm))
         cx = (x1 + x2) / 2.0
+        h_cm = self.sheet_height / 10.0
+        w_cm = self.sheet_width / 10.0
         self.canvas.create_text(
             cx,
             max(10.0, y1 - 10.0),
-            text=f"Sheet ({self.sheet_height:.2f} X {self.sheet_width:.2f})",
+            text=f"Placa ({h_cm:.2f} X {w_cm:.2f} cm)",
             fill="#000000",
             font=("Segoe UI", 8, "bold"),
             tags="sheet_label"
@@ -2367,7 +2377,7 @@ class LayoutEditorView(tk.Frame):
             "layout_name": getattr(self, "layout_name", "10001.lay"),
             "sheet_w_mm": self.sheet_width,
             "sheet_h_mm": self.sheet_height,
-            "dimensions_str": f"{mat_w_m:.2f} X {mat_h_m:.2f} M",
+            "dimensions_str": f"{self.sheet_height / 10.0:.2f} X {self.sheet_width / 10.0:.2f} cm ({mat_h_m:.2f} X {mat_w_m:.2f} M)",
             "mat_area_str": f"{mat_area:.2f} sq.M.",
             "used_area_str": f"{used_area:.2f} sq.M.",
             "yield_pct": yield_pct,

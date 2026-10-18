@@ -377,8 +377,8 @@ class MaterialCodesView(tk.Frame):
         for r_idx, (lbl, val) in enumerate(fields):
             tk.Label(body, text=lbl, bg=THEME["bg_card"], fg=THEME["text_main"], font=("Segoe UI", 9), anchor="w").grid(row=r_idx, column=0, sticky="w", pady=3)
             if r_idx == 2:
-                cb_def = ttk.Combobox(body, values=["como placa", "como rolo", "como pele", "como retalho"], state="readonly", width=22)
-                cb_def.set(val or "como placa")
+                cb_def = ttk.Combobox(body, values=["como placa", "como rolo", "como retalho"], state="readonly", width=22)
+                cb_def.set("como placa" if val in ("como pele", "leather", "sheet") else (val or "como placa"))
                 cb_def.grid(row=r_idx, column=1, sticky="e", pady=3, padx=(10, 0))
                 entries[r_idx] = cb_def
             else:

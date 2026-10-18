@@ -621,6 +621,36 @@ class TestLayoutEditorShortcuts(unittest.TestCase):
 
         dlg2.destroy()
 
+    def test_plate_label_in_cm_and_no_sheet_nor_leather(self):
+        """O rótulo exibe 'Placa' com medidas em cm (sem 'Sheet' nem 'Leather')."""
+        self.root.geometry("1024x515")
+        self.view.update()
+        # 1. Configura dimensões idênticas à captura do usuário (1380 x 2980 mm -> 298.00 X 138.00 cm)
+        self.view.set_sheet_size(1380.0, 2980.0)
+        self.view.update()
+        self.view.redraw()
+
+        # Verifica rótulo na barra de status
+        stat_text = self.view.lbl_stat_sheet.cget("text")
+        self.assertEqual(stat_text, "Placa (298.00 X 138.00 cm)")
+        self.assertNotIn("Sheet", stat_text)
+        self.assertNotIn("Leather", stat_text)
+
+        # Verifica rótulo sobre a mesa CAD no Canvas
+        label_items = self.view.canvas.find_withtag("sheet_label")
+        self.assertTrue(len(label_items) > 0)
+        canvas_text = self.view.canvas.itemcget(label_items[0], "text")
+        self.assertEqual(canvas_text, "Placa (298.00 X 138.00 cm)")
+        self.assertNotIn("Sheet", canvas_text)
+        self.assertNotIn("Leather", canvas_text)
+
+        # 2. Verifica que SessionView não disponibiliza 'flashnestleather' na lista de estratégias
+        from ui.session_view import SessionView
+        sv = SessionView(self.root, session_data={"id": 101, "status": "Stand by"})
+        strat_values = sv.cb_strategy.cget("values")
+        self.assertNotIn("flashnestleather", strat_values)
+        sv.destroy()
+
 
 if __name__ == "__main__":
     unittest.main()

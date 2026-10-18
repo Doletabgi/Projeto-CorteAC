@@ -341,7 +341,7 @@ class DatabaseManager:
                 # Garante que material padrão das sessões de exemplo exista
                 cursor.execute("""
                 INSERT OR IGNORE INTO materials (id, name, type, width_mm, height_mm, area_m2, thickness_mm, layers, gap_mm)
-                VALUES ('MAT_VAQ_01', 'Sheet (2553.38 X 1350.00)', 'como placa', 1350.0, 2553.38, 3.447, 1.0, 2, 1.0)
+                VALUES ('MAT_VAQ_01', 'Placa (255.34 X 135.00 cm)', 'como placa', 1350.0, 2553.38, 3.447, 1.0, 2, 1.0)
                 """)
 
             # Inserir configurações padrão sem sobrescrever as existentes
@@ -736,7 +736,7 @@ class DatabaseManager:
                     if not cursor.fetchone():
                         cursor.execute("""
                         INSERT OR IGNORE INTO materials (id, name, type, width_mm, height_mm, area_m2, thickness_mm, layers, gap_mm)
-                        VALUES ('MAT_VAQ_01', 'Sheet (2553.38 X 1350.00)', 'como placa', 1350.0, 2553.38, 3.447, 1.0, 2, 1.0)
+                        VALUES ('MAT_VAQ_01', 'Placa (255.34 X 135.00 cm)', 'como placa', 1350.0, 2553.38, 3.447, 1.0, 2, 1.0)
                         """)
 
                     cursor.execute("""
