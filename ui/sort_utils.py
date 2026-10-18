@@ -71,3 +71,22 @@ def shape_area_sort_key(shape: dict) -> float:
         return float(polygon_area(contour))
     except Exception:
         return 0.0
+
+
+def clean_session_display_name(name: Any) -> str:
+    """
+    Remove prefixos automáticos como '(#3)' ou '( #3 )' do nome da sessão.
+    Garante que quando a sessão for renomeada (ex: para '121805'), tanto a árvore
+    quanto a tabela exibam o nome limpo '121805' sem (#3), enquanto o SessId numérico
+    permanece preservado intacto na coluna SessId.
+    """
+    if name is None:
+        return ""
+    s = str(name).strip()
+    m = re.match(r"^\(\s*#?\d+\s*\)\s*(.+)$", s)
+    if m:
+        cleaned = m.group(1).strip()
+        if cleaned:
+            return cleaned
+    return s
+

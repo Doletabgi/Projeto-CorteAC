@@ -827,9 +827,164 @@ class TestLayoutEditorShortcuts(unittest.TestCase):
         corte_child_texts = [fm.tree_main.item(c, "text").strip() for c in corte_children]
         self.assertTrue(any("Sessao 3" in t for t in corte_child_texts))
 
+    def test_clean_session_display_name_helper(self):
+        """Verifica a limpeza de prefixos (#id) em nomes de sessão mantendo nomes originais intactos."""
+        from ui.sort_utils import clean_session_display_name
+        self.assertEqual(clean_session_display_name("121805"), "121805")
+        self.assertEqual(clean_session_display_name("(#3) 121805"), "121805")
+        self.assertEqual(clean_session_display_name("( #3 ) 121805"), "121805")
+        self.assertEqual(clean_session_display_name("(#3227) 121805"), "121805")
+        self.assertEqual(clean_session_display_name("(3) 121805"), "121805")
+        self.assertEqual(clean_session_display_name("Sessão #3"), "Sessão #3")
+        self.assertEqual(clean_session_display_name("(#3) Sessão #3"), "Sessão #3")
+        self.assertEqual(clean_session_display_name(""), "")
+        self.assertEqual(clean_session_display_name(None), "")
+
+    def test_renamed_session_has_no_id_prefix_in_tree_and_preserves_sessid_in_grid(self):
+        """
+        Verifica que após renomear a sessão (ex: 121805):
+        1. A árvore exibe estritamente '121805' sem prefixo (#3).
+        2. A tabela inferior (grid_lower) mantém SessId='3' e Nome sessão='121805'.
+        """
+        from tkinter import ttk
+        from ui.main_window import MainWindow
+
+        class FakeDB:
+            def get_job_folders(self):
+                return ["1684.044"]
+            def get_orders(self):
+                return []
+
+        class DummyBtn:
+            def config(self, **kwargs):
+                pass
+
+        class FakeMain:
+            def __init__(self, root):
+                self.root = root
+                self.tree_main = ttk.Treeview(root)
+                self.grid_lower = ttk.Treeview(root)
+                self.current_mode = "jobs"
+                self.icons = {}
+                self.db = FakeDB()
+                self.sessions = [
+                    {"id": 3, "job": "1684.044", "name": "121805", "status": "Pronta"}
+                ]
+                self.current_session = self.sessions[0]
+                self.orders = []
+                self.btn_mode_jobs = DummyBtn()
+                self.btn_mode_shapes = DummyBtn()
+                self.btn_mode_materials = DummyBtn()
+                self.sort_grid_lower = lambda col: None
+
+            def populate_tree(self, mode="jobs"):
+                MainWindow.populate_tree(self, mode=mode)
+
+        fm = FakeMain(self.root)
+        fm.populate_tree(mode="jobs")
+
+        # Verifica árvore: nó de 1684.044
+        prod_root = fm.tree_main.get_children("")[0]
+        job_node = fm.tree_main.get_children(prod_root)[0]
+        self.assertEqual(fm.tree_main.item(job_node, "text").strip(), "1684.044")
+
+        # Verifica sessão filha
+        sess_node = fm.tree_main.get_children(job_node)[0]
+        sess_text = fm.tree_main.item(sess_node, "text").strip()
+        self.assertEqual(sess_text, "121805")
+        self.assertNotIn("(#3)", sess_text)
+        self.assertNotIn("#3", sess_text)
+
+        # Verifica grid inferior
+        grid_items = fm.grid_lower.get_children("")
+        self.assertEqual(len(grid_items), 1)
+        row_vals = fm.grid_lower.item(grid_items[0], "values")
+        # values: (sess_id, s_job, disp_name, s_status)
+        self.assertEqual(str(row_vals[0]), "3")          # SessId original preservado
+        self.assertEqual(str(row_vals[1]), "1684.044")   # Produção
+        self.assertEqual(str(row_vals[2]), "121805")     # Nome sessão limpo
+        self.assertEqual(str(row_vals[3]), "Pronta")     # Status
+
+    def test_on_rename_tree_item_cleans_and_updates_session(self):
+        """Verifica que ao acionar on_rename_tree_item o nome digitado é limpo e atualiza tree e grid."""
+        from tkinter import ttk
+        from unittest.mock import patch
+        from ui.main_window import MainWindow
+
+        class FakeDB:
+            def __init__(self):
+                self.updated = {}
+            def get_job_folders(self):
+                return ["1684.044"]
+            def get_orders(self):
+                return []
+            def update_session(self, sid, **kwargs):
+                self.updated[sid] = kwargs
+
+        class DummyBtn:
+            def config(self, **kwargs):
+                pass
+
+        class FakeMain:
+            def __init__(self, root):
+                self.root = root
+                self.tree_main = ttk.Treeview(root)
+                self.grid_lower = ttk.Treeview(root)
+                self.current_mode = "jobs"
+                self.icons = {}
+                self.db = FakeDB()
+                self.sessions = [
+                    {"id": 3, "job": "1684.044", "name": "Sessão #3", "status": "Stand by"}
+                ]
+                self.current_session = self.sessions[0]
+                self.orders = []
+                self.btn_mode_jobs = DummyBtn()
+                self.btn_mode_shapes = DummyBtn()
+                self.btn_mode_materials = DummyBtn()
+                self.sort_grid_lower = lambda col: None
+                self.session_view = None
+
+            def switch_tree_mode(self, mode="jobs"):
+                MainWindow.switch_tree_mode(self, mode=mode)
+
+            def _select_session_in_tree(self, parent_item, target_sess_id):
+                return MainWindow._select_session_in_tree(self, parent_item, target_sess_id)
+
+            def on_rename_tree_item(self):
+                MainWindow.on_rename_tree_item(self)
+
+        fm = FakeMain(self.root)
+        fm.switch_tree_mode("jobs")
+
+        # Seleciona nó da sessão na árvore
+        prod_root = fm.tree_main.get_children("")[0]
+        job_node = fm.tree_main.get_children(prod_root)[0]
+        sess_node = fm.tree_main.get_children(job_node)[0]
+        fm.tree_main.selection_set(sess_node)
+
+        # Mock simpledialog.askstring para simular o usuário digitando "(#3) 121805"
+        with patch("tkinter.simpledialog.askstring", return_value="(#3) 121805"):
+            fm.on_rename_tree_item()
+
+        # O banco foi atualizado para "121805"
+        self.assertEqual(fm.db.updated.get(3, {}).get("name"), "121805")
+        self.assertEqual(fm.sessions[0]["name"], "121805")
+
+        # O nó da árvore exibe "121805"
+        updated_job_node = fm.tree_main.get_children(fm.tree_main.get_children("")[0])[0]
+        updated_sess_node = fm.tree_main.get_children(updated_job_node)[0]
+        self.assertEqual(fm.tree_main.item(updated_sess_node, "text").strip(), "121805")
+
+        # O grid inferior tem SessId="3" e Nome="121805"
+        grid_items = fm.grid_lower.get_children("")
+        vals = fm.grid_lower.item(grid_items[0], "values")
+        self.assertEqual(str(vals[0]), "3")
+        self.assertEqual(str(vals[2]), "121805")
+
 
 if __name__ == "__main__":
     unittest.main()
+
 
 
 

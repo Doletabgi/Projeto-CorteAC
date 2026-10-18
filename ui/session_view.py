@@ -16,7 +16,7 @@ from ui.add_shapes_dialog import AddShapesDialog
 from ui.dieproc_dialog import DieProcDialog
 from ui.edit_shape_in_session_dialog import EditShapeInSessionDialog
 from cad.lay_parser import parse_lay, export_layout_from_pieces, validate_layout_placement
-from ui.sort_utils import natural_sort_key, size_sort_key, shape_area_sort_key
+from ui.sort_utils import natural_sort_key, size_sort_key, shape_area_sort_key, clean_session_display_name
 
 class SessionView(tk.Frame):
     def __init__(self, parent, session_data=None, canvas_ref=None, on_close=None, on_minimize=None, on_maximize=None, on_edit_shape=None, on_delete_shape=None, on_import_die=None, on_open_layout_editor=None, on_material_change=None, on_nest=None, on_standby=None, on_rewind=None, on_cut=None, on_strategy_change=None, on_add_shapes=None, all_shapes_catalog=None, db=None, on_open_dieproc=None, **kwargs):
@@ -306,8 +306,11 @@ class SessionView(tk.Frame):
             width=26,
             font=("Segoe UI", 9)
         )
-        self.entry_sname.insert(0, self.session_data.get("name", f"Sessão #{self.session_data['id']}"))
+        initial_name = clean_session_display_name(self.session_data.get("name", f"Sessão #{self.session_data['id']}")) or f"Sessão #{self.session_data['id']}"
+        self.entry_sname.insert(0, initial_name)
         self.entry_sname.pack(side="left", padx=(0, 18))
+        self.entry_sname.bind("<Return>", self._on_entry_sname_commit)
+        self.entry_sname.bind("<FocusOut>", self._on_entry_sname_commit)
 
         tk.Label(
             row_info,
@@ -1017,7 +1020,8 @@ class SessionView(tk.Frame):
         status = session_data.get("status", "Stand by")
         self.lbl_title.config(text=f"🗂️ Session #{session_data['id']} [{status}]")
         self.entry_sname.delete(0, "end")
-        self.entry_sname.insert(0, session_data.get("name", f"Sessão #{session_data['id']}"))
+        clean_name = clean_session_display_name(session_data.get("name", f"Sessão #{session_data['id']}")) or f"Sessão #{session_data['id']}"
+        self.entry_sname.insert(0, clean_name)
         if hasattr(self, "lbl_status_val"):
             self.lbl_status_val.config(text=status)
 
@@ -1070,6 +1074,34 @@ class SessionView(tk.Frame):
             self.set_material_data(session_data.get("material"))
 
         self.draw_mini_layout_preview()
+
+    def _on_entry_sname_commit(self, event=None):
+        if not self.session_data:
+            return
+        new_val = self.entry_sname.get().strip()
+        if not new_val:
+            return
+        clean_val = clean_session_display_name(new_val)
+        if clean_val != new_val:
+            self.entry_sname.delete(0, "end")
+            self.entry_sname.insert(0, clean_val)
+        sess_id = self.session_data.get("id")
+        if clean_val and self.session_data.get("name") != clean_val:
+            self.session_data["name"] = clean_val
+            if self.db and sess_id:
+                try:
+                    self.db.update_session(sess_id, name=clean_val)
+                except Exception:
+                    pass
+            top = self.winfo_toplevel()
+            if hasattr(top, "sessions"):
+                for s in top.sessions:
+                    if s.get("id") == sess_id:
+                        s["name"] = clean_val
+                        break
+            if hasattr(top, "populate_tree"):
+                top.populate_tree(mode=getattr(top, "current_mode", "jobs"))
+
 
     def set_material_data(self, material=None):
         if not hasattr(self, "tree_mat"):

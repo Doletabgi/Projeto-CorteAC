@@ -31,7 +31,7 @@ from ui.material_codes_view import MaterialCodesView
 from ui.options_dialog import OptionsDialog
 from ui.params_dialog import NestingParamsDialog
 from ui.dieproc_dialog import DieProcDialog
-from ui.sort_utils import natural_sort_key, size_sort_key
+from ui.sort_utils import natural_sort_key, size_sort_key, clean_session_display_name
 
 def get_assets_dir():
     if getattr(sys, 'frozen', False):
@@ -2011,6 +2011,7 @@ class MainWindow(tk.Tk):
     def switch_tree_mode(self, mode):
         self.current_mode = mode
         self.tree_main.delete(*self.tree_main.get_children())
+
         self.grid_lower.delete(*self.grid_lower.get_children())
 
         # Reset dos 3 botões visuais
@@ -2092,19 +2093,17 @@ class MainWindow(tk.Tk):
                 parent_node = get_or_create_job_node(s_job)
 
                 # Formatação do rótulo na árvore
-                if s_name.startswith(f"(#{s_id})") or s_name.startswith(f"( #{s_id} )"):
-                    node_text = f" {s_name}"
-                elif s_name.startswith(f"#{s_id}"):
-                    node_text = f" ({s_name})"
-                else:
-                    node_text = f" (#{s_id}) {s_name}"
+                disp_name = clean_session_display_name(s_name)
+                if not disp_name or disp_name == f"(#{s_id})":
+                    disp_name = f"Sessão #{s_id}"
+                node_text = f" {disp_name}"
 
                 item_id = self.tree_main.insert(parent_node, "end", text=node_text, values=("session", s_id), **img_sess)
                 if self.current_session and self.current_session.get("id") == s_id:
                     selected_sess_item = item_id
 
-                # Alimenta grid inferior
-                self.grid_lower.insert("", "end", values=(str(s_id), s_job, s_name, s_status))
+                # Alimenta grid inferior: SessId preserva o ID original e Name exibe o nome limpo
+                self.grid_lower.insert("", "end", values=(str(s_id), s_job, disp_name, s_status))
 
             # Seleciona o item da sessão ativa ou primeira pasta ou raiz
             if selected_sess_item:
@@ -2205,6 +2204,8 @@ class MainWindow(tk.Tk):
 
             # Seleciona nó raiz com destaque azul clássico
             self.tree_main.selection_set(root)
+
+    populate_tree = switch_tree_mode
 
     def _is_inside_menu(self, menu, x_root, y_root):
         if not menu:
@@ -3375,25 +3376,49 @@ class MainWindow(tk.Tk):
 
     def on_rename_tree_item(self):
         sel = self.tree_main.selection()
+        if not sel and self.current_mode == "jobs":
+            g_sel = self.grid_lower.selection()
+            if g_sel:
+                vals = self.grid_lower.item(g_sel[0], "values")
+                if vals:
+                    try:
+                        sid = int(vals[0])
+                        roots = self.tree_main.get_children("")
+                        if roots:
+                            self._select_session_in_tree(roots[0], sid)
+                            sel = self.tree_main.selection()
+                    except Exception:
+                        pass
         if not sel:
             return
         curr = self.tree_main.item(sel[0], "text").strip()
         vals = self.tree_main.item(sel[0], "values")
+        if vals and len(vals) >= 2 and vals[0] == "session":
+            sess_id = int(vals[1])
+            s_obj = next((s for s in self.sessions if s.get("id") == sess_id), None)
+            raw_name = (s_obj.get("name") if s_obj else curr) or curr
+            curr = clean_session_display_name(raw_name)
+
         new_name = simpledialog.askstring("Renomear", "Novo nome:", initialvalue=curr, parent=self)
         if new_name and new_name.strip():
             new_name = new_name.strip()
             if vals and len(vals) >= 2 and vals[0] == "session":
                 sess_id = int(vals[1])
-                self.db.update_session(sess_id, name=new_name)
+                clean_name = clean_session_display_name(new_name)
+                self.db.update_session(sess_id, name=clean_name)
                 for s in self.sessions:
                     if s.get("id") == sess_id:
-                        s["name"] = new_name
+                        s["name"] = clean_name
                         break
                 if self.current_session and self.current_session.get("id") == sess_id:
-                    self.current_session["name"] = new_name
-                    self.session_view.load_session(self.current_session)
+                    self.current_session["name"] = clean_name
+                    if getattr(self, "session_view", None):
+                        self.session_view.load_session(self.current_session)
                 if self.current_mode == "jobs":
                     self.switch_tree_mode("jobs")
+                    roots = self.tree_main.get_children("")
+                    if roots:
+                        self._select_session_in_tree(roots[0], sess_id)
             elif vals and len(vals) >= 2 and vals[0] == "order":
                 order_id = int(vals[1])
                 self.db.update_order(order_id, name=new_name)
@@ -3432,7 +3457,9 @@ class MainWindow(tk.Tk):
                 return
             else:
                 self.tree_main.item(sel[0], text=f" {new_name}")
-            self.lbl_status_msg.config(text=f"Item renomeado para '{new_name}'.")
+            disp_renamed = clean_name if (vals and len(vals) >= 2 and vals[0] == "session") else new_name
+            if getattr(self, "lbl_status_msg", None):
+                self.lbl_status_msg.config(text=f"Item renomeado para '{disp_renamed}'.")
 
     def on_delete_job_folder(self, folder_name: str):
         """Exclui uma pasta de produção (job) com confirmação e opção de exclusão em cascata."""
