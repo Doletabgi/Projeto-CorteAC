@@ -25,6 +25,8 @@ from db import (
     DB_BACKEND
 )
 
+_SENTINEL = object()
+
 def get_current_operator() -> str:
     """Retorna identificação do operador e terminal (usuário@computador)."""
     try:
@@ -1112,7 +1114,7 @@ class DatabaseManager:
             conn.commit()
             return session_id
 
-    def update_session(self, session_id, name=None, status=None, placed_pieces=None, yield_pct=None, time_sec=None, material_id=None, strategy=None, params=None, machine=None, shapes=None, job=None):
+    def update_session(self, session_id, name=None, status=None, placed_pieces=None, yield_pct=None, time_sec=None, material_id=_SENTINEL, strategy=None, params=None, machine=None, shapes=None, job=None, clear_material=False):
         with self.get_connection() as conn:
             cursor = conn.cursor()
             updates = []
@@ -1120,7 +1122,9 @@ class DatabaseManager:
             if name is not None:
                 updates.append("name = ?")
                 values.append(name)
-            if material_id is not None:
+            if clear_material:
+                updates.append("material_id = NULL")
+            elif material_id is not _SENTINEL:
                 updates.append("material_id = ?")
                 values.append(material_id)
             if status is not None:

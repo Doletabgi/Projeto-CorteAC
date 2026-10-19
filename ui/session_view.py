@@ -496,10 +496,7 @@ class SessionView(tk.Frame):
         self.tree_mat.column("qty", width=95, anchor="e", stretch=True)
         self.tree_mat.pack(fill="both", expand=True)
 
-        self.tree_mat.insert("", "end", iid="mat_0", values=("▶", "como placa", "853412", "1,38", "1,08", "2", "0", "1", "0"))
-        self.tree_mat.selection_set("mat_0")
-
-        # Barra inferior com botão de edição e dica de uso
+        # Barra inferior com botão de edição, remoção e dica de uso
         mat_bot_bar = tk.Frame(self.tab_mat, bg=THEME["bg_surface"], pady=4, padx=6)
         mat_bot_bar.pack(fill="x")
         btn_edit_mat = tk.Button(
@@ -514,22 +511,39 @@ class SessionView(tk.Frame):
         )
         btn_edit_mat.pack(side="left", padx=2)
 
+        self.btn_remove_mat = tk.Button(
+            mat_bot_bar,
+            text="🗑️ Remover Material (Del)",
+            relief="raised",
+            bd=2,
+            bg=THEME["bg_surface"],
+            fg=THEME["text_main"],
+            font=("Segoe UI", 9),
+            command=self.remove_session_material
+        )
+        self.btn_remove_mat.pack(side="left", padx=2)
+
         lbl_hint = tk.Label(
             mat_bot_bar,
-            text="💡 Dica: Clique em qualquer célula (Largura, Comprimento, Camadas, Gap) para editar diretamente.",
+            text="💡 Dica: Clique na célula para editar ou tecle Delete para remover o material (disponível quando sem layout calculado).",
             bg=THEME["bg_surface"],
             fg=THEME["text_muted"],
             font=("Segoe UI", 8, "italic")
         )
         lbl_hint.pack(side="left", padx=10)
 
-        # Eventos para edição interativa de Largura, Comprimento/Altura e Camadas
+        # Eventos para edição interativa de Largura, Comprimento/Altura, Camadas e Remoção via Delete
         self.tree_mat.bind("<Double-1>", self.on_mat_double_click)
         self.tree_mat.bind("<Button-1>", self.on_mat_single_click)
         self.tree_mat.bind("<Return>", self.on_mat_enter_key)
         self.tree_mat.bind("<F2>", self.on_mat_f2_key)
         self.tree_mat.bind("<KeyPress>", self.on_mat_key_press)
         self.tree_mat.bind("<Button-3>", self.show_mat_context_menu)
+        for w in (self.tree_mat, self.tab_mat):
+            w.bind("<Delete>", self.remove_session_material)
+            w.bind("<Key-Delete>", self.remove_session_material)
+            w.bind("<BackSpace>", self.remove_session_material)
+            w.bind("<Key-BackSpace>", self.remove_session_material)
 
         # -----------------------------------------------------------------
         # Aba 4: Layout (frmSessionLays.gif / media_1791990326629.jpg)
@@ -1007,7 +1021,24 @@ class SessionView(tk.Frame):
         self.session_data["machine"] = machine
 
     def on_material_code_selected(self, event=None):
+        if self.has_calculated_layout():
+            messagebox.showwarning(
+                "Material Bloqueado",
+                "Não é possível trocar o material enquanto o layout estiver calculado.\n\n"
+                "Para liberar a troca do material, limpe o layout atual (aba 'Layout' -> botão '🗑️ Limpar') ou refaça o cálculo.",
+                parent=self
+            )
+            mat = self.session_data.get("material") if isinstance(self.session_data, dict) else None
+            if mat:
+                self.cb_mat_code.set(f"{mat.get('id', '')} - {mat.get('name', mat.get('code', ''))}")
+            else:
+                self.cb_mat_code.set("(unspecified)")
+            return
+
         val = self.cb_mat_code.get()
+        if val == "(unspecified)":
+            self.remove_session_material()
+            return
         if " - " in val:
             mat_id = val.split(" - ")[0].strip()
             if self.on_material_change_cb:
@@ -1138,13 +1169,84 @@ class SessionView(tk.Frame):
                 top.populate_tree(mode=getattr(top, "current_mode", "jobs"))
 
 
+    def has_calculated_layout(self):
+        """Verifica se a sessão possui um layout de corte calculado com peças posicionadas."""
+        if not self.session_data or not isinstance(self.session_data, dict):
+            return False
+        return bool(self.session_data.get("placed_pieces"))
+
+    def remove_session_material(self, event=None):
+        """Remove o material da sessão caso o layout NÃO esteja calculado.
+        Se o layout já estiver calculado com peças encaixadas, bloqueia a remoção e
+        orienta o usuário a limpar ou refazer o layout para liberar a troca.
+        """
+        # Se estiver em edição inline de célula (Entry ativo), deixa a tecla Delete apagar o caractere
+        if hasattr(self, "_active_cell_entry") and self._active_cell_entry:
+            return None
+
+        # 1. Bloqueia se houver layout calculado
+        if self.has_calculated_layout():
+            messagebox.showwarning(
+                "Material Bloqueado",
+                "Não é possível remover ou trocar o material enquanto o layout estiver calculado.\n\n"
+                "Para liberar a troca do material, limpe o layout atual (aba 'Layout' -> botão '🗑️ Limpar') ou refaça o cálculo.",
+                parent=self
+            )
+            return "break"
+
+        # 2. Verifica se há material atribuído
+        has_mat = bool(self.session_data.get("material")) if isinstance(self.session_data, dict) else False
+        if not has_mat and not self.tree_mat.get_children():
+            return "break"
+
+        # 3. Confirmação
+        if not messagebox.askyesno(
+            "Remover Material da Sessão",
+            "Deseja realmente remover o material desta sessão?",
+            parent=self
+        ):
+            return "break"
+
+        # 4. Remove o material da sessão
+        if isinstance(self.session_data, dict):
+            self.session_data["material"] = None
+            self.session_data["material_id"] = None
+            if self.db and self.session_data.get("id"):
+                try:
+                    self.db.update_session(self.session_data["id"], material_id=None, clear_material=True)
+                except Exception as e:
+                    print(f"Aviso ao persistir remoção do material no banco: {e}")
+
+        # 5. Limpa a Treeview e o combobox
+        self.tree_mat.delete(*self.tree_mat.get_children())
+        if hasattr(self, "cb_mat_code"):
+            self.cb_mat_code.set("(unspecified)")
+
+        # 6. Notifica o MainWindow
+        if self.on_material_change_cb:
+            self.on_material_change_cb(None)
+
+        # 7. Redesenha mini preview e sumário
+        self.draw_mini_layout_preview()
+        layouts_cnt = len(self.session_data.get("placed_pieces", [])) if isinstance(self.session_data, dict) else 0
+        yield_pct = self.session_data.get("yield_percent", 0.0) if isinstance(self.session_data, dict) else 0.0
+        est_sec = self.session_data.get("cutting_time_sec", 0.0) if isinstance(self.session_data, dict) else 0.0
+        self.update_summary_text(layouts_cnt, yield_pct, est_sec)
+
+        return "break"
+
     def set_material_data(self, material=None):
         if not hasattr(self, "tree_mat"):
             return
         self.tree_mat.delete(*self.tree_mat.get_children())
         if material:
             if hasattr(self, "cb_mat_code"):
-                self.cb_mat_code.set(f"{material.get('id', '')} - {material.get('name', '')}")
+                mat_id_str = str(material.get("id", ""))
+                mat_name_str = str(material.get("name", material.get("code", "")))
+                if mat_id_str and mat_name_str:
+                    self.cb_mat_code.set(f"{mat_id_str} - {mat_name_str}")
+                elif mat_name_str:
+                    self.cb_mat_code.set(mat_name_str)
             defn = material.get("type_desc", material.get("type", "como placa"))
             if defn in ("sheet", "placa", "como placa"):
                 defn = "como placa"
@@ -1158,9 +1260,10 @@ class SessionView(tk.Frame):
             gap = str(material.get("gap", material.get("gap_mm", 1)))
             qty = str(material.get("quantity", 0))
             self.tree_mat.insert("", "end", iid="mat_0", values=("▶", defn, code, w_m, l_m, layers, thick, gap, qty))
+            self.tree_mat.selection_set("mat_0")
         else:
-            self.tree_mat.insert("", "end", iid="mat_0", values=("▶", "como placa", "853412", "1,38", "1,08", "2", "0", "1", "0"))
-        self.tree_mat.selection_set("mat_0")
+            if hasattr(self, "cb_mat_code"):
+                self.cb_mat_code.set("(unspecified)")
 
     def on_mat_key_press(self, event):
         if event.char and (event.char.isdigit() or event.char in ".,"):
@@ -1228,6 +1331,7 @@ class SessionView(tk.Frame):
         self.dismiss_context_menu()
         menu = tk.Menu(self, tearoff=0, bg=THEME["bg_surface"], fg=THEME["text_main"], font=("Segoe UI", 9))
         menu.add_command(label="📝 Editar Todos os Parâmetros... (Propriedades)", command=self.open_material_edit_dialog)
+        menu.add_command(label="🗑️ Remover Material da Sessão (Del)", command=self.remove_session_material)
         menu.add_separator()
         menu.add_command(label="📐 Editar Largura (m)", command=lambda: self.start_cell_edit("mat_0", "#4"))
         menu.add_command(label="📏 Editar Comprimento / Altura (m)", command=lambda: self.start_cell_edit("mat_0", "#5"))
@@ -1286,6 +1390,15 @@ class SessionView(tk.Frame):
             self.notify_material_changed()
 
     def start_cell_edit(self, row_id=None, col_id=None, initial_char=None):
+        if self.has_calculated_layout():
+            messagebox.showwarning(
+                "Material Bloqueado",
+                "Não é possível editar as medidas do material enquanto o layout estiver calculado.\n\n"
+                "Para alterar o material, limpe o layout atual (aba 'Layout' -> botão '🗑️ Limpar') ou refaça o cálculo.",
+                parent=self
+            )
+            return
+
         if hasattr(self, "_active_commit_cb") and self._active_commit_cb:
             cb = self._active_commit_cb
             self._active_commit_cb = None
@@ -1446,6 +1559,15 @@ class SessionView(tk.Frame):
         entry.bind("<Shift-Tab>", on_shift_tab)
 
     def open_material_edit_dialog(self):
+        if self.has_calculated_layout():
+            messagebox.showwarning(
+                "Material Bloqueado",
+                "Não é possível editar os parâmetros do material enquanto o layout estiver calculado.\n\n"
+                "Para alterar o material, limpe o layout atual (aba 'Layout' -> botão '🗑️ Limpar') ou refaça o cálculo.",
+                parent=self
+            )
+            return
+
         items = self.tree_mat.get_children()
         if not items:
             return
@@ -2346,7 +2468,26 @@ class SessionView(tk.Frame):
     def update_summary_text(self, layouts_count, yield_pct, est_sec):
         sess_id = self.session_data.get("id", 1) if hasattr(self, "session_data") and self.session_data else 1
         sess_job = self.session_data.get("job", "Job") if hasattr(self, "session_data") and self.session_data else "Job"
-        mat = self.session_data.get("material", {}) if hasattr(self, "session_data") and self.session_data else {}
+        mat = (self.session_data.get("material") or {}) if hasattr(self, "session_data") and self.session_data else {}
+        if not mat:
+            text = f"""Summary information for session #{sess_id} of job {sess_job}
+
+Material / Layout:
+- Código do Material: (nenhum material atribuído)
+- Dimensões do Layout: Não definido
+- Camadas de corte (Layers): 0
+- Gap entre peças: 1.0 mm
+- Área total da placa: 0.0000 m²
+
+Layouts:
+- Calculated Layouts: {layouts_count}
+- Material Yield (Aproveitamento Útil): {yield_pct:.1f}%
+- Estimated ATOM Cycle Time: {int(est_sec // 60)}m {int(est_sec % 60):02d}s
+"""
+            self.txt_summary.delete("1.0", "end")
+            self.txt_summary.insert("1.0", text)
+            return
+
         w_m = mat.get("width_m", mat.get("width_mm", 1380) / 1000.0)
         l_m = mat.get("length_m", mat.get("height_mm", 1080) / 1000.0)
         layers = mat.get("layers", 2)

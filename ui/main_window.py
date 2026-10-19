@@ -561,6 +561,47 @@ class MainWindow(tk.Tk):
 
     def on_session_material_changed(self, mat_dict):
         """Atualiza dimensões de layout, camadas e parâmetros do material na sessão e CAD."""
+        if mat_dict is None:
+            self.current_material = None
+            if self.current_session:
+                self.current_session["material"] = None
+                self.current_session["material_id"] = None
+                if self.db and self.current_session.get("id"):
+                    try:
+                        self.db.update_session(self.current_session["id"], clear_material=True)
+                    except Exception as e:
+                        print(f"Aviso ao persistir remoção do material no banco: {e}")
+                self.save_current_session_state()
+            if hasattr(self, "canvas") and self.canvas:
+                self.canvas.set_material(None)
+            self.update_all_metrics()
+            self.lbl_status_msg.config(text="Material da sessão removido.")
+            return
+
+        if isinstance(mat_dict, (int, str)):
+            mat_id = str(mat_dict).strip()
+            mat_obj = next((m for m in getattr(self, "materials", []) if str(m.get("id")) == mat_id or str(m.get("code")) == mat_id), None)
+            if not mat_obj and self.db:
+                mat_obj = self.db.get_material(mat_id)
+            if not mat_obj:
+                return
+            mat_dict = {
+                "id": mat_obj.get("id"),
+                "type": mat_obj.get("type", "como placa"),
+                "code": mat_obj.get("code", "853412"),
+                "width_m": float(mat_obj.get("width_mm", 1380.0)) / 1000.0,
+                "length_m": float(mat_obj.get("height_mm", 1080.0)) / 1000.0,
+                "width_mm": float(mat_obj.get("width_mm", 1380.0)),
+                "height_mm": float(mat_obj.get("height_mm", 1080.0)),
+                "layers": int(mat_obj.get("layers", 2)),
+                "thickness": float(mat_obj.get("thickness", 0.0)),
+                "gap": float(mat_obj.get("gap_mm", mat_obj.get("gap", 1.0))),
+                "quantity": int(mat_obj.get("quantity", 0)),
+                "area_m2": round((float(mat_obj.get("width_mm", 1380.0)) / 1000.0) * (float(mat_obj.get("height_mm", 1080.0)) / 1000.0), 4)
+            }
+            if hasattr(self, "session_view") and self.session_view:
+                self.session_view.set_material_data(mat_dict)
+
         if not self.current_material:
             self.current_material = {}
 
@@ -662,8 +703,14 @@ class MainWindow(tk.Tk):
             if not sess_dict:
                 sess_dict = {"id": session_data_or_id, "name": f"Sessão #{session_data_or_id}", "status": "Stand by"}
 
-        if "material" not in sess_dict and self.current_material:
-            sess_dict["material"] = self.current_material
+        if "material" not in sess_dict:
+            if sess_dict.get("material_id"):
+                mat = next((m for m in self.materials if m["id"] == sess_dict["material_id"]), None)
+                if not mat and self.db:
+                    mat = self.db.get_material(sess_dict["material_id"])
+                sess_dict["material"] = mat
+            else:
+                sess_dict["material"] = None
 
         view = self.get_or_create_session_view(sess_dict)
 
@@ -3312,6 +3359,15 @@ class MainWindow(tk.Tk):
 
     def apply_material_to_session(self, mat_id):
         """Aplica o material selecionado à sessão ativa e atualiza todas as visualizações CAD."""
+        if self.current_session and self.current_session.get("placed_pieces"):
+            messagebox.showwarning(
+                "Material Bloqueado",
+                "Não é possível trocar o material enquanto o layout estiver calculado.\n\n"
+                "Para alterar o material, limpe o layout atual (aba 'Layout' -> botão '🗑️ Limpar') ou refaça o cálculo.",
+                parent=self
+            )
+            return
+
         mat = next((m for m in self.materials if m["id"] == mat_id or str(m["id"]).startswith(str(mat_id))), None)
         if not mat:
             mat = self.db.get_material(mat_id)
