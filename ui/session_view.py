@@ -18,6 +18,57 @@ from ui.edit_shape_in_session_dialog import EditShapeInSessionDialog
 from cad.lay_parser import parse_lay, export_layout_from_pieces, validate_layout_placement
 from ui.sort_utils import natural_sort_key, size_sort_key, shape_area_sort_key, clean_session_display_name
 
+RECOMMENDED_COMBINATIONS = [
+    {
+        "objetivo": "Solados / Palmilhas em chapa sintética (pedido exato)",
+        "estrategia": "sint",
+        "parametro": "stdNOTFill",
+        "resultado": "Fileiras niveladas, geminação 0°/180°, gap estrito 1.0 mm e parada exata na cota."
+    },
+    {
+        "objetivo": "Corte de solas para estoque (lotação total da placa)",
+        "estrategia": "sint",
+        "parametro": "stdFill",
+        "resultado": "Fileiras contínuas preenchendo 100% da chapa física até o fim para estoque."
+    },
+    {
+        "objetivo": "Placas de EVA, Borracha, Recouro (DieProc dp98)",
+        "estrategia": "flashnestsheet",
+        "parametro": "ALTERNADO",
+        "resultado": "Grade DieProc clássica com intertravamento macho-fêmea (0°/180°) e preenchimento de cavidades."
+    },
+    {
+        "objetivo": "Economizar material ao máximo em chapa cara (scrap mínimo)",
+        "estrategia": "flashnestsheet",
+        "parametro": "HighYield",
+        "resultado": "Varredura angular fina (-5° a +5°) buscando o milímetro de máximo rendimento."
+    },
+    {
+        "objetivo": "Material com estampa, verniz ou textura orientada",
+        "estrategia": "flashnestsheet",
+        "parametro": "DIREITA",
+        "resultado": "Trava o corte em sentido único (0°/0°); nenhuma peça fica invertida de cabeça para baixo."
+    },
+    {
+        "objetivo": "Preset clássico de fábrica ATOM para sintéticos direcionais",
+        "estrategia": "flashnestsheet",
+        "parametro": "PrmSss_35",
+        "resultado": "Acoplamento unidirecional 0°/0° preservando trama e fio da matéria-prima."
+    },
+    {
+        "objetivo": "Tiras finas, debruns, correias e atacadores estreitos",
+        "estrategia": "tape_a",
+        "parametro": "stdNOTFill",
+        "resultado": "Alinhamento longitudinal paralelo linear em passo fixo sem distorção por arrasto."
+    },
+    {
+        "objetivo": "Aproveitar sobras e retalhos com moldes sortidos",
+        "estrategia": "freenest",
+        "parametro": "stdNOTFill",
+        "resultado": "Encaixe orgânico livre por atração de gravidade espacial em retalhos e geometrias mistas."
+    },
+]
+
 class SessionView(tk.Frame):
     def __init__(self, parent, session_data=None, canvas_ref=None, on_close=None, on_minimize=None, on_maximize=None, on_edit_shape=None, on_delete_shape=None, on_import_die=None, on_open_layout_editor=None, on_material_change=None, on_nest=None, on_standby=None, on_rewind=None, on_cut=None, on_strategy_change=None, on_add_shapes=None, all_shapes_catalog=None, db=None, on_open_dieproc=None, **kwargs):
         super().__init__(parent, bg=THEME["bg_surface"], relief="ridge", bd=2, **kwargs)
@@ -346,6 +397,90 @@ class SessionView(tk.Frame):
         )
         self.lbl_strategy_desc.pack(fill="x", pady=(6, 0))
         self.update_strategy_description(self.cb_strategy.get())
+
+        # -----------------------------------------------------------------
+        # Tabela de Consulta: Matriz de Combinações Recomendadas (Estratégia + Parâmetro)
+        # -----------------------------------------------------------------
+        guide_frame = tk.LabelFrame(
+            gen_container,
+            text="Guia de Combinações Recomendadas (Estratégias & Parâmetros)",
+            bg=THEME["bg_card"],
+            fg=THEME["text_main"],
+            font=("Segoe UI", 9, "bold"),
+            relief="groove",
+            padx=8,
+            pady=6
+        )
+        guide_frame.pack(fill="both", expand=True, pady=(6, 2))
+
+        guide_table_frame = tk.Frame(guide_frame, bg="#ffffff", relief="sunken", bd=1)
+        guide_table_frame.pack(fill="both", expand=True)
+
+        sb_guide_y = ttk.Scrollbar(guide_table_frame, orient="vertical")
+        sb_guide_y.pack(side="right", fill="y")
+        sb_guide_x = ttk.Scrollbar(guide_table_frame, orient="horizontal")
+        sb_guide_x.pack(side="bottom", fill="x")
+
+        guide_cols = ("objetivo", "estrategia", "parametro", "resultado")
+        self.tree_guide = ttk.Treeview(
+            guide_table_frame,
+            columns=guide_cols,
+            show="headings",
+            height=7,
+            yscrollcommand=sb_guide_y.set,
+            xscrollcommand=sb_guide_x.set,
+            selectmode="browse"
+        )
+        self.tree_guide.pack(fill="both", expand=True)
+        sb_guide_y.config(command=self.tree_guide.yview)
+        sb_guide_x.config(command=self.tree_guide.xview)
+
+        self.tree_guide.heading("objetivo", text="Objetivo / Aplicação na Fábrica", anchor="w")
+        self.tree_guide.heading("estrategia", text="Estratégia", anchor="center")
+        self.tree_guide.heading("parametro", text="Parâmetro", anchor="center")
+        self.tree_guide.heading("resultado", text="Comportamento Técnico do Corte", anchor="w")
+
+        self.tree_guide.column("objetivo", width=270, anchor="w")
+        self.tree_guide.column("estrategia", width=115, anchor="center")
+        self.tree_guide.column("parametro", width=110, anchor="center")
+        self.tree_guide.column("resultado", width=440, anchor="w")
+
+        self.tree_guide.tag_configure("even", background="#ffffff")
+        self.tree_guide.tag_configure("odd", background="#f8f9fa")
+
+        for idx, row in enumerate(RECOMMENDED_COMBINATIONS):
+            tag = "even" if idx % 2 == 0 else "odd"
+            self.tree_guide.insert("", "end", iid=f"guide_{idx}", values=(row["objetivo"], row["estrategia"], row["parametro"], row["resultado"]), tags=(tag,))
+
+        self.tree_guide.bind("<Double-1>", self.on_guide_double_click)
+
+        guide_footer = tk.Frame(guide_frame, bg=THEME["bg_card"], pady=4)
+        guide_footer.pack(fill="x")
+
+        btn_apply_combo = tk.Button(
+            guide_footer,
+            text="✓ Aplicar Selecionado",
+            bg=THEME["bg_surface"],
+            fg=THEME["text_main"],
+            font=("Segoe UI", 8, "bold"),
+            relief="raised",
+            bd=1,
+            cursor="hand2",
+            padx=8,
+            pady=2,
+            command=self.on_guide_apply_clicked
+        )
+        btn_apply_combo.pack(side="left")
+
+        tk.Label(
+            guide_footer,
+            text="Dica: Dê um duplo-clique em qualquer linha (ou clique em 'Aplicar Selecionado') para preencher a Estratégia e o Parâmetro.",
+            bg=THEME["bg_card"],
+            fg="#555555",
+            font=("Segoe UI", 8, "italic")
+        ).pack(side="left", padx=(10, 0))
+
+        self.highlight_guide_matching()
 
 
         # -----------------------------------------------------------------
@@ -973,10 +1108,46 @@ class SessionView(tk.Frame):
         if hasattr(self, "lbl_strategy_desc"):
             self.lbl_strategy_desc.config(text=descs.get(strategy, ""))
 
+    def highlight_guide_matching(self):
+        if not hasattr(self, "tree_guide"):
+            return
+        curr_strat = self.cb_strategy.get() if hasattr(self, "cb_strategy") else ""
+        curr_param = self.cb_params.get() if hasattr(self, "cb_params") else ""
+        for item in self.tree_guide.get_children():
+            vals = self.tree_guide.item(item, "values")
+            if len(vals) >= 3 and str(vals[1]) == curr_strat and str(vals[2]) == curr_param:
+                self.tree_guide.selection_set(item)
+                self.tree_guide.see(item)
+                return
+        sel = self.tree_guide.selection()
+        if sel:
+            self.tree_guide.selection_remove(sel)
+
+    def on_guide_apply_clicked(self):
+        if not hasattr(self, "tree_guide"):
+            return
+        sel = self.tree_guide.selection()
+        if not sel:
+            return
+        vals = self.tree_guide.item(sel[0], "values")
+        if vals and len(vals) >= 3:
+            strat = str(vals[1])
+            param = str(vals[2])
+            if hasattr(self, "cb_strategy") and strat in self.cb_strategy["values"]:
+                self.cb_strategy.set(strat)
+                self.on_strategy_selected()
+            if hasattr(self, "cb_params") and param in self.cb_params["values"]:
+                self.cb_params.set(param)
+                self.on_params_selected()
+
+    def on_guide_double_click(self, event=None):
+        self.on_guide_apply_clicked()
+
     def on_strategy_selected(self, event=None):
         strat = self.cb_strategy.get()
         self.session_data["strategy"] = strat
         self.update_strategy_description(strat)
+        self.highlight_guide_matching()
         if self.on_strategy_change_cb:
             self.on_strategy_change_cb(strat)
 
@@ -988,6 +1159,7 @@ class SessionView(tk.Frame):
             p = self.db.get_dieproc_preset(params)
             if p:
                 self.active_dieproc_params = p
+        self.highlight_guide_matching()
         if self.on_strategy_change_cb:
             self.on_strategy_change_cb(self.get_strategy(), params)
 
@@ -1099,6 +1271,7 @@ class SessionView(tk.Frame):
             self.update_strategy_description(strat)
         if hasattr(self, "cb_params"):
             self.cb_params.set(session_data.get("params") or "ALTERNADO")
+        self.highlight_guide_matching()
         if hasattr(self, "cb_machine"):
             self.cb_machine.set(session_data.get("machine") or "ATOM FlashCut Flex 3020")
         if hasattr(self, "cb_mat_code"):

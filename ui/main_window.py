@@ -4312,7 +4312,7 @@ class MainWindow(tk.Tk):
                 self.session_view.load_session(self.current_session)
         self.lbl_status_msg.config(text="Sessão colocada em 'Stand by'.")
 
-    def on_session_strategy_changed(self, strategy):
+    def on_session_strategy_changed(self, strategy, *args):
         if self.current_session:
             self.current_session["strategy"] = strategy
             self.db.update_session(self.current_session["id"], strategy=strategy)
