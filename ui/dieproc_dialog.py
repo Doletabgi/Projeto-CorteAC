@@ -440,7 +440,7 @@ class DieProcDialog(tk.Toplevel):
             f"• Espaçamento (Gap 1): {data['gap1']} mm\n"
             f"• Intertravamento de Linhas (Row interlock): {interlock_txt}\n"
             f"• Distribuição Diagonal: {diag_txt}\n\n"
-            f"Este perfil é utilizado pelo motor de corte contínuo (dp98) nas estratégias flashnestsheet e flashnestroll."
+            f"Este perfil é utilizado pelo motor de corte (dp98) na estratégia flashnestsheet (chapas/placas)."
         )
         messagebox.showinfo("DieProc Usage", info, parent=self)
 

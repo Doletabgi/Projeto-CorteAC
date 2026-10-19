@@ -170,7 +170,7 @@ def parse_coupling_angles(coupling_str):
 def dieproc_nest_pieces(available_shapes, bed_width_mm, bed_height_mm, target_count=16, dieproc_params=None, is_roll=False):
     """
     Motor de referência para corte contínuo de sintéticos (ATOM DieProc dp98).
-    Projetado para rolos e chapas sintéticas (flashnestsheet / flashnestroll).
+    Projetado para chapas e placas sintéticas (flashnestsheet).
     Aplica acoplamento de rotação (coupling), varredura de tolerância angular (range sweep),
     intertravamento entre linhas (row interlock) e controle de gap milimétrico.
     """
@@ -234,7 +234,7 @@ def dieproc_nest_pieces(available_shapes, bed_width_mm, bed_height_mm, target_co
 
     idx = 1
 
-    # Disposição 1: Rolo Contínuo (flashnestroll)
+    # Disposição Rolo (descontinuada - fábrica opera com chapas/placas)
     if is_roll:
         cur_x = margin
         cur_y = margin
@@ -703,10 +703,9 @@ def nest_tape_engine(available_shapes, bed_width_mm, bed_height_mm, target_count
 def auto_nest_pieces(available_shapes, bed_width_mm, bed_height_mm, target_count=16, strategy="flashnestsheet", params="stdNOTFill", gap_mm=1.0, dieproc_params=None):
     """
     Algoritmo de aninhamento automático 2D com suporte a múltiplas estratégias:
-    - sint: Motor de corte contínuo para rolos e chapas sintéticas (geminação 0°/180° e colmeia).
+    - sint: Motor de corte contínuo para chapas sintéticas (geminação 0°/180° e colmeia).
     - tape_a: Motor linear para fitas estreitas, tiras, debruns e correias (passo linear compacto).
     - flashnestsheet: Nesting contínuo em chapas sintéticas (DieProc dp98 com Row interlock e Coupling).
-    - flashnestroll: Nesting contínuo em rolos/bobinas sintéticas.
     - flashnestleather: Nesting em couro / peles irregulares (busca multi-angular).
     - freenest: Heurística livre para máxima compactação geométrica.
     """
@@ -819,7 +818,7 @@ def auto_nest_pieces(available_shapes, bed_width_mm, bed_height_mm, target_count
 
         return placed
 
-    # Estratégias de Sintéticos (DieProc dp98): flashnestsheet, flashnestroll, freenest
+    # Estratégias de Sintéticos (DieProc dp98): flashnestsheet, freenest
     dp_config = dict(dieproc_params) if dieproc_params else {}
     if not dp_config:
         # Mapeia predefinições caso não tenha sido passado objeto customizado
@@ -838,13 +837,12 @@ def auto_nest_pieces(available_shapes, bed_width_mm, bed_height_mm, target_count
         else:
             dp_config = {"coupling": "0/0", "gap1": gap_mm, "row_interlock": False, "range1_from": 0.0, "range1_to": 1.0, "range1_step": 1.0}
 
-    is_roll = (strategy == "flashnestroll")
     return dieproc_nest_pieces(
         available_shapes,
         bed_width_mm,
         bed_height_mm,
         target_count=max_pieces,
         dieproc_params=dp_config,
-        is_roll=is_roll
+        is_roll=False
     )
 

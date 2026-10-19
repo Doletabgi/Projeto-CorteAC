@@ -338,7 +338,7 @@ class OptionsDialog(tk.Toplevel):
         # Linha 1: Estratégia padrão
         tk.Label(grid_frame, text="Estratégia padrão", bg=THEME["bg_surface"], fg=THEME["text_main"],
                  font=("Segoe UI", 9), anchor="w").grid(row=0, column=0, sticky="w", pady=6)
-        self.cb_strategy = ttk.Combobox(grid_frame, values=["sint", "tape_a", "flashnestsheet", "flashnestroll", "std"], state="readonly", width=26)
+        self.cb_strategy = ttk.Combobox(grid_frame, values=["sint", "tape_a", "flashnestsheet", "std"], state="readonly", width=26)
         self.cb_strategy.set("sint")
         self.cb_strategy.grid(row=0, column=1, sticky="w", padx=(30, 0), pady=6)
         self.cb_strategy.bind("<<ComboboxSelected>>", self.mark_changed)
@@ -519,7 +519,10 @@ class OptionsDialog(tk.Toplevel):
         self.var_mold_view_pairs.set(st.get("mold_view_mode", "pairs"))
         self._on_mold_mode_toggle()
 
-        self.cb_strategy.set(st.get("default_strategy", "flashnestsheet"))
+        strat = st.get("default_strategy", "flashnestsheet")
+        if strat == "flashnestroll":
+            strat = "flashnestsheet"
+        self.cb_strategy.set(strat)
         self.cb_nest_params.set(st.get("default_nesting_params", "Padrao"))
         self.cb_postbuilder.set(st.get("default_postbuilder", "(nenhum)"))
         self.cb_mold_params.set(st.get("default_mold_params", "(nenhum)"))

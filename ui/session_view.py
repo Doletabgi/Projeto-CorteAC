@@ -132,12 +132,16 @@ class SessionView(tk.Frame):
 
         self.cb_strategy = ttk.Combobox(
             col_left,
-            values=["sint", "tape_a", "flashnestsheet", "flashnestroll", "freenest"],
+            values=["sint", "tape_a", "flashnestsheet", "freenest"],
             state="readonly",
             font=("Segoe UI", 9),
             height=8
         )
-        self.cb_strategy.set(self.session_data.get("strategy") or "sint")
+        initial_strat = self.session_data.get("strategy") or "sint"
+        if initial_strat == "flashnestroll":
+            initial_strat = "flashnestsheet"
+            self.session_data["strategy"] = initial_strat
+        self.cb_strategy.set(initial_strat)
         self.cb_strategy.pack(fill="x", pady=(0, 10))
         self.cb_strategy.bind("<<ComboboxSelected>>", self.on_strategy_selected)
 
@@ -961,10 +965,9 @@ class SessionView(tk.Frame):
 
     def update_strategy_description(self, strategy):
         descs = {
-            "sint": "Estratégia Sint (Sintéticos): Nesting contínuo para rolos e placas sintéticas com geminação de pares (0°/180°) e intertravamento em colmeia.",
+            "sint": "Estratégia Sint (Sintéticos): Nesting contínuo para chapas e placas sintéticas com geminação de pares (0°/180°) e intertravamento em colmeia.",
             "tape_a": "Estratégia Tape A (Tiras & Fitas): Nesting linear para faixas estreitas e correias com alinhamento longitudinal e passo compacto.",
             "flashnestsheet": "Estratégia Placa: Otimização bidimensional para placas e folhas retangulares com encaixe interlocking em linhas horizontais.",
-            "flashnestroll": "Estratégia Rolo: Otimização orientada ao avanço contínuo de rolos/bobinas (minimiza o comprimento linear desenrolado).",
             "freenest": "Estratégia FreeNest: Algoritmo livre de alta densidade visando máximo aproveitamento percentual (Yield %)."
         }
         if hasattr(self, "lbl_strategy_desc"):
@@ -1088,6 +1091,9 @@ class SessionView(tk.Frame):
             self.lbl_status_val.config(text=status)
 
         strat = session_data.get("strategy") or "flashnestsheet"
+        if strat == "flashnestroll":
+            strat = "flashnestsheet"
+            session_data["strategy"] = strat
         if hasattr(self, "cb_strategy"):
             self.cb_strategy.set(strat)
             self.update_strategy_description(strat)

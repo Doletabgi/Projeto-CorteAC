@@ -14,7 +14,6 @@ Na interface de produção (`SessionView`), o operador dispõe de dois seletores
 | [ sint                 |v]                                              |
 |   tape_a                                                                |
 |   flashnestsheet                                                        |
-|   flashnestroll                                                         |
 |   freenest                                                              |
 |                                                                         |
 | Parâmetros:                                                             |
@@ -27,7 +26,7 @@ Na interface de produção (`SessionView`), o operador dispõe de dois seletores
 ```
 
 ### Qual a diferença entre Estratégia e Parâmetros?
-* **A Estratégia** define o **tipo de material e a geometria física da mesa de corte**: se é chapa fechada, bobina/rolo contínuo, fitas lineares estreitas ou encaixe livre em retalhos.
+* **A Estratégia** define o **tipo de material e a geometria física da mesa de corte**: se é chapa fechada, placa retangular, fitas lineares estreitas ou encaixe livre em retalhos (a fábrica opera 100% com chapas/placas).
 * **Os Parâmetros (Motores)** definem a **agressividade do cálculo e a regra de produção**: se o algoritmo deve calcular instantaneamente, se deve buscar o aproveitamento máximo no milímetro, se deve parar na quantidade exata pedida ou se deve lotar a chapa inteira para estoque.
 
 ---
@@ -36,7 +35,7 @@ Na interface de produção (`SessionView`), o operador dispõe de dois seletores
 
 ---
 
-### 2.1. `sint` (Sintéticos em Chapa / Rolo com Linhas Uniformes)
+### 2.1. `sint` (Sintéticos em Chapas e Placas com Linhas Uniformes)
 
 * **Conceito Industrial**: Motor de corte contínuo desenvolvido especificamente para materiais sintéticos regulares (laminados, PVC, PU, sintéticos expandidos, palmilhas e solados).
 * **Como Funciona**:
@@ -45,7 +44,7 @@ Na interface de produção (`SessionView`), o operador dispõe de dois seletores
   * **Contour Bumping Exato de 1.0 mm**: Utiliza busca binária submilimétrica para encostar as peças contorno a contorno com folga estrita de $1.0\text{ mm}$ (sem folgas exageradas de bounding box e com zero colisões).
   * **Intertravamento Vertical de Linhas**: A aproximação entre linhas inteiras penetra nas curvas das peças da linha anterior.
 * **Quando Utilizar**:
-  * Solados, palmilhas e cortes de calçados em chapas sintéticas ou rolos onde se exige corte veloz, organizado em fileiras limpas e sem desvios de esteira.
+  * Solados, palmilhas e cortes de calçados em chapas sintéticas ou placas onde se exige corte veloz, organizado em fileiras limpas e sem desvios.
 
 ---
 
@@ -53,7 +52,7 @@ Na interface de produção (`SessionView`), o operador dispõe de dois seletores
 
 * **Conceito Industrial**: Motor linear especializado para peças extremamente compridas e estreitas (*Tapes & Ribbons*), como tiras de sandálias, debruns, vivos, passadores, correias e tirantes.
 * **Como Funciona**:
-  * **Alinhamento Unidirecional Fixo**: Trava a rotação das tiras em ângulo fixo (geralmente paralelo ao eixo da chapa ou rolo).
+  * **Alinhamento Unidirecional Fixo**: Trava a rotação das tiras em ângulo fixo (geralmente paralelo ao eixo da chapa).
   * **Passo Linear Constante**: Avança as tiras lado a lado com espaçamento estritamente uniforme.
   * **Prevenção de Distorção por Arrasto**: Ao cortar peças compridas e finas, rotações variadas ou curvas inclinadas fariam a lâmina vibrar ou puxar o material, gerando variação de largura na ponta da tira. O alinhamento paralelo linear elimina esse problema.
 * **Quando Utilizar**:
@@ -73,19 +72,7 @@ Na interface de produção (`SessionView`), o operador dispõe de dois seletores
 
 ---
 
-### 2.4. `flashnestroll` (Bobinas e Rolos Contínuos com Esteira)
-
-* **Conceito Industrial**: Estratégia clássica da ATOM para materiais em bobina / rolo contínuo (*Rolls*), onde a largura é fixa (ex: 1400 mm), mas o comprimento é alimentado continuamente pela esteira rolante da máquina.
-* **Como Funciona**:
-  * **Otimização de Comprimento (*Last die by len / Last layout by len*)**: O algoritmo prioriza minimizar a quantidade de metros lineares puxados da bobina, em vez de apenas otimizar a área instantânea da janela.
-  * **Organização em Colunas e Faixas de Avanço**: As peças são organizadas em colunas verticais ou avanços contínuos de esteira.
-  * **Suporte à Opção Diagonal do DieProc**: Permite que as matrizes de encaixe sejam inclinadas diagonalmente ao longo da largura do rolo, aproveitando sobras triangulares nas bordas da bobina.
-* **Quando Utilizar**:
-  * Máquinas ATOM equipadas com desenrolador automático de bobinas (*Roll feeder*) e esteira transportadora para corte contínuo de rolos de PU, PVC ou tecidos sintéticos.
-
----
-
-### 2.5. `freenest` (Nesting Livre / Geometria Orgânica e Retalhos)
+### 2.4. `freenest` (Nesting Livre / Geometria Orgânica e Retalhos)
 
 * **Conceito Industrial**: Motor de encaixe livre baseado em heurística poligonal e gravidade geométrica bidimensional, sem a rigidez de matrizes ou linhas fixas.
 * **Como Funciona**:
@@ -95,16 +82,18 @@ Na interface de produção (`SessionView`), o operador dispõe de dois seletores
 * **Quando Utilizar**:
   * Prototipagem rápida, corte de coleções com muitas peças mistas de tamanhos diferentes, ou quando o material possui formato irregular / retalhos.
 
+> [!NOTE]
+> **Nota sobre Bobinas Contínuas (`flashnestroll`)**: A estratégia para bobinas contínuas com esteira rolante foi removida do sistema, uma vez que a fábrica opera exclusivamente com corte em chapas e placas sintéticas.
+
 ---
 
 ### Resumo Comparativo das Estratégias
 
 | Estratégia | Tipo de Material / Suporte | Disposição no Layout | Comportamento do Cabeçote | Melhor Aplicação |
 |---|---|---|---|---|
-| **`sint`** | Chapas e Rolos Sintéticos | Fileiras retilíneas geminadas (0°/180°) | Trajetória linear contínua | Solados, palmilhas e calçados em geral |
-| **`tape_a`** | Fitas e Tiras em Chapa/Rolo | Tiras paralelas lineares em passo fixo | Trajetória paralela uniforme | Debruns, vivos, correias e tirantes |
+| **`sint`** | Chapas e Placas Sintéticas | Fileiras retilíneas geminadas (0°/180°) | Trajetória linear contínua | Solados, palmilhas e calçados em geral |
+| **`tape_a`** | Fitas e Tiras em Chapa/Placa | Tiras paralelas lineares em passo fixo | Trajetória paralela uniforme | Debruns, vivos, correias e tirantes |
 | **`flashnestsheet`** | Placas e Chapas Fechadas | Grade DieProc com *Hole-Filling* | Otimizado para área retangular | Chapas de borracha, EVA, recouro e PVC |
-| **`flashnestroll`** | Bobinas e Rolos com Esteira | Colunas orientadas ao avanço do rolo | Minimiza metros lineares de esteira | Rolos contínuos alimentados por bobina |
 | **`freenest`** | Chapas, Retalhos e Peças Mistas | Orgânico livre (busca de espaços vazios) | Gravidade espacial e atratores | Protótipos, peças sortidas e retalhos |
 
 ---
@@ -174,6 +163,5 @@ Os motores de parâmetros atuam sobre a estratégia escolhida, determinando as r
 | **Corte de solas aproveitando 100% da chapa para estoque** | **`sint`** | **`stdFill`** |
 | **Economizar material ao máximo em chapa cara** | **`flashnestsheet`** | **`HighYield`** |
 | **Corte de tiras finas, debruns ou correias** | **`tape_a`** | **`stdNOTFill`** |
-| **Corte contínuo em rolo/bobina com esteira** | **`flashnestroll`** | **`HighYield`** ou **`FastNest`** |
 | **Material com textura/brilho que não pode girar** | **`sint`** ou **`flashnestsheet`** | **`PrmSss_35`** |
 | **Aproveitar sobras e retalhos com peças sortidas** | **`freenest`** | **`stdNOTFill`** |
