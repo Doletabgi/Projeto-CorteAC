@@ -166,6 +166,31 @@ class TestStrategyRemoval(unittest.TestCase):
 
         sv.destroy()
 
+    def test_strategy_label_and_descriptions(self):
+        """Valida que o label de estratégia e as descrições definem a geometria física do corte e do material."""
+        mock_db = MagicMock()
+        session_dict = {
+            "id": 1,
+            "name": "Teste Sessao",
+            "status": "Open",
+            "strategy": "freenest",
+            "shapes": [],
+            "placed_pieces": []
+        }
+        sv = SessionView(self.root, session_dict, db=mock_db)
+
+        # Encontra o label acima do combobox cb_strategy
+        parent = sv.cb_strategy.master
+        labels = [w for w in parent.winfo_children() if isinstance(w, tk.Label)]
+        label_texts = [lbl.cget("text") for lbl in labels]
+        self.assertIn("A Estratégia define a geometria física do corte e do material:", label_texts)
+
+        # Verifica descrição dinâmica
+        self.assertIn("A Estratégia define a geometria física do corte e do material", sv.lbl_strategy_desc.cget("text"))
+
+        sv.destroy()
+
 
 if __name__ == "__main__":
     unittest.main()
+

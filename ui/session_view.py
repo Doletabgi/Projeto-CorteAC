@@ -174,7 +174,7 @@ class SessionView(tk.Frame):
         # 1. Estratégia
         tk.Label(
             col_left,
-            text="Estratégia:",
+            text="A Estratégia define a geometria física do corte e do material:",
             anchor="w",
             bg=THEME["bg_card"],
             fg=THEME["text_main"],
@@ -1100,10 +1100,10 @@ class SessionView(tk.Frame):
 
     def update_strategy_description(self, strategy):
         descs = {
-            "sint": "Estratégia Sint (Sintéticos): Nesting contínuo para chapas e placas sintéticas com geminação de pares (0°/180°) e intertravamento em colmeia.",
-            "tape_a": "Estratégia Tape A (Tiras & Fitas): Nesting linear para faixas estreitas e correias com alinhamento longitudinal e passo compacto.",
-            "flashnestsheet": "Estratégia Placa: Otimização bidimensional para placas e folhas retangulares com encaixe interlocking em linhas horizontais.",
-            "freenest": "Estratégia FreeNest: Algoritmo livre de alta densidade visando máximo aproveitamento percentual (Yield %)."
+            "sint": "A Estratégia define a geometria física do corte e do material. Sint (Sintéticos): Nesting contínuo para chapas e placas com geminação 0°/180° e colmeia.",
+            "tape_a": "A Estratégia define a geometria física do corte e do material. Tape A (Tiras & Fitas): Nesting linear para faixas estreitas com passo compacto.",
+            "flashnestsheet": "A Estratégia define a geometria física do corte e do material. Placa: Otimização bidimensional para placas retangulares com interlocking.",
+            "freenest": "A Estratégia define a geometria física do corte e do material. FreeNest: Algoritmo livre de alta densidade visando máximo aproveitamento percentual (Yield %)."
         }
         if hasattr(self, "lbl_strategy_desc"):
             self.lbl_strategy_desc.config(text=descs.get(strategy, ""))
