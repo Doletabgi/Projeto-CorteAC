@@ -185,6 +185,13 @@ class TestStrategyRemoval(unittest.TestCase):
         label_texts = [lbl.cget("text") for lbl in labels]
         self.assertIn("A Estratégia define a geometria física do corte e do material:", label_texts)
 
+        # Encontra o label de parâmetros dentro de params_header
+        hdr_labels = []
+        for w in parent.winfo_children():
+            if isinstance(w, tk.Frame):
+                hdr_labels.extend([subw.cget("text") for subw in w.winfo_children() if isinstance(subw, tk.Label)])
+        self.assertIn("O Parâmetro define o comportamento das rotações, folgas e preenchimento da chapa:", hdr_labels)
+
         # Verifica descrição dinâmica
         self.assertIn("A Estratégia define a geometria física do corte e do material", sv.lbl_strategy_desc.cget("text"))
 

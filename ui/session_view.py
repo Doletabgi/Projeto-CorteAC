@@ -200,15 +200,6 @@ class SessionView(tk.Frame):
         params_header = tk.Frame(col_left, bg=THEME["bg_card"])
         params_header.pack(fill="x", pady=(0, 2))
 
-        tk.Label(
-            params_header,
-            text="Parâmetros:",
-            anchor="w",
-            bg=THEME["bg_card"],
-            fg=THEME["text_main"],
-            font=("Segoe UI", 9)
-        ).pack(side="left")
-
         self.btn_dieproc_cfg = tk.Button(
             params_header,
             text="⚙️ Configurar...",
@@ -223,6 +214,15 @@ class SessionView(tk.Frame):
             command=self.open_dieproc_configuration
         )
         self.btn_dieproc_cfg.pack(side="right")
+
+        tk.Label(
+            params_header,
+            text="O Parâmetro define o comportamento das rotações, folgas e preenchimento da chapa:",
+            anchor="w",
+            bg=THEME["bg_card"],
+            fg=THEME["text_main"],
+            font=("Segoe UI", 9)
+        ).pack(side="left")
 
         self.cb_params = ttk.Combobox(
             col_left,
