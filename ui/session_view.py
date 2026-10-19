@@ -61,6 +61,12 @@ RECOMMENDED_COMBINATIONS = [
         "parametro": "stdNOTFill",
         "resultado": "Encaixe orgânico livre por atração de gravidade espacial em retalhos e geometrias mistas."
     },
+    {
+        "objetivo": "Otimização avançada por macros com IA local adaptativa",
+        "estrategia": "IA-teste",
+        "parametro": "FastNest",
+        "resultado": "Motor híbrido inteligente por macros declarativas com aprendizado por imitação e auto-tune UCB1."
+    },
 ]
 
 class SessionView(tk.Frame):
@@ -177,7 +183,7 @@ class SessionView(tk.Frame):
 
         self.cb_strategy = ttk.Combobox(
             col_left,
-            values=["sint", "tape_a", "flashnestsheet", "freenest"],
+            values=["sint", "tape_a", "flashnestsheet", "freenest", "IA-teste"],
             state="readonly",
             font=("Segoe UI", 9),
             height=8
@@ -1097,7 +1103,8 @@ class SessionView(tk.Frame):
             "sint": "A Estratégia define a geometria física do corte e do material. Sint (Sintéticos): Nesting contínuo para chapas e placas com geminação 0°/180° e colmeia.",
             "tape_a": "A Estratégia define a geometria física do corte e do material. Tape A (Tiras & Fitas): Nesting linear para faixas estreitas com passo compacto.",
             "flashnestsheet": "A Estratégia define a geometria física do corte e do material. Placa: Otimização bidimensional para placas retangulares com interlocking.",
-            "freenest": "A Estratégia define a geometria física do corte e do material. FreeNest: Algoritmo livre de alta densidade visando máximo aproveitamento percentual (Yield %)."
+            "freenest": "A Estratégia define a geometria física do corte e do material. FreeNest: Algoritmo livre de alta densidade visando máximo aproveitamento percentual (Yield %).",
+            "IA-teste": "A Estratégia define a geometria física do corte e do material. IA-teste: Motor híbrido por macros declarativas com IA local embarcada e Auto-Tune."
         }
         if hasattr(self, "lbl_strategy_desc"):
             self.lbl_strategy_desc.config(text=descs.get(strategy, ""))

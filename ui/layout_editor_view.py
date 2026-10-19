@@ -2413,15 +2413,33 @@ class LayoutEditorView(tk.Frame):
         self._saved_undo_index = len(self.undo_stack)
         self.set_modified(False)
 
+        # Imitation Learning da IA Local ('IA-teste')
+        ai_learned = False
+        if not error_msg and getattr(self, "db", None) and len(self.placed_pieces) >= 2:
+            try:
+                import threading
+                from cad.ai_learner import NestingAIBrain
+                brain = NestingAIBrain(self.db)
+                t = threading.Thread(
+                    target=brain.learn_from_operator_save,
+                    args=(self.placed_pieces, self.sheet_width, self.sheet_height),
+                    daemon=True
+                )
+                t.start()
+                ai_learned = True
+            except Exception as e:
+                print(f"[IA-teste] Aviso ao registrar aprendizado: {e}")
+
         if error_msg:
             status_text = f"Aviso ao salvar: {error_msg}"
             status_color = "#dc2626"
         else:
             n_pieces = len(self.placed_pieces)
+            extra_ai = " | IA Local aprendeu com este ajuste" if ai_learned else ""
             if saved_file:
-                status_text = f"Layout salvo no banco e em '{Path(self.layout_filepath).name}' ({n_pieces} peças) [Ctrl+S]."
+                status_text = f"Layout salvo no banco e em '{Path(self.layout_filepath).name}' ({n_pieces} peças) [Ctrl+S]{extra_ai}."
             else:
-                status_text = f"Layout salvo no banco de dados ({n_pieces} peças) [Ctrl+S]."
+                status_text = f"Layout salvo no banco de dados ({n_pieces} peças) [Ctrl+S]{extra_ai}."
             status_color = THEME.get("text_main", "#000000")
 
         if hasattr(self, "lbl_stat_pos"):

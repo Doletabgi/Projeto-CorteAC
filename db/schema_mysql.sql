@@ -126,7 +126,8 @@ CREATE TABLE IF NOT EXISTS dieproc_presets (
     gap2 DOUBLE DEFAULT 0.0,
     gap3 DOUBLE DEFAULT 0.0,
     row_interlock INT DEFAULT 1,
-    diagonal INT DEFAULT 0
+    diagonal INT DEFAULT 0,
+    macro_script LONGTEXT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- 9. Layouts de Corte (.lay) com Controle de Versão Otimista

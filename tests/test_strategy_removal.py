@@ -51,7 +51,7 @@ class TestStrategyRemoval(unittest.TestCase):
         sv = SessionView(self.root, session_dict, db=mock_db)
         values = list(sv.cb_strategy["values"])
         self.assertNotIn("flashnestroll", values)
-        self.assertEqual(values, ["sint", "tape_a", "flashnestsheet", "freenest"])
+        self.assertEqual(values, ["sint", "tape_a", "flashnestsheet", "freenest", "IA-teste"])
         sv.destroy()
 
     def test_session_view_normalizes_legacy_flashnestroll(self):

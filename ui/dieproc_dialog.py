@@ -20,7 +20,7 @@ class DieProcDialog(tk.Toplevel):
         self.resizable(False, False)
         self.configure(bg=THEME["bg_surface"])
 
-        dlg_w, dlg_h = 620, 430
+        dlg_w, dlg_h = 680, 460
         self.geometry(f"{dlg_w}x{dlg_h}")
 
         # Centraliza sobre a janela pai
@@ -84,13 +84,23 @@ class DieProcDialog(tk.Toplevel):
         self.preset_listbox.bind("<<ListboxSelect>>", self.on_listbox_select)
 
         # -------------------------------------------------------------
-        # Painel Direito: Configuração detalhada do DieProc
+        # Painel Direito: Notebook com DieProc e Macro/IA
         # -------------------------------------------------------------
         right_box = tk.Frame(content_frame, bg=THEME["bg_surface"])
         right_box.pack(side="left", fill="both", expand=True)
 
+        self.notebook = ttk.Notebook(right_box)
+        self.notebook.pack(fill="both", expand=True)
+
+        self.tab_dieproc = tk.Frame(self.notebook, bg=THEME["bg_surface"], padx=6, pady=6)
+        self.tab_macro = tk.Frame(self.notebook, bg=THEME["bg_surface"], padx=6, pady=6)
+
+        self.notebook.add(self.tab_dieproc, text="Parâmetros DieProc (dp98)")
+        self.notebook.add(self.tab_macro, text="Macro & IA Local ('IA-teste')")
+
+        # ---------------- TAB 1: DIEPROC (DP98) ----------------
         # Linha 1: Name e Coupling
-        row1 = tk.Frame(right_box, bg=THEME["bg_surface"])
+        row1 = tk.Frame(self.tab_dieproc, bg=THEME["bg_surface"])
         row1.pack(fill="x", pady=(0, 6))
 
         tk.Label(row1, text="Name:", bg=THEME["bg_surface"], fg=THEME["text_main"], font=("Segoe UI", 9), width=7, anchor="w").pack(side="left")
@@ -107,7 +117,7 @@ class DieProcDialog(tk.Toplevel):
         self.cb_coupling.pack(side="left", padx=(6, 0))
 
         # Linha 2: Step e Solutions
-        row2 = tk.Frame(right_box, bg=THEME["bg_surface"])
+        row2 = tk.Frame(self.tab_dieproc, bg=THEME["bg_surface"])
         row2.pack(fill="x", pady=(0, 8))
 
         tk.Label(row2, text="Step:", bg=THEME["bg_surface"], fg=THEME["text_main"], font=("Segoe UI", 9), width=7, anchor="w").pack(side="left")
@@ -119,7 +129,7 @@ class DieProcDialog(tk.Toplevel):
         self.sp_solutions.pack(side="left", padx=(6, 0))
 
         # Linha 3: 3 Caixas de Faixas Angulares (Range 1, Range 2, Range 3)
-        row_ranges = tk.Frame(right_box, bg=THEME["bg_surface"])
+        row_ranges = tk.Frame(self.tab_dieproc, bg=THEME["bg_surface"])
         row_ranges.pack(fill="x", pady=(0, 8))
 
         # Range 1
@@ -138,7 +148,7 @@ class DieProcDialog(tk.Toplevel):
         self.ent_r3_from, self.ent_r3_to, self.ent_r3_step = self._build_range_fields(box_r3)
 
         # Linha 4: Gaps e Checkboxes (Row interlock, Diagonal)
-        row4 = tk.Frame(right_box, bg=THEME["bg_surface"])
+        row4 = tk.Frame(self.tab_dieproc, bg=THEME["bg_surface"])
         row4.pack(fill="x", pady=(0, 8))
 
         box_gaps = tk.LabelFrame(row4, text="Gaps", bg=THEME["bg_surface"], fg=THEME["text_main"], font=("Segoe UI", 8), relief="groove")
@@ -184,6 +194,53 @@ class DieProcDialog(tk.Toplevel):
             font=("Segoe UI", 9)
         )
         self.chk_diagonal.pack(anchor="w", pady=(2, 2))
+
+        # ---------------- TAB 2: MACRO & IA LOCAL ----------------
+        macro_top = tk.Frame(self.tab_macro, bg=THEME["bg_surface"])
+        macro_top.pack(fill="x", pady=(0, 6))
+
+        self.lbl_ai_status = tk.Label(
+            macro_top,
+            text="IA Local: Carregando status...",
+            bg=THEME["bg_surface"],
+            fg=THEME["text_main"],
+            font=("Segoe UI", 8, "italic"),
+            anchor="w"
+        )
+        self.lbl_ai_status.pack(side="left", fill="x", expand=True)
+
+        self.btn_restore_macro = tk.Button(
+            macro_top,
+            text="Restaurar Macro Padrão IA-teste",
+            bg=THEME["bg_surface"],
+            fg=THEME["text_main"],
+            font=("Segoe UI", 8),
+            relief="raised",
+            bd=1,
+            cursor="hand2",
+            padx=6,
+            command=self.restore_default_macro
+        )
+        self.btn_restore_macro.pack(side="right")
+
+        macro_text_frame = tk.Frame(self.tab_macro, bg=THEME["bg_surface"])
+        macro_text_frame.pack(fill="both", expand=True)
+
+        macro_scroll = tk.Scrollbar(macro_text_frame, orient="vertical")
+        self.txt_macro = tk.Text(
+            macro_text_frame,
+            bg=THEME["bg_input"],
+            fg=THEME["text_main"],
+            insertbackground=THEME["text_main"],
+            font=("Courier", 9),
+            wrap="word",
+            relief="sunken",
+            bd=2,
+            yscrollcommand=macro_scroll.set
+        )
+        macro_scroll.config(command=self.txt_macro.yview)
+        macro_scroll.pack(side="right", fill="y")
+        self.txt_macro.pack(side="left", fill="both", expand=True)
 
         # -------------------------------------------------------------
         # Barra Inferior de Botões de Ação
@@ -347,6 +404,31 @@ class DieProcDialog(tk.Toplevel):
         self.var_row_interlock.set(bool(preset.get("row_interlock", 1)))
         self.var_diagonal.set(bool(preset.get("diagonal", 0)))
 
+        # Carrega script de macro se disponível
+        if hasattr(self, "txt_macro"):
+            self.txt_macro.delete("1.0", "end")
+            macro_val = preset.get("macro_script") or ""
+            if not macro_val and (name == "MACRO_IA_TESTE" or "IA" in name.upper()):
+                from cad.macro_engine import DEFAULT_IA_TESTE_MACRO
+                macro_val = DEFAULT_IA_TESTE_MACRO
+            self.txt_macro.insert("1.0", macro_val)
+
+        if hasattr(self, "lbl_ai_status"):
+            try:
+                from cad.ai_learner import NestingAIBrain
+                ai_info = NestingAIBrain(self.db).get_memory_status()
+                self.lbl_ai_status.config(text=f"IA Local: {ai_info.get('summary', 'Ativa')}")
+            except Exception:
+                self.lbl_ai_status.config(text="IA Local: Ativa")
+
+        if (name == "MACRO_IA_TESTE" or "IA" in name.upper()) and hasattr(self, "notebook") and hasattr(self, "tab_macro"):
+            self.notebook.select(self.tab_macro)
+
+    def restore_default_macro(self):
+        from cad.macro_engine import DEFAULT_IA_TESTE_MACRO
+        self.txt_macro.delete("1.0", "end")
+        self.txt_macro.insert("1.0", DEFAULT_IA_TESTE_MACRO)
+
     def _set_entry(self, entry, value):
         entry.delete(0, "end")
         val_str = f"{value:g}" if isinstance(value, (int, float)) else str(value)
@@ -390,6 +472,7 @@ class DieProcDialog(tk.Toplevel):
             "gap3": self._get_float(self.sp_gap3, 0.0),
             "row_interlock": 1 if self.var_row_interlock.get() else 0,
             "diagonal": 1 if self.var_diagonal.get() else 0,
+            "macro_script": self.txt_macro.get("1.0", "end-1c") if hasattr(self, "txt_macro") else "",
         }
 
     def on_listbox_select(self, event):
@@ -424,6 +507,8 @@ class DieProcDialog(tk.Toplevel):
         self._set_spin(self.sp_gap3, 0.0)
         self.var_row_interlock.set(False)
         self.var_diagonal.set(False)
+        if hasattr(self, "txt_macro"):
+            self.txt_macro.delete("1.0", "end")
 
     def on_no_selection(self):
         self.preset_listbox.selection_clear(0, "end")

@@ -9,6 +9,7 @@ from cad.geometry import (
     SpatialGrid, find_contact_coordinate_binary
 )
 from cad.colors import get_color_for_size
+from cad.macro_engine import nest_ia_teste_engine, DEFAULT_IA_TESTE_MACRO
 from config import ATOM_MACHINE
 
 _PAIRED_OFFSET_CACHE = {}
@@ -700,9 +701,10 @@ def nest_tape_engine(available_shapes, bed_width_mm, bed_height_mm, target_count
 
     return placed
 
-def auto_nest_pieces(available_shapes, bed_width_mm, bed_height_mm, target_count=16, strategy="flashnestsheet", params="stdNOTFill", gap_mm=1.0, dieproc_params=None):
+def auto_nest_pieces(available_shapes, bed_width_mm, bed_height_mm, target_count=16, strategy="flashnestsheet", params="stdNOTFill", gap_mm=1.0, dieproc_params=None, db=None):
     """
     Algoritmo de aninhamento automático 2D com suporte a múltiplas estratégias:
+    - IA-teste: Motor híbrido por macros declarativas com IA local embarcada e UCB1 Bandit.
     - sint: Motor de corte contínuo para chapas sintéticas (geminação 0°/180° e colmeia).
     - tape_a: Motor linear para fitas estreitas, tiras, debruns e correias (passo linear compacto).
     - flashnestsheet: Nesting contínuo em chapas sintéticas (DieProc dp98 com Row interlock e Coupling).
@@ -712,6 +714,18 @@ def auto_nest_pieces(available_shapes, bed_width_mm, bed_height_mm, target_count
     placed = []
     if not available_shapes:
         return placed
+
+    # 0. Estratégia IA-teste (Macros Declarativas + IA Local Embarcada 100% Nativa)
+    if str(strategy).lower() in ("ia-teste", "ia_teste", "iateste"):
+        return nest_ia_teste_engine(
+            available_shapes=available_shapes,
+            bed_width_mm=bed_width_mm,
+            bed_height_mm=bed_height_mm,
+            target_count=target_count,
+            gap_mm=gap_mm,
+            db=db,
+            dieproc_params=dieproc_params
+        )
 
     # 1. Estratégia Sint (Sintéticos Contínuo)
     if str(strategy).lower() in ("sint", "sintetico", "sintetico_continuo"):

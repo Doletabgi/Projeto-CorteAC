@@ -4386,7 +4386,8 @@ class MainWindow(tk.Tk):
                     strategy=strategy,
                     params=params,
                     gap_mm=gap,
-                    dieproc_params=dieproc_params
+                    dieproc_params=dieproc_params,
+                    db=self.db
                 )
                 nest_q.put(("SUCCESS", pieces))
             except Exception as e:

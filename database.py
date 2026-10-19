@@ -77,6 +77,27 @@ class DatabaseManager:
                             if stmt:
                                 cursor.execute(stmt)
                         conn.commit()
+                # Migração transparente idempotente para MySQL (macro_script em dieproc_presets)
+                try:
+                    cursor.execute("""
+                    SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS
+                    WHERE TABLE_NAME = 'dieproc_presets' AND COLUMN_NAME = 'macro_script'
+                    """)
+                    if not cursor.fetchone():
+                        cursor.execute("ALTER TABLE dieproc_presets ADD COLUMN macro_script LONGTEXT NULL")
+                        conn.commit()
+                    try:
+                        from cad.macro_engine import DEFAULT_IA_TESTE_MACRO
+                        cursor.execute("""
+                        INSERT IGNORE INTO dieproc_presets
+                        (name, coupling, step, solutions, range1_from, range1_to, range1_step, range2_from, range2_to, range2_step, range3_from, range3_to, range3_step, gap1, gap2, gap3, row_interlock, diagonal, macro_script)
+                        VALUES ('MACRO_IA_TESTE', '0/0 0/180', 1.0, 30, -3.0, 3.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 1, 0, %s)
+                        """, (DEFAULT_IA_TESTE_MACRO,))
+                        conn.commit()
+                    except Exception:
+                        pass
+                except Exception:
+                    pass
             else:
                 # Backend SQLite (reserva / testes)
                 cursor.execute("""
@@ -217,9 +238,24 @@ class DatabaseManager:
                     gap2 REAL DEFAULT 0.0,
                     gap3 REAL DEFAULT 0.0,
                     row_interlock INTEGER DEFAULT 1,
-                    diagonal INTEGER DEFAULT 0
+                    diagonal INTEGER DEFAULT 0,
+                    macro_script TEXT DEFAULT ''
                 )
                 """)
+                try:
+                    cursor.execute("ALTER TABLE dieproc_presets ADD COLUMN macro_script TEXT DEFAULT ''")
+                except Exception:
+                    pass
+
+                try:
+                    from cad.macro_engine import DEFAULT_IA_TESTE_MACRO
+                    cursor.execute("""
+                    INSERT OR IGNORE INTO dieproc_presets
+                    (name, coupling, step, solutions, range1_from, range1_to, range1_step, range2_from, range2_to, range2_step, range3_from, range3_to, range3_step, gap1, gap2, gap3, row_interlock, diagonal, macro_script)
+                    VALUES ('MACRO_IA_TESTE', '0/0 0/180', 1.0, 30, -3.0, 3.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 1, 0, ?)
+                    """, (DEFAULT_IA_TESTE_MACRO,))
+                except Exception:
+                    pass
 
                 cursor.execute("""
                 CREATE TABLE IF NOT EXISTS layouts (
@@ -389,6 +425,17 @@ class DatabaseManager:
                 (name, coupling, step, solutions, range1_from, range1_to, range1_step, range2_from, range2_to, range2_step, range3_from, range3_to, range3_step, gap1, gap2, gap3, row_interlock, diagonal)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """, dp)
+
+            # Preset padrão do novo motor de cálculo IA-teste com macro declarativa
+            try:
+                from cad.macro_engine import DEFAULT_IA_TESTE_MACRO
+                cursor.execute("""
+                INSERT OR IGNORE INTO dieproc_presets
+                (name, coupling, step, solutions, range1_from, range1_to, range1_step, range2_from, range2_to, range2_step, range3_from, range3_to, range3_step, gap1, gap2, gap3, row_interlock, diagonal, macro_script)
+                VALUES ('MACRO_IA_TESTE', '0/0 0/180', 1.0, 30, -3.0, 3.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 1, 0, ?)
+                """, (DEFAULT_IA_TESTE_MACRO,))
+            except Exception:
+                pass
 
             # Verificar se já existem ordens
             cursor.execute("SELECT COUNT(*) FROM orders")
@@ -1251,8 +1298,8 @@ class DatabaseManager:
             cursor = conn.cursor()
             cursor.execute("""
             REPLACE INTO dieproc_presets 
-            (name, coupling, step, solutions, range1_from, range1_to, range1_step, range2_from, range2_to, range2_step, range3_from, range3_to, range3_step, gap1, gap2, gap3, row_interlock, diagonal)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            (name, coupling, step, solutions, range1_from, range1_to, range1_step, range2_from, range2_to, range2_step, range3_from, range3_to, range3_step, gap1, gap2, gap3, row_interlock, diagonal, macro_script)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """, (
                 p.get("name", "ALTERNADO"),
                 p.get("coupling", "0/0 0/180"),
@@ -1271,7 +1318,8 @@ class DatabaseManager:
                 float(p.get("gap2", 0.0)),
                 float(p.get("gap3", 0.0)),
                 1 if p.get("row_interlock", True) else 0,
-                1 if p.get("diagonal", False) else 0
+                1 if p.get("diagonal", False) else 0,
+                str(p.get("macro_script", "") or "")
             ))
             conn.commit()
 
