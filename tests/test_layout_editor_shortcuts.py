@@ -1240,6 +1240,48 @@ class TestLayoutEditorShortcuts(unittest.TestCase):
             mock_warn.assert_not_called()
             win.maximize_window.assert_called_once_with(win.layout_editor_view)
 
+    def test_materials_grid_has_descricao_column_and_no_partida(self):
+        """Valida que o grid inferior no modo Estoque de material usa coluna 'Descrição' e não 'Partida'."""
+        from ui.main_window import MainWindow
+
+        class DummyBtn:
+            def config(self, **kwargs):
+                pass
+
+        class FakeMainMatGrid:
+            def __init__(self, root):
+                self.root = root
+                self.tree_main = ttk.Treeview(root)
+                self.grid_lower = ttk.Treeview(root)
+                self.current_mode = "materials"
+                self.icons = {}
+                self.materials = [
+                    {"id": 1, "name": "SINT-LOGAM 1.4 PRETO", "code": "SINT-LOGAM", "width_mm": 1380.0, "height_mm": 2980.0, "type": "como placa"}
+                ]
+                self.btn_mode_jobs = DummyBtn()
+                self.btn_mode_shapes = DummyBtn()
+                self.btn_mode_materials = DummyBtn()
+                self.sort_grid_lower = lambda col: None
+
+            def switch_tree_mode(self, mode="materials"):
+                MainWindow.switch_tree_mode(self, mode=mode)
+
+        fm = FakeMainMatGrid(self.root)
+        fm.switch_tree_mode("materials")
+
+        cols = list(fm.grid_lower["columns"])
+        self.assertNotIn("partida", cols)
+        self.assertIn("descricao", cols)
+        self.assertEqual(cols, ["cod_mat", "descricao", "definicao", "comprimento", "largura"])
+
+        self.assertEqual(fm.grid_lower.heading("descricao", "text"), "Descrição")
+
+        items = fm.grid_lower.get_children("")
+        self.assertEqual(len(items), 1)
+        row_vals = fm.grid_lower.item(items[0], "values")
+        self.assertEqual(str(row_vals[0]), "1")
+        self.assertEqual(row_vals[1], "SINT-LOGAM 1.4 PRETO")
+
 
 if __name__ == "__main__":
     unittest.main()

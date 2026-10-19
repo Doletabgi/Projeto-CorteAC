@@ -2254,16 +2254,16 @@ class MainWindow(tk.Tk):
             # -------------------------------------------------------------
             self.btn_mode_materials.config(relief="sunken", bg=THEME["bg_hover"])
 
-            # Configura colunas do Grid: Cod. Mat. | Partida | Definição | Comprimento (m) | Largura (m)
-            self.grid_lower["columns"] = ("cod_mat", "partida", "definicao", "comprimento", "largura")
+            # Configura colunas do Grid: Cod. Mat. | Descrição | Definição | Comprimento (m) | Largura (m)
+            self.grid_lower["columns"] = ("cod_mat", "descricao", "definicao", "comprimento", "largura")
             self.grid_lower.heading("cod_mat", text="Cod. Mat.", command=lambda: self.sort_grid_lower("cod_mat"))
-            self.grid_lower.heading("partida", text="Partida", command=lambda: self.sort_grid_lower("partida"))
+            self.grid_lower.heading("descricao", text="Descrição", command=lambda: self.sort_grid_lower("descricao"))
             self.grid_lower.heading("definicao", text="Definição", command=lambda: self.sort_grid_lower("definicao"))
             self.grid_lower.heading("comprimento", text="Comprimento (m)", command=lambda: self.sort_grid_lower("comprimento"))
             self.grid_lower.heading("largura", text="Largura (m)", command=lambda: self.sort_grid_lower("largura"))
 
             self.grid_lower.column("cod_mat", width=75, anchor="w")
-            self.grid_lower.column("partida", width=55, anchor="center")
+            self.grid_lower.column("descricao", width=160, anchor="w")
             self.grid_lower.column("definicao", width=95, anchor="w")
             self.grid_lower.column("comprimento", width=105, anchor="center")
             self.grid_lower.column("largura", width=85, anchor="center")
@@ -2276,7 +2276,8 @@ class MainWindow(tk.Tk):
                 w_m = f"{m.get('width_mm', 1380.0)/1000.0:.2f}m".replace(".", ",")
                 h_m = f"{m.get('height_mm', 2980.0)/1000.0:.2f}m".replace(".", ",")
                 t_def = m.get("type", "como placa").capitalize()
-                self.grid_lower.insert("", "end", iid=m["id"], values=(m["id"], "1", t_def, h_m, w_m))
+                m_desc = m.get("name") or m.get("code") or f"Material #{m['id']}"
+                self.grid_lower.insert("", "end", iid=m["id"], values=(m["id"], m_desc, t_def, h_m, w_m))
 
             # Seleciona nó raiz com destaque azul clássico
             self.tree_main.selection_set(root)
@@ -2772,9 +2773,9 @@ class MainWindow(tk.Tk):
             if col == "tamanho":
                 name_val = vals[2] if len(vals) > 2 else ""
                 return size_sort_key(val, name_val)
-            elif col in ("nome", "pasta", "percurso", "prod", "definicao", "status"):
+            elif col in ("nome", "pasta", "percurso", "prod", "definicao", "descricao", "cod_mat", "status"):
                 return natural_sort_key(val)
-            elif col in ("shape_id", "sess_id", "partida"):
+            elif col in ("shape_id", "sess_id"):
                 try:
                     return (0, int(val), "")
                 except Exception:
