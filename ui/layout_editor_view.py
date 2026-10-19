@@ -483,9 +483,18 @@ class LayoutEditorView(tk.Frame):
             w.bind("<Control-P>", lambda e: (self.print_layout(), "break")[1])
 
         # Refilar layout com corte automático (Ctrl+T)
+        def _on_ctrl_t(e=None):
+            w = self.focus_get()
+            if w and isinstance(w, (tk.Entry, ttk.Entry, tk.Text)):
+                return None
+            self.trim_layout_auto()
+            return "break"
+
         for w in (self, self.canvas):
-            w.bind("<Control-t>", lambda e: (self.trim_layout_dialog(), "break")[1])
-            w.bind("<Control-T>", lambda e: (self.trim_layout_dialog(), "break")[1])
+            w.bind("<Control-t>", _on_ctrl_t)
+            w.bind("<Control-T>", _on_ctrl_t)
+            w.bind("<Control-Key-t>", _on_ctrl_t)
+            w.bind("<Control-Key-T>", _on_ctrl_t)
 
         # Atalhos CAM F1 / F2 / F3 / F4 e Proibição Shift+F3
         for w in (self, self.canvas):
@@ -1505,6 +1514,7 @@ class LayoutEditorView(tk.Frame):
                     self.lbl_stat_pos.config(text=f"{zoom_prefix}x: {cur_x_mm:.2f} y: {cur_y_mm:.2f}")
 
     def on_canvas_click(self, event):
+        self.canvas.focus_set()
         # 1. Clique na linha divisória lateral (com tolerância de ±6 pixels)
         if hasattr(self, "sidebar_div_x") and abs(event.x - self.sidebar_div_x) <= 6:
             self.is_dragging_divider = True

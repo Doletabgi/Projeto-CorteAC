@@ -176,6 +176,40 @@ class TestLayoutEditorTrim(unittest.TestCase):
         self.assertEqual(self.view.sheet_height, 2980.0)
         self.assertIsNone(self.view.trim_cut_line)
 
+    def test_ctrl_t_shortcut_key_events(self):
+        """Valida que o atalho Ctrl+T e Ctrl+t via evento de teclado dispara o refile automático."""
+        max_y = 0.0
+        for p in self.view.placed_pieces:
+            poly = transform_contour(p["contour"], p["x"], p["y"], p["rotation"])
+            _, _, _, by2 = polygon_bbox(poly)
+            if by2 > max_y:
+                max_y = by2
+        expected_h = round(max_y + 1.0, 2)
+
+        try:
+            self.root.deiconify()
+            self.view.pack(fill="both", expand=True)
+            self.root.update()
+            self.view.canvas.focus_set()
+            self.root.update()
+
+            # Dispara evento <Control-t> no Canvas
+            self.view.canvas.event_generate("<Control-t>")
+            self.root.update()
+            self.assertAlmostEqual(self.view.sheet_height, expected_h, places=2)
+            self.assertIsNotNone(self.view.trim_cut_line)
+
+            # Desfaz com Ctrl+Z
+            self.view.undo_action()
+            self.assertEqual(self.view.sheet_height, 2980.0)
+
+            # Dispara evento <Control-T> (maiúsculo)
+            self.view.canvas.event_generate("<Control-T>")
+            self.root.update()
+            self.assertAlmostEqual(self.view.sheet_height, expected_h, places=2)
+        finally:
+            self.root.withdraw()
+
 
 if __name__ == "__main__":
     unittest.main()

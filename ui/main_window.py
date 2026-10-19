@@ -65,6 +65,8 @@ class MainWindow(tk.Tk):
         self.bind("<Control-S>", self.handle_ctrl_s)
         self.bind("<Control-p>", self.handle_ctrl_p)
         self.bind("<Control-P>", self.handle_ctrl_p)
+        self.bind("<Control-t>", self.handle_ctrl_t)
+        self.bind("<Control-T>", self.handle_ctrl_t)
 
         # Carrega Ícones Nativos Extraídos do Sistema Original
         self.load_icons()
@@ -835,6 +837,12 @@ class MainWindow(tk.Tk):
             return "break"
         return None
 
+    def handle_ctrl_t(self, event=None):
+        if hasattr(self, "layout_editor_view") and self.layout_editor_view and self.layout_editor_view.winfo_ismapped():
+            self.layout_editor_view.trim_layout_auto()
+            return "break"
+        return None
+
     def on_layout_editor_save(self, placed_pieces, sheet_w=1350.0, sheet_h=2553.38, layout_name="[I0000]"):
         """Salva as peças posicionadas no layout de volta para a sessão ativa e banco de dados SQLite."""
         active_sess = self.current_session
@@ -1270,6 +1278,8 @@ class MainWindow(tk.Tk):
                 self.layout_editor_view.placed_pieces = []
             self.layout_editor_view.redraw()
             self.layout_editor_view.update_status()
+            if hasattr(self.layout_editor_view, "canvas"):
+                self.layout_editor_view.canvas.focus_set()
 
         doc_name = layout_name or (active_sess.get("layout_name") if active_sess else None) or "[I0000]"
         self.lbl_status_msg.config(text=f"Layout Editor: {doc_name} aberto na área de trabalho.")
