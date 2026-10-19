@@ -4,7 +4,7 @@
 > **Regra de ouro:** o que está marcado `[CONFIRMADO]` veio do relatório, do código ou do usuário. O que está `[NÃO CONFIRMADO]` é suposição e não deve virar "fato" sem validação. O que está `[PREENCHER]` o Antigravity deve completar lendo o código real.
 
 <!-- AUTO:header:start -->
-**Última sincronização com o código:** 2026-10-19 11:03 (HEAD ao gerar: `e82174c`; 38 arquivos Python, ~24102 linhas)
+**Última sincronização com o código:** 2026-10-19 11:23 (HEAD ao gerar: `d2f84e0`; 38 arquivos Python, ~24100 linhas)
 <!-- AUTO:header:end -->
 **Versão deste documento:** 1
 
@@ -237,7 +237,7 @@ ui/trim_layout_dialog.py                    # JobManager 2000 (Python Edition)
 - `class NestingParamsDialog` (linha 10, 2 métodos)
 
 ### `ui/session_view.py`
-- `class SessionView` (linha 72, 75 métodos)
+- `class SessionView` (linha 66, 75 métodos)
 
 ### `ui/shape_editor_view.py`
 - `class ShapeEditorView` (linha 19, 47 métodos)
@@ -942,7 +942,7 @@ A ordem de corte do `.lay` para a mesa **não pode** ser aleatória:
 | Atalho | Estado no código | Onde |
 |---|---|---|
 | F1 | encontrado | `ui/layout_editor_view.py:501`, `ui/layout_editor_view.py:502` |
-| F2 | encontrado | `ui/layout_editor_view.py:505`, `ui/layout_editor_view.py:506`, `ui/session_view.py:529` |
+| F2 | encontrado | `ui/layout_editor_view.py:505`, `ui/layout_editor_view.py:506`, `ui/session_view.py:523` |
 | F3 | encontrado | `ui/layout_editor_view.py:509`, `ui/layout_editor_view.py:510` |
 | F4 | encontrado | `ui/layout_editor_view.py:517`, `ui/layout_editor_view.py:518` |
 | Ctrl+Z | encontrado | `ui/layout_editor_view.py:458`, `ui/layout_editor_view.py:459`, `ui/layout_editor_view.py:460` |
@@ -954,19 +954,19 @@ A ordem de corte do `.lay` para a mesa **não pode** ser aleatória:
 
 | Atalho | Local | Linha |
 |---|---|---|
-| Alt+Down | `ui/session_view.py:2120` | `entry.bind("<Alt-Down>", lambda e: adjust_number(-1))` |
-| Alt+Up | `ui/session_view.py:2119` | `entry.bind("<Alt-Up>", lambda e: adjust_number(+1))` |
+| Alt+Down | `ui/session_view.py:2114` | `entry.bind("<Alt-Down>", lambda e: adjust_number(-1))` |
+| Alt+Up | `ui/session_view.py:2113` | `entry.bind("<Alt-Up>", lambda e: adjust_number(+1))` |
 | Backspace | `ui/cad_canvas.py:69` | `self.master.bind("<BackSpace>", lambda e: self.delete_selected())` |
 | Backspace | `ui/main_window.py:547` | `self.bind_all("<BackSpace>", self.on_global_delete_key, add="+")` |
-| Backspace | `ui/session_view.py:684` | `w.bind("<BackSpace>", self.remove_session_material)` |
-| Backspace | `ui/session_view.py:685` | `w.bind("<Key-BackSpace>", self.remove_session_material)` |
+| Backspace | `ui/session_view.py:678` | `w.bind("<BackSpace>", self.remove_session_material)` |
+| Backspace | `ui/session_view.py:679` | `w.bind("<Key-BackSpace>", self.remove_session_material)` |
 | Ctrl+A | `ui/main_window.py:259` | `edit_menu.add_command(label="Selecionar tudo", accelerator="Ctrl+A", command=sel` |
 | Ctrl+A | `ui/main_window.py:548` | `self.bind_all("<Control-a>", self.on_select_all, add="+")` |
 | Ctrl+A | `ui/main_window.py:549` | `self.bind_all("<Control-A>", self.on_select_all, add="+")` |
 | Ctrl+A | `ui/main_window.py:550` | `self.bind_all("<Control-Key-a>", self.on_select_all, add="+")` |
 | Ctrl+A | `ui/main_window.py:551` | `self.bind_all("<Control-Key-A>", self.on_select_all, add="+")` |
 | Ctrl+C | `ui/main_window.py:255` | `edit_menu.add_command(label="Copiar", accelerator="Ctrl+C")` |
-| Ctrl+Down | `ui/session_view.py:2118` | `entry.bind("<Control-Down>", lambda e: adjust_number(-1))` |
+| Ctrl+Down | `ui/session_view.py:2112` | `entry.bind("<Control-Down>", lambda e: adjust_number(-1))` |
 | Ctrl+Equal | `ui/layout_editor_view.py:448` | `w.bind("<Control-equal>", lambda e: (self.zoom_in(), "break")[1])` |
 | Ctrl+Minus | `ui/layout_editor_view.py:449` | `w.bind("<Control-minus>", lambda e: (self.zoom_out(), "break")[1])` |
 | Ctrl+O | `ui/layout_editor_view.py:475` | `self.canvas.bind("<Control-o>", self.open_layout_dialog)` |
@@ -998,7 +998,7 @@ A ordem de corte do `.lay` para a mesa **não pode** ser aleatória:
 | Ctrl+T | `ui/layout_editor_view.py:497` | `w.bind("<Control-Key-T>", _on_ctrl_t)` |
 | Ctrl+T | `ui/main_window.py:68` | `self.bind("<Control-t>", self.handle_ctrl_t)` |
 | Ctrl+T | `ui/main_window.py:69` | `self.bind("<Control-T>", self.handle_ctrl_t)` |
-| Ctrl+Up | `ui/session_view.py:2117` | `entry.bind("<Control-Up>", lambda e: adjust_number(+1))` |
+| Ctrl+Up | `ui/session_view.py:2111` | `entry.bind("<Control-Up>", lambda e: adjust_number(+1))` |
 | Ctrl+V | `ui/main_window.py:256` | `edit_menu.add_command(label="Colar", accelerator="Ctrl+V")` |
 | Ctrl+X | `ui/main_window.py:254` | `edit_menu.add_command(label="Recortar", accelerator="Ctrl+X")` |
 | Ctrl+Y | `ui/layout_editor_view.py:464` | `self.canvas.bind("<Control-y>", lambda e: "break")` |
@@ -1030,11 +1030,11 @@ A ordem de corte do `.lay` para a mesa **não pode** ser aleatória:
 | Delete | `ui/main_window.py:2432` | `accelerator="Del",` |
 | Delete | `ui/main_window.py:2653` | `accelerator="Del",` |
 | Delete | `ui/main_window.py:2672` | `accelerator="Del",` |
-| Delete | `ui/session_view.py:526` | `self.tree_shapes.bind("<Delete>", lambda e: self.delete_selected_shape())` |
-| Delete | `ui/session_view.py:682` | `w.bind("<Delete>", self.remove_session_material)` |
-| Delete | `ui/session_view.py:683` | `w.bind("<Key-Delete>", self.remove_session_material)` |
+| Delete | `ui/session_view.py:520` | `self.tree_shapes.bind("<Delete>", lambda e: self.delete_selected_shape())` |
+| Delete | `ui/session_view.py:676` | `w.bind("<Delete>", self.remove_session_material)` |
+| Delete | `ui/session_view.py:677` | `w.bind("<Key-Delete>", self.remove_session_material)` |
 | Down | `ui/layout_editor_view.py:527` | `self.bind_all("<Down>", lambda e: self.nudge_selected(0, -5))` |
-| Down | `ui/session_view.py:2104` | `entry.bind("<Down>", move_down)` |
+| Down | `ui/session_view.py:2098` | `entry.bind("<Down>", move_down)` |
 | Escape | `ui/dieproc_dialog.py:39` | `self.bind("<Escape>", lambda e: self.destroy())` |
 | Escape | `ui/edit_shape_in_session_dialog.py:147` | `self.bind("<Escape>", lambda e: self.destroy())` |
 | Escape | `ui/layout_print_dialog.py:251` | `self.bind("<Escape>", self.on_escape)` |
@@ -1043,9 +1043,9 @@ A ordem de corte do `.lay` para a mesa **não pode** ser aleatória:
 | Escape | `ui/main_window.py:2928` | `dialog.bind("<Escape>", lambda e: dialog.destroy())` |
 | Escape | `ui/material_codes_view.py:466` | `dlg.bind("<Escape>", lambda e: dlg.destroy())` |
 | Escape | `ui/options_dialog.py:40` | `self.bind("<Escape>", lambda e: self.on_cancel())` |
-| Escape | `ui/session_view.py:1736` | `entry.bind("<Escape>", cancel)` |
-| Escape | `ui/session_view.py:1820` | `dialog.bind("<Escape>", lambda e: dialog.destroy())` |
-| Escape | `ui/session_view.py:2113` | `entry.bind("<Escape>", cancel_edit)` |
+| Escape | `ui/session_view.py:1730` | `entry.bind("<Escape>", cancel)` |
+| Escape | `ui/session_view.py:1814` | `dialog.bind("<Escape>", lambda e: dialog.destroy())` |
+| Escape | `ui/session_view.py:2107` | `entry.bind("<Escape>", cancel_edit)` |
 | Escape | `ui/trim_layout_dialog.py:74` | `self.bind("<Escape>", lambda e: self.destroy())` |
 | F1 | `ui/layout_editor_view.py:501` | `w.bind("<F1>", self.on_f1_press)` |
 | F1 | `ui/layout_editor_view.py:502` | `w.bind("<Key-F1>", self.on_f1_press)` |
@@ -1053,18 +1053,18 @@ A ordem de corte do `.lay` para a mesa **não pode** ser aleatória:
 | F11 | `ui/main_window.py:62` | `self.bind("<F11>", self.toggle_fullscreen)` |
 | F2 | `ui/layout_editor_view.py:505` | `w.bind("<F2>", self.on_f2_press)` |
 | F2 | `ui/layout_editor_view.py:506` | `w.bind("<Key-F2>", self.on_f2_press)` |
-| F2 | `ui/session_view.py:529` | `self.tree_shapes.bind("<F2>", self.on_tree_shape_f2)` |
-| F2 | `ui/session_view.py:678` | `self.tree_mat.bind("<F2>", self.on_mat_f2_key)` |
+| F2 | `ui/session_view.py:523` | `self.tree_shapes.bind("<F2>", self.on_tree_shape_f2)` |
+| F2 | `ui/session_view.py:672` | `self.tree_mat.bind("<F2>", self.on_mat_f2_key)` |
 | F3 | `ui/layout_editor_view.py:509` | `w.bind("<F3>", self.on_f3_press)` |
 | F3 | `ui/layout_editor_view.py:510` | `w.bind("<Key-F3>", self.on_f3_press)` |
 | F4 | `ui/layout_editor_view.py:517` | `w.bind("<F4>", self.on_f4_press)` |
 | F4 | `ui/layout_editor_view.py:518` | `w.bind("<Key-F4>", self.on_f4_press)` |
 | F5 | `ui/main_window.py:107` | `self.bind_all("<F5>", lambda e: self.on_refresh_f5())` |
 | F5 | `ui/main_window.py:275` | `tools_menu.add_command(label="Atualizar", accelerator="F5", command=self.on_refr` |
-| Kp_down | `ui/session_view.py:2105` | `entry.bind("<KP_Down>", move_down)` |
-| Kp_enter | `ui/session_view.py:528` | `self.tree_shapes.bind("<KP_Enter>", self.on_tree_shape_enter)` |
-| Kp_enter | `ui/session_view.py:2109` | `entry.bind("<KP_Enter>", move_down)` |
-| Kp_up | `ui/session_view.py:2107` | `entry.bind("<KP_Up>", move_up)` |
+| Kp_down | `ui/session_view.py:2099` | `entry.bind("<KP_Down>", move_down)` |
+| Kp_enter | `ui/session_view.py:522` | `self.tree_shapes.bind("<KP_Enter>", self.on_tree_shape_enter)` |
+| Kp_enter | `ui/session_view.py:2103` | `entry.bind("<KP_Enter>", move_down)` |
+| Kp_up | `ui/session_view.py:2101` | `entry.bind("<KP_Up>", move_up)` |
 | Left | `ui/layout_editor_view.py:524` | `self.bind_all("<Left>", lambda e: self.nudge_selected(-5, 0))` |
 | R | `ui/cad_canvas.py:66` | `self.master.bind("<r>", lambda e: self.rotate_selected(45))` |
 | R | `ui/cad_canvas.py:67` | `self.master.bind("<R>", lambda e: self.rotate_selected(45))` |
@@ -1074,12 +1074,12 @@ A ordem de corte do `.lay` para a mesa **não pode** ser aleatória:
 | Return | `ui/main_window.py:2927` | `dialog.bind("<Return>", lambda e: save())` |
 | Return | `ui/material_codes_view.py:199` | `self.tree.bind("<Return>", lambda e: self.open_edit_selected_dialog())` |
 | Return | `ui/material_codes_view.py:465` | `dlg.bind("<Return>", lambda e: save_action())` |
-| Return | `ui/session_view.py:367` | `self.entry_sname.bind("<Return>", self._on_entry_sname_commit)` |
-| Return | `ui/session_view.py:527` | `self.tree_shapes.bind("<Return>", self.on_tree_shape_enter)` |
-| Return | `ui/session_view.py:677` | `self.tree_mat.bind("<Return>", self.on_mat_enter_key)` |
-| Return | `ui/session_view.py:1734` | `entry.bind("<Return>", lambda e: commit())` |
-| Return | `ui/session_view.py:1819` | `dialog.bind("<Return>", lambda e: save())` |
-| Return | `ui/session_view.py:2108` | `entry.bind("<Return>", move_down)` |
+| Return | `ui/session_view.py:361` | `self.entry_sname.bind("<Return>", self._on_entry_sname_commit)` |
+| Return | `ui/session_view.py:521` | `self.tree_shapes.bind("<Return>", self.on_tree_shape_enter)` |
+| Return | `ui/session_view.py:671` | `self.tree_mat.bind("<Return>", self.on_mat_enter_key)` |
+| Return | `ui/session_view.py:1728` | `entry.bind("<Return>", lambda e: commit())` |
+| Return | `ui/session_view.py:1813` | `dialog.bind("<Return>", lambda e: save())` |
+| Return | `ui/session_view.py:2102` | `entry.bind("<Return>", move_down)` |
 | Return | `ui/shape_editor_view.py:276` | `self.entry_name.bind("<Return>", lambda e: self.on_name_change())` |
 | Return | `ui/shape_editor_view.py:309` | `self.entry_vx.bind("<Return>", self.on_vertex_entry_change)` |
 | Return | `ui/shape_editor_view.py:314` | `self.entry_vy.bind("<Return>", self.on_vertex_entry_change)` |
@@ -1087,14 +1087,14 @@ A ordem de corte do `.lay` para a mesa **não pode** ser aleatória:
 | Right | `ui/layout_editor_view.py:525` | `self.bind_all("<Right>", lambda e: self.nudge_selected(5, 0))` |
 | Shift+F3 | `ui/layout_editor_view.py:514` | `w.bind("<Shift-F3>", lambda e: "break")` |
 | Shift+F3 | `ui/layout_editor_view.py:515` | `w.bind("<Shift-Key-F3>", lambda e: "break")` |
-| Shift+Return | `ui/session_view.py:2110` | `entry.bind("<Shift-Return>", move_up)` |
-| Shift+Tab | `ui/session_view.py:1738` | `entry.bind("<Shift-Tab>", on_shift_tab)` |
-| Shift+Tab | `ui/session_view.py:2112` | `entry.bind("<Shift-Tab>", move_up)` |
+| Shift+Return | `ui/session_view.py:2104` | `entry.bind("<Shift-Return>", move_up)` |
+| Shift+Tab | `ui/session_view.py:1732` | `entry.bind("<Shift-Tab>", on_shift_tab)` |
+| Shift+Tab | `ui/session_view.py:2106` | `entry.bind("<Shift-Tab>", move_up)` |
 | Space | `ui/add_shapes_dialog.py:135` | `self.tree.bind("<space>", self.on_tree_space)` |
-| Tab | `ui/session_view.py:1737` | `entry.bind("<Tab>", on_tab)` |
-| Tab | `ui/session_view.py:2111` | `entry.bind("<Tab>", move_down)` |
+| Tab | `ui/session_view.py:1731` | `entry.bind("<Tab>", on_tab)` |
+| Tab | `ui/session_view.py:2105` | `entry.bind("<Tab>", move_down)` |
 | Up | `ui/layout_editor_view.py:526` | `self.bind_all("<Up>", lambda e: self.nudge_selected(0, 5))` |
-| Up | `ui/session_view.py:2106` | `entry.bind("<Up>", move_up)` |
+| Up | `ui/session_view.py:2100` | `entry.bind("<Up>", move_up)` |
 
 **Conflitos reais detectados:**
 
@@ -1278,12 +1278,14 @@ Local: `/home/dola/Documentos/clone do job/antigo/arquivos pos instalacao/Common
 | Seg, 19/10/2026 | 10:40 | Antigravity | Inclusão de planilha interativa de consulta das combinações recomendadas de Estratégias & Parâmetros na aba Geral da Sessão (`SessionView`): criação do painel 'Guia de Combinações Recomendadas (Estratégias & Parâmetros)' com tabela Treeview zebrada contendo Objetivo industrial, Estratégia, Parâmetro e Comportamento técnico do corte; suporte a duplo clique e botão '✓ Aplicar Selecionado' para configuração automática e instantânea dos seletores `cb_strategy` e `cb_params`; sincronização bidirecional e destaque dinâmico da combinação ativa (`highlight_guide_matching`); 1 novo teste unitário dedicado (`test_session_view_has_recommended_combinations_table`, 96 testes passando na suíte geral) e recompilação do executável standalone Linux (`teste_dola_linux`). | `ui/session_view.py`, `ui/main_window.py`, `tests/test_strategy_removal.py`, `PROJETO_ATOM_JOBMANAGER.md`, `teste_dola_linux` |
 | Seg, 19/10/2026 | 10:55 | Antigravity | Atualização do rótulo e descrição da Estratégia na sessão ('A Estratégia define a geometria física do corte e do material:'): substituição do rótulo estático 'Estratégia:' acima da combobox `cb_strategy` em `SessionView` pelo texto conceitual solicitado pelo operador, e enriquecimento das descrições dinâmicas de cada motor em `lbl_strategy_desc`; 1 novo teste unitário dedicado (`test_strategy_label_and_descriptions`, 97 testes passando) e recompilação do executável standalone Linux (`teste_dola_linux`). | `ui/session_view.py`, `tests/test_strategy_removal.py`, `PROJETO_ATOM_JOBMANAGER.md`, `teste_dola_linux` |
 | Seg, 19/10/2026 | 11:02 | Antigravity | Atualização do rótulo e descrição de Parâmetros na sessão ('O Parâmetro define o comportamento das rotações, folgas e preenchimento da chapa:'): substituição do rótulo 'Parâmetros:' em `SessionView` pelo texto conceitual solicitado pelo operador, mantendo o botão '⚙️ Configurar...' à direita com perfeito alinhamento visual; atualização do teste unitário dedicado (`test_strategy_label_and_descriptions`, 97 testes passando) e recompilação do executável standalone Linux (`teste_dola_linux`). | `ui/session_view.py`, `tests/test_strategy_removal.py`, `PROJETO_ATOM_JOBMANAGER.md`, `teste_dola_linux` |
+| Seg, 19/10/2026 | 11:20 | Antigravity | Remoção da combinação 'flashnestsheet' + 'HighYield' ('Economizar material ao máximo em chapa cara') da tabela interativa de combinações recomendadas (`RECOMMENDED_COMBINATIONS` em `ui/session_view.py`) e da matriz do manual técnico (`docs/MOTORES_NESTING_PARAMETROS.md`); atualização dos testes automatizados em `tests/test_strategy_removal.py` validando ausência de `HighYield` na tabela de guia; recompilação do executável standalone Linux (`teste_dola_linux`). | `ui/session_view.py`, `docs/MOTORES_NESTING_PARAMETROS.md`, `tests/test_strategy_removal.py`, `PROJETO_ATOM_JOBMANAGER.md`, `teste_dola_linux` |
 
 **Commits recentes (automático):**
 
 <!-- AUTO:gitlog:start -->
 | Commit | Data | Autor | Mensagem |
 |---|---|---|---|
+| `d2f84e0` | 2026-10-19 | Doletabgi | feat(ui): mudar descricao de parametros para 'O Parametro define o comportamento das rotacoes, folgas e preenchimento da chapa:' |
 | `e82174c` | 2026-10-19 | Doletabgi | feat(ui): mudar descricao de estrategia para 'A Estrategia define a geometria fisica do corte e do material' |
 | `eb1757a` | 2026-10-19 | Doletabgi | feat(ui): adicionar planilha interativa de consulta de estrategias e parametros na sessao |
 | `0fa43b2` | 2026-10-19 | Doletabgi | feat(ui): substituir coluna partida por descricao no estoque de material |
@@ -1298,7 +1300,6 @@ Local: `/home/dola/Documentos/clone do job/antigo/arquivos pos instalacao/Common
 | `72c8e83` | 2026-10-18 | Doletabgi | feat(ui): bloquear abertura do layout editor sem calculo e eliminar pecas fantasmas |
 | `f60527e` | 2026-10-18 | Doletabgi | feat(ui): opcao de excluir material clicando com o mouse na arvore e no grid |
 | `0cb99e0` | 2026-10-18 | Doletabgi | feat(ui): opcao de exclusao de artigos e desacoplamento do uso de artigos no sistema |
-| `9a41755` | 2026-10-18 | Doletabgi | feat(ui): remover prefixo forçado de ID da árvore ao renomear sessão e preservar SessId original |
 <!-- AUTO:gitlog:end -->
 
 ---

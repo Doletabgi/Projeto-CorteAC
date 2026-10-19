@@ -38,12 +38,6 @@ RECOMMENDED_COMBINATIONS = [
         "resultado": "Grade DieProc clássica com intertravamento macho-fêmea (0°/180°) e preenchimento de cavidades."
     },
     {
-        "objetivo": "Economizar material ao máximo em chapa cara (scrap mínimo)",
-        "estrategia": "flashnestsheet",
-        "parametro": "HighYield",
-        "resultado": "Varredura angular fina (-5° a +5°) buscando o milímetro de máximo rendimento."
-    },
-    {
         "objetivo": "Material com estampa, verniz ou textura orientada",
         "estrategia": "flashnestsheet",
         "parametro": "DIREITA",

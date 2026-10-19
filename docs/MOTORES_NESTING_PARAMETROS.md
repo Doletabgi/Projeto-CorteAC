@@ -161,7 +161,6 @@ Os motores de parâmetros atuam sobre a estratégia escolhida, determinando as r
 |---|---|---|
 | **Corte padrão de solados em chapa sintética com pedido exato** | **`sint`** | **`stdNOTFill`** |
 | **Corte de solas aproveitando 100% da chapa para estoque** | **`sint`** | **`stdFill`** |
-| **Economizar material ao máximo em chapa cara** | **`flashnestsheet`** | **`HighYield`** |
 | **Corte de tiras finas, debruns ou correias** | **`tape_a`** | **`stdNOTFill`** |
 | **Material com textura/brilho que não pode girar** | **`sint`** ou **`flashnestsheet`** | **`PrmSss_35`** |
 | **Aproveitar sobras e retalhos com peças sortidas** | **`freenest`** | **`stdNOTFill`** |

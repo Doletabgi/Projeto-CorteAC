@@ -136,11 +136,15 @@ class TestStrategyRemoval(unittest.TestCase):
         self.assertEqual(vals_initial[1], "sint")
         self.assertEqual(vals_initial[2], "stdNOTFill")
 
-        # Seleciona linha do flashnestsheet + HighYield e aplica
+        # Verifica que a combinação de HighYield foi removida da tabela
+        all_guide_pairs = [(sv.tree_guide.item(it, "values")[1], sv.tree_guide.item(it, "values")[2]) for it in items]
+        self.assertNotIn(("flashnestsheet", "HighYield"), all_guide_pairs)
+
+        # Seleciona linha do flashnestsheet + DIREITA e aplica
         target_item = None
         for item in items:
             vals = sv.tree_guide.item(item, "values")
-            if vals[1] == "flashnestsheet" and vals[2] == "HighYield":
+            if vals[1] == "flashnestsheet" and vals[2] == "DIREITA":
                 target_item = item
                 break
         self.assertIsNotNone(target_item)
@@ -148,7 +152,7 @@ class TestStrategyRemoval(unittest.TestCase):
         sv.on_guide_apply_clicked()
 
         self.assertEqual(sv.cb_strategy.get(), "flashnestsheet")
-        self.assertEqual(sv.cb_params.get(), "HighYield")
+        self.assertEqual(sv.cb_params.get(), "DIREITA")
 
         # Seleciona linha do tape_a e simula duplo clique
         target_tape = None
