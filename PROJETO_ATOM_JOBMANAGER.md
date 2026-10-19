@@ -4,7 +4,7 @@
 > **Regra de ouro:** o que está marcado `[CONFIRMADO]` veio do relatório, do código ou do usuário. O que está `[NÃO CONFIRMADO]` é suposição e não deve virar "fato" sem validação. O que está `[PREENCHER]` o Antigravity deve completar lendo o código real.
 
 <!-- AUTO:header:start -->
-**Última sincronização com o código:** 2026-10-18 20:55 (HEAD ao gerar: `f60527e`; 33 arquivos Python, ~22175 linhas)
+**Última sincronização com o código:** 2026-10-18 21:49 (HEAD ao gerar: `72c8e83`; 34 arquivos Python, ~22314 linhas)
 <!-- AUTO:header:end -->
 **Versão deste documento:** 1
 
@@ -94,6 +94,7 @@ tests/test_db_layer.py                      # Testes Unitários da Camada de Ban
 tests/test_lay_parser.py                    # Testes Unitários para o Parser e Gerador de Arquivos .lay (ATOM $$LAYOUT.v3$$)
 tests/test_layout_editor_shortcuts.py       # Testes Automatizados para Atalhos do LayoutEditorView:
 tests/test_mysql_concurrency.py             # JobManager 2000 (Python Edition)
+tests/test_nesting_contour_gap.py
 tests/test_session_monotonic.py             # Testes Unitários: Monotonicidade Estrita de Sessões e Persistência contra Re-semeadura
 tests/test_shape_sorting.py                 # Testes Unitários: Classificação e Ordenação de Moldes e Tamanhos (Maior para Menor / Menor para Maior)
 tools/migrate_sqlite_to_mysql.py            # tools/migrate_sqlite_to_mysql.py - Migra jobmanager.db (SQLite) para MySQL 8.0 Central.
@@ -171,6 +172,9 @@ ui/sort_utils.py                            # JobManager 2000 (Python Edition)
 
 ### `tests/test_mysql_concurrency.py`
 - `class TestMySQLConcurrency` (linha 29, 4 métodos)
+
+### `tests/test_nesting_contour_gap.py`
+- `class TestNestingContourGap` (linha 7, 4 métodos)
 
 ### `tests/test_session_monotonic.py`
 - `class TestSessionMonotonic` (linha 10, 9 métodos)
@@ -1233,12 +1237,14 @@ Local: `/home/dola/Documentos/clone do job/antigo/arquivos pos instalacao/Common
 | Dom, 18/10/2026 | 19:40 | Antigravity | Opção de exclusão de artigos/pedidos e desacoplamento de artigos no sistema: inclusão de comando 'Excluir Artigo' / 'Excluir' no menu de contexto com clique direito em artigos na árvore (`ui/main_window.py`) e suporte à tecla Delete/Backspace; exclusão segura em `database.py` (`delete_order` e `delete_article`) desvinculando sessões (`order_id = NULL`) e moldes (`article_id = NULL`) sem perda de geometria nem violação de integridade referencial; alteração dos esquemas MySQL 8.0 e SQLite para permitir `order_id` e `article_id` nulos com `ON DELETE SET NULL`; eliminação da recriação automática forçada de artigos de exemplo ('Derby Masculino #41') na criação de sessões; 1 novo teste unitário dedicado (72/72 testes passando) e recompilação do executável standalone Linux (`teste_dola_linux`) | `database.py`, `ui/main_window.py`, `db/schema_mysql.sql`, `db/migrations/001_initial_mysql_schema.sql`, `tests/test_layout_editor_shortcuts.py`, `PROJETO_ATOM_JOBMANAGER.md`, `teste_dola_linux`, `dist/teste_dola` |
 | Dom, 18/10/2026 | 20:02 | Antigravity | Opção de exclusão de materiais clicando com o mouse na árvore e no grid (`MainWindow`): implementação de menu de contexto dinâmico no clique com botão direito sobre materiais na Treeview (`tree_main`) e no DataGrid inferior (`grid_lower`) exibindo 'Excluir Material' (Del) e 'Excluir', além de suporte a exclusão em lote; exclusão segura em `database.py` (`delete_material`) desvinculando sessões (`material_id = NULL`) e artigos (`material_id = NULL`) sem violação de FK nem perda de dados; migração dos esquemas MySQL 8.0 e SQLite para suportar `material_id` anulável com `ON DELETE SET NULL`; sincronização e recarga imediata em cache, árvore, grid, janelas de sessão e códigos de materiais (`refresh_materials_everywhere`); 2 novos testes unitários dedicados (74/74 testes passando) e recompilação do executável standalone Linux (`teste_dola_linux`) | `database.py`, `ui/main_window.py`, `db/schema_mysql.sql`, `db/migrations/001_initial_mysql_schema.sql`, `tests/test_layout_editor_shortcuts.py`, `tests/test_db_layer.py`, `PROJETO_ATOM_JOBMANAGER.md`, `teste_dola_linux`, `dist/teste_dola` |
 | Dom, 18/10/2026 | 20:55 | Antigravity | Bloqueio de abertura do Layout Editor sem cálculo prévio de encaixe e eliminação de peças fantasmas em sessões em branco: desativação do botão 'Editor...' na aba Layout da sessão quando não há layout calculado (`btn_open_editor["state"] = "disabled"`); bloqueio com alerta explicativo ('Não há layout calculado para esta sessão. Execute o cálculo de encaixe (Nest) primeiro.') ao tentar abrir via duplo-clique na lista ou no mini-preview, menu de contexto da tabela de layout, menus superiores (Arquivo/Ferramentas/Janela), barra de ferramentas (`btn_lay`) e menu da árvore (`MainWindow.show_layout_editor`); eliminação de injeção automática de 22 peças fictícias e moldes de exemplo (`load_sample_nesting`, `TARGET_SPECS`) no `LayoutEditorView` por padrão (`load_sample=False`); sincronização dinâmica de estado do botão ao executar Nesting ou limpar layout; 3 novos testes unitários dedicados (77/77 testes passando) e recompilação do executável standalone Linux (`teste_dola_linux`) | `ui/layout_editor_view.py`, `ui/session_view.py`, `ui/main_window.py`, `tests/test_layout_editor_shortcuts.py`, `PROJETO_ATOM_JOBMANAGER.md`, `teste_dola_linux`, `dist/teste_dola` |
+| Dom, 18/10/2026 | 21:48 | Antigravity | Respeito rigoroso ao gap exato de 1.0 mm com encaixe contorno a contorno (contour-to-contour bumping) e zero colisões: substituição do avanço horizontal por bounding box (`w + gap`) pelo bumping de contato horizontal via busca binária submilimétrica (`find_contact_coordinate_binary`, resolução ~0.02 mm e margem de segurança de 0.05 mm); implementação de encaixe vertical por intertravamento de linhas inteiras (`nest_synthetic_engine` e `dieproc_nest_pieces`) garantindo alinhamento de base uniforme e rotação alternada 0°/180°; eliminação dos vãos vazios de 14.8 mm e aproximação precisa para a distância real de ~1.05 mm (>= 1.00 mm estrito); 2 novos testes unitários dedicados em `tests/test_nesting_contour_gap.py` (79/79 testes passando) e recompilação do executável standalone Linux (`teste_dola_linux`) | `cad/geometry.py`, `cad/nesting_engine.py`, `tests/test_nesting_contour_gap.py`, `PROJETO_ATOM_JOBMANAGER.md`, `teste_dola_linux`, `dist/teste_dola` |
 
 **Commits recentes (automático):**
 
 <!-- AUTO:gitlog:start -->
 | Commit | Data | Autor | Mensagem |
 |---|---|---|---|
+| `72c8e83` | 2026-10-18 | Doletabgi | feat(ui): bloquear abertura do layout editor sem calculo e eliminar pecas fantasmas |
 | `f60527e` | 2026-10-18 | Doletabgi | feat(ui): opcao de excluir material clicando com o mouse na arvore e no grid |
 | `0cb99e0` | 2026-10-18 | Doletabgi | feat(ui): opcao de exclusao de artigos e desacoplamento do uso de artigos no sistema |
 | `9a41755` | 2026-10-18 | Doletabgi | feat(ui): remover prefixo forçado de ID da árvore ao renomear sessão e preservar SessId original |
@@ -1253,7 +1259,6 @@ Local: `/home/dola/Documentos/clone do job/antigo/arquivos pos instalacao/Common
 | `09955d4` | 2026-10-18 | Doletabgi | feat(ui): centralizar placa do layout simetricamente no meio da tela |
 | `68b8648` | 2026-10-18 | Doletabgi | feat(ui): habilitar zoom de 20% ao clicar na ferramenta e atalho Ctrl+Clique no canvas |
 | `9d88e22` | 2026-10-18 | Doletabgi | feat(ui): digitacao continua de pares via setas cima/baixo e enter |
-| `8ce8ae4` | 2026-10-18 | Doletabgi | docs: sincronizar header e gitlog do PROJETO_ATOM_JOBMANAGER.md |
 <!-- AUTO:gitlog:end -->
 
 ---

@@ -393,7 +393,8 @@ def dieproc_nest_pieces(available_shapes, bed_width_mm, bed_height_mm, target_co
             trial_y = max(margin, row_baseline_y)
             poly_fn = lambda y, cx=cur_x: transform_contour(shape["contour"], cx - min_x, y - min_y, rot)
             query_bbox = (cur_x - gap, max(0.0, trial_y - gap * 2.0), cur_x + w + gap, bed_height_mm)
-            colliders = grid.query_potential_colliders(query_bbox, gap=gap)
+            colliders_all = grid.query_potential_colliders(query_bbox, gap=gap)
+            colliders = [(cp, cb) for cp, cb in colliders_all if cb[1] < trial_y + h * 0.15]
 
             if colliders:
                 max_c_y = max(cb[3] for _, cb in colliders)
@@ -406,20 +407,24 @@ def dieproc_nest_pieces(available_shapes, bed_width_mm, bed_height_mm, target_co
             if trial_y + h > bed_height_mm - margin:
                 break
 
-            if any(polygons_collide(c_poly, cp, gap=gap, bbox_a=c_bbox, bbox_b=cb) for cp, cb in colliders):
-                if colliders:
-                    max_c_y = max(cb[3] for _, cb in colliders)
-                    trial_y = max_c_y + gap
-                    c_poly = poly_fn(trial_y)
-                    c_bbox = polygon_bbox(c_poly)
-                if trial_y + h > bed_height_mm - margin or any(polygons_collide(c_poly, cp, gap=gap, bbox_a=c_bbox, bbox_b=cb) for cp, cb in colliders):
-                    cur_x += (w * 0.25 + gap)
-                    if cur_x + w > bed_width_mm - margin:
-                        row_idx += 1
-                        cur_x = margin
-                        row_baseline_y += (row_height + gap)
-                        row_height = 0.0
-                    continue
+            # Verificação estrita contra todos os potenciais obstáculos com micro-ajuste de segurança
+            all_cols = grid.query_potential_colliders(c_bbox, gap=gap)
+            shifts = 0
+            while any(polygons_collide(c_poly, cp, gap=gap, bbox_a=c_bbox, bbox_b=cb) for cp, cb in all_cols) and shifts < 50:
+                cur_x += 0.2
+                c_poly = transform_contour(shape["contour"], cur_x - min_x, trial_y - min_y, rot)
+                c_bbox = polygon_bbox(c_poly)
+                all_cols = grid.query_potential_colliders(c_bbox, gap=gap)
+                shifts += 1
+
+            if trial_y + h > bed_height_mm - margin or any(polygons_collide(c_poly, cp, gap=gap, bbox_a=c_bbox, bbox_b=cb) for cp, cb in all_cols):
+                cur_x += (w * 0.25 + gap)
+                if cur_x + w > bed_width_mm - margin:
+                    row_idx += 1
+                    cur_x = margin
+                    row_baseline_y += (row_height + gap)
+                    row_height = 0.0
+                continue
 
             size_str = str(shape.get("size") or shape.get("taglia") or "41")
             p_color = get_color_for_size(size_str, idx)
@@ -438,9 +443,24 @@ def dieproc_nest_pieces(available_shapes, bed_width_mm, bed_height_mm, target_co
             grid.insert(idx, c_poly, c_bbox)
             idx += 1
 
-            cur_x += (w + gap)
             if (trial_y - row_baseline_y + h) > row_height:
                 row_height = trial_y - row_baseline_y + h
+
+            # Deslocamento por aproximação de contorno (bumping contorno a contorno para gap exato)
+            if idx <= target_count:
+                next_shape = shape_queue[(idx - 1) % len(shape_queue)]
+                next_angle_idx = (idx - 1 + (row_idx if row_interlock else 0)) % len(effective_angles)
+                next_rot = effective_angles[next_angle_idx]
+                n_poly0 = transform_contour(next_shape["contour"], 0, 0, next_rot)
+                n_min_x, n_min_y, n_max_x, n_max_y = polygon_bbox(n_poly0)
+
+                safe_start_x = c_bbox[2] + gap
+                min_cand_x = max(margin, c_bbox[0])
+
+                poly_fn_x = lambda x: transform_contour(next_shape["contour"], x - n_min_x, trial_y - n_min_y, next_rot)
+                cur_x = find_contact_coordinate_binary(poly_fn_x, [(c_poly, c_bbox)], gap, start_val=safe_start_x, min_val=min_cand_x)
+            else:
+                cur_x += (w + gap)
 
         return placed
 
@@ -449,7 +469,8 @@ def nest_synthetic_engine(available_shapes, bed_width_mm, bed_height_mm, target_
     """
     Motor 'Sint': Otimização para corte contínuo de materiais sintéticos em rolos ou chapas.
     Características:
-    - Geminação de pares (acoplamento 0° e 180° / macho-fêmea).
+    - Geminação de pares (acoplamento 0° e 180° / macho-fêmea com encaixe contorno a contorno).
+    - Deslocamento de contato milimétrico estrito (gap exato de 1.0mm sem desperdício de bounding box).
     - Intertravamento de colmeia com defasagem horizontal entre linhas (Row Shifting).
     - Janela de avanço contínuo respeitando largura útil e margem.
     - Zero colisão estrita e respeito ao gap milimétrico.
@@ -460,94 +481,124 @@ def nest_synthetic_engine(available_shapes, bed_width_mm, bed_height_mm, target_
 
     sorted_shapes = sorted(available_shapes, key=lambda s: int(s.get("sequence", 999)))
     shape_queue = []
-    for s in sorted_shapes:
-        qty = int(s.get("pairs", 24))
+    for s_item in sorted_shapes:
+        qty = int(s_item.get("pairs", 24)) * 2
         for _ in range(qty):
-            shape_queue.append(s)
+            shape_queue.append(s_item)
     if not shape_queue:
         shape_queue = list(sorted_shapes)
 
     max_pieces = target_count if (target_count and target_count > 0) else len(shape_queue)
-
     margin = max(10.0, gap_mm * 2.0)
     gap = max(0.5, float(gap_mm))
 
-    cur_x = margin
-    row_baseline_y = margin
-    row_height = 0.0
-    row_idx = 0
-    idx = 1
     grid = SpatialGrid(cell_size=100.0)
 
-    # Amostra para estimativa do tamanho médio do molde
     sample_poly = transform_contour(shape_queue[0]["contour"], 0, 0, 0.0)
     s_min_x, s_min_y, s_max_x, s_max_y = polygon_bbox(sample_poly)
     avg_w = max(10.0, s_max_x - s_min_x)
+    avg_h = max(10.0, s_max_y - s_min_y)
 
-    while idx <= max_pieces and (row_baseline_y < bed_height_mm - margin):
-        shape = shape_queue[(idx - 1) % len(shape_queue)]
+    row_idx = 0
+    cur_row_y = margin
+    idx = 1
+    rows = []
 
-        # Acoplamento de pares: alterna entre 0° e 180° invertido
+    while idx <= max_pieces and (cur_row_y < bed_height_mm - margin):
         is_odd_row = (row_idx % 2 == 1)
-        rot = 180.0 if ((idx % 2 == 0) ^ is_odd_row) else 0.0
+        interlock_offset = (avg_w * 0.40) if is_odd_row else 0.0
 
-        poly = transform_contour(shape["contour"], 0, 0, rot)
-        min_x, min_y, max_x, max_y = polygon_bbox(poly)
-        w = max_x - min_x
-        h = max_y - min_y
+        row_pieces = []
+        cur_x = margin + interlock_offset
 
-        # Quebra de linha ao atingir a borda da chapa/esteira
-        if cur_x + w > bed_width_mm - margin:
-            row_idx += 1
-            interlock_offset = (avg_w * 0.40) if (row_idx % 2 == 1) else 0.0
-            cur_x = margin + interlock_offset
-            row_baseline_y += max(h * 0.72 + gap, row_height * 0.75 + gap)
-            row_height = 0.0
+        while idx <= max_pieces:
+            shape = shape_queue[(idx - 1) % len(shape_queue)]
+            rot = 180.0 if ((idx % 2 == 0) ^ is_odd_row) else 0.0
+            poly0 = transform_contour(shape["contour"], 0, 0, rot)
+            min_x, min_y, max_x, max_y = polygon_bbox(poly0)
+            w = max_x - min_x
+            h = max_y - min_y
 
-        trial_y = max(margin, row_baseline_y)
-        poly_fn = lambda y, cx=cur_x: transform_contour(shape["contour"], cx - min_x, y - min_y, rot)
-        query_bbox = (cur_x - gap, max(0.0, trial_y - gap * 2.0), cur_x + w + gap, bed_height_mm)
-        colliders = grid.query_potential_colliders(query_bbox, gap=gap)
-
-        if colliders:
-            max_c_y = max(cb[3] for _, cb in colliders)
-            start_val = max(trial_y, max_c_y + gap)
-            trial_y = find_contact_coordinate_binary(poly_fn, colliders, gap, start_val, trial_y)
-
-        c_poly = poly_fn(trial_y)
-        c_bbox = polygon_bbox(c_poly)
-
-        if trial_y + h > bed_height_mm - margin or any(polygons_collide(c_poly, cp, gap=gap, bbox_a=c_bbox, bbox_b=cb) for cp, cb in colliders):
-            if is_roll:
-                break
+            if not row_pieces:
+                cand_x = cur_x
             else:
-                row_idx += 1
-                cur_x = margin
-                row_baseline_y += (h + gap)
-                if row_baseline_y + h > bed_height_mm - margin:
-                    break
-                continue
+                prev = row_pieces[-1]
+                safe_x = prev["bbox"][2] + gap
+                min_x_cand = max(margin, prev["bbox"][0])
+                poly_fn_x = lambda x: transform_contour(shape["contour"], x - min_x, cur_row_y - min_y, rot)
+                cand_x = find_contact_coordinate_binary(poly_fn_x, [(prev["poly"], prev["bbox"])], gap, start_val=safe_x, min_val=min_x_cand)
 
-        p_color = get_color_for_size(shape.get("size") or shape.get("name") or "41", idx)
-        piece = {
-            "id": idx,
-            "shape": shape,
-            "name": shape.get("name", "Molde"),
-            "size": str(shape.get("size", "41")),
-            "color": p_color,
-            "contour": shape.get("contour", []),
-            "x": cur_x - min_x,
-            "y": trial_y - min_y,
-            "rotation": rot
-        }
-        placed.append(piece)
-        grid.insert(idx, c_poly, c_bbox)
-        idx += 1
+            if cand_x + w > bed_width_mm - margin:
+                break
 
+            c_poly = transform_contour(shape["contour"], cand_x - min_x, cur_row_y - min_y, rot)
+            c_bbox = polygon_bbox(c_poly)
+            p_color = get_color_for_size(shape.get("size") or shape.get("name") or "41", idx)
+            item = {
+                "id": idx,
+                "shape": shape,
+                "name": shape.get("name", "Molde"),
+                "size": str(shape.get("size", "41")),
+                "color": p_color,
+                "contour": shape.get("contour", []),
+                "x": cand_x - min_x,
+                "y": cur_row_y - min_y,
+                "rotation": rot,
+                "poly": c_poly,
+                "bbox": c_bbox,
+                "row": row_idx,
+                "min_x": min_x,
+                "min_y": min_y,
+                "w": w,
+                "h": h
+            }
+            row_pieces.append(item)
+            idx += 1
 
-        cur_x += (w + gap)
-        if (trial_y - row_baseline_y + h) > row_height:
-            row_height = trial_y - row_baseline_y + h
+        if not row_pieces:
+            break
+
+        # Posicionamento vertical otimizado contra linhas anteriores
+        if row_idx > 0:
+            def row_collides(test_y):
+                for p in row_pieces:
+                    test_poly = transform_contour(p["shape"]["contour"], p["x"], test_y - p["min_y"], p["rotation"])
+                    test_bbox = polygon_bbox(test_poly)
+                    cols = grid.query_potential_colliders(test_bbox, gap=gap)
+                    if any(polygons_collide(test_poly, cp, gap=gap, bbox_a=test_bbox, bbox_b=cb) for cp, cb in cols):
+                        return True
+                return False
+
+            prev_row = rows[-1]
+            prev_max_y = max(p["bbox"][3] for p in prev_row)
+            high_y = prev_max_y + gap
+            low_y = prev_max_y - avg_h * 0.35
+
+            for _ in range(12):
+                mid_y = (low_y + high_y) / 2.0
+                if row_collides(mid_y):
+                    low_y = mid_y
+                else:
+                    high_y = mid_y
+            cur_row_y = high_y + 0.05
+            while row_collides(cur_row_y):
+                cur_row_y += 0.2
+
+            for p in row_pieces:
+                p["y"] = cur_row_y - p["min_y"]
+                p["poly"] = transform_contour(p["shape"]["contour"], p["x"], p["y"], p["rotation"])
+                p["bbox"] = polygon_bbox(p["poly"])
+
+        if not is_roll and any(p["bbox"][3] > bed_height_mm - margin for p in row_pieces):
+            break
+
+        for p in row_pieces:
+            grid.insert(p["id"], p["poly"], p["bbox"])
+            placed.append(p)
+        rows.append(row_pieces)
+
+        row_idx += 1
+        cur_row_y += avg_h * 0.70
 
     return placed
 

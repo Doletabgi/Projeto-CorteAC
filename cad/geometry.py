@@ -275,13 +275,13 @@ class SpatialGrid:
                                 candidates.append((it[1], it[2]))
         return candidates
 
-def find_contact_coordinate_binary(poly_candidate_fn, candidate_colliders, gap, start_val, min_val, axis='y', iterations=10):
+def find_contact_coordinate_binary(poly_candidate_fn, candidate_colliders, gap, start_val, min_val, axis='y', iterations=12):
     """
     Busca Binária de Contato (Bumping Rápido com Resolução Submilimétrica Exata).
     Dado um intervalo [min_val, start_val], onde `start_val` é garantidamente livre de colisão
     e `min_val` é a posição desejada mais próxima da borda (que pode colidir),
     encontra por busca binária a coordenada mais baixa/próxima que NÃO colide com nenhum obstáculo.
-    Em 10 iterações, resolve uma janela de até 128mm com resolução inferior a 0.1mm.
+    Em 12 iterações, resolve uma janela com resolução de centésimos de milímetro (~0.02mm).
     """
 
     if not candidate_colliders:
@@ -310,13 +310,13 @@ def find_contact_coordinate_binary(poly_candidate_fn, candidate_colliders, gap, 
         else:
             high = mid  # Livre de colisão, pode tentar descer mais
 
-    # Garante margem de segurança discreta para zero colisão
-    res_coord = high + 0.1
+    # Garante margem de segurança discreta para zero colisão com precisão milimétrica
+    res_coord = high + 0.05
     poly_res = poly_candidate_fn(res_coord)
     bbox_res = polygon_bbox(poly_res)
     while any(polygons_collide(poly_res, c_poly, gap=gap, bbox_a=bbox_res, bbox_b=c_bbox)
               for c_poly, c_bbox in candidate_colliders):
-        res_coord += 0.5
+        res_coord += 0.05
         poly_res = poly_candidate_fn(res_coord)
         bbox_res = polygon_bbox(poly_res)
 
