@@ -149,7 +149,32 @@ class TestLayoutEditorTrim(unittest.TestCase):
         """Valida que o botão ✂ Refilar e atalhos de menu existem no LayoutEditor."""
         self.assertTrue(hasattr(self.view, "btn_trim"))
         self.assertEqual(self.view.btn_trim.cget("text"), "✂ Refilar")
+        self.assertTrue(callable(self.view.trim_layout_auto))
         self.assertTrue(callable(self.view.trim_layout_dialog))
+
+    def test_trim_layout_auto_without_dialog(self):
+        """Valida que o acionamento do botão Refilar executa o refile imediatamente no final das peças com gap 1mm sem abrir diálogo."""
+        max_y = 0.0
+        for p in self.view.placed_pieces:
+            poly = transform_contour(p["contour"], p["x"], p["y"], p["rotation"])
+            _, _, _, by2 = polygon_bbox(poly)
+            if by2 > max_y:
+                max_y = by2
+
+        expected_target_h = round(max_y + 1.0, 2)
+
+        # Executa trim_layout_auto (chamado pelo botão ✂ Refilar e Ctrl+T)
+        self.view.trim_layout_auto()
+
+        self.assertAlmostEqual(self.view.sheet_height, expected_target_h, places=2)
+        self.assertIsNotNone(self.view.trim_cut_line)
+        self.assertAlmostEqual(self.view.trim_cut_line["y"], expected_target_h, places=2)
+        self.assertTrue(self.view.trim_cut_line["enabled"])
+
+        # Testa desfazer
+        self.view.undo_action()
+        self.assertEqual(self.view.sheet_height, 2980.0)
+        self.assertIsNone(self.view.trim_cut_line)
 
 
 if __name__ == "__main__":
