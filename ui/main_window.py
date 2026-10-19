@@ -844,8 +844,12 @@ class MainWindow(tk.Tk):
         if not active_sess:
             return False
 
-        # 1. Atualiza as peças na sessão em memória
+        # 1. Atualiza as peças e dimensões na sessão em memória
         active_sess["placed_pieces"] = copy.deepcopy(placed_pieces)
+        active_sess["sheet_width"] = float(sheet_w)
+        active_sess["sheet_height"] = float(sheet_h)
+        if hasattr(self, "layout_editor_view") and getattr(self.layout_editor_view, "trim_cut_line", None):
+            active_sess["trim_cut_line"] = copy.deepcopy(self.layout_editor_view.trim_cut_line)
 
         # 2. Recalcula a área utilizada e a eficiência de aproveitamento (Yield %)
         tot_area_mm2 = sum(polygon_area(p.get("contour", [])) for p in placed_pieces)
@@ -869,6 +873,10 @@ class MainWindow(tk.Tk):
         sess_view = self.open_sessions.get(active_sess["id"])
         if sess_view:
             sess_view.session_data["placed_pieces"] = copy.deepcopy(placed_pieces)
+            sess_view.session_data["sheet_width"] = float(sheet_w)
+            sess_view.session_data["sheet_height"] = float(sheet_h)
+            if hasattr(self, "layout_editor_view") and getattr(self.layout_editor_view, "trim_cut_line", None):
+                sess_view.session_data["trim_cut_line"] = copy.deepcopy(self.layout_editor_view.trim_cut_line)
             sess_view.session_data["yield_percent"] = yield_pct
             sess_view.session_data["used_area_m2"] = used_area_m2
 

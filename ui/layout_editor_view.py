@@ -8,6 +8,7 @@ import copy
 import math
 import re
 import json
+from datetime import datetime
 from typing import Optional, List, Dict, Any
 import tkinter as tk
 from tkinter import ttk, messagebox, colorchooser, filedialog
@@ -17,6 +18,7 @@ from config import THEME
 from cad.geometry import transform_contour, point_in_polygon, rotate_point, polygon_bbox, polygons_collide, polygon_area
 from cad.colors import get_color_for_size, get_contrast_text_color
 from ui.layout_print_dialog import LayoutPrintDialog
+from ui.trim_layout_dialog import TrimLayoutDialog
 from cad.lay_parser import parse_lay, export_layout_from_pieces, validate_layout_placement
 from db.connection import VersionConflictError
 
@@ -165,6 +167,7 @@ class LayoutEditorView(tk.Frame):
         self.sheet_width = 1380.0   # mm
         self.sheet_height = 1080.0  # mm
         self._custom_sheet_size = None
+        self.trim_cut_line = None
 
         self.placed_pieces = []
         self.selected_index = -1
@@ -375,6 +378,36 @@ class LayoutEditorView(tk.Frame):
             )
             b.pack(side="left", padx=1)
 
+        self.create_tb_sep(tb_row)
+
+        # Grupo 7: Operações CAM de Acabamento (Refilar / Corte Automático)
+        self.btn_trim = tk.Button(
+            tb_row,
+            text="✂ Refilar",
+            bg=THEME["bg_surface"],
+            activebackground=THEME["bg_hover"],
+            fg="#0f766e",
+            font=("Segoe UI", 8, "bold"),
+            relief="raised",
+            bd=1,
+            padx=6,
+            pady=1,
+            command=self.trim_layout_dialog,
+            cursor="hand2"
+        )
+        self.btn_trim.pack(side="left", padx=2)
+
+        tip_trim = "Refilar Layout com Corte Automático no Final das Peças (Ctrl+T)"
+        def _on_enter_trim(e):
+            if hasattr(self, "lbl_stat_pos"):
+                self._last_status_pos_text = self.lbl_stat_pos.cget("text")
+                self.lbl_stat_pos.config(text=tip_trim)
+        def _on_leave_trim(e):
+            if hasattr(self, "lbl_stat_pos") and hasattr(self, "_last_status_pos_text"):
+                self.lbl_stat_pos.config(text=self._last_status_pos_text)
+        self.btn_trim.bind("<Enter>", _on_enter_trim)
+        self.btn_trim.bind("<Leave>", _on_leave_trim)
+
         # -------------------------------------------------------------
         # 4. Área de Trabalho Principal (Canvas ocupa todo o espaço, sem sidebar)
         # -------------------------------------------------------------
@@ -448,6 +481,11 @@ class LayoutEditorView(tk.Frame):
         for w in (self, self.canvas):
             w.bind("<Control-p>", lambda e: (self.print_layout(), "break")[1])
             w.bind("<Control-P>", lambda e: (self.print_layout(), "break")[1])
+
+        # Refilar layout com corte automático (Ctrl+T)
+        for w in (self, self.canvas):
+            w.bind("<Control-t>", lambda e: (self.trim_layout_dialog(), "break")[1])
+            w.bind("<Control-T>", lambda e: (self.trim_layout_dialog(), "break")[1])
 
         # Atalhos CAM F1 / F2 / F3 / F4 e Proibição Shift+F3
         for w in (self, self.canvas):
@@ -626,7 +664,11 @@ class LayoutEditorView(tk.Frame):
             menu_obj.add_command(label="Calculate Nesting", command=self.run_auto_nest)
             menu_obj.add_command(label="Start SoleNest...", command=self.run_auto_nest)
             menu_obj.add_command(label="SoleNest Params...", command=lambda: None)
+            menu_obj.add_separator()
+            menu_obj.add_command(label="Refilar Chapa no Final das Peças...\tCtrl+T", command=self.trim_layout_dialog)
         elif menu_name == "Tools":
+            menu_obj.add_command(label="Refilar Layout (Corte Automático)...\tCtrl+T", command=self.trim_layout_dialog)
+            menu_obj.add_separator()
             menu_obj.add_command(label="Colours...", command=lambda: None)
             menu_obj.add_command(label="Check Overlay	Ctrl+E", command=self.check_overlay)
             menu_obj.add_command(label="Preferences...", command=lambda: None)
@@ -1364,6 +1406,56 @@ class LayoutEditorView(tk.Frame):
                     width=1.5
                 )
 
+        # 6.5. Linha de Corte de Refile Automático (CAM / Guilhotina)
+        if getattr(self, "trim_cut_line", None) and self.trim_cut_line.get("enabled", True):
+            cut_y = float(self.trim_cut_line.get("y", self.sheet_height))
+            sy_cut = y2 - cut_y * scale
+
+            # Linha tracejada transversal vermelha em toda a extensão horizontal da chapa
+            self.canvas.create_line(
+                x1 - 6, sy_cut, x2 + 6, sy_cut,
+                fill="#dc2626",
+                dash=(8, 4),
+                width=2.5,
+                tags="trim_cut_line"
+            )
+            # Ícones de tesoura nas extremidades esquerda e direita
+            self.canvas.create_text(
+                x1 - 16, sy_cut,
+                text="✂",
+                fill="#dc2626",
+                font=("Segoe UI", 12, "bold"),
+                tags="trim_cut_icon_left"
+            )
+            self.canvas.create_text(
+                x2 + 16, sy_cut,
+                text="✂",
+                fill="#dc2626",
+                font=("Segoe UI", 12, "bold"),
+                tags="trim_cut_icon_right"
+            )
+
+            # Badge explicativo estilizado
+            h_cm = cut_y / 10.0
+            h_m = cut_y / 1000.0
+            badge_text = f"✂ CORTE DE REFILE: {h_cm:.1f} cm ({h_m:.2f} m)"
+            bx = (x1 + x2) / 2.0
+            by = sy_cut - 14 if sy_cut >= y1 + 10 else sy_cut + 14
+            self.canvas.create_rectangle(
+                bx - 125, by - 9, bx + 125, by + 9,
+                fill="#fef2f2",
+                outline="#dc2626",
+                width=1.5,
+                tags="trim_cut_badge_bg"
+            )
+            self.canvas.create_text(
+                bx, by,
+                text=badge_text,
+                fill="#991b1b",
+                font=("Segoe UI", 8, "bold"),
+                tags="trim_cut_badge_txt"
+            )
+
         # 7. Divisor Vertical e Barra Lateral de Moldes (com fundo opaco para isolar do zoom da mesa)
         div_x = self.sidebar_div_x
         if div_x < cw:
@@ -1533,7 +1625,13 @@ class LayoutEditorView(tk.Frame):
                     self.lbl_stat_left.config(text="⚠️ Bloqueio de Colisão: Peça retornou à posição anterior (sobreposição proibida).")
                 self.redraw()
             elif self.placed_pieces != self._pre_drag_pieces:
-                self.undo_stack.append([dict(p) for p in self._pre_drag_pieces])
+                state = {
+                    "pieces": [dict(p) for p in self._pre_drag_pieces],
+                    "sheet_height": self.sheet_height,
+                    "trim_cut_line": copy.deepcopy(getattr(self, "trim_cut_line", None)),
+                    "original_sheet_height": getattr(self, "original_sheet_height", None)
+                }
+                self.undo_stack.append(state)
                 if len(self.undo_stack) > UNDO_MAX_LEVELS:
                     self.undo_stack.pop(0)
                 self.set_modified(True)
@@ -1542,18 +1640,34 @@ class LayoutEditorView(tk.Frame):
 
     def push_undo(self):
         """Salva o estado atual do layout na pilha de desfazer (Ctrl+Z) de forma leve."""
-        self.undo_stack.append([dict(p) for p in self.placed_pieces])
+        state = {
+            "pieces": [dict(p) for p in self.placed_pieces],
+            "sheet_height": self.sheet_height,
+            "trim_cut_line": copy.deepcopy(getattr(self, "trim_cut_line", None)),
+            "original_sheet_height": getattr(self, "original_sheet_height", None)
+        }
+        self.undo_stack.append(state)
         if len(self.undo_stack) > UNDO_MAX_LEVELS:
             self.undo_stack.pop(0)
 
     def undo_action(self, event=None):
         """Desfaz a última alteração feita no layout (Ctrl+Z). Não existe redo (Ctrl+Y proibido)."""
         if self.undo_stack:
-            self.placed_pieces = self.undo_stack.pop()
+            prev_state = self.undo_stack.pop()
+            if isinstance(prev_state, dict):
+                self.placed_pieces = prev_state.get("pieces", [])
+                if "sheet_height" in prev_state:
+                    self.sheet_height = prev_state["sheet_height"]
+                self.trim_cut_line = copy.deepcopy(prev_state.get("trim_cut_line", None))
+                self.original_sheet_height = prev_state.get("original_sheet_height", None)
+            elif isinstance(prev_state, list):
+                self.placed_pieces = prev_state
+
             if self.selected_index >= len(self.placed_pieces):
                 self.selected_index = len(self.placed_pieces) - 1
             self.is_modified = (len(self.undo_stack) != getattr(self, "_saved_undo_index", -1))
             self._update_window_title()
+            self.update_sheet_status()
             self.redraw()
             self.update_status()
             if hasattr(self, "lbl_stat_pos"):
@@ -2106,6 +2220,97 @@ class LayoutEditorView(tk.Frame):
 
         return "break"
 
+    def trim_layout_dialog(self, event=None):
+        """
+        Abre a caixa de diálogo para refilar o layout com corte transversal automático (guilhotina CAM)
+        no final das peças, permitindo economia e reaproveitamento da sobra da chapa.
+        Atalho: Ctrl+T.
+        """
+        if not self.placed_pieces:
+            messagebox.showinfo(
+                "Refilar Layout",
+                "Não há peças posicionadas no layout para refilar.",
+                parent=self
+            )
+            return "break"
+
+        # Calcula o Y máximo de todas as peças considerando a geometria poligonal real rotacionada
+        max_y = 0.0
+        for p in self.placed_pieces:
+            c = p.get("contour", [])
+            px = float(p.get("x", 0.0))
+            py = float(p.get("y", 0.0))
+            rot = float(p.get("rotation", 0.0))
+            if c:
+                poly = transform_contour(c, px, py, rot)
+                _, _, _, p_max_y = polygon_bbox(poly)
+                if p_max_y > max_y:
+                    max_y = p_max_y
+            else:
+                if py > max_y:
+                    max_y = py
+
+        if max_y <= 0.0:
+            max_y = max(float(p.get("y", 0.0)) for p in self.placed_pieces)
+
+        dlg = TrimLayoutDialog(
+            self,
+            max_piece_y_mm=max_y,
+            sheet_height_mm=self.sheet_height,
+            sheet_width_mm=self.sheet_width,
+            on_apply=self.apply_trim_layout
+        )
+        dlg.focus_set()
+        return "break"
+
+    def apply_trim_layout(self, target_h_mm: float, add_cut_line: bool = True):
+        """
+        Aplica o refile da chapa para a nova altura target_h_mm,
+        configurando opcionalmente a linha de corte transversal de acabamento (CAM).
+        Suporta desfazer completo via Ctrl+Z.
+        """
+        # 1. Salva estado anterior para Undo (Ctrl+Z)
+        self.push_undo()
+
+        # 2. Armazena a altura original da chapa para cálculo de sobra/economia
+        if not hasattr(self, "original_sheet_height") or self.original_sheet_height is None:
+            self.original_sheet_height = self.sheet_height
+
+        # 3. Atualiza as dimensões da chapa
+        self.sheet_height = float(target_h_mm)
+
+        # 4. Configura ou remove a linha de corte transversal CAM
+        if add_cut_line:
+            self.trim_cut_line = {
+                "y": float(target_h_mm),
+                "enabled": True,
+                "created_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            }
+        else:
+            self.trim_cut_line = None
+
+        # 5. Marca layout como modificado
+        self.set_modified(True)
+
+        # 6. Atualiza status e cabeçalhos visuais
+        self.update_sheet_status()
+        self.update_status()
+
+        # 7. Redefine o enquadramento total (Fit 100%) para a nova chapa refilada
+        self.reset_view()
+
+        # 8. Feedback visual na barra de status
+        h_cm = target_h_mm / 10.0
+        h_m = target_h_mm / 1000.0
+        msg = f"Layout refilado com sucesso para {h_cm:.1f} cm ({h_m:.2f} m)"
+        if add_cut_line:
+            msg += " com corte automático CAM configurado (Ctrl+Z para desfazer)."
+        else:
+            msg += " (Ctrl+Z para desfazer)."
+
+        if hasattr(self, "lbl_stat_pos"):
+            self.lbl_stat_pos.config(text=msg)
+
     def save_layout(self, event=None):
         """
         Salva o layout atomicamente no SQLite e regrava o arquivo .lay em disco
@@ -2428,6 +2633,7 @@ class LayoutEditorView(tk.Frame):
             "shapes_count": shapes,
             "instances_count": instances,
             "gap_str": "1.00 mm",
+            "trim_cut_line": getattr(self, "trim_cut_line", None),
             "placed_pieces": self.placed_pieces if self.placed_pieces else None
         }
 

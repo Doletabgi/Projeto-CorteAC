@@ -850,6 +850,10 @@ class SessionView(tk.Frame):
         if mat:
             sheet_w = float(mat.get("width_mm", 1350.0))
             sheet_h = float(mat.get("height_mm", 2553.38))
+        if "sheet_width" in self.session_data:
+            sheet_w = float(self.session_data["sheet_width"])
+        if "sheet_height" in self.session_data:
+            sheet_h = float(self.session_data["sheet_height"])
 
         pad = 10
         top_lbl_h = 16
@@ -926,6 +930,20 @@ class SessionView(tk.Frame):
                 scr.extend([sx, sy])
             if len(scr) >= 6:
                 cv.create_polygon(scr, fill=col, outline="#000000", width=1)
+
+        # Linha de Corte de Refile (CAM) se configurada
+        trim_cut = self.session_data.get("trim_cut_line")
+        if trim_cut and trim_cut.get("enabled", True):
+            cut_y = float(trim_cut.get("y", sheet_h))
+            sy_cut = y2 - cut_y * sc
+            cv.create_line(x1 - 2, sy_cut, x2 + 2, sy_cut, fill="#dc2626", dash=(4, 2), width=2)
+            cv.create_text(
+                (x1 + x2) / 2.0,
+                max(y1 + 8, sy_cut - 7),
+                text=f"✂ Refile: {cut_y / 10.0:.1f} cm",
+                fill="#dc2626",
+                font=("Segoe UI", 7, "bold")
+            )
 
     def update_strategy_description(self, strategy):
         descs = {
