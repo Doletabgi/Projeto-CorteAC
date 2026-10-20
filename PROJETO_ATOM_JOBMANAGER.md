@@ -4,7 +4,7 @@
 > **Regra de ouro:** o que está marcado `[CONFIRMADO]` veio do relatório, do código ou do usuário. O que está `[NÃO CONFIRMADO]` é suposição e não deve virar "fato" sem validação. O que está `[PREENCHER]` o Antigravity deve completar lendo o código real.
 
 <!-- AUTO:header:start -->
-**Última sincronização com o código:** 2026-10-20 02:54 (HEAD ao gerar: `048b051`; 41 arquivos Python, ~26421 linhas)
+**Última sincronização com o código:** 2026-10-20 08:29 (HEAD ao gerar: `eed775c`; 41 arquivos Python, ~26487 linhas)
 <!-- AUTO:header:end -->
 **Versão deste documento:** 1
 
@@ -189,7 +189,7 @@ ui/trim_layout_dialog.py                    # JobManager 2000 (Python Edition)
 ### `tests/test_layout_editor_shortcuts.py`
 - `class DummyEvent` (linha 31, 1 métodos)
 - `class DummyMouseEvent` (linha 37, 1 métodos)
-- `class TestLayoutEditorShortcuts` (linha 45, 44 métodos)
+- `class TestLayoutEditorShortcuts` (linha 45, 45 métodos)
 
 ### `tests/test_layout_editor_trim.py`
 - `class TestLayoutEditorTrim` (linha 16, 9 métodos)
@@ -1314,6 +1314,7 @@ Local: `/home/dola/Documentos/clone do job/antigo/arquivos pos instalacao/Common
 <!-- AUTO:gitlog:start -->
 | Commit | Data | Autor | Mensagem |
 |---|---|---|---|
+| `eed775c` | 2026-10-20 | Doletabgi | feat(ui): eliminar lag de movimentacao manual com fast-path, ghost outline, snap magnetico e colisao dupla |
 | `048b051` | 2026-10-19 | Doletabgi | feat(nesting): criar e integrar motor IA-teste com macros declarativas e IA local embarcada |
 | `3006bb6` | 2026-10-19 | Doletabgi | feat(ui): remover combinacao flashnestsheet + HighYield da tabela de recomendacoes da sessao |
 | `d2f84e0` | 2026-10-19 | Doletabgi | feat(ui): mudar descricao de parametros para 'O Parametro define o comportamento das rotacoes, folgas e preenchimento da chapa:' |
@@ -1328,7 +1329,6 @@ Local: `/home/dola/Documentos/clone do job/antigo/arquivos pos instalacao/Common
 | `2c1dead` | 2026-10-18 | Doletabgi | docs: adicionar estrategias de nesting (sint, tape_a, flashnestsheet, flashnestroll, freenest) ao manual |
 | `187cbd4` | 2026-10-18 | Doletabgi | docs: manual tecnico detalhado dos motores e perfis de nesting |
 | `f3f0dc1` | 2026-10-18 | Doletabgi | feat(cad): respeitar gap 1mm exato com encaixe contorno a contorno e zero colisao |
-| `72c8e83` | 2026-10-18 | Doletabgi | feat(ui): bloquear abertura do layout editor sem calculo e eliminar pecas fantasmas |
 <!-- AUTO:gitlog:end -->
 
 ---

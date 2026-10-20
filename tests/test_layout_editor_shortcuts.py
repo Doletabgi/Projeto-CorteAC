@@ -1291,11 +1291,27 @@ class TestLayoutEditorShortcuts(unittest.TestCase):
         self.assertEqual(row_vals[1], "SINT-LOGAM 1.4 PRETO")
 
     def test_drag_motion_zero_delay_without_full_redraw(self):
-        """Valida que o loop de arraste (<B1-Motion>) não executa redraw() completo e responde em sub-milissegundos."""
+        """Simula 100 eventos consecutivos de <B1-Motion> em uma placa com 50 peças e verifica que o tempo total dos 100 frames é inferior a 50 ms (< 0.5 ms por movimento) e que redraw() completo não é chamado durante o <B1-Motion>."""
         import time
         from unittest.mock import patch
 
-        self.assertTrue(len(self.view.placed_pieces) > 0)
+        # Configura exatamente 50 peças na mesa
+        pieces = []
+        for i in range(50):
+            row = i // 10
+            col = i % 10
+            pieces.append({
+                "name": f"P{i+1}",
+                "contour": list(CONTOUR_CON),
+                "x": 50.0 + col * 120.0,
+                "y": 50.0 + row * 120.0,
+                "rotation": 0.0,
+                "color": "#3b82f6"
+            })
+        self.view.placed_pieces = pieces
+        self.view.redraw()
+        self.assertEqual(len(self.view.placed_pieces), 50)
+
         p = self.view.placed_pieces[0]
         poly = transform_contour(p["contour"], p["x"], p["y"], p["rotation"])
         bbox = polygon_bbox(poly)
@@ -1323,14 +1339,64 @@ class TestLayoutEditorShortcuts(unittest.TestCase):
 
             # Prova inviolável: NENHUM redraw() completo no loop de arraste
             self.assertEqual(mock_redraw.call_count, 0)
-            # Desempenho extremo: 100 frames processados em menos de 0.1s (< 1ms/evento)
-            self.assertLess(dt, 0.100)
+            # Desempenho extremo: 100 frames processados em menos de 50 ms (< 0.5 ms/evento)
+            self.assertLess(dt, 0.050)
 
         # Release: redraw() único e remoção do ghost
         self.view.on_canvas_release(DummyMouseEvent(cx + 200, cy + 200))
         self.assertFalse(self.view.is_dragging_piece)
         ghost_after = self.view.canvas.find_withtag("drag_ghost")
         self.assertEqual(len(ghost_after), 0)
+
+    def test_drag_realtime_collision_red_outline_feedback(self):
+        """Verifica que durante o arrasto sobre outra peça ou fora da Placa o polígono recebe outline='#ef4444', voltando ao normal quando movido para uma área livre."""
+        self.view.placed_pieces = [
+            {"name": "P1", "contour": list(CONTOUR_CON), "x": 100.0, "y": 100.0, "rotation": 0.0, "color": "#3b82f6"},
+            {"name": "P2", "contour": list(CONTOUR_CON), "x": 300.0, "y": 100.0, "rotation": 0.0, "color": "#10b981"},
+        ]
+        self.view.redraw()
+
+        p0 = self.view.placed_pieces[0]
+        poly0 = transform_contour(p0["contour"], p0["x"], p0["y"], p0["rotation"])
+        bbox0 = polygon_bbox(poly0)
+        wx0 = (bbox0[0] + bbox0[2]) / 2.0
+        wy0 = (bbox0[1] + bbox0[3]) / 2.0
+        cx0 = self.view.plate_x1 + wx0 * self.view.plate_scale
+        cy0 = self.view.plate_y2 - wy0 * self.view.plate_scale
+
+        self.view.on_canvas_click(DummyMouseEvent(cx0, cy0))
+        poly0_item = self.view.canvas.find_withtag("piece_poly_0")[0]
+
+        # 1. Arraste sobre outra peça (colisão peça a peça) -> outline="#ef4444"
+        p1 = self.view.placed_pieces[1]
+        poly1 = transform_contour(p1["contour"], p1["x"], p1["y"], p1["rotation"])
+        bbox1 = polygon_bbox(poly1)
+        wx1 = (bbox1[0] + bbox1[2]) / 2.0
+        wy1 = (bbox1[1] + bbox1[3]) / 2.0
+        col_cx = self.view.plate_x1 + wx1 * self.view.plate_scale
+        col_cy = self.view.plate_y2 - wy1 * self.view.plate_scale
+        self.view.on_canvas_drag(DummyMouseEvent(col_cx, col_cy))
+        self.assertEqual(self.view.canvas.itemcget(poly0_item, "outline"), "#ef4444")
+
+        # 2. Arraste para fora da Placa (invasão de borda) -> outline="#ef4444"
+        out_wx = -200.0
+        out_wy = -200.0
+        out_cx = self.view.plate_x1 + out_wx * self.view.plate_scale
+        out_cy = self.view.plate_y2 - out_wy * self.view.plate_scale
+        self.view.on_canvas_drag(DummyMouseEvent(out_cx, out_cy))
+        self.assertEqual(self.view.canvas.itemcget(poly0_item, "outline"), "#ef4444")
+
+        # 3. Arraste para área livre e válida dentro da Placa -> outline="#22c55e"
+        free_wx = 100.0
+        free_wy = 350.0
+        free_cx = self.view.plate_x1 + free_wx * self.view.plate_scale
+        free_cy = self.view.plate_y2 - free_wy * self.view.plate_scale
+        self.view.on_canvas_drag(DummyMouseEvent(free_cx, free_cy))
+        self.assertEqual(self.view.canvas.itemcget(poly0_item, "outline"), "#22c55e")
+
+        # Release na área livre
+        self.view.on_canvas_release(DummyMouseEvent(free_cx, free_cy))
+        self.assertFalse(self.view.is_dragging_piece)
 
     def test_drag_realtime_collision_and_ghost_feedback(self):
         """Valida ghost outline, feedback vermelho/verde na peça arrastada e âmbar nas peças colididas."""
