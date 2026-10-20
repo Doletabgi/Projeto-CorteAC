@@ -275,6 +275,32 @@ class SpatialGrid:
                                 candidates.append((it[1], it[2]))
         return candidates
 
+    def query_items(self, bbox, gap=0.0):
+        """
+        Retorna a lista de itens completos (item_id, poly, bbox) que compartilham células espaciais
+        com a Bounding Box consultada (expandida pelo gap).
+        """
+        min_x, min_y, max_x, max_y = bbox
+        c_min_x = int(math.floor((min_x - gap) / self.cell_size))
+        c_max_x = int(math.floor((max_x + gap) / self.cell_size))
+        c_min_y = int(math.floor((min_y - gap) / self.cell_size))
+        c_max_y = int(math.floor((max_y + gap) / self.cell_size))
+
+        candidates = []
+        seen = set()
+
+        for cx in range(c_min_x, c_max_x + 1):
+            for cy in range(c_min_y, c_max_y + 1):
+                cell_items = self.grid.get((cx, cy))
+                if cell_items:
+                    for it in cell_items:
+                        it_id = it[0]
+                        if it_id not in seen:
+                            seen.add(it_id)
+                            if bbox_overlap(bbox, it[2], gap):
+                                candidates.append((it[0], it[1], it[2]))
+        return candidates
+
 def find_contact_coordinate_binary(poly_candidate_fn, candidate_colliders, gap, start_val, min_val, axis='y', iterations=12):
     """
     Busca Binária de Contato (Bumping Rápido com Resolução Submilimétrica Exata).

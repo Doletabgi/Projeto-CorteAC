@@ -4,7 +4,7 @@
 > **Regra de ouro:** o que está marcado `[CONFIRMADO]` veio do relatório, do código ou do usuário. O que está `[NÃO CONFIRMADO]` é suposição e não deve virar "fato" sem validação. O que está `[PREENCHER]` o Antigravity deve completar lendo o código real.
 
 <!-- AUTO:header:start -->
-**Última sincronização com o código:** 2026-10-19 14:10 (HEAD ao gerar: `3006bb6`; 41 arquivos Python, ~25802 linhas)
+**Última sincronização com o código:** 2026-10-20 02:54 (HEAD ao gerar: `048b051`; 41 arquivos Python, ~26421 linhas)
 <!-- AUTO:header:end -->
 **Versão deste documento:** 1
 
@@ -148,7 +148,7 @@ ui/trim_layout_dialog.py                    # JobManager 2000 (Python Edition)
 - funções: `reorder_contour_midpoint_longest_edge`, `optimize_piece_cutting_order_tsp`, `_canonical_edge`, `export_gcode`, `export_dxf`, `export_xml_report`
 
 ### `cad/geometry.py`
-- `class SpatialGrid` (linha 215, 4 métodos): Indexação Espacial 2D (Spatial Grid Hashing).
+- `class SpatialGrid` (linha 215, 5 métodos): Indexação Espacial 2D (Spatial Grid Hashing).
 - funções: `rotate_point`, `transform_contour`, `polygon_area`, `polygon_perimeter`, `polygon_bbox`, `bbox_overlap`, `point_in_polygon`, `_ccw`, `segments_intersect`, `point_segment_distance_sq`, `simplify_contour_for_collision`, `polygons_collide`, `find_contact_coordinate_binary`
 
 ### `cad/lay_parser.py`
@@ -188,7 +188,8 @@ ui/trim_layout_dialog.py                    # JobManager 2000 (Python Edition)
 
 ### `tests/test_layout_editor_shortcuts.py`
 - `class DummyEvent` (linha 31, 1 métodos)
-- `class TestLayoutEditorShortcuts` (linha 37, 39 métodos)
+- `class DummyMouseEvent` (linha 37, 1 métodos)
+- `class TestLayoutEditorShortcuts` (linha 45, 44 métodos)
 
 ### `tests/test_layout_editor_trim.py`
 - `class TestLayoutEditorTrim` (linha 16, 9 métodos)
@@ -223,7 +224,7 @@ ui/trim_layout_dialog.py                    # JobManager 2000 (Python Edition)
 - `class AddShapesDialog` (linha 13, 14 métodos)
 
 ### `ui/cad_canvas.py`
-- `class CADCanvas` (linha 11, 22 métodos)
+- `class CADCanvas` (linha 11, 23 métodos)
 
 ### `ui/dieproc_dialog.py`
 - `class DieProcDialog` (linha 12, 17 métodos)
@@ -232,7 +233,7 @@ ui/trim_layout_dialog.py                    # JobManager 2000 (Python Edition)
 - `class EditShapeInSessionDialog` (linha 11, 6 métodos)
 
 ### `ui/layout_editor_view.py`
-- `class LayoutEditorView` (linha 151, 81 métodos)
+- `class LayoutEditorView` (linha 151, 83 métodos)
 - funções: `rotate_piece_in_place`
 
 ### `ui/layout_print_dialog.py`
@@ -979,7 +980,7 @@ A ordem de corte do `.lay` para a mesa **não pode** ser aleatória:
 |---|---|---|
 | Alt+Down | `ui/session_view.py:2121` | `entry.bind("<Alt-Down>", lambda e: adjust_number(-1))` |
 | Alt+Up | `ui/session_view.py:2120` | `entry.bind("<Alt-Up>", lambda e: adjust_number(+1))` |
-| Backspace | `ui/cad_canvas.py:69` | `self.master.bind("<BackSpace>", lambda e: self.delete_selected())` |
+| Backspace | `ui/cad_canvas.py:71` | `self.master.bind("<BackSpace>", lambda e: self.delete_selected())` |
 | Backspace | `ui/main_window.py:547` | `self.bind_all("<BackSpace>", self.on_global_delete_key, add="+")` |
 | Backspace | `ui/session_view.py:684` | `w.bind("<BackSpace>", self.remove_session_material)` |
 | Backspace | `ui/session_view.py:685` | `w.bind("<Key-BackSpace>", self.remove_session_material)` |
@@ -1045,8 +1046,8 @@ A ordem de corte do `.lay` para a mesa **não pode** ser aleatória:
 | Ctrl+Z | `ui/shape_editor_view.py:213` | `self.canvas.bind("<Control-Z>", self.undo_or_revert)` |
 | Ctrl+Z | `ui/shape_editor_view.py:214` | `self.canvas.bind("<Control-Key-z>", self.undo_or_revert)` |
 | Ctrl+Z | `ui/shape_editor_view.py:215` | `self.canvas.bind("<Control-Key-Z>", self.undo_or_revert)` |
-| Delete | `ui/cad_canvas.py:68` | `self.master.bind("<Delete>", lambda e: self.delete_selected())` |
-| Delete | `ui/layout_editor_view.py:523` | `self.bind_all("<Delete>", lambda e: self.delete_selected())` |
+| Delete | `ui/cad_canvas.py:70` | `self.master.bind("<Delete>", lambda e: self.delete_selected())` |
+| Delete | `ui/layout_editor_view.py:525` | `self.bind_all("<Delete>", lambda e: self.delete_selected())` |
 | Delete | `ui/main_window.py:257` | `edit_menu.add_command(label="Excluir", accelerator="Del", command=self.on_global` |
 | Delete | `ui/main_window.py:546` | `self.bind_all("<Delete>", self.on_global_delete_key, add="+")` |
 | Delete | `ui/main_window.py:2413` | `accelerator="Del",` |
@@ -1056,10 +1057,13 @@ A ordem de corte do `.lay` para a mesa **não pode** ser aleatória:
 | Delete | `ui/session_view.py:526` | `self.tree_shapes.bind("<Delete>", lambda e: self.delete_selected_shape())` |
 | Delete | `ui/session_view.py:682` | `w.bind("<Delete>", self.remove_session_material)` |
 | Delete | `ui/session_view.py:683` | `w.bind("<Key-Delete>", self.remove_session_material)` |
-| Down | `ui/layout_editor_view.py:527` | `self.bind_all("<Down>", lambda e: self.nudge_selected(0, -5))` |
+| Down | `ui/layout_editor_view.py:529` | `self.bind_all("<Down>", lambda e: self.nudge_selected(0, -5))` |
 | Down | `ui/session_view.py:2105` | `entry.bind("<Down>", move_down)` |
+| Escape | `ui/cad_canvas.py:66` | `self.bind("<Escape>", self.cancel_drag)` |
+| Escape | `ui/cad_canvas.py:67` | `self.master.bind("<Escape>", self.cancel_drag)` |
 | Escape | `ui/dieproc_dialog.py:39` | `self.bind("<Escape>", lambda e: self.destroy())` |
 | Escape | `ui/edit_shape_in_session_dialog.py:147` | `self.bind("<Escape>", lambda e: self.destroy())` |
+| Escape | `ui/layout_editor_view.py:521` | `w.bind("<Escape>", self.cancel_drag)` |
 | Escape | `ui/layout_print_dialog.py:251` | `self.bind("<Escape>", self.on_escape)` |
 | Escape | `ui/main_window.py:63` | `self.bind("<Escape>", self.exit_fullscreen)` |
 | Escape | `ui/main_window.py:545` | `self.bind_all("<Escape>", self.dismiss_popup_menus, add="+")` |
@@ -1088,11 +1092,11 @@ A ordem de corte do `.lay` para a mesa **não pode** ser aleatória:
 | Kp_enter | `ui/session_view.py:528` | `self.tree_shapes.bind("<KP_Enter>", self.on_tree_shape_enter)` |
 | Kp_enter | `ui/session_view.py:2110` | `entry.bind("<KP_Enter>", move_down)` |
 | Kp_up | `ui/session_view.py:2108` | `entry.bind("<KP_Up>", move_up)` |
-| Left | `ui/layout_editor_view.py:524` | `self.bind_all("<Left>", lambda e: self.nudge_selected(-5, 0))` |
-| R | `ui/cad_canvas.py:66` | `self.master.bind("<r>", lambda e: self.rotate_selected(45))` |
-| R | `ui/cad_canvas.py:67` | `self.master.bind("<R>", lambda e: self.rotate_selected(45))` |
-| R | `ui/layout_editor_view.py:521` | `self.bind_all("<Key-r>", lambda e: self.rotate_selected(45))` |
-| R | `ui/layout_editor_view.py:522` | `self.bind_all("<Key-R>", lambda e: self.rotate_selected(45))` |
+| Left | `ui/layout_editor_view.py:526` | `self.bind_all("<Left>", lambda e: self.nudge_selected(-5, 0))` |
+| R | `ui/cad_canvas.py:68` | `self.master.bind("<r>", lambda e: self.rotate_selected(45))` |
+| R | `ui/cad_canvas.py:69` | `self.master.bind("<R>", lambda e: self.rotate_selected(45))` |
+| R | `ui/layout_editor_view.py:523` | `self.bind_all("<Key-r>", lambda e: self.rotate_selected(45))` |
+| R | `ui/layout_editor_view.py:524` | `self.bind_all("<Key-R>", lambda e: self.rotate_selected(45))` |
 | Return | `ui/edit_shape_in_session_dialog.py:146` | `self.bind("<Return>", lambda e: self.on_save())` |
 | Return | `ui/main_window.py:2927` | `dialog.bind("<Return>", lambda e: save())` |
 | Return | `ui/material_codes_view.py:199` | `self.tree.bind("<Return>", lambda e: self.open_edit_selected_dialog())` |
@@ -1107,7 +1111,7 @@ A ordem de corte do `.lay` para a mesa **não pode** ser aleatória:
 | Return | `ui/shape_editor_view.py:309` | `self.entry_vx.bind("<Return>", self.on_vertex_entry_change)` |
 | Return | `ui/shape_editor_view.py:314` | `self.entry_vy.bind("<Return>", self.on_vertex_entry_change)` |
 | Return | `ui/trim_layout_dialog.py:73` | `self.bind("<Return>", lambda e: self.on_confirm())` |
-| Right | `ui/layout_editor_view.py:525` | `self.bind_all("<Right>", lambda e: self.nudge_selected(5, 0))` |
+| Right | `ui/layout_editor_view.py:527` | `self.bind_all("<Right>", lambda e: self.nudge_selected(5, 0))` |
 | Shift+F3 | `ui/layout_editor_view.py:514` | `w.bind("<Shift-F3>", lambda e: "break")` |
 | Shift+F3 | `ui/layout_editor_view.py:515` | `w.bind("<Shift-Key-F3>", lambda e: "break")` |
 | Shift+Return | `ui/session_view.py:2111` | `entry.bind("<Shift-Return>", move_up)` |
@@ -1116,7 +1120,7 @@ A ordem de corte do `.lay` para a mesa **não pode** ser aleatória:
 | Space | `ui/add_shapes_dialog.py:135` | `self.tree.bind("<space>", self.on_tree_space)` |
 | Tab | `ui/session_view.py:1738` | `entry.bind("<Tab>", on_tab)` |
 | Tab | `ui/session_view.py:2112` | `entry.bind("<Tab>", move_down)` |
-| Up | `ui/layout_editor_view.py:526` | `self.bind_all("<Up>", lambda e: self.nudge_selected(0, 5))` |
+| Up | `ui/layout_editor_view.py:528` | `self.bind_all("<Up>", lambda e: self.nudge_selected(0, 5))` |
 | Up | `ui/session_view.py:2107` | `entry.bind("<Up>", move_up)` |
 
 **Conflitos reais detectados:**
@@ -1303,12 +1307,14 @@ Local: `/home/dola/Documentos/clone do job/antigo/arquivos pos instalacao/Common
 | Seg, 19/10/2026 | 11:02 | Antigravity | Atualização do rótulo e descrição de Parâmetros na sessão ('O Parâmetro define o comportamento das rotações, folgas e preenchimento da chapa:'): substituição do rótulo 'Parâmetros:' em `SessionView` pelo texto conceitual solicitado pelo operador, mantendo o botão '⚙️ Configurar...' à direita com perfeito alinhamento visual; atualização do teste unitário dedicado (`test_strategy_label_and_descriptions`, 97 testes passando) e recompilação do executável standalone Linux (`teste_dola_linux`). | `ui/session_view.py`, `tests/test_strategy_removal.py`, `PROJETO_ATOM_JOBMANAGER.md`, `teste_dola_linux` |
 | Seg, 19/10/2026 | 11:20 | Antigravity | Remoção da combinação 'flashnestsheet' + 'HighYield' ('Economizar material ao máximo em chapa cara') da tabela interativa de combinações recomendadas (`RECOMMENDED_COMBINATIONS` em `ui/session_view.py`) e da matriz do manual técnico (`docs/MOTORES_NESTING_PARAMETROS.md`); atualização dos testes automatizados em `tests/test_strategy_removal.py` validando ausência de `HighYield` na tabela de guia; recompilação do executável standalone Linux (`teste_dola_linux`). | `ui/session_view.py`, `docs/MOTORES_NESTING_PARAMETROS.md`, `tests/test_strategy_removal.py`, `PROJETO_ATOM_JOBMANAGER.md`, `teste_dola_linux` |
 | Seg, 19/10/2026 | 14:15 | Antigravity | Criação e integração do novo motor de cálculo de nesting 'IA-teste' com Macros Declarativas e IA Local Embarcada 100% nativa (Python 3.12 puro, zero dependências externas): motor `OmniNestMacroEngine` com avaliador seguro de expressões por AST sem `eval()` (`SafeFormulaEvaluator`), compilador de DSL de macros (`MacroCompiler`), aprendizado contínuo por imitação em `Ctrl+S` (`learn_from_operator_save`) e auto-calibração por UCB1 Multi-Armed Bandit (`suggest_optimized_macro_params` / `record_macro_execution_feedback`) por família geométrica calçadista (`ShapeFeatureExtractor`); suporte a persistência de macros em predefinições DieProc no MySQL 8.0 e SQLite (`macro_script` em `dieproc_presets`), aba dedicada com editor de macro e status da IA no `DieProcDialog`, nova estratégia `IA-teste` com feedback em tempo real e suíte com 106 testes automatizados passando. | `cad/ai_learner.py`, `cad/macro_engine.py`, `cad/nesting_engine.py`, `database.py`, `db/schema_mysql.sql`, `db/migrations/001_initial_mysql_schema.sql`, `ui/session_view.py`, `ui/dieproc_dialog.py`, `ui/layout_editor_view.py`, `ui/main_window.py`, `tests/test_macro_engine_ia_teste.py`, `tests/test_strategy_removal.py`, `PROJETO_ATOM_JOBMANAGER.md` |
+| Ter, 20/10/2026 | 02:45 | Antigravity | Eliminação total de delay (lag) na movimentação manual de peças e feedback visual avançado em `LayoutEditorView` e `CADCanvas`: implementação de fast-path de renderização via `canvas.move` sem recriação de cena (`self.redraw`), reduzindo o tempo por evento de `<B1-Motion>` para menos de 0.05 ms (>100 FPS); contorno fantasma (Ghost Outline com dash e `#64748b`) na origem de arraste; snap magnético em tempo real nas bordas da chapa a 2.0 mm; feedback de colisão espacial instantâneo $O(1)$ via `SpatialGrid.query_items` destacando a peça arrastada em vermelho (`#ef4444`) se colidir ou verde (`#22c55e`) se livre, e peças estáticas colididas em âmbar (`#f59e0b`); cancelamento limpo com a tecla `<Escape>` restaurando a peça à origem do ghost sem poluir a pilha de undo; redesenho pontual `redraw_single_piece` para rotações F1–F4 e setas do teclado; validação estrita de zero colisão com reversão automática no `<ButtonRelease-1>`; 5 novos testes unitários adicionados (111/111 testes passando na suíte geral) e recompilação do executável standalone Linux (`teste_dola_linux`). | `ui/layout_editor_view.py`, `ui/cad_canvas.py`, `cad/geometry.py`, `tests/test_layout_editor_shortcuts.py`, `PROJETO_ATOM_JOBMANAGER.md`, `teste_dola_linux` |
 
 **Commits recentes (automático):**
 
 <!-- AUTO:gitlog:start -->
 | Commit | Data | Autor | Mensagem |
 |---|---|---|---|
+| `048b051` | 2026-10-19 | Doletabgi | feat(nesting): criar e integrar motor IA-teste com macros declarativas e IA local embarcada |
 | `3006bb6` | 2026-10-19 | Doletabgi | feat(ui): remover combinacao flashnestsheet + HighYield da tabela de recomendacoes da sessao |
 | `d2f84e0` | 2026-10-19 | Doletabgi | feat(ui): mudar descricao de parametros para 'O Parametro define o comportamento das rotacoes, folgas e preenchimento da chapa:' |
 | `e82174c` | 2026-10-19 | Doletabgi | feat(ui): mudar descricao de estrategia para 'A Estrategia define a geometria fisica do corte e do material' |
@@ -1323,7 +1329,6 @@ Local: `/home/dola/Documentos/clone do job/antigo/arquivos pos instalacao/Common
 | `187cbd4` | 2026-10-18 | Doletabgi | docs: manual tecnico detalhado dos motores e perfis de nesting |
 | `f3f0dc1` | 2026-10-18 | Doletabgi | feat(cad): respeitar gap 1mm exato com encaixe contorno a contorno e zero colisao |
 | `72c8e83` | 2026-10-18 | Doletabgi | feat(ui): bloquear abertura do layout editor sem calculo e eliminar pecas fantasmas |
-| `f60527e` | 2026-10-18 | Doletabgi | feat(ui): opcao de excluir material clicando com o mouse na arvore e no grid |
 <!-- AUTO:gitlog:end -->
 
 ---

@@ -63,6 +63,8 @@ class CADCanvas(tk.Canvas):
         self.bind("<Button-5>", lambda e: self.zoom_step(0.9, e.x, e.y))
 
         # Atalhos de Teclado
+        self.bind("<Escape>", self.cancel_drag)
+        self.master.bind("<Escape>", self.cancel_drag)
         self.master.bind("<r>", lambda e: self.rotate_selected(45))
         self.master.bind("<R>", lambda e: self.rotate_selected(45))
         self.master.bind("<Delete>", lambda e: self.delete_selected())
@@ -169,7 +171,9 @@ class CADCanvas(tk.Canvas):
         hit_idx = -1
         for i in range(len(self.placed_pieces) - 1, -1, -1):
             p = self.placed_pieces[i]
-            poly = transform_contour(p["shape"]["contour"], p["x"], p["y"], p["rotation"])
+            contour = p.get("contour") or (p.get("shape", {}).get("contour") if isinstance(p.get("shape"), dict) else [])
+            rot = float(p.get("rotation", p.get("angle", 0.0)))
+            poly = transform_contour(contour, p["x"], p["y"], rot)
             if point_in_polygon(wx, wy, poly):
                 hit_idx = i
                 break
@@ -180,49 +184,170 @@ class CADCanvas(tk.Canvas):
             p = self.placed_pieces[hit_idx]
             self.drag_start_world = (wx - p["x"], wy - p["y"])
             self._pre_drag_pos = (p["x"], p["y"])
-        else:
-            self.selected_index = -1
-            self.dragged_index = -1
-            self._pre_drag_pos = None
+            self._drag_last_screen = (event.x, event.y)
+            self._drag_colliding_others = set()
 
-        self.redraw()
-        if self.on_change:
-            self.on_change()
-
-    def on_button1_motion(self, event):
-        if 0 <= self.dragged_index < len(self.placed_pieces):
-            wx, wy = self.screen_to_world(event.x, event.y)
-            p = self.placed_pieces[self.dragged_index]
-            p["x"] = round(wx - self.drag_start_world[0])
-            p["y"] = round(wy - self.drag_start_world[1])
             self.redraw()
             if self.on_change:
                 self.on_change()
 
-    def on_button1_up(self, event):
-        if 0 <= self.dragged_index < len(self.placed_pieces) and hasattr(self, "_pre_drag_pos") and self._pre_drag_pos:
-            p_curr = self.placed_pieces[self.dragged_index]
-            poly_curr = transform_contour(p_curr["shape"]["contour"], p_curr["x"], p_curr["y"], p_curr["rotation"])
-            bbox_curr = polygon_bbox(poly_curr)
-            has_collision = False
+            # Desenha ghost outline na posição original
+            self.delete("drag_ghost")
+            contour = p.get("contour") or (p.get("shape", {}).get("contour") if isinstance(p.get("shape"), dict) else [])
+            rot = float(p.get("rotation", p.get("angle", 0.0)))
+            orig_poly = transform_contour(contour, p["x"], p["y"], rot)
+            ghost_coords = []
+            for pt in orig_poly:
+                sx, sy = self.world_to_screen(pt["x"], pt["y"])
+                ghost_coords.extend([sx, sy])
+            if ghost_coords:
+                self.create_polygon(
+                    ghost_coords,
+                    fill="",
+                    outline="#64748b",
+                    dash=(4, 3),
+                    width=1.5,
+                    tags=("drag_ghost",)
+                )
+                self.tag_raise(f"piece_{hit_idx}")
+        else:
+            self.selected_index = -1
+            self.dragged_index = -1
+            self._pre_drag_pos = None
+            self.delete("drag_ghost")
+            self.redraw()
+            if self.on_change:
+                self.on_change()
+
+    def on_button1_motion(self, event):
+        if 0 <= self.dragged_index < len(self.placed_pieces):
+            last_sx, last_sy = getattr(self, "_drag_last_screen", (event.x, event.y))
+            dx = event.x - last_sx
+            dy = event.y - last_sy
+            self._drag_last_screen = (event.x, event.y)
+
+            # Fast-path: deslocamento imediato via canvas.move sem recriar cena
+            self.move(f"piece_{self.dragged_index}", dx, dy)
+
+            # Atualiza coordenadas lógicas da peça
+            wx, wy = self.screen_to_world(event.x, event.y)
+            p = self.placed_pieces[self.dragged_index]
+            p["x"] = round(wx - self.drag_start_world[0])
+            p["y"] = round(wy - self.drag_start_world[1])
+
+            # Checagem em tempo real de colisão
+            contour = p.get("contour") or (p.get("shape", {}).get("contour") if isinstance(p.get("shape"), dict) else [])
+            rot = float(p.get("rotation", p.get("angle", 0.0)))
+            curr_poly = transform_contour(contour, p["x"], p["y"], rot)
+            curr_bbox = polygon_bbox(curr_poly)
+
+            prev_colliding = getattr(self, "_drag_colliding_others", set())
+            new_colliding = set()
+            is_colliding = False
+
+            if self.material:
+                mw = self.material["width_mm"]
+                mh = self.material["height_mm"]
+                if curr_bbox[0] < -0.01 or curr_bbox[1] < -0.01 or curr_bbox[2] > mw + 0.01 or curr_bbox[3] > mh + 0.01:
+                    is_colliding = True
+
             for j, other in enumerate(self.placed_pieces):
                 if j == self.dragged_index:
                     continue
-                other_poly = transform_contour(other["shape"]["contour"], other["x"], other["y"], other["rotation"])
-                other_bbox = polygon_bbox(other_poly)
-                if polygons_collide(poly_curr, other_poly, gap=0.0, bbox_a=bbox_curr, bbox_b=other_bbox):
+                o_contour = other.get("contour") or (other.get("shape", {}).get("contour") if isinstance(other.get("shape"), dict) else [])
+                o_rot = float(other.get("rotation", other.get("angle", 0.0)))
+                o_poly = transform_contour(o_contour, other["x"], other["y"], o_rot)
+                o_bbox = polygon_bbox(o_poly)
+                if polygons_collide(curr_poly, o_poly, gap=0.0, bbox_a=curr_bbox, bbox_b=o_bbox):
+                    is_colliding = True
+                    new_colliding.add(j)
+
+            # Restaura contorno das peças que saíram da colisão
+            for j in prev_colliding - new_colliding:
+                if 0 <= j < len(self.placed_pieces):
+                    o_p = self.placed_pieces[j]
+                    s_val = str(o_p.get("size") or (o_p.get("shape", {}).get("size") if isinstance(o_p.get("shape"), dict) else "") or o_p.get("name") or "41")
+                    base_col = get_color_for_size(s_val, j)
+                    self.itemconfig(f"piece_poly_{j}", outline=base_col, width=2.0)
+
+            # Destaca novas peças colididas em âmbar
+            for j in new_colliding:
+                self.itemconfig(f"piece_poly_{j}", outline="#f59e0b", width=2.5)
+            self._drag_colliding_others = new_colliding
+
+            # Feedback de colisão na peça arrastada
+            if is_colliding:
+                self.itemconfig(f"piece_poly_{self.dragged_index}", outline="#ef4444", width=3.0)
+            else:
+                self.itemconfig(f"piece_poly_{self.dragged_index}", outline="#22c55e", width=2.5)
+
+            self.tag_raise(f"piece_{self.dragged_index}")
+
+    def on_button1_up(self, event):
+        self.delete("drag_ghost")
+        # Restaura qualquer peça destacada em âmbar
+        for j in getattr(self, "_drag_colliding_others", set()):
+            if 0 <= j < len(self.placed_pieces):
+                o_p = self.placed_pieces[j]
+                s_val = str(o_p.get("size") or (o_p.get("shape", {}).get("size") if isinstance(o_p.get("shape"), dict) else "") or o_p.get("name") or "41")
+                base_col = get_color_for_size(s_val, j)
+                self.itemconfig(f"piece_poly_{j}", outline=base_col, width=2.0)
+        self._drag_colliding_others = set()
+
+        if 0 <= self.dragged_index < len(self.placed_pieces) and hasattr(self, "_pre_drag_pos") and self._pre_drag_pos:
+            p_curr = self.placed_pieces[self.dragged_index]
+            contour = p_curr.get("contour") or (p_curr.get("shape", {}).get("contour") if isinstance(p_curr.get("shape"), dict) else [])
+            rot = float(p_curr.get("rotation", p_curr.get("angle", 0.0)))
+            poly_curr = transform_contour(contour, p_curr["x"], p_curr["y"], rot)
+            bbox_curr = polygon_bbox(poly_curr)
+            has_collision = False
+
+            if self.material:
+                mw = self.material["width_mm"]
+                mh = self.material["height_mm"]
+                if bbox_curr[0] < -0.01 or bbox_curr[1] < -0.01 or bbox_curr[2] > mw + 0.01 or bbox_curr[3] > mh + 0.01:
                     has_collision = True
-                    break
+
+            if not has_collision:
+                for j, other in enumerate(self.placed_pieces):
+                    if j == self.dragged_index:
+                        continue
+                    o_contour = other.get("contour") or (other.get("shape", {}).get("contour") if isinstance(other.get("shape"), dict) else [])
+                    o_rot = float(other.get("rotation", other.get("angle", 0.0)))
+                    other_poly = transform_contour(o_contour, other["x"], other["y"], o_rot)
+                    other_bbox = polygon_bbox(other_poly)
+                    if polygons_collide(poly_curr, other_poly, gap=0.0, bbox_a=bbox_curr, bbox_b=other_bbox):
+                        has_collision = True
+                        break
 
             if has_collision:
                 # Regra Estrita: JAMAIS uma peça poderá ficar sobreposta a outra!
                 p_curr["x"], p_curr["y"] = self._pre_drag_pos
-                self.redraw()
-                if self.on_change:
-                    self.on_change()
+
+            self.redraw()
+            if self.on_change:
+                self.on_change()
 
         self.dragged_index = -1
         self._pre_drag_pos = None
+
+    def cancel_drag(self, event=None):
+        if 0 <= self.dragged_index < len(self.placed_pieces) and hasattr(self, "_pre_drag_pos") and self._pre_drag_pos:
+            self.delete("drag_ghost")
+            for j in getattr(self, "_drag_colliding_others", set()):
+                if 0 <= j < len(self.placed_pieces):
+                    o_p = self.placed_pieces[j]
+                    s_val = str(o_p.get("size") or (o_p.get("shape", {}).get("size") if isinstance(o_p.get("shape"), dict) else "") or o_p.get("name") or "41")
+                    base_col = get_color_for_size(s_val, j)
+                    self.itemconfig(f"piece_poly_{j}", outline=base_col, width=2.0)
+            self._drag_colliding_others = set()
+            p = self.placed_pieces[self.dragged_index]
+            p["x"], p["y"] = self._pre_drag_pos
+            self.dragged_index = -1
+            self._pre_drag_pos = None
+            self.redraw()
+            if self.on_change:
+                self.on_change()
 
     # =========================================================================
     # Simulação de Corte
@@ -366,11 +491,12 @@ class CADCanvas(tk.Canvas):
                 screen_coords,
                 fill=fill_col,
                 outline=outline_col,
-                width=line_width
+                width=line_width,
+                tags=(f"piece_{idx}", f"piece_poly_{idx}", "piece_item")
             )
 
             # Furações (Punches) em verde/vermelho nítido
-            holes = p.get("holes") or (p.get("shape", {}).get("holes") if isinstance(p.get("shape"), dict) else [])
+            holes = p.get("holes") or (p.get("shape", {}).get("holes") if isinstance(p.get("shape"), dict) else []) or []
             for hole in holes:
                 rx, ry = rotate_point(hole["x"], hole["y"], p.get("rotation", 0.0))
                 hx = p["x"] + rx
@@ -379,7 +505,8 @@ class CADCanvas(tk.Canvas):
                 hr = max(2, hole.get("r", 2.0) * self.zoom)
                 self.create_oval(
                     hsx - hr, hsy - hr, hsx + hr, hsy + hr,
-                    fill="#22c55e", outline="#008000", width=1.5
+                    fill="#22c55e", outline="#008000", width=1.5,
+                    tags=(f"piece_{idx}", "piece_item")
                 )
 
             # Rótulo da Peça com o NÚMERO
@@ -393,7 +520,8 @@ class CADCanvas(tk.Canvas):
                 text=f"#{p_id} [Nº {size_val}] {p_name}",
                 fill="#dc2626" if is_colliding else (piece_col if not is_selected else "#0a246a"),
                 font=("Segoe UI", 8, "bold" if (is_selected or is_colliding) else "normal"),
-                anchor="w"
+                anchor="w",
+                tags=(f"piece_{idx}", f"piece_txt_{idx}", "piece_item")
             )
 
         # 4. Cabeçote CNC se Simulação estiver Ativa (Mira vermelha clássica)

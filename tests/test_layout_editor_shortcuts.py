@@ -34,6 +34,14 @@ class DummyEvent:
         self.keysym = keysym
 
 
+class DummyMouseEvent:
+    def __init__(self, x=0, y=0, state=0, num=1):
+        self.x = x
+        self.y = y
+        self.state = state
+        self.num = num
+
+
 class TestLayoutEditorShortcuts(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
@@ -1281,6 +1289,190 @@ class TestLayoutEditorShortcuts(unittest.TestCase):
         row_vals = fm.grid_lower.item(items[0], "values")
         self.assertEqual(str(row_vals[0]), "1")
         self.assertEqual(row_vals[1], "SINT-LOGAM 1.4 PRETO")
+
+    def test_drag_motion_zero_delay_without_full_redraw(self):
+        """Valida que o loop de arraste (<B1-Motion>) não executa redraw() completo e responde em sub-milissegundos."""
+        import time
+        from unittest.mock import patch
+
+        self.assertTrue(len(self.view.placed_pieces) > 0)
+        p = self.view.placed_pieces[0]
+        poly = transform_contour(p["contour"], p["x"], p["y"], p["rotation"])
+        bbox = polygon_bbox(poly)
+        wx = (bbox[0] + bbox[2]) / 2.0
+        wy = (bbox[1] + bbox[3]) / 2.0
+        cx = self.view.plate_x1 + wx * self.view.plate_scale
+        cy = self.view.plate_y2 - wy * self.view.plate_scale
+
+        # Clique inicial para selecionar e iniciar drag
+        self.view.on_canvas_click(DummyMouseEvent(cx, cy))
+        self.assertEqual(self.view.selected_index, 0)
+        self.assertTrue(self.view.is_dragging_piece)
+
+        # Verifica criação do ghost outline na origem
+        ghost_items = self.view.canvas.find_withtag("drag_ghost")
+        self.assertTrue(len(ghost_items) > 0)
+
+        # Monitora chamadas a redraw() durante o arraste
+        with patch.object(self.view, "redraw", wraps=self.view.redraw) as mock_redraw:
+            t0 = time.perf_counter()
+            # Simula 100 eventos contínuos de B1-Motion
+            for i in range(1, 101):
+                self.view.on_canvas_drag(DummyMouseEvent(cx + i * 2, cy + i * 2))
+            dt = time.perf_counter() - t0
+
+            # Prova inviolável: NENHUM redraw() completo no loop de arraste
+            self.assertEqual(mock_redraw.call_count, 0)
+            # Desempenho extremo: 100 frames processados em menos de 0.1s (< 1ms/evento)
+            self.assertLess(dt, 0.100)
+
+        # Release: redraw() único e remoção do ghost
+        self.view.on_canvas_release(DummyMouseEvent(cx + 200, cy + 200))
+        self.assertFalse(self.view.is_dragging_piece)
+        ghost_after = self.view.canvas.find_withtag("drag_ghost")
+        self.assertEqual(len(ghost_after), 0)
+
+    def test_drag_realtime_collision_and_ghost_feedback(self):
+        """Valida ghost outline, feedback vermelho/verde na peça arrastada e âmbar nas peças colididas."""
+        self.view.placed_pieces = [
+            {"name": "P1", "contour": list(CONTOUR_CON), "x": 100.0, "y": 100.0, "rotation": 0.0, "color": "#3b82f6"},
+            {"name": "P2", "contour": list(CONTOUR_CON), "x": 300.0, "y": 100.0, "rotation": 0.0, "color": "#10b981"},
+        ]
+        self.view.redraw()
+
+        p0 = self.view.placed_pieces[0]
+        poly0 = transform_contour(p0["contour"], p0["x"], p0["y"], p0["rotation"])
+        bbox0 = polygon_bbox(poly0)
+        wx0 = (bbox0[0] + bbox0[2]) / 2.0
+        wy0 = (bbox0[1] + bbox0[3]) / 2.0
+        cx0 = self.view.plate_x1 + wx0 * self.view.plate_scale
+        cy0 = self.view.plate_y2 - wy0 * self.view.plate_scale
+
+        self.view.on_canvas_click(DummyMouseEvent(cx0, cy0))
+        self.assertEqual(self.view.selected_index, 0)
+
+        # Ghost presente
+        self.assertTrue(len(self.view.canvas.find_withtag("drag_ghost")) > 0)
+
+        # Arraste para área livre (ex: +200 no Y)
+        target_wx = wx0
+        target_wy = wy0 + 200.0
+        target_cx = self.view.plate_x1 + target_wx * self.view.plate_scale
+        target_cy = self.view.plate_y2 - target_wy * self.view.plate_scale
+        self.view.on_canvas_drag(DummyMouseEvent(target_cx, target_cy))
+
+        poly0_item = self.view.canvas.find_withtag("piece_poly_0")[0]
+        self.assertEqual(self.view.canvas.itemcget(poly0_item, "outline"), "#22c55e")
+
+        # Arraste sobrepondo a peça P2
+        p1 = self.view.placed_pieces[1]
+        poly1 = transform_contour(p1["contour"], p1["x"], p1["y"], p1["rotation"])
+        bbox1 = polygon_bbox(poly1)
+        wx1 = (bbox1[0] + bbox1[2]) / 2.0
+        wy1 = (bbox1[1] + bbox1[3]) / 2.0
+        col_cx = self.view.plate_x1 + wx1 * self.view.plate_scale
+        col_cy = self.view.plate_y2 - wy1 * self.view.plate_scale
+        self.view.on_canvas_drag(DummyMouseEvent(col_cx, col_cy))
+
+        self.assertEqual(self.view.canvas.itemcget(poly0_item, "outline"), "#ef4444")
+        poly1_item = self.view.canvas.find_withtag("piece_poly_1")[0]
+        self.assertEqual(self.view.canvas.itemcget(poly1_item, "outline"), "#f59e0b")
+
+        # Solta o mouse: colisão deve reverter a peça para a posição original
+        self.view.on_canvas_release(DummyMouseEvent(col_cx, col_cy))
+        self.assertAlmostEqual(self.view.placed_pieces[0]["x"], 100.0, places=1)
+        self.assertAlmostEqual(self.view.placed_pieces[0]["y"], 100.0, places=1)
+        self.assertEqual(len(self.view.canvas.find_withtag("drag_ghost")), 0)
+
+    def test_escape_cancels_drag_and_restores_ghost_position(self):
+        """Valida que a tecla Escape cancela o arraste e restaura a peça exatamente à origem do ghost."""
+        self.view.placed_pieces = [
+            {"name": "P1", "contour": list(CONTOUR_CON), "x": 150.0, "y": 200.0, "rotation": 0.0, "color": "#3b82f6"}
+        ]
+        self.view.redraw()
+        orig_undo_len = len(self.view.undo_stack)
+
+        p = self.view.placed_pieces[0]
+        poly = transform_contour(p["contour"], p["x"], p["y"], p["rotation"])
+        bbox = polygon_bbox(poly)
+        wx = (bbox[0] + bbox[2]) / 2.0
+        wy = (bbox[1] + bbox[3]) / 2.0
+        cx = self.view.plate_x1 + wx * self.view.plate_scale
+        cy = self.view.plate_y2 - wy * self.view.plate_scale
+
+        self.view.on_canvas_click(DummyMouseEvent(cx, cy))
+        self.assertTrue(self.view.is_dragging_piece)
+        self.assertTrue(len(self.view.canvas.find_withtag("drag_ghost")) > 0)
+
+        # Move a peça para longe
+        self.view.on_canvas_drag(DummyMouseEvent(cx + 100, cy - 80))
+        self.assertNotEqual(self.view.placed_pieces[0]["x"], 150.0)
+
+        # Cancela com Escape
+        self.view.cancel_drag()
+        self.assertFalse(self.view.is_dragging_piece)
+        self.assertEqual(len(self.view.canvas.find_withtag("drag_ghost")), 0)
+        self.assertAlmostEqual(self.view.placed_pieces[0]["x"], 150.0, places=2)
+        self.assertAlmostEqual(self.view.placed_pieces[0]["y"], 200.0, places=2)
+        self.assertEqual(len(self.view.undo_stack), orig_undo_len)
+
+    def test_redraw_single_piece_rotations_and_nudge(self):
+        """Valida que F1/F2/F3/F4 e setas utilizam redraw_single_piece sem recriar cena inteira."""
+        from unittest.mock import patch
+
+        self.view.selected_index = 0
+        p = self.view.placed_pieces[0]
+        orig_rot = p["rotation"]
+        orig_x = p["x"]
+
+        with patch.object(self.view, "redraw") as mock_redraw:
+            # F1 rotação 2°
+            self.view.on_f1_press(DummyEvent(keysym="F1"))
+            self.assertEqual(mock_redraw.call_count, 0)
+            self.assertEqual(p["rotation"], (orig_rot + 2.0) % 360.0)
+
+            # Nudge seta
+            x_before_nudge = p["x"]
+            self.view.nudge_selected(5, 0)
+            self.assertEqual(mock_redraw.call_count, 0)
+            self.assertEqual(p["x"], x_before_nudge + 5.0)
+
+    def test_cad_canvas_fast_path_and_ghost(self):
+        """Valida fast-path, ghost e cancel_drag no widget CADCanvas."""
+        from ui.cad_canvas import CADCanvas
+        from unittest.mock import patch
+
+        cad = CADCanvas(self.root)
+        cad.pack()
+        cad.set_material({"width_mm": 1000.0, "height_mm": 1000.0})
+        cad.set_pieces([
+            {"shape": {"contour": list(CONTOUR_CON)}, "x": 100.0, "y": 100.0, "rotation": 0.0},
+            {"shape": {"contour": list(CONTOUR_CON)}, "x": 300.0, "y": 100.0, "rotation": 0.0}
+        ])
+        cad.update_idletasks()
+
+        # Clica na peça 0
+        poly0 = transform_contour(CONTOUR_CON, 100.0, 100.0, 0.0)
+        bbox0 = polygon_bbox(poly0)
+        wx0 = (bbox0[0] + bbox0[2]) / 2.0
+        wy0 = (bbox0[1] + bbox0[3]) / 2.0
+        sx, sy = cad.world_to_screen(wx0, wy0)
+        cad.on_button1_down(DummyMouseEvent(sx, sy))
+        self.assertEqual(cad.dragged_index, 0)
+        self.assertTrue(len(cad.find_withtag("drag_ghost")) > 0)
+
+        # Move a peça com fast-path
+        with patch.object(cad, "redraw") as mock_redraw:
+            for i in range(1, 11):
+                cad.on_button1_motion(DummyMouseEvent(sx + i * 5, sy + i * 5))
+            self.assertEqual(mock_redraw.call_count, 0)
+
+        # Escape cancela
+        cad.cancel_drag()
+        self.assertEqual(cad.dragged_index, -1)
+        self.assertEqual(len(cad.find_withtag("drag_ghost")), 0)
+        self.assertAlmostEqual(cad.placed_pieces[0]["x"], 100.0, places=1)
+        cad.destroy()
 
 
 if __name__ == "__main__":

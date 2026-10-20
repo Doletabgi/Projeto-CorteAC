@@ -15,7 +15,7 @@ from tkinter import ttk, messagebox, colorchooser, filedialog
 from pathlib import Path
 
 from config import THEME
-from cad.geometry import transform_contour, point_in_polygon, rotate_point, polygon_bbox, polygons_collide, polygon_area
+from cad.geometry import transform_contour, point_in_polygon, rotate_point, polygon_bbox, polygons_collide, polygon_area, SpatialGrid
 from cad.colors import get_color_for_size, get_contrast_text_color
 from ui.layout_print_dialog import LayoutPrintDialog
 from ui.trim_layout_dialog import TrimLayoutDialog
@@ -518,6 +518,8 @@ class LayoutEditorView(tk.Frame):
             w.bind("<Key-F4>", self.on_f4_press)
             w.bind("<KeyRelease-F4>", self.on_f4_release)
 
+            w.bind("<Escape>", self.cancel_drag)
+
         self.bind_all("<Key-r>", lambda e: self.rotate_selected(45))
         self.bind_all("<Key-R>", lambda e: self.rotate_selected(45))
         self.bind_all("<Delete>", lambda e: self.delete_selected())
@@ -860,17 +862,17 @@ class LayoutEditorView(tk.Frame):
                 self.canvas.create_rectangle(
                     thumb_cx - 9, thumb_cy - 12, thumb_cx + 9, thumb_cy + 12,
                     fill="#b0b0b0", outline="#000000", width=1.0,
-                    tags=("sidebar_element", f"sidebar_target_{i}")
+                    tags=("sidebar_element", f"sidebar_target_{i}", "sidebar_ui")
                 )
                 self.canvas.create_line(
                     thumb_cx - 5, thumb_cy - 12, thumb_cx - 5, thumb_cy + 12,
                     fill="#505050", width=1.0,
-                    tags=("sidebar_element", f"sidebar_target_{i}")
+                    tags=("sidebar_element", f"sidebar_target_{i}", "sidebar_ui")
                 )
                 self.canvas.create_line(
                     thumb_cx + 5, thumb_cy - 12, thumb_cx + 5, thumb_cy + 12,
                     fill="#505050", width=1.0,
-                    tags=("sidebar_element", f"sidebar_target_{i}")
+                    tags=("sidebar_element", f"sidebar_target_{i}", "sidebar_ui")
                 )
             else:
                 contour = target.get("contour") or CONTOUR_CON
@@ -898,7 +900,7 @@ class LayoutEditorView(tk.Frame):
                         fill=fill_col,
                         outline="#000000",
                         width=1.0,
-                        tags=("sidebar_element", f"sidebar_target_{i}")
+                        tags=("sidebar_element", f"sidebar_target_{i}", "sidebar_ui")
                     )
 
             # 3. Linha 1: Nome do Molde (ex: 323_PalAcb_36a)
@@ -909,7 +911,7 @@ class LayoutEditorView(tk.Frame):
                 text=name_disp,
                 fill="#000000",
                 font=("Segoe UI", 7),
-                tags=("sidebar_element", f"sidebar_target_{i}")
+                tags=("sidebar_element", f"sidebar_target_{i}", "sidebar_ui")
             )
 
             # 4. Linha 2: Contadores de Produção (placed/req rem/req, ex: 18/36 0/36)
@@ -923,7 +925,7 @@ class LayoutEditorView(tk.Frame):
                 text=stat_disp,
                 fill="#000000",
                 font=("Segoe UI", 7),
-                tags=("sidebar_element", f"sidebar_target_{i}")
+                tags=("sidebar_element", f"sidebar_target_{i}", "sidebar_ui")
             )
 
     def on_sidebar_click(self, event):
@@ -1387,7 +1389,7 @@ class LayoutEditorView(tk.Frame):
                 fill=fill_col,
                 outline=outline_col,
                 width=line_w,
-                tags=f"piece_{idx}"
+                tags=(f"piece_{idx}", f"piece_poly_{idx}", "piece_item")
             )
 
             # Rótulo nítido com o NÚMERO (Tamanho) apenas em visualizações de poucas peças
@@ -1401,7 +1403,7 @@ class LayoutEditorView(tk.Frame):
                     text=display_label,
                     fill=txt_col,
                     font=("Segoe UI", 8, "bold"),
-                    tags=f"piece_txt_{idx}"
+                    tags=(f"piece_{idx}", f"piece_txt_{idx}", "piece_item")
                 )
 
             if is_sel and len(screen_pts) >= 4:
@@ -1413,7 +1415,8 @@ class LayoutEditorView(tk.Frame):
                     min_sx - 3, min_sy - 3, max_sx + 3, max_sy + 3,
                     outline="#ef4444" if is_col else "#ffffff",
                     dash=(3, 3),
-                    width=1.5
+                    width=1.5,
+                    tags=(f"piece_{idx}", f"piece_box_{idx}", "piece_item")
                 )
 
         # 6.5. Linha de Corte de Refile Automático (CAM / Guilhotina no final das peças)
@@ -1472,10 +1475,10 @@ class LayoutEditorView(tk.Frame):
             is_dragging = getattr(self, "is_dragging_divider", False)
             div_left_col = "#2563eb" if is_dragging else "#a0a0a0"
             div_right_col = "#60a5fa" if is_dragging else "#ffffff"
-            self.canvas.create_rectangle(div_x, 0, cw, ch, fill="#ffffff", outline="", tags="sidebar_bg")
-            self.canvas.create_line(div_x, 0, div_x, ch, fill=div_left_col, width=1, tags="divider_line")
-            self.canvas.create_line(div_x + 1, 0, div_x + 1, ch, fill=div_right_col, width=1, tags="divider_line")
-            self.canvas.create_line(div_x, 0, div_x, ch, fill="", width=11, tags="divider_hitbox")
+            self.canvas.create_rectangle(div_x, 0, cw, ch, fill="#ffffff", outline="", tags=("sidebar_bg", "sidebar_ui"))
+            self.canvas.create_line(div_x, 0, div_x, ch, fill=div_left_col, width=1, tags=("divider_line", "sidebar_ui"))
+            self.canvas.create_line(div_x + 1, 0, div_x + 1, ch, fill=div_right_col, width=1, tags=("divider_line", "sidebar_ui"))
+            self.canvas.create_line(div_x, 0, div_x, ch, fill="", width=11, tags=("divider_hitbox", "sidebar_ui"))
             self.draw_sidebar(div_x, ch, cw)
 
         if colliding_indices and hasattr(self, "lbl_stat_left"):
@@ -1552,16 +1555,54 @@ class LayoutEditorView(tk.Frame):
             self._pre_drag_pieces = [dict(p) for p in self.placed_pieces]
             p = self.placed_pieces[hit_idx]
             self.drag_start = (wx - p["x"], wy - p["y"])
+            self._drag_last_canvas_x = event.x
+            self._drag_last_canvas_y = event.y
+            self._drag_origin_x = p["x"]
+            self._drag_origin_y = p["y"]
+            self._drag_colliding_others = set()
+
+            # Constrói SpatialGrid e cache com todas as OUTRAS peças estáticas da mesa
+            self._drag_spatial_grid = SpatialGrid(cell_size=100.0)
+            self._drag_static_data = []
+            for j, other in enumerate(self.placed_pieces):
+                if j == hit_idx:
+                    continue
+                other_poly = transform_contour(other["contour"], other["x"], other["y"], other["rotation"])
+                other_bbox = polygon_bbox(other_poly)
+                self._drag_spatial_grid.insert(j, other_poly, other_bbox)
+                self._drag_static_data.append((j, other_poly, other_bbox))
+
+            self.redraw()
+
+            # Cria Contorno Fantasma (drag_ghost) na posição inicial de saída da peça
+            poly_ghost = transform_contour(p["contour"], p["x"], p["y"], p["rotation"])
+            ghost_screen_pts = []
+            for pt in poly_ghost:
+                gx = self.plate_x1 + pt["x"] * self.plate_scale
+                gy = self.plate_y2 - pt["y"] * self.plate_scale
+                ghost_screen_pts.extend([gx, gy])
+            self.canvas.delete("drag_ghost")
+            if len(ghost_screen_pts) >= 6:
+                self.canvas.create_polygon(
+                    ghost_screen_pts,
+                    fill="",
+                    outline="#64748b",
+                    dash=(4, 4),
+                    width=1.5,
+                    tags="drag_ghost"
+                )
         else:
             self.is_dragging_piece = False
             self._pre_drag_pieces = None
+            self._drag_spatial_grid = None
+            self._drag_static_data = []
+            self.canvas.delete("drag_ghost")
             if getattr(self, "zoom_factor", 1.0) > 1.0:
                 self.is_panning = True
                 self.pan_start_x = event.x
                 self.pan_start_y = event.y
                 self.canvas.config(cursor="fleur")
-
-        self.redraw()
+            self.redraw()
 
     def on_canvas_drag(self, event):
         # 1. Movimentação da linha divisória para os lados
@@ -1586,15 +1627,127 @@ class LayoutEditorView(tk.Frame):
             self.redraw()
             return
 
-        # 3. Arrastar peça na mesa
+        # 3. Arrastar peça na mesa (Fast-Path Visual via canvas.move)
         if self.is_dragging_piece and 0 <= self.selected_index < len(self.placed_pieces):
+            dx_px = event.x - getattr(self, "_drag_last_canvas_x", event.x)
+            dy_px = event.y - getattr(self, "_drag_last_canvas_y", event.y)
+            if abs(dx_px) < 1 and abs(dy_px) < 1:
+                return
+
+            self._drag_last_canvas_x = event.x
+            self._drag_last_canvas_y = event.y
+
             wx, wy = self.screen_to_world(event.x, event.y)
             offset_x, offset_y = self.drag_start
+            target_x = wx - offset_x
+            target_y = wy - offset_y
+
             p = self.placed_pieces[self.selected_index]
-            p["x"] = wx - offset_x
-            p["y"] = wy - offset_y
+
+            # Encosto Magnético Suave (Snap) nas bordas da chapa se a menos de 2.0 mm
+            gap = getattr(self, "gap_mm", 1.0)
+            test_poly = transform_contour(p["contour"], target_x, target_y, p["rotation"])
+            bx0, by0, bx1, by1 = polygon_bbox(test_poly)
+            snap_thresh = 2.0
+
+            # Margem esquerda
+            if abs(bx0 - gap) <= snap_thresh:
+                target_x += (gap - bx0)
+            # Margem direita
+            elif abs(bx1 - (self.sheet_width - gap)) <= snap_thresh:
+                target_x += ((self.sheet_width - gap) - bx1)
+
+            # Margem inferior
+            if abs(by0 - gap) <= snap_thresh:
+                target_y += (gap - by0)
+            # Margem superior
+            elif abs(by1 - (self.sheet_height - gap)) <= snap_thresh:
+                target_y += ((self.sheet_height - gap) - by1)
+
+            # Calcula deslocamento real de tela da peça
+            old_sx = self.plate_x1 + p["x"] * self.plate_scale
+            old_sy = self.plate_y2 - p["y"] * self.plate_scale
+            new_sx = self.plate_x1 + target_x * self.plate_scale
+            new_sy = self.plate_y2 - target_y * self.plate_scale
+            move_dx = new_sx - old_sx
+            move_dy = new_sy - old_sy
+
+            p["x"] = target_x
+            p["y"] = target_y
+
+            # Fast-path visual: move todos os itens da peça no canvas
+            self.canvas.move(f"piece_{self.selected_index}", move_dx, move_dy)
+            self.canvas.tag_raise(f"piece_{self.selected_index}")
+            self.canvas.tag_raise("sidebar_ui")
+
+            # Detecção de colisão ultrarrápida via SpatialGrid
+            poly_curr = transform_contour(p["contour"], target_x, target_y, p["rotation"])
+            bbox_curr = polygon_bbox(poly_curr)
+
+            out_of_bounds = (
+                bbox_curr[0] < -0.01 or
+                bbox_curr[1] < -0.01 or
+                bbox_curr[2] > self.sheet_width + 0.01 or
+                bbox_curr[3] > self.sheet_height + 0.01
+            )
+
+            colliding_with = set()
+            if hasattr(self, "_drag_spatial_grid") and self._drag_spatial_grid is not None:
+                candidates = self._drag_spatial_grid.query_items(bbox_curr, gap=0.0)
+                for j, other_poly, other_bbox in candidates:
+                    if polygons_collide(poly_curr, other_poly, gap=0.0, bbox_a=bbox_curr, bbox_b=other_bbox):
+                        colliding_with.add(j)
+
+            is_collision = out_of_bounds or bool(colliding_with)
+
+            if is_collision:
+                # Contorno vermelho alerta na peça arrastada
+                self.canvas.itemconfig(f"piece_poly_{self.selected_index}", outline="#ef4444", width=3.0)
+                # Destaque âmbar nas peças estáticas atingidas
+                for j in colliding_with:
+                    self.canvas.itemconfig(f"piece_poly_{j}", outline="#f59e0b", width=2.5)
+            else:
+                # Contorno verde seleção válida
+                self.canvas.itemconfig(f"piece_poly_{self.selected_index}", outline="#22c55e", width=2.5)
+
+            # Restaura contorno das peças estáticas que deixaram de colidir
+            prev_colliding = getattr(self, "_drag_colliding_others", set())
+            for prev_j in prev_colliding:
+                if prev_j not in colliding_with:
+                    self.canvas.itemconfig(f"piece_poly_{prev_j}", outline="#1e293b", width=1.2)
+            self._drag_colliding_others = colliding_with
+
+            # Atualização leve de coordenadas na barra de status
+            if hasattr(self, "lbl_stat_pos"):
+                pnm = p.get("name", "Molde")
+                status_drag = " [COLISÃO]" if is_collision else ""
+                self.lbl_stat_pos.config(text=f"x: {p['x']:.2f} y: {p['y']:.2f} - {pnm}{status_drag}")
+            if hasattr(self, "lbl_stat_x"):
+                self.lbl_stat_x.config(text=f"X: {p['x']:.2f}")
+            if hasattr(self, "lbl_stat_y"):
+                self.lbl_stat_y.config(text=f"Y: {p['y']:.2f}")
+
+    def cancel_drag(self, event=None):
+        """Cancela o arraste em andamento via Escape e restaura a peça na posição do drag_ghost."""
+        if getattr(self, "is_dragging_piece", False) and 0 <= self.selected_index < len(self.placed_pieces):
+            p = self.placed_pieces[self.selected_index]
+            if hasattr(self, "_drag_origin_x") and hasattr(self, "_drag_origin_y"):
+                p["x"] = self._drag_origin_x
+                p["y"] = self._drag_origin_y
+            self.canvas.delete("drag_ghost")
+            prev_colliding = getattr(self, "_drag_colliding_others", set())
+            for prev_j in prev_colliding:
+                self.canvas.itemconfig(f"piece_poly_{prev_j}", outline="#1e293b", width=1.2)
+            self._drag_colliding_others = set()
+            self.is_dragging_piece = False
+            self._pre_drag_pieces = None
+            self._drag_spatial_grid = None
+            self._drag_static_data = []
             self.redraw()
-            self.update_status()
+            if hasattr(self, "lbl_stat_left"):
+                self.lbl_stat_left.config(text="Movimento cancelado via Escape.")
+            return "break"
+        return None
 
     def on_canvas_release(self, event):
         if getattr(self, "is_panning", False):
@@ -1611,22 +1764,34 @@ class LayoutEditorView(tk.Frame):
             self.redraw()
             return
 
-        # 2. Conclusão do arrasto de peças (validação de colisão)
+        # 2. Conclusão do arrasto de peças (validação estrita e consolidação)
+        self.canvas.delete("drag_ghost")
+        prev_colliding = getattr(self, "_drag_colliding_others", set())
+        for prev_j in prev_colliding:
+            self.canvas.itemconfig(f"piece_poly_{prev_j}", outline="#1e293b", width=1.2)
+        self._drag_colliding_others = set()
+        self._drag_spatial_grid = None
+        self._drag_static_data = []
+
         if self._pre_drag_pieces is not None:
-            # Regra Estrita: JAMAIS uma peça poderá ficar sobreposta a outra!
+            # Regra Estrita: JAMAIS uma peça poderá ficar sobreposta a outra ou fora da chapa!
             has_collision = False
             if 0 <= self.selected_index < len(self.placed_pieces):
                 p_curr = self.placed_pieces[self.selected_index]
                 poly_curr = transform_contour(p_curr["contour"], p_curr["x"], p_curr["y"], p_curr["rotation"])
                 bbox_curr = polygon_bbox(poly_curr)
-                for j, other in enumerate(self.placed_pieces):
-                    if j == self.selected_index:
-                        continue
-                    other_poly = transform_contour(other["contour"], other["x"], other["y"], other["rotation"])
-                    other_bbox = polygon_bbox(other_poly)
-                    if polygons_collide(poly_curr, other_poly, gap=0.0, bbox_a=bbox_curr, bbox_b=other_bbox):
-                        has_collision = True
-                        break
+                if (bbox_curr[0] < -0.01 or bbox_curr[1] < -0.01 or
+                    bbox_curr[2] > self.sheet_width + 0.01 or bbox_curr[3] > self.sheet_height + 0.01):
+                    has_collision = True
+                else:
+                    for j, other in enumerate(self.placed_pieces):
+                        if j == self.selected_index:
+                            continue
+                        other_poly = transform_contour(other["contour"], other["x"], other["y"], other["rotation"])
+                        other_bbox = polygon_bbox(other_poly)
+                        if polygons_collide(poly_curr, other_poly, gap=0.0, bbox_a=bbox_curr, bbox_b=other_bbox):
+                            has_collision = True
+                            break
 
             if has_collision:
                 # Reverte a peça para a posição anterior livre de colisão
@@ -1634,7 +1799,6 @@ class LayoutEditorView(tk.Frame):
                 self.placed_pieces[self.selected_index]["y"] = self._pre_drag_pieces[self.selected_index]["y"]
                 if hasattr(self, "lbl_stat_left"):
                     self.lbl_stat_left.config(text="⚠️ Bloqueio de Colisão: Peça retornou à posição anterior (sobreposição proibida).")
-                self.redraw()
             elif self.placed_pieces != self._pre_drag_pieces:
                 state = {
                     "pieces": [dict(p) for p in self._pre_drag_pieces],
@@ -1648,6 +1812,115 @@ class LayoutEditorView(tk.Frame):
                 self.set_modified(True)
             self._pre_drag_pieces = None
         self.is_dragging_piece = False
+        self.redraw()
+        self.update_status()
+
+    def redraw_single_piece(self, piece_idx):
+        """
+        Redesenha unicamente os itens gráficos da peça especificada (piece_{piece_idx}),
+        sem apagar nem recriar a chapa, grade de 10 cm, sidebar ou as outras peças estáticas.
+        """
+        if not (0 <= piece_idx < len(self.placed_pieces)):
+            return
+
+        p = self.placed_pieces[piece_idx]
+        self.canvas.delete(f"piece_{piece_idx}")
+
+        scale = self.plate_scale
+        x1 = self.plate_x1
+        y2 = self.plate_y2
+
+        poly = transform_contour(p["contour"], p["x"], p["y"], p["rotation"])
+        bbox = polygon_bbox(poly)
+
+        # Checa colisão com limites da chapa ou com qualquer outra peça
+        is_col = (
+            bbox[0] < -0.01 or bbox[1] < -0.01 or
+            bbox[2] > self.sheet_width + 0.01 or bbox[3] > self.sheet_height + 0.01
+        )
+        colliding_with = []
+        for j, other in enumerate(self.placed_pieces):
+            if j == piece_idx:
+                continue
+            other_poly = transform_contour(other["contour"], other["x"], other["y"], other["rotation"])
+            other_bbox = polygon_bbox(other_poly)
+            if polygons_collide(poly, other_poly, gap=0.0, bbox_a=bbox, bbox_b=other_bbox):
+                is_col = True
+                colliding_with.append(j)
+
+        screen_pts = []
+        for pt in poly:
+            sx = x1 + pt["x"] * scale
+            sy = y2 - pt["y"] * scale
+            screen_pts.extend([sx, sy])
+
+        size_str = str(p.get("size") or (p.get("shape", {}).get("size") if isinstance(p.get("shape"), dict) else "") or "")
+        if not size_str and p.get("target_id"):
+            ts = next((t for t in TARGET_SPECS if t["id"] == p["target_id"]), None)
+            if ts:
+                size_str = str(ts.get("size", ""))
+        if not size_str:
+            size_str = str(p.get("name") or "")
+
+        fill_col = p.get("color") or get_color_for_size(size_str, piece_idx)
+        p["color"] = fill_col
+
+        is_sel = (piece_idx == self.selected_index)
+        if is_col:
+            outline_col = "#ef4444"
+            line_w = 3.0
+        elif is_sel:
+            outline_col = "#ff0000"
+            line_w = 2.5
+        else:
+            outline_col = "#1e293b"
+            line_w = 1.2
+
+        self.canvas.create_polygon(
+            screen_pts,
+            fill=fill_col,
+            outline=outline_col,
+            width=line_w,
+            tags=(f"piece_{piece_idx}", f"piece_poly_{piece_idx}", "piece_item")
+        )
+
+        if len(self.placed_pieces) <= 40 and len(screen_pts) >= 6:
+            avg_sx = sum(screen_pts[0::2]) / (len(screen_pts) // 2)
+            avg_sy = sum(screen_pts[1::2]) / (len(screen_pts) // 2)
+            txt_col = get_contrast_text_color(fill_col)
+            display_label = f"Nº {size_str}" if size_str else f"#{piece_idx + 1}"
+            self.canvas.create_text(
+                avg_sx, avg_sy,
+                text=display_label,
+                fill=txt_col,
+                font=("Segoe UI", 8, "bold"),
+                tags=(f"piece_{piece_idx}", f"piece_txt_{piece_idx}", "piece_item")
+            )
+
+        if is_sel and len(screen_pts) >= 4:
+            min_sx = min(screen_pts[0::2])
+            max_sx = max(screen_pts[0::2])
+            min_sy = min(screen_pts[1::2])
+            max_sy = max(screen_pts[1::2])
+            self.canvas.create_rectangle(
+                min_sx - 3, min_sy - 3, max_sx + 3, max_sy + 3,
+                outline="#ef4444" if is_col else "#ffffff",
+                dash=(3, 3),
+                width=1.5,
+                tags=(f"piece_{piece_idx}", f"piece_box_{piece_idx}", "piece_item")
+            )
+
+        # Destaca peças atingidas em âmbar
+        for j in colliding_with:
+            self.canvas.itemconfig(f"piece_poly_{j}", outline="#f59e0b", width=2.5)
+
+        self.canvas.tag_raise(f"piece_{piece_idx}")
+        self.canvas.tag_raise("sidebar_ui")
+
+        if is_col and hasattr(self, "lbl_stat_left"):
+            self.lbl_stat_left.config(text=f"⚠️ ALERTA: Colisão na peça #{piece_idx + 1}! Sobreposição proibida.")
+        elif not is_col and hasattr(self, "lbl_stat_left"):
+            self.lbl_stat_left.config(text="")
 
     def push_undo(self):
         """Salva o estado atual do layout na pilha de desfazer (Ctrl+Z) de forma leve."""
@@ -1818,7 +2091,7 @@ class LayoutEditorView(tk.Frame):
             p["x"] += dx_mm
             p["y"] += dy_mm
             self.set_modified(True)
-            self.redraw()
+            self.redraw_single_piece(self.selected_index)
             self.update_status()
 
     def rotate_selected(self, delta_deg, group_autorepeat=False):
@@ -1835,7 +2108,7 @@ class LayoutEditorView(tk.Frame):
             p = self.placed_pieces[self.selected_index]
             rotate_piece_in_place(p, delta_deg)
             self.set_modified(True)
-            self.redraw()
+            self.redraw_single_piece(self.selected_index)
             self.update_status()
 
     def on_f1_press(self, event=None):
