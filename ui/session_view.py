@@ -1214,8 +1214,6 @@ class SessionView(tk.Frame):
             p = self.db.get_dieproc_preset(params)
             if p:
                 self.active_dieproc_params = p
-                if "gap1" in p:
-                    self.set_gap_mm(p["gap1"])
         self.highlight_guide_matching()
         if self.on_strategy_change_cb:
             self.on_strategy_change_cb(self.get_strategy(), params)
@@ -1237,8 +1235,6 @@ class SessionView(tk.Frame):
             self.cb_params["values"] = cur_vals
         self.cb_params.set(name)
         self.session_data["params"] = name
-        if "gap1" in preset_data:
-            self.set_gap_mm(preset_data["gap1"])
         if self.on_strategy_change_cb:
             self.on_strategy_change_cb(self.get_strategy(), name)
 
@@ -1273,6 +1269,11 @@ class SessionView(tk.Frame):
                 self.entry_gap.delete(0, tk.END)
                 self.entry_gap.insert(0, f"{v:.1f}")
             self.session_data["gap_mm"] = v
+            if getattr(self, "db", None) and self.session_data.get("id"):
+                try:
+                    self.db.update_session(self.session_data["id"], gap_mm=v)
+                except Exception:
+                    pass
         except Exception:
             pass
 

@@ -83,5 +83,36 @@ class TestNestingContourGap(unittest.TestCase):
                 self.assertGreaterEqual(dist, 1.0, f"Gap violado: {dist:.3f} mm < 1.0 mm")
                 self.assertLess(dist, 1.3, f"Gap excessivo: {dist:.3f} mm >= 1.3 mm")
 
+    def test_session_gap_overrides_all_legacy_sources(self):
+        legacy_dieproc_params = {
+            "name": "TEST_LEGACY",
+            "coupling": "PARALELO",
+            "gap1": 0.5,
+            "gap2": 0.5,
+            "gap3": 0.5,
+            "solutions": 10
+        }
+        for strat in ["sint", "flashnestsheet", "IA-teste"]:
+            pieces = auto_nest_pieces(
+                self.shapes, self.bed_width, self.bed_height,
+                target_count=10, strategy=strat, gap_mm=2.5,
+                dieproc_params=legacy_dieproc_params,
+                db=self.db
+            )
+            self.assertGreater(len(pieces), 0, f"Nenhuma peça gerada para estratégia {strat}")
+            polys = [transform_contour(p["contour"], p["x"], p["y"], p["rotation"]) for p in pieces]
+            bboxes = [polygon_bbox(p) for p in polys]
+            for i in range(len(polys)):
+                for j in range(i + 1, len(polys)):
+                    self.assertFalse(
+                        polygons_collide(polys[i], polys[j], gap=0.0, bbox_a=bboxes[i], bbox_b=bboxes[j]),
+                        f"Colisão detectada na estratégia {strat} entre {pieces[i]['id']} e {pieces[j]['id']}"
+                    )
+            # Verifica que a distância entre peças adjacentes respeita o gap_mm mestre (>= 2.5 mm)
+            for i in range(min(4, len(polys) - 1)):
+                for j in range(i + 1, min(len(polys), i + 3)):
+                    dist = self._calc_min_dist(polys[i], polys[j])
+                    self.assertGreaterEqual(dist, 2.49, f"Estratégia {strat} violou gap central de 2.5mm: {dist:.3f} mm < 2.5 mm (possível vazamento de gap1 legado de 0.5mm)")
+
 if __name__ == "__main__":
     unittest.main()

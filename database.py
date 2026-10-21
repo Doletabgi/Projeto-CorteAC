@@ -206,6 +206,8 @@ class DatabaseManager:
                     cursor.execute("ALTER TABLE sessions ADD COLUMN machine TEXT DEFAULT 'ATOM FlashCut Flex 3020'")
                 if "shapes_json" not in s_cols:
                     cursor.execute("ALTER TABLE sessions ADD COLUMN shapes_json TEXT DEFAULT '[]'")
+                if "gap_mm" not in s_cols:
+                    cursor.execute("ALTER TABLE sessions ADD COLUMN gap_mm REAL DEFAULT 1.0")
 
                 cursor.execute("PRAGMA table_info(orders)")
                 o_cols = [c[1] for c in cursor.fetchall()]
@@ -319,6 +321,10 @@ class DatabaseManager:
                     name VARCHAR(150) UNIQUE NOT NULL
                 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
                 """)
+                try:
+                    cursor.execute("ALTER TABLE sessions ADD COLUMN gap_mm DOUBLE DEFAULT 1.0")
+                except Exception:
+                    pass
             else:
                 cursor.execute("""
                 CREATE TABLE IF NOT EXISTS job_folders (
@@ -1000,6 +1006,7 @@ class DatabaseManager:
                 d["strategy"] = d.get("strategy") or "flashnestsheet"
                 d["params"] = d.get("params") or "stdNOTFill"
                 d["machine"] = d.get("machine") or "ATOM FlashCut Flex 3020"
+                d["gap_mm"] = float(d.get("gap_mm", 1.0) if d.get("gap_mm") is not None else 1.0)
 
                 for idx, s in enumerate(d["shapes"], start=1):
                     s_sz = str(s.get("size") or s.get("name") or "41")
@@ -1027,6 +1034,7 @@ class DatabaseManager:
             if not row:
                 return None
             d = dict(row)
+            d["gap_mm"] = float(d.get("gap_mm", 1.0) if d.get("gap_mm") is not None else 1.0)
             d["placed_pieces"] = json.loads(d.get("placed_pieces_json") or "[]")
             for p in d["placed_pieces"]:
                 p_sz = p.get("size", "41")
@@ -1081,7 +1089,8 @@ class DatabaseManager:
         strategy: str = "flashnestsheet",
         params: str = "stdNOTFill",
         machine: str = "ATOM FlashCut Flex 3020",
-        shapes: Optional[List[Dict[str, Any]]] = None
+        shapes: Optional[List[Dict[str, Any]]] = None,
+        gap_mm: float = 1.0
     ) -> int:
         with self.get_connection() as conn:
             cursor = conn.cursor()
@@ -1127,23 +1136,24 @@ class DatabaseManager:
             # 5. Gravação da sessão
             if conn.backend == "mysql":
                 cursor.execute("""
-                INSERT INTO sessions (id, code, order_id, material_id, name, job, status, yield_percent, cutting_time_sec, placed_pieces_json, strategy, params, machine, shapes_json)
-                VALUES (?, ?, ?, ?, ?, ?, ?, 0.0, 0.0, ?, ?, ?, ?, ?)
+                INSERT INTO sessions (id, code, order_id, material_id, name, job, status, yield_percent, cutting_time_sec, placed_pieces_json, strategy, params, machine, shapes_json, gap_mm)
+                VALUES (?, ?, ?, ?, ?, ?, ?, 0.0, 0.0, ?, ?, ?, ?, ?, ?)
                 ON DUPLICATE KEY UPDATE
                     code = VALUES(code), name = VALUES(name), job = VALUES(job), status = VALUES(status),
                     material_id = VALUES(material_id), placed_pieces_json = VALUES(placed_pieces_json),
-                    strategy = VALUES(strategy), params = VALUES(params), machine = VALUES(machine), shapes_json = VALUES(shapes_json)
+                    strategy = VALUES(strategy), params = VALUES(params), machine = VALUES(machine), shapes_json = VALUES(shapes_json),
+                    gap_mm = VALUES(gap_mm)
                 """, (
                     session_id, code, valid_order_id, valid_mat_id, name, job, status,
-                    json.dumps(placed_pieces or []), strategy, params, machine, json.dumps(shapes or [])
+                    json.dumps(placed_pieces or []), strategy, params, machine, json.dumps(shapes or []), float(gap_mm)
                 ))
             else:
                 cursor.execute("""
-                REPLACE INTO sessions (id, code, order_id, material_id, name, job, status, yield_percent, cutting_time_sec, placed_pieces_json, strategy, params, machine, shapes_json)
-                VALUES (?, ?, ?, ?, ?, ?, ?, 0.0, 0.0, ?, ?, ?, ?, ?)
+                REPLACE INTO sessions (id, code, order_id, material_id, name, job, status, yield_percent, cutting_time_sec, placed_pieces_json, strategy, params, machine, shapes_json, gap_mm)
+                VALUES (?, ?, ?, ?, ?, ?, ?, 0.0, 0.0, ?, ?, ?, ?, ?, ?)
                 """, (
                     session_id, code, valid_order_id, valid_mat_id, name, job, status,
-                    json.dumps(placed_pieces or []), strategy, params, machine, json.dumps(shapes or [])
+                    json.dumps(placed_pieces or []), strategy, params, machine, json.dumps(shapes or []), float(gap_mm)
                 ))
 
             # 6. Atualiza o contador permanente de último número de sessão
@@ -1161,7 +1171,7 @@ class DatabaseManager:
             conn.commit()
             return session_id
 
-    def update_session(self, session_id, name=None, status=None, placed_pieces=None, yield_pct=None, time_sec=None, material_id=_SENTINEL, strategy=None, params=None, machine=None, shapes=None, job=None, clear_material=False):
+    def update_session(self, session_id, name=None, status=None, placed_pieces=None, yield_pct=None, time_sec=None, material_id=_SENTINEL, strategy=None, params=None, machine=None, shapes=None, job=None, clear_material=False, gap_mm=None):
         with self.get_connection() as conn:
             cursor = conn.cursor()
             updates = []
@@ -1201,6 +1211,9 @@ class DatabaseManager:
             if job is not None:
                 updates.append("job = ?")
                 values.append(job)
+            if gap_mm is not None:
+                updates.append("gap_mm = ?")
+                values.append(float(gap_mm))
             if updates:
                 values.append(session_id)
                 cursor.execute(f"UPDATE sessions SET {', '.join(updates)} WHERE id = ?", values)

@@ -1117,12 +1117,20 @@ class MainWindow(tk.Tk):
             self.current_session["yield_percent"] = yield_pct
             self.current_session["cutting_time_sec"] = time_sec
             self.current_session["used_area_m2"] = used_m2
+            gap_val = self.current_session.get("gap_mm", 1.0)
+            if hasattr(self, "session_view") and hasattr(self.session_view, "get_gap_mm"):
+                try:
+                    gap_val = self.session_view.get_gap_mm()
+                    self.current_session["gap_mm"] = gap_val
+                except Exception:
+                    pass
             try:
                 self.db.update_session(
                     self.current_session["id"],
                     placed_pieces=self.current_session["placed_pieces"],
                     yield_pct=yield_pct,
-                    time_sec=time_sec
+                    time_sec=time_sec,
+                    gap_mm=gap_val
                 )
             except Exception:
                 pass
@@ -4404,13 +4412,13 @@ class MainWindow(tk.Tk):
 
         th = threading.Thread(target=_worker, daemon=True)
         th.start()
-        self.after(50, lambda: self._poll_nest_worker(nest_q, strategy, params, machine))
+        self.after(50, lambda: self._poll_nest_worker(nest_q, strategy, params, machine, gap))
 
-    def _poll_nest_worker(self, q, strategy, params, machine):
+    def _poll_nest_worker(self, q, strategy, params, machine, gap=1.0):
         try:
             status, data = q.get_nowait()
         except queue.Empty:
-            self.after(50, lambda: self._poll_nest_worker(q, strategy, params, machine))
+            self.after(50, lambda: self._poll_nest_worker(q, strategy, params, machine, gap))
             return
 
         self._nesting_in_progress = False
@@ -4425,12 +4433,14 @@ class MainWindow(tk.Tk):
                 self.current_session["strategy"] = strategy
                 self.current_session["params"] = params
                 self.current_session["machine"] = machine
+                self.current_session["gap_mm"] = gap
                 self.db.update_session(
                     self.current_session["id"],
                     status="Nested",
                     strategy=strategy,
                     params=params,
-                    machine=machine
+                    machine=machine,
+                    gap_mm=gap
                 )
                 if self.current_mode == "jobs":
                     self.switch_tree_mode("jobs")

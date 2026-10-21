@@ -93,6 +93,7 @@ CREATE TABLE IF NOT EXISTS sessions (
     params VARCHAR(100) DEFAULT 'stdNOTFill',
     machine VARCHAR(150) DEFAULT 'ATOM FlashCut Flex 3020',
     shapes_json LONGTEXT NULL,
+    gap_mm DOUBLE DEFAULT 1.0,
     created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (order_id) REFERENCES orders(id) ON DELETE SET NULL,
     FOREIGN KEY (material_id) REFERENCES materials(id) ON DELETE SET NULL,

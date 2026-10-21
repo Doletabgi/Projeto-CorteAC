@@ -151,20 +151,24 @@ class DieProcDialog(tk.Toplevel):
         row4 = tk.Frame(self.tab_dieproc, bg=THEME["bg_surface"])
         row4.pack(fill="x", pady=(0, 8))
 
-        box_gaps = tk.LabelFrame(row4, text="Gaps", bg=THEME["bg_surface"], fg=THEME["text_main"], font=("Segoe UI", 8), relief="groove")
+        box_gaps = tk.LabelFrame(row4, text="Espaçamento (Gap)", bg=THEME["bg_surface"], fg=THEME["text_main"], font=("Segoe UI", 8), relief="groove")
         box_gaps.pack(side="left", fill="both", expand=True, padx=(0, 6))
 
-        gaps_inner = tk.Frame(box_gaps, bg=THEME["bg_surface"], padx=4, pady=4)
-        gaps_inner.pack(fill="both", expand=True)
+        lbl_gap_note = tk.Label(
+            box_gaps,
+            text="Nota: O espaçamento entre peças (Gap) é definido centralmente na tela da Sessão (Distância peças: 1.0 mm).",
+            bg=THEME["bg_surface"],
+            fg=THEME.get("text_dim", "#888888"),
+            font=("Segoe UI", 8, "italic"),
+            wraplength=280,
+            justify="left"
+        )
+        lbl_gap_note.pack(fill="both", expand=True, padx=4, pady=4)
 
-        self.sp_gap1 = tk.Spinbox(gaps_inner, from_=0, to=50, increment=0.5, bg=THEME["bg_input"], fg=THEME["text_main"], font=("Segoe UI", 9), width=5, relief="sunken", bd=2)
-        self.sp_gap1.pack(side="left", padx=2)
-
-        self.sp_gap2 = tk.Spinbox(gaps_inner, from_=0, to=50, increment=0.5, bg=THEME["bg_input"], fg=THEME["text_main"], font=("Segoe UI", 9), width=5, relief="sunken", bd=2)
-        self.sp_gap2.pack(side="left", padx=2)
-
-        self.sp_gap3 = tk.Spinbox(gaps_inner, from_=0, to=50, increment=0.5, bg=THEME["bg_input"], fg=THEME["text_main"], font=("Segoe UI", 9), width=5, relief="sunken", bd=2)
-        self.sp_gap3.pack(side="left", padx=2)
+        # Instâncias mantidas para compatibilidade interna sem renderização na tela
+        self.sp_gap1 = tk.Spinbox(box_gaps, from_=0, to=50, increment=0.5)
+        self.sp_gap2 = tk.Spinbox(box_gaps, from_=0, to=50, increment=0.5)
+        self.sp_gap3 = tk.Spinbox(box_gaps, from_=0, to=50, increment=0.5)
 
         box_checks = tk.Frame(row4, bg=THEME["bg_surface"], padx=6, pady=4)
         box_checks.pack(side="left", fill="both", expand=True)
