@@ -4356,7 +4356,16 @@ class MainWindow(tk.Tk):
         if not dieproc_params and self.db:
             dieproc_params = self.db.get_dieproc_preset(params)
 
-        gap = float(dieproc_params.get("gap1", 1.0) if dieproc_params else (self.current_material.get("gap_mm", 1.0) or 1.0))
+        gap = 1.0
+        if getattr(self, "session_view", None) and hasattr(self.session_view, "get_gap_mm"):
+            try:
+                gap = float(self.session_view.get_gap_mm())
+            except Exception:
+                pass
+        elif dieproc_params and "gap1" in dieproc_params:
+            gap = float(dieproc_params["gap1"])
+        elif self.current_material and self.current_material.get("gap_mm"):
+            gap = float(self.current_material["gap_mm"])
         # Ordena moldes pela sequência de geração configurada pelo usuário
         sess_shapes = sorted(sess_shapes, key=lambda s: int(s.get("sequence", 999)))
         for idx, s in enumerate(sess_shapes, start=1):

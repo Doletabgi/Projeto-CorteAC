@@ -187,7 +187,7 @@ def dieproc_nest_pieces(available_shapes, bed_width_mm, bed_height_mm, target_co
     r1_from = float(params.get("range1_from", -3.0))
     r1_to = float(params.get("range1_to", 3.0))
     r1_step = float(params.get("range1_step", 1.0) or 1.0)
-    gap = max(0.5, float(params.get("gap1", 1.0) or 1.0))
+    gap = max(0.0, float(params.get("gap1", 1.0) if params.get("gap1") is not None else 1.0))
     row_interlock = bool(params.get("row_interlock", True))
     diagonal = bool(params.get("diagonal", False))
 
@@ -490,8 +490,8 @@ def nest_synthetic_engine(available_shapes, bed_width_mm, bed_height_mm, target_
         shape_queue = list(sorted_shapes)
 
     max_pieces = target_count if (target_count and target_count > 0) else len(shape_queue)
-    margin = max(10.0, gap_mm * 2.0)
-    gap = max(0.5, float(gap_mm))
+    margin = max(8.0, float(gap_mm) * 2.0)
+    gap = max(0.0, float(gap_mm))
 
     grid = SpatialGrid(cell_size=100.0)
 
@@ -845,11 +845,15 @@ def auto_nest_pieces(available_shapes, bed_width_mm, bed_height_mm, target_count
         elif params == "GAP 2":
             dp_config = {"coupling": "0/0 0/180", "gap1": 2.0, "row_interlock": True, "range1_from": -3.0, "range1_to": 3.0, "range1_step": 1.0}
         elif params == "HighYield":
-            dp_config = {"coupling": "0/0 0/180", "gap1": max(0.5, gap_mm * 0.7), "row_interlock": True, "range1_from": -5.0, "range1_to": 5.0, "range1_step": 0.5}
+            dp_config = {"coupling": "0/0 0/180", "gap1": max(0.5, float(gap_mm) * 0.7), "row_interlock": True, "range1_from": -5.0, "range1_to": 5.0, "range1_step": 0.5}
         elif params == "FastNest":
-            dp_config = {"coupling": "0/0 0/180", "gap1": max(1.5, gap_mm * 1.5), "row_interlock": True, "range1_from": 0.0, "range1_to": 0.0, "range1_step": 0.0}
+            dp_config = {"coupling": "0/0 0/180", "gap1": max(1.5, float(gap_mm) * 1.5), "row_interlock": True, "range1_from": 0.0, "range1_to": 0.0, "range1_step": 0.0}
         else:
             dp_config = {"coupling": "0/0", "gap1": gap_mm, "row_interlock": False, "range1_from": 0.0, "range1_to": 1.0, "range1_step": 1.0}
+
+    # Prioridade absoluta do gap oficial configurado pelo usuário na sessão
+    if gap_mm is not None:
+        dp_config["gap1"] = float(gap_mm)
 
     return dieproc_nest_pieces(
         available_shapes,

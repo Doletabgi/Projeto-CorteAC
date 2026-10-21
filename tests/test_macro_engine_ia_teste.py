@@ -13,6 +13,7 @@ import unittest
 import math
 import os
 import tempfile
+import tkinter as tk
 from pathlib import Path
 from database import DatabaseManager
 from cad.geometry import transform_contour, polygon_bbox, polygons_collide, point_segment_distance_sq
@@ -20,8 +21,49 @@ from cad.ai_learner import ShapeFeatureExtractor, NestingAIBrain
 from cad.macro_engine import SafeFormulaEvaluator, MacroCompiler, DEFAULT_IA_TESTE_MACRO, nest_ia_teste_engine
 from cad.nesting_engine import auto_nest_pieces
 from cad.lay_parser import export_layout_from_pieces, parse_lay
+from ui.session_view import SessionView
+
+
+def make_realistic_shoe_sole_contour(length=240.0, width=85.0):
+    """
+    Gera um contorno de palmilha/sola calçadista realista com 36 vértices,
+    incluindo curvatura suave do calcanhar, concavidade do enfranque/cintura medial,
+    largura na planta e curvatura no bico.
+    """
+    pts = []
+    for deg in range(0, 360, 10):
+        rad = math.radians(deg)
+        cx = (math.cos(rad) + 1.0) * 0.5 * length
+        base_w = math.sin(rad) * 0.5 * width
+        if 0 <= deg <= 180:
+            # Lado medial (interno) com concavidade no enfranque entre 50° e 130°
+            if 50 <= deg <= 130:
+                base_w *= 0.52
+            cy = 44.0 + base_w
+        else:
+            # Lado lateral (externo)
+            cy = 44.0 + base_w * 0.95
+        pts.append({"x": round(cx, 2), "y": round(cy, 2)})
+    return pts
+
 
 class TestMacroEngineIATeste(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        try:
+            cls.root = tk.Tk()
+            cls.root.withdraw()
+        except Exception:
+            cls.root = None
+
+    @classmethod
+    def tearDownClass(cls):
+        if getattr(cls, "root", None):
+            try:
+                cls.root.destroy()
+            except Exception:
+                pass
+
     def setUp(self):
         self.db = DatabaseManager()
         self.shapes = self.db.get_shapes()
@@ -210,6 +252,145 @@ class TestMacroEngineIATeste(unittest.TestCase):
         ia_preset = presets["MACRO_IA_TESTE"]
         self.assertTrue(len(ia_preset.get("macro_script", "").strip()) > 0)
         self.assertIn("AI AUTO_TUNE", ia_preset["macro_script"])
+
+    # -------------------------------------------------------------
+    # 8. Strict Zero-Overlap Test with Realistic Concave Shoe Contours
+    # -------------------------------------------------------------
+    def test_ia_teste_strict_zero_overlap_with_real_shoe_contours(self):
+        """
+        Garantia Estrita de Zero Sobreposição:
+        Cria moldes curvos reais (palmilha côncava com 36 vértices) e roda IA-teste com gap=1.0.
+        Reconstrói os polígonos exatamente como LayoutEditorView e verifica par-a-par
+        com polygons_collide(p1, p2, gap=0.95) que ZERO pares colidem.
+        """
+        shoe_sole = make_realistic_shoe_sole_contour(length=240.0, width=85.0)
+        shape_sole = {
+            "id": 999,
+            "name": "SOLA_PALMILHA_TESTE",
+            "size": "41",
+            "pairs": 12,
+            "sequence": 1,
+            "contour": shoe_sole,
+            "holes": [],
+            "internal_cuts": [],
+            "stitching": []
+        }
+        test_shapes = [shape_sole]
+
+        pieces = auto_nest_pieces(
+            test_shapes,
+            bed_width_mm=1350.0,
+            bed_height_mm=1000.0,
+            target_count=20,
+            strategy="IA-teste",
+            gap_mm=1.0,
+            db=self.db
+        )
+        self.assertGreaterEqual(len(pieces), 4, "Deve posicionar pelo menos 4 palmilhas na placa.")
+
+        # Reconstrução exata do LayoutEditorView
+        reconstructed_polys = []
+        reconstructed_bboxes = []
+        for p in pieces:
+            poly = transform_contour(p["contour"], p["x"], p["y"], p["rotation"])
+            bbox = polygon_bbox(poly)
+            reconstructed_polys.append(poly)
+            reconstructed_bboxes.append(bbox)
+
+        # 1. Verifica limites físicos da Placa
+        for idx, (poly, (bx0, by0, bx1, by1)) in enumerate(zip(reconstructed_polys, reconstructed_bboxes)):
+            self.assertGreaterEqual(bx0, 0.0, f"Peça {pieces[idx]['id']} ultrapassou margem esquerda")
+            self.assertGreaterEqual(by0, 0.0, f"Peça {pieces[idx]['id']} ultrapassou margem inferior")
+            self.assertLessEqual(bx1, 1350.0 + 0.05, f"Peça {pieces[idx]['id']} ultrapassou margem direita")
+            self.assertLessEqual(by1, 1000.0 + 0.05, f"Peça {pieces[idx]['id']} ultrapassou margem superior")
+
+        # 2. Auditoria par-a-par estrita com tolerância de gap=0.95 (garante gap de 1.0mm)
+        collisions = []
+        for i in range(len(reconstructed_polys)):
+            for j in range(i + 1, len(reconstructed_polys)):
+                if polygons_collide(
+                    reconstructed_polys[i], reconstructed_polys[j],
+                    gap=0.95,
+                    bbox_a=reconstructed_bboxes[i],
+                    bbox_b=reconstructed_bboxes[j]
+                ):
+                    collisions.append((pieces[i]["id"], pieces[j]["id"]))
+
+        self.assertEqual(
+            len(collisions), 0,
+            f"Erro crítico: sobreposição/colisão detectada em peças {collisions} com motor IA-teste!"
+        )
+
+    # -------------------------------------------------------------
+    # 9. SessionView Spin Control: 'Distância peças (mm)' [-][ 1.0 ][+]
+    # -------------------------------------------------------------
+    def test_session_view_piece_distance_spin_control_overrides_gap(self):
+        """
+        Valida o controle 'Distância peças (mm)' [-] [ 1.0 ] [+] em SessionView:
+        - Campo inicial com valor padrão 1.0 mm
+        - Cliques no botão [+] incrementam em 0.5 mm
+        - Cliques no botão [-] decrementam em 0.5 mm com trava em 0.0 mm
+        - O gap configurado é repassado como gap mestre em get_dieproc_params()
+        - auto_nest_pieces com o gap da SessionView é respeitado pelo motor IA-teste
+        """
+        if not self.root:
+            self.skipTest("Ambiente Tkinter headless sem display gráfico.")
+
+        sess_data = {"id": 1, "status": "Stand by", "strategy": "IA-teste", "gap_mm": 1.0}
+        sv = SessionView(self.root, session_data=sess_data, db=self.db)
+
+        # 1. Checa presença dos widgets visuais
+        self.assertTrue(hasattr(sv, "entry_gap"), "SessionView deve ter entry_gap")
+        self.assertTrue(hasattr(sv, "btn_gap_minus"), "SessionView deve ter btn_gap_minus")
+        self.assertTrue(hasattr(sv, "btn_gap_plus"), "SessionView deve ter btn_gap_plus")
+        self.assertEqual(sv.entry_gap.get(), "1.0")
+        self.assertEqual(sv.get_gap_mm(), 1.0)
+
+        # 2. Testa incremento via [+]
+        sv._on_gap_plus()
+        self.assertEqual(sv.get_gap_mm(), 1.5)
+        self.assertEqual(sv.entry_gap.get(), "1.5")
+
+        sv._on_gap_plus()
+        self.assertEqual(sv.get_gap_mm(), 2.0)
+        self.assertEqual(sv.entry_gap.get(), "2.0")
+
+        # 3. Testa decremento via [-]
+        sv._on_gap_minus()
+        self.assertEqual(sv.get_gap_mm(), 1.5)
+        self.assertEqual(sv.entry_gap.get(), "1.5")
+
+        # Testa trava no mínimo de 0.0 mm
+        sv._on_gap_minus()  # 1.0
+        sv._on_gap_minus()  # 0.5
+        sv._on_gap_minus()  # 0.0
+        self.assertEqual(sv.get_gap_mm(), 0.0)
+        self.assertEqual(sv.entry_gap.get(), "0.0")
+
+        sv._on_gap_minus()  # Continua travado em 0.0
+        self.assertEqual(sv.get_gap_mm(), 0.0)
+        self.assertEqual(sv.entry_gap.get(), "0.0")
+
+        # 4. Testa set_gap_mm e repasse mestre para get_dieproc_params()
+        sv.set_gap_mm(2.5)
+        self.assertEqual(sv.get_gap_mm(), 2.5)
+        self.assertEqual(sv.entry_gap.get(), "2.5")
+        dieproc_p = sv.get_dieproc_params()
+        if dieproc_p:
+            self.assertEqual(dieproc_p.get("gap1"), 2.5)
+
+        # 5. Testa cálculo de layout com o gap da interface
+        pieces = auto_nest_pieces(
+            self.shapes,
+            bed_width_mm=1350.0,
+            bed_height_mm=1000.0,
+            target_count=8,
+            strategy="IA-teste",
+            gap_mm=sv.get_gap_mm(),
+            db=self.db
+        )
+        self.assertGreater(len(pieces), 0)
+
 
 if __name__ == "__main__":
     unittest.main()

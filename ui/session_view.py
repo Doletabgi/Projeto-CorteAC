@@ -260,6 +260,60 @@ class SessionView(tk.Frame):
         self.cb_mat_code.pack(fill="x", pady=(0, 4))
         self.cb_mat_code.bind("<<ComboboxSelected>>", self.on_material_code_selected)
 
+        # 4. Distância peças (mm) (Gap / Folga entre peças)
+        tk.Label(
+            col_right,
+            text="Distância peças (mm):",
+            anchor="w",
+            bg=THEME["bg_card"],
+            fg=THEME["text_main"],
+            font=("Segoe UI", 9)
+        ).pack(fill="x", pady=(4, 2))
+
+        gap_spin_frame = tk.Frame(col_right, bg=THEME["bg_card"])
+        gap_spin_frame.pack(anchor="w", pady=(0, 4))
+
+        self.btn_gap_minus = tk.Button(
+            gap_spin_frame,
+            text="-",
+            width=3,
+            relief="raised",
+            bd=1,
+            bg=THEME["bg_surface"],
+            fg=THEME["text_main"],
+            font=("Segoe UI", 9, "bold"),
+            command=self._on_gap_minus
+        )
+        self.btn_gap_minus.pack(side="left")
+
+        initial_gap = f"{float(self.session_data.get('gap_mm', 1.0)):.1f}"
+        self.entry_gap = tk.Entry(
+            gap_spin_frame,
+            width=6,
+            justify="center",
+            font=("Tahoma", 9, "bold"),
+            bg=THEME["bg_surface"],
+            fg=THEME["text_main"],
+            insertbackground=THEME["text_main"]
+        )
+        self.entry_gap.insert(0, initial_gap)
+        self.entry_gap.pack(side="left", padx=4)
+        self.entry_gap.bind("<FocusOut>", self._on_gap_entry_change)
+        self.entry_gap.bind("<Return>", self._on_gap_entry_change)
+
+        self.btn_gap_plus = tk.Button(
+            gap_spin_frame,
+            text="+",
+            width=3,
+            relief="raised",
+            bd=1,
+            bg=THEME["bg_surface"],
+            fg=THEME["text_main"],
+            font=("Segoe UI", 9, "bold"),
+            command=self._on_gap_plus
+        )
+        self.btn_gap_plus.pack(side="left")
+
         # Máquina de corte padrão fixa (ATOM FlashCut Flex 3020) mantida nos dados da sessão sem exibir opção no editor
         self.session_data["machine"] = self.session_data.get("machine") or "ATOM FlashCut Flex 3020"
 
@@ -1160,6 +1214,8 @@ class SessionView(tk.Frame):
             p = self.db.get_dieproc_preset(params)
             if p:
                 self.active_dieproc_params = p
+                if "gap1" in p:
+                    self.set_gap_mm(p["gap1"])
         self.highlight_guide_matching()
         if self.on_strategy_change_cb:
             self.on_strategy_change_cb(self.get_strategy(), params)
@@ -1181,16 +1237,58 @@ class SessionView(tk.Frame):
             self.cb_params["values"] = cur_vals
         self.cb_params.set(name)
         self.session_data["params"] = name
+        if "gap1" in preset_data:
+            self.set_gap_mm(preset_data["gap1"])
         if self.on_strategy_change_cb:
             self.on_strategy_change_cb(self.get_strategy(), name)
 
     def get_dieproc_params(self):
+        params = None
         if self.active_dieproc_params:
-            return self.active_dieproc_params
-        if self.db:
+            params = dict(self.active_dieproc_params)
+        elif self.db:
             preset_name = self.cb_params.get()
-            return self.db.get_dieproc_preset(preset_name)
-        return None
+            preset = self.db.get_dieproc_preset(preset_name)
+            if preset:
+                params = dict(preset)
+        if params is not None:
+            params["gap1"] = self.get_gap_mm()
+        return params
+
+    def get_gap_mm(self) -> float:
+        """Retorna o valor atual configurado no controle Distância peças (mm)."""
+        if hasattr(self, "entry_gap"):
+            try:
+                val = float(str(self.entry_gap.get()).strip().replace(",", "."))
+                return max(0.0, val)
+            except Exception:
+                pass
+        return float(self.session_data.get("gap_mm", 1.0))
+
+    def set_gap_mm(self, val: float):
+        """Atualiza o controle visual e o session_data com o novo valor de gap."""
+        try:
+            v = max(0.0, float(val))
+            if hasattr(self, "entry_gap"):
+                self.entry_gap.delete(0, tk.END)
+                self.entry_gap.insert(0, f"{v:.1f}")
+            self.session_data["gap_mm"] = v
+        except Exception:
+            pass
+
+    def _on_gap_minus(self):
+        cur = self.get_gap_mm()
+        new_val = max(0.0, round(cur - 0.5, 1))
+        self.set_gap_mm(new_val)
+
+    def _on_gap_plus(self):
+        cur = self.get_gap_mm()
+        new_val = round(cur + 0.5, 1)
+        self.set_gap_mm(new_val)
+
+    def _on_gap_entry_change(self, event=None):
+        val = self.get_gap_mm()
+        self.set_gap_mm(val)
 
     def on_machine_selected(self, event=None):
         machine = self.cb_machine.get() if hasattr(self, "cb_machine") else (self.session_data.get("machine") or "ATOM FlashCut Flex 3020")
@@ -1281,6 +1379,14 @@ class SessionView(tk.Frame):
                 self.cb_mat_code.set(f"{mat['id']} - {mat['name']}")
             else:
                 self.cb_mat_code.set("(unspecified)")
+
+        if hasattr(self, "set_gap_mm"):
+            gap_val = session_data.get("gap_mm")
+            if gap_val is None and isinstance(session_data.get("material"), dict):
+                gap_val = session_data["material"].get("gap_mm")
+            if gap_val is None:
+                gap_val = 1.0
+            self.set_gap_mm(gap_val)
 
         # Atualiza a tabela da aba Moldes
         session_shapes = session_data.get("shapes", [])
