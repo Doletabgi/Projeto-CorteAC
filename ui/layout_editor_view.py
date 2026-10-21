@@ -169,6 +169,12 @@ class LayoutEditorView(tk.Frame):
         self._custom_sheet_size = None
         self.trim_cut_line = None
 
+        # Margens de segurança da placa (mm)
+        self.margin_left = float(kwargs.get("margin_left", 10.0))
+        self.margin_right = float(kwargs.get("margin_right", 10.0))
+        self.margin_top = float(kwargs.get("margin_top", 10.0))
+        self.margin_bottom = float(kwargs.get("margin_bottom", 10.0))
+
         self.placed_pieces = []
         self.selected_index = -1
         self.show_grid = True
@@ -1058,6 +1064,14 @@ class LayoutEditorView(tk.Frame):
         self.update_sheet_status()
         self.redraw()
 
+    def set_margins(self, left: float = 10.0, right: float = 10.0, top: float = 10.0, bottom: float = 10.0):
+        """Define as margens de segurança da placa em milímetros e atualiza o Canvas."""
+        self.margin_left = float(left)
+        self.margin_right = float(right)
+        self.margin_top = float(top)
+        self.margin_bottom = float(bottom)
+        self.redraw()
+
     # -------------------------------------------------------------
     # Inicialização das Peças Conforme Print Autêntico
     # -------------------------------------------------------------
@@ -1251,6 +1265,25 @@ class LayoutEditorView(tk.Frame):
             width=1.5,
             tags="sheet_bed"
         )
+
+        # 2.1 Margem de Segurança da Placa (Retângulo tracejado sutil delimitando a área útil de corte)
+        m_left = getattr(self, "margin_left", 10.0)
+        m_right = getattr(self, "margin_right", 10.0)
+        m_top = getattr(self, "margin_top", 10.0)
+        m_bottom = getattr(self, "margin_bottom", 10.0)
+        mx1 = x1 + m_left * scale
+        mx2 = x2 - m_right * scale
+        my1 = y1 + m_top * scale
+        my2 = y2 - m_bottom * scale
+        if mx2 > mx1 and my2 > my1:
+            self.canvas.create_rectangle(
+                mx1, my1, mx2, my2,
+                fill="",
+                outline="#475569",
+                dash=(4, 3),
+                width=1.0,
+                tags="sheet_margins"
+            )
 
         # Rótulo com dimensões no topo da chapa (estilo Placa (298.00 X 138.00 cm))
         cx = (x1 + x2) / 2.0

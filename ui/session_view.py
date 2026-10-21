@@ -5,6 +5,7 @@ Telas frmSessionGeneral, frmSessionShapes, frmSessionMats, frmSessionLays, frmSe
 """
 
 import math
+from typing import Dict, Any, Optional, List
 import tkinter as tk
 from tkinter import ttk, messagebox, simpledialog, colorchooser, filedialog
 from pathlib import Path
@@ -313,6 +314,87 @@ class SessionView(tk.Frame):
             command=self._on_gap_plus
         )
         self.btn_gap_plus.pack(side="left")
+
+        # 5. Margem de Segurança da Placa (mm) (Esquerda, Direita, Do Topo, De baixo)
+        box_margins = tk.LabelFrame(
+            col_right,
+            text="Margem de Segurança da Placa (mm):",
+            bg=THEME["bg_card"],
+            fg=THEME["text_main"],
+            font=("Segoe UI", 9, "bold"),
+            relief="groove",
+            padx=6,
+            pady=4
+        )
+        box_margins.pack(fill="x", pady=(6, 4))
+
+        grid_m = tk.Frame(box_margins, bg=THEME["bg_card"])
+        grid_m.pack(fill="x")
+
+        def _make_margin_ctrl(parent, label_text, row, col, attr_entry, cmd_minus, cmd_plus, cmd_change, initial_val):
+            cell = tk.Frame(parent, bg=THEME["bg_card"])
+            cell.grid(row=row, column=col, sticky="w", padx=4, pady=2)
+
+            tk.Label(
+                cell,
+                text=label_text,
+                bg=THEME["bg_card"],
+                fg=THEME["text_main"],
+                font=("Segoe UI", 8),
+                width=8,
+                anchor="w"
+            ).pack(side="left")
+
+            btn_m = tk.Button(
+                cell,
+                text="-",
+                width=2,
+                relief="raised",
+                bd=1,
+                bg=THEME["bg_surface"],
+                fg=THEME["text_main"],
+                font=("Segoe UI", 8, "bold"),
+                command=cmd_minus
+            )
+            btn_m.pack(side="left")
+
+            entry = tk.Entry(
+                cell,
+                width=5,
+                justify="center",
+                font=("Tahoma", 8, "bold"),
+                bg=THEME["bg_surface"],
+                fg=THEME["text_main"],
+                insertbackground=THEME["text_main"]
+            )
+            entry.insert(0, f"{float(initial_val):.1f}")
+            entry.pack(side="left", padx=2)
+            entry.bind("<FocusOut>", cmd_change)
+            entry.bind("<Return>", cmd_change)
+            setattr(self, attr_entry, entry)
+
+            btn_p = tk.Button(
+                cell,
+                text="+",
+                width=2,
+                relief="raised",
+                bd=1,
+                bg=THEME["bg_surface"],
+                fg=THEME["text_main"],
+                font=("Segoe UI", 8, "bold"),
+                command=cmd_plus
+            )
+            btn_p.pack(side="left")
+
+        init_ml = float(self.session_data.get("margin_left", 10.0))
+        init_mr = float(self.session_data.get("margin_right", 10.0))
+        init_mt = float(self.session_data.get("margin_top", 10.0))
+        init_mb = float(self.session_data.get("margin_bottom", 10.0))
+
+        _make_margin_ctrl(grid_m, "Esquerda:", 0, 0, "entry_margin_left", self._on_margin_left_minus, self._on_margin_left_plus, self._on_margin_left_change, init_ml)
+        _make_margin_ctrl(grid_m, "Direita:", 0, 1, "entry_margin_right", self._on_margin_right_minus, self._on_margin_right_plus, self._on_margin_right_change, init_mr)
+        _make_margin_ctrl(grid_m, "Do Topo:", 1, 0, "entry_margin_top", self._on_margin_top_minus, self._on_margin_top_plus, self._on_margin_top_change, init_mt)
+        _make_margin_ctrl(grid_m, "De baixo:", 1, 1, "entry_margin_bottom", self._on_margin_bottom_minus, self._on_margin_bottom_plus, self._on_margin_bottom_change, init_mb)
 
         # Máquina de corte padrão fixa (ATOM FlashCut Flex 3020) mantida nos dados da sessão sem exibir opção no editor
         self.session_data["machine"] = self.session_data.get("machine") or "ATOM FlashCut Flex 3020"
@@ -1291,6 +1373,71 @@ class SessionView(tk.Frame):
         val = self.get_gap_mm()
         self.set_gap_mm(val)
 
+    def get_margins(self) -> Dict[str, float]:
+        """Retorna os valores atuais configurados no bloco Margem de Segurança da Placa (mm)."""
+        margins = {}
+        for side, entry_name in [("left", "entry_margin_left"), ("right", "entry_margin_right"), ("top", "entry_margin_top"), ("bottom", "entry_margin_bottom")]:
+            val = None
+            if hasattr(self, entry_name):
+                try:
+                    entry = getattr(self, entry_name)
+                    val = float(str(entry.get()).strip().replace(",", "."))
+                except Exception:
+                    val = None
+            if val is None:
+                val = float(self.session_data.get(f"margin_{side}", 10.0))
+            margins[side] = max(0.0, val)
+        return margins
+
+    def set_margins(self, left: Optional[float] = None, right: Optional[float] = None, top: Optional[float] = None, bottom: Optional[float] = None):
+        """Atualiza os controles visuais, o session_data e persiste no banco se disponível."""
+        updates = {}
+        mapping = [
+            ("left", left, "entry_margin_left"),
+            ("right", right, "entry_margin_right"),
+            ("top", top, "entry_margin_top"),
+            ("bottom", bottom, "entry_margin_bottom")
+        ]
+        for side, val, attr in mapping:
+            if val is not None:
+                try:
+                    v = max(0.0, float(val))
+                    self.session_data[f"margin_{side}"] = v
+                    updates[f"margin_{side}"] = v
+                    if hasattr(self, attr):
+                        entry = getattr(self, attr)
+                        entry.delete(0, tk.END)
+                        entry.insert(0, f"{v:.1f}")
+                except Exception:
+                    pass
+
+        if updates and getattr(self, "db", None) and self.session_data.get("id"):
+            try:
+                self.db.update_session(self.session_data["id"], **updates)
+            except Exception:
+                pass
+
+    def _step_margin(self, side: str, delta: float):
+        cur_margins = self.get_margins()
+        new_val = max(0.0, round(cur_margins[side] + delta, 1))
+        self.set_margins(**{side: new_val})
+
+    def _on_margin_left_minus(self): self._step_margin("left", -1.0)
+    def _on_margin_left_plus(self): self._step_margin("left", 1.0)
+    def _on_margin_left_change(self, event=None): self.set_margins(left=self.get_margins()["left"])
+
+    def _on_margin_right_minus(self): self._step_margin("right", -1.0)
+    def _on_margin_right_plus(self): self._step_margin("right", 1.0)
+    def _on_margin_right_change(self, event=None): self.set_margins(right=self.get_margins()["right"])
+
+    def _on_margin_top_minus(self): self._step_margin("top", -1.0)
+    def _on_margin_top_plus(self): self._step_margin("top", 1.0)
+    def _on_margin_top_change(self, event=None): self.set_margins(top=self.get_margins()["top"])
+
+    def _on_margin_bottom_minus(self): self._step_margin("bottom", -1.0)
+    def _on_margin_bottom_plus(self): self._step_margin("bottom", 1.0)
+    def _on_margin_bottom_change(self, event=None): self.set_margins(bottom=self.get_margins()["bottom"])
+
     def on_machine_selected(self, event=None):
         machine = self.cb_machine.get() if hasattr(self, "cb_machine") else (self.session_data.get("machine") or "ATOM FlashCut Flex 3020")
         self.session_data["machine"] = machine
@@ -1388,6 +1535,13 @@ class SessionView(tk.Frame):
             if gap_val is None:
                 gap_val = 1.0
             self.set_gap_mm(gap_val)
+
+        if hasattr(self, "set_margins"):
+            ml = session_data.get("margin_left", 10.0)
+            mr = session_data.get("margin_right", 10.0)
+            mt = session_data.get("margin_top", 10.0)
+            mb = session_data.get("margin_bottom", 10.0)
+            self.set_margins(left=ml, right=mr, top=mt, bottom=mb)
 
         # Atualiza a tabela da aba Moldes
         session_shapes = session_data.get("shapes", [])

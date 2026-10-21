@@ -1124,13 +1124,34 @@ class MainWindow(tk.Tk):
                     self.current_session["gap_mm"] = gap_val
                 except Exception:
                     pass
+            m_left = self.current_session.get("margin_left", 10.0)
+            m_right = self.current_session.get("margin_right", 10.0)
+            m_top = self.current_session.get("margin_top", 10.0)
+            m_bottom = self.current_session.get("margin_bottom", 10.0)
+            if hasattr(self, "session_view") and hasattr(self.session_view, "get_margins"):
+                try:
+                    margins = self.session_view.get_margins()
+                    m_left = margins.get("left", 10.0)
+                    m_right = margins.get("right", 10.0)
+                    m_top = margins.get("top", 10.0)
+                    m_bottom = margins.get("bottom", 10.0)
+                    self.current_session["margin_left"] = m_left
+                    self.current_session["margin_right"] = m_right
+                    self.current_session["margin_top"] = m_top
+                    self.current_session["margin_bottom"] = m_bottom
+                except Exception:
+                    pass
             try:
                 self.db.update_session(
                     self.current_session["id"],
                     placed_pieces=self.current_session["placed_pieces"],
                     yield_pct=yield_pct,
                     time_sec=time_sec,
-                    gap_mm=gap_val
+                    gap_mm=gap_val,
+                    margin_left=m_left,
+                    margin_right=m_right,
+                    margin_top=m_top,
+                    margin_bottom=m_bottom
                 )
             except Exception:
                 pass
@@ -1305,6 +1326,14 @@ class MainWindow(tk.Tk):
                 w = float(sess_mat.get("width_mm", 1350.0))
                 h = float(sess_mat.get("height_mm", 2553.38))
                 self.layout_editor_view.set_sheet_size(w, h)
+
+            if hasattr(self.layout_editor_view, "set_margins"):
+                self.layout_editor_view.set_margins(
+                    left=active_sess.get("margin_left", 10.0),
+                    right=active_sess.get("margin_right", 10.0),
+                    top=active_sess.get("margin_top", 10.0),
+                    bottom=active_sess.get("margin_bottom", 10.0)
+                )
 
             sess_shapes = active_sess.get("shapes") or []
             if hasattr(self.layout_editor_view, "set_session_shapes"):
@@ -4374,6 +4403,16 @@ class MainWindow(tk.Tk):
             gap = float(dieproc_params["gap1"])
         elif self.current_material and self.current_material.get("gap_mm"):
             gap = float(self.current_material["gap_mm"])
+
+        margins = {"left": 10.0, "right": 10.0, "top": 10.0, "bottom": 10.0}
+        if getattr(self, "session_view", None) and hasattr(self.session_view, "get_margins"):
+            try:
+                margins = self.session_view.get_margins()
+            except Exception:
+                pass
+        elif dieproc_params and "margins" in dieproc_params:
+            margins = dieproc_params["margins"]
+
         # Ordena moldes pela sequência de geração configurada pelo usuário
         sess_shapes = sorted(sess_shapes, key=lambda s: int(s.get("sequence", 999)))
         for idx, s in enumerate(sess_shapes, start=1):
@@ -4404,7 +4443,8 @@ class MainWindow(tk.Tk):
                     params=params,
                     gap_mm=gap,
                     dieproc_params=dieproc_params,
-                    db=self.db
+                    db=self.db,
+                    margins=margins
                 )
                 nest_q.put(("SUCCESS", pieces))
             except Exception as e:
@@ -4412,13 +4452,13 @@ class MainWindow(tk.Tk):
 
         th = threading.Thread(target=_worker, daemon=True)
         th.start()
-        self.after(50, lambda: self._poll_nest_worker(nest_q, strategy, params, machine, gap))
+        self.after(50, lambda: self._poll_nest_worker(nest_q, strategy, params, machine, gap, margins))
 
-    def _poll_nest_worker(self, q, strategy, params, machine, gap=1.0):
+    def _poll_nest_worker(self, q, strategy, params, machine, gap=1.0, margins=None):
         try:
             status, data = q.get_nowait()
         except queue.Empty:
-            self.after(50, lambda: self._poll_nest_worker(q, strategy, params, machine, gap))
+            self.after(50, lambda: self._poll_nest_worker(q, strategy, params, machine, gap, margins))
             return
 
         self._nesting_in_progress = False
@@ -4434,13 +4474,26 @@ class MainWindow(tk.Tk):
                 self.current_session["params"] = params
                 self.current_session["machine"] = machine
                 self.current_session["gap_mm"] = gap
+                m_dict = margins if isinstance(margins, dict) else {}
+                m_left = float(m_dict.get("left", self.current_session.get("margin_left", 10.0)))
+                m_right = float(m_dict.get("right", self.current_session.get("margin_right", 10.0)))
+                m_top = float(m_dict.get("top", self.current_session.get("margin_top", 10.0)))
+                m_bottom = float(m_dict.get("bottom", self.current_session.get("margin_bottom", 10.0)))
+                self.current_session["margin_left"] = m_left
+                self.current_session["margin_right"] = m_right
+                self.current_session["margin_top"] = m_top
+                self.current_session["margin_bottom"] = m_bottom
                 self.db.update_session(
                     self.current_session["id"],
                     status="Nested",
                     strategy=strategy,
                     params=params,
                     machine=machine,
-                    gap_mm=gap
+                    gap_mm=gap,
+                    margin_left=m_left,
+                    margin_right=m_right,
+                    margin_top=m_top,
+                    margin_bottom=m_bottom
                 )
                 if self.current_mode == "jobs":
                     self.switch_tree_mode("jobs")

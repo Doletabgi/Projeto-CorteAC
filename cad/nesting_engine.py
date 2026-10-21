@@ -168,7 +168,7 @@ def parse_coupling_angles(coupling_str):
         return [0.0, 180.0]
     return list(dict.fromkeys(angles))
 
-def dieproc_nest_pieces(available_shapes, bed_width_mm, bed_height_mm, target_count=16, dieproc_params=None, is_roll=False):
+def dieproc_nest_pieces(available_shapes, bed_width_mm, bed_height_mm, target_count=16, dieproc_params=None, is_roll=False, margins=None):
     """
     Motor de referência para corte contínuo de sintéticos (ATOM DieProc dp98).
     Projetado para chapas e placas sintéticas (flashnestsheet).
@@ -216,9 +216,15 @@ def dieproc_nest_pieces(available_shapes, bed_width_mm, bed_height_mm, target_co
 
     effective_angles = [(a + best_delta) % 360.0 for a in base_angles]
 
-    margin = max(15.0, gap * 2.5)
-    usable_width = bed_width_mm - margin * 2.0
-    usable_height = bed_height_mm - margin * 2.0
+    if margins is None and params and "margins" in params:
+        margins = params["margins"]
+    m_left = float(margins.get("left", 10.0)) if margins else 10.0
+    m_right = float(margins.get("right", 10.0)) if margins else 10.0
+    m_top = float(margins.get("top", 10.0)) if margins else 10.0
+    m_bottom = float(margins.get("bottom", 10.0)) if margins else 10.0
+
+    usable_width = max(10.0, bed_width_mm - m_left - m_right)
+    usable_height = max(10.0, bed_height_mm - m_bottom - m_top)
 
     # Ordena os moldes pela sequência de geração configurada
     sorted_shapes = sorted(available_shapes, key=lambda s: int(s.get("sequence", 999)))
@@ -326,8 +332,8 @@ def dieproc_nest_pieces(available_shapes, bed_width_mm, bed_height_mm, target_co
 
     # Disposição 2: Chapa Retangular / Sheets (flashnestsheet & freenest)
     else:
-        cur_x = margin
-        row_baseline_y = margin
+        cur_x = m_left
+        row_baseline_y = m_bottom
         row_height = 0.0
         row_idx = 0
         grid = SpatialGrid(cell_size=100.0)
@@ -345,7 +351,7 @@ def dieproc_nest_pieces(available_shapes, bed_width_mm, bed_height_mm, target_co
             rot = effective_angles[angle_idx]
 
             # Otimização de Hole-Filling: Se a peça for menor e existirem linhas já preenchidas
-            if len(available_shapes) > 1 and row_baseline_y > margin + 60.0:
+            if len(available_shapes) > 1 and row_baseline_y > m_bottom + 60.0:
                 s_area = polygon_area(shape.get("contour", []))
                 if s_area > 0 and s_area < avg_area * 0.6:
                     hole_pos = try_hole_filling_placement(shape, grid, bed_width_mm, row_baseline_y, gap, rot)
@@ -375,15 +381,15 @@ def dieproc_nest_pieces(available_shapes, bed_width_mm, bed_height_mm, target_co
             h = max_y - min_y
 
             # Mudança de linha ao atingir limite da largura da chapa
-            if cur_x + w > bed_width_mm - margin:
+            if cur_x + w > bed_width_mm - m_right:
 
                 row_idx += 1
                 if row_interlock:
                     interlock_x_offset = (avg_w * 0.45) if (row_idx % 2 == 1) else 0.0
-                    cur_x = margin + interlock_x_offset
+                    cur_x = m_left + interlock_x_offset
                     row_baseline_y += (row_height * 0.70 + gap)
                 else:
-                    cur_x = margin
+                    cur_x = m_left
                     row_baseline_y += (row_height + gap)
 
                 if diagonal:
@@ -391,7 +397,7 @@ def dieproc_nest_pieces(available_shapes, bed_width_mm, bed_height_mm, target_co
 
                 row_height = 0.0
 
-            trial_y = max(margin, row_baseline_y)
+            trial_y = max(m_bottom, row_baseline_y)
             poly_fn = lambda y, cx=cur_x: transform_contour(shape["contour"], cx - min_x, y - min_y, rot)
             query_bbox = (cur_x - gap, max(0.0, trial_y - gap * 2.0), cur_x + w + gap, bed_height_mm)
             colliders_all = grid.query_potential_colliders(query_bbox, gap=gap)
@@ -405,7 +411,7 @@ def dieproc_nest_pieces(available_shapes, bed_width_mm, bed_height_mm, target_co
             c_poly = poly_fn(trial_y)
             c_bbox = polygon_bbox(c_poly)
 
-            if trial_y + h > bed_height_mm - margin:
+            if trial_y + h > bed_height_mm - m_top:
                 break
 
             # Verificação estrita contra todos os potenciais obstáculos com micro-ajuste de segurança
@@ -418,11 +424,11 @@ def dieproc_nest_pieces(available_shapes, bed_width_mm, bed_height_mm, target_co
                 all_cols = grid.query_potential_colliders(c_bbox, gap=gap)
                 shifts += 1
 
-            if trial_y + h > bed_height_mm - margin or any(polygons_collide(c_poly, cp, gap=gap, bbox_a=c_bbox, bbox_b=cb) for cp, cb in all_cols):
+            if trial_y + h > bed_height_mm - m_top or any(polygons_collide(c_poly, cp, gap=gap, bbox_a=c_bbox, bbox_b=cb) for cp, cb in all_cols):
                 cur_x += (w * 0.25 + gap)
-                if cur_x + w > bed_width_mm - margin:
+                if cur_x + w > bed_width_mm - m_right:
                     row_idx += 1
-                    cur_x = margin
+                    cur_x = m_left
                     row_baseline_y += (row_height + gap)
                     row_height = 0.0
                 continue
@@ -456,7 +462,7 @@ def dieproc_nest_pieces(available_shapes, bed_width_mm, bed_height_mm, target_co
                 n_min_x, n_min_y, n_max_x, n_max_y = polygon_bbox(n_poly0)
 
                 safe_start_x = c_bbox[2] + gap
-                min_cand_x = max(margin, c_bbox[0])
+                min_cand_x = max(m_left, c_bbox[0])
 
                 poly_fn_x = lambda x: transform_contour(next_shape["contour"], x - n_min_x, trial_y - n_min_y, next_rot)
                 cur_x = find_contact_coordinate_binary(poly_fn_x, [(c_poly, c_bbox)], gap, start_val=safe_start_x, min_val=min_cand_x)
@@ -466,7 +472,7 @@ def dieproc_nest_pieces(available_shapes, bed_width_mm, bed_height_mm, target_co
         return placed
 
 
-def nest_synthetic_engine(available_shapes, bed_width_mm, bed_height_mm, target_count=16, gap_mm=1.0, is_roll=False):
+def nest_synthetic_engine(available_shapes, bed_width_mm, bed_height_mm, target_count=16, gap_mm=1.0, is_roll=False, margins=None):
     """
     Motor 'Sint': Otimização para corte contínuo de materiais sintéticos em rolos ou chapas.
     Características:
@@ -490,7 +496,10 @@ def nest_synthetic_engine(available_shapes, bed_width_mm, bed_height_mm, target_
         shape_queue = list(sorted_shapes)
 
     max_pieces = target_count if (target_count and target_count > 0) else len(shape_queue)
-    margin = max(8.0, float(gap_mm) * 2.0)
+    m_left = float(margins.get("left", 10.0)) if margins else 10.0
+    m_right = float(margins.get("right", 10.0)) if margins else 10.0
+    m_top = float(margins.get("top", 10.0)) if margins else 10.0
+    m_bottom = float(margins.get("bottom", 10.0)) if margins else 10.0
     gap = max(0.0, float(gap_mm))
 
     grid = SpatialGrid(cell_size=100.0)
@@ -501,16 +510,16 @@ def nest_synthetic_engine(available_shapes, bed_width_mm, bed_height_mm, target_
     avg_h = max(10.0, s_max_y - s_min_y)
 
     row_idx = 0
-    cur_row_y = margin
+    cur_row_y = m_bottom
     idx = 1
     rows = []
 
-    while idx <= max_pieces and (cur_row_y < bed_height_mm - margin):
+    while idx <= max_pieces and (cur_row_y < bed_height_mm - m_top):
         is_odd_row = (row_idx % 2 == 1)
         interlock_offset = (avg_w * 0.40) if is_odd_row else 0.0
 
         row_pieces = []
-        cur_x = margin + interlock_offset
+        cur_x = m_left + interlock_offset
 
         while idx <= max_pieces:
             shape = shape_queue[(idx - 1) % len(shape_queue)]
@@ -525,11 +534,11 @@ def nest_synthetic_engine(available_shapes, bed_width_mm, bed_height_mm, target_
             else:
                 prev = row_pieces[-1]
                 safe_x = prev["bbox"][2] + gap
-                min_x_cand = max(margin, prev["bbox"][0])
+                min_x_cand = max(m_left, prev["bbox"][0])
                 poly_fn_x = lambda x: transform_contour(shape["contour"], x - min_x, cur_row_y - min_y, rot)
                 cand_x = find_contact_coordinate_binary(poly_fn_x, [(prev["poly"], prev["bbox"])], gap, start_val=safe_x, min_val=min_x_cand)
 
-            if cand_x + w > bed_width_mm - margin:
+            if cand_x + w > bed_width_mm - m_right:
                 break
 
             c_poly = transform_contour(shape["contour"], cand_x - min_x, cur_row_y - min_y, rot)
@@ -590,7 +599,7 @@ def nest_synthetic_engine(available_shapes, bed_width_mm, bed_height_mm, target_
                 p["poly"] = transform_contour(p["shape"]["contour"], p["x"], p["y"], p["rotation"])
                 p["bbox"] = polygon_bbox(p["poly"])
 
-        if not is_roll and any(p["bbox"][3] > bed_height_mm - margin for p in row_pieces):
+        if not is_roll and any(p["bbox"][3] > bed_height_mm - m_top for p in row_pieces):
             break
 
         for p in row_pieces:
@@ -603,7 +612,7 @@ def nest_synthetic_engine(available_shapes, bed_width_mm, bed_height_mm, target_
 
     return placed
 
-def nest_tape_engine(available_shapes, bed_width_mm, bed_height_mm, target_count=16, gap_mm=1.0):
+def nest_tape_engine(available_shapes, bed_width_mm, bed_height_mm, target_count=16, gap_mm=1.0, margins=None):
     """
     Motor 'Tape A': Otimização linear para fitas, tiras estreitas, debruns, vivos e correias.
     Características:
@@ -628,11 +637,14 @@ def nest_tape_engine(available_shapes, bed_width_mm, bed_height_mm, target_count
 
     max_pieces = target_count if (target_count and target_count > 0) else len(shape_queue)
 
-    margin = max(8.0, gap_mm * 1.5)
+    m_left = float(margins.get("left", 10.0)) if margins else 10.0
+    m_right = float(margins.get("right", 10.0)) if margins else 10.0
+    m_top = float(margins.get("top", 10.0)) if margins else 10.0
+    m_bottom = float(margins.get("bottom", 10.0)) if margins else 10.0
     gap = max(0.5, float(gap_mm))
 
-    cur_x = margin
-    row_baseline_y = margin
+    cur_x = m_left
+    row_baseline_y = m_bottom
     row_height = 0.0
     row_idx = 0
     idx = 1
@@ -656,13 +668,13 @@ def nest_tape_engine(available_shapes, bed_width_mm, bed_height_mm, target_count
             w = max_x - min_x
             h = max_y - min_y
 
-        if cur_x + w > bed_width_mm - margin:
+        if cur_x + w > bed_width_mm - m_right:
             row_idx += 1
-            cur_x = margin
+            cur_x = m_left
             row_baseline_y += (row_height + gap)
             row_height = 0.0
 
-        trial_y = max(margin, row_baseline_y)
+        trial_y = max(m_bottom, row_baseline_y)
         poly_fn = lambda y, cx=cur_x: transform_contour(shape["contour"], cx - min_x, y - min_y, rot)
         query_bbox = (cur_x - gap, max(0.0, trial_y - gap * 2.0), cur_x + w + gap, bed_height_mm)
         colliders = grid.query_potential_colliders(query_bbox, gap=gap)
@@ -675,7 +687,7 @@ def nest_tape_engine(available_shapes, bed_width_mm, bed_height_mm, target_count
         c_poly = poly_fn(trial_y)
         c_bbox = polygon_bbox(c_poly)
 
-        if trial_y + h > bed_height_mm - margin or any(polygons_collide(c_poly, cp, gap=gap, bbox_a=c_bbox, bbox_b=cb) for cp, cb in colliders):
+        if trial_y + h > bed_height_mm - m_top or any(polygons_collide(c_poly, cp, gap=gap, bbox_a=c_bbox, bbox_b=cb) for cp, cb in colliders):
             break
 
         p_color = get_color_for_size(shape.get("size") or shape.get("name") or "41", idx)
@@ -701,7 +713,7 @@ def nest_tape_engine(available_shapes, bed_width_mm, bed_height_mm, target_count
 
     return placed
 
-def auto_nest_pieces(available_shapes, bed_width_mm, bed_height_mm, target_count=16, strategy="flashnestsheet", params="stdNOTFill", gap_mm=1.0, dieproc_params=None, db=None):
+def auto_nest_pieces(available_shapes, bed_width_mm, bed_height_mm, target_count=16, strategy="flashnestsheet", params="stdNOTFill", gap_mm=1.0, dieproc_params=None, db=None, margins=None):
     """
     Algoritmo de aninhamento automático 2D com suporte a múltiplas estratégias:
     - IA-teste: Motor híbrido por macros declarativas com IA local embarcada e UCB1 Bandit.
@@ -715,6 +727,9 @@ def auto_nest_pieces(available_shapes, bed_width_mm, bed_height_mm, target_count
     if not available_shapes:
         return placed
 
+    if margins is None and dieproc_params and isinstance(dieproc_params, dict) and "margins" in dieproc_params:
+        margins = dieproc_params["margins"]
+
     # 0. Estratégia IA-teste (Macros Declarativas + IA Local Embarcada 100% Nativa)
     if str(strategy).lower() in ("ia-teste", "ia_teste", "iateste"):
         return nest_ia_teste_engine(
@@ -724,7 +739,8 @@ def auto_nest_pieces(available_shapes, bed_width_mm, bed_height_mm, target_count
             target_count=target_count,
             gap_mm=gap_mm,
             db=db,
-            dieproc_params=dieproc_params
+            dieproc_params=dieproc_params,
+            margins=margins
         )
 
     # 1. Estratégia Sint (Sintéticos Contínuo)
@@ -735,7 +751,8 @@ def auto_nest_pieces(available_shapes, bed_width_mm, bed_height_mm, target_count
             bed_height_mm,
             target_count=target_count,
             gap_mm=gap_mm,
-            is_roll=False
+            is_roll=False,
+            margins=margins
         )
 
     # 2. Estratégia Tape A (Tiras e Fitas)
@@ -745,7 +762,8 @@ def auto_nest_pieces(available_shapes, bed_width_mm, bed_height_mm, target_count
             bed_width_mm,
             bed_height_mm,
             target_count=target_count,
-            gap_mm=gap_mm
+            gap_mm=gap_mm,
+            margins=margins
         )
 
     # Ordena os moldes pela sequência de geração configurada
@@ -769,11 +787,14 @@ def auto_nest_pieces(available_shapes, bed_width_mm, bed_height_mm, target_count
 
     # Estratégia Couro Irregular (flashnestleather)
     if strategy == "flashnestleather":
-        margin = max(40.0, gap_mm * 10.0)
+        m_left = float(margins.get("left", 10.0)) if margins else 10.0
+        m_right = float(margins.get("right", 10.0)) if margins else 10.0
+        m_top = float(margins.get("top", 10.0)) if margins else 10.0
+        m_bottom = float(margins.get("bottom", 10.0)) if margins else 10.0
         base_spacing = max(6.0, gap_mm * 2.0)
         angles = [0, 45, 90, 135, 180, 225, 270, 315] if params == "HighYield" else [0, 90, 180, 270]
-        cur_x = margin + 15.0
-        row_baseline_y = margin + 15.0
+        cur_x = m_left + 5.0
+        row_baseline_y = m_bottom + 5.0
         row_height = 0.0
         idx = 1
         grid = SpatialGrid(cell_size=100.0)
@@ -787,8 +808,8 @@ def auto_nest_pieces(available_shapes, bed_width_mm, bed_height_mm, target_count
             w = max_x - min_x
             h = max_y - min_y
 
-            if cur_x + w > bed_width_mm - margin - 20.0:
-                cur_x = margin + 15.0
+            if cur_x + w > bed_width_mm - m_right:
+                cur_x = m_left + 5.0
                 row_baseline_y += row_height + base_spacing
                 row_height = 0.0
 
@@ -805,7 +826,7 @@ def auto_nest_pieces(available_shapes, bed_width_mm, bed_height_mm, target_count
             c_poly = poly_fn(trial_y)
             c_bbox = polygon_bbox(c_poly)
 
-            if trial_y + h > bed_height_mm - margin - 20.0 or any(polygons_collide(c_poly, cp, gap=base_spacing, bbox_a=c_bbox, bbox_b=cb) for cp, cb in colliders):
+            if trial_y + h > bed_height_mm - m_top or any(polygons_collide(c_poly, cp, gap=base_spacing, bbox_a=c_bbox, bbox_b=cb) for cp, cb in colliders):
                 break
 
             s_sz = str(shape.get("size") or shape.get("taglia") or "41")
@@ -861,6 +882,7 @@ def auto_nest_pieces(available_shapes, bed_width_mm, bed_height_mm, target_count
         bed_height_mm,
         target_count=max_pieces,
         dieproc_params=dp_config,
-        is_roll=False
+        is_roll=False,
+        margins=margins
     )
 

@@ -114,5 +114,64 @@ class TestNestingContourGap(unittest.TestCase):
                     dist = self._calc_min_dist(polys[i], polys[j])
                     self.assertGreaterEqual(dist, 2.49, f"Estratégia {strat} violou gap central de 2.5mm: {dist:.3f} mm < 2.5 mm (possível vazamento de gap1 legado de 0.5mm)")
 
+    def test_plate_safety_margins_respected(self):
+        """Valida que todos os motores respeitam rigorosamente as 4 margens da placa (Esquerda, Direita, Topo, De baixo)."""
+        margins = {
+            "left": 25.0,
+            "right": 35.0,
+            "top": 40.0,
+            "bottom": 30.0
+        }
+        for strat in ["sint", "IA-teste"]:
+            pieces = auto_nest_pieces(
+                self.shapes, self.bed_width, self.bed_height,
+                target_count=10, strategy=strat, gap_mm=1.0,
+                margins=margins,
+                db=self.db
+            )
+            self.assertGreater(len(pieces), 0, f"Nenhuma peça gerada para estratégia {strat}")
+            for p in pieces:
+                poly = transform_contour(p["contour"], p["x"], p["y"], p["rotation"])
+                min_x, min_y, max_x, max_y = polygon_bbox(poly)
+                self.assertGreaterEqual(
+                    min_x, margins["left"] - 0.05,
+                    f"Estratégia {strat}: Peça invadiu margem esquerda! min_x={min_x:.2f} < margin_left={margins['left']}"
+                )
+                self.assertLessEqual(
+                    max_x, self.bed_width - margins["right"] + 0.05,
+                    f"Estratégia {strat}: Peça invadiu margem direita! max_x={max_x:.2f} > limit={self.bed_width - margins['right']}"
+                )
+                self.assertGreaterEqual(
+                    min_y, margins["bottom"] - 0.05,
+                    f"Estratégia {strat}: Peça invadiu margem de baixo! min_y={min_y:.2f} < margin_bottom={margins['bottom']}"
+                )
+                self.assertLessEqual(
+                    max_y, self.bed_height - margins["top"] + 0.05,
+                    f"Estratégia {strat}: Peça invadiu margem do topo! max_y={max_y:.2f} > limit={self.bed_height - margins['top']}"
+                )
+
+        # Valida persistência das margens no banco de dados SQLite
+        sess_id = self.db.create_session(
+            name="Test Margins Session",
+            margin_left=15.0,
+            margin_right=20.0,
+            margin_top=25.0,
+            margin_bottom=30.0
+        )
+        loaded = self.db.get_session(sess_id)
+        self.assertEqual(loaded["margin_left"], 15.0)
+        self.assertEqual(loaded["margin_right"], 20.0)
+        self.assertEqual(loaded["margin_top"], 25.0)
+        self.assertEqual(loaded["margin_bottom"], 30.0)
+
+        # Atualiza margens via update_session
+        self.db.update_session(sess_id, margin_left=12.5, margin_right=18.5, margin_top=22.0, margin_bottom=28.0)
+        reloaded = self.db.get_session(sess_id)
+        self.assertEqual(reloaded["margin_left"], 12.5)
+        self.assertEqual(reloaded["margin_right"], 18.5)
+        self.assertEqual(reloaded["margin_top"], 22.0)
+        self.assertEqual(reloaded["margin_bottom"], 28.0)
+
 if __name__ == "__main__":
     unittest.main()
+

@@ -208,6 +208,14 @@ class DatabaseManager:
                     cursor.execute("ALTER TABLE sessions ADD COLUMN shapes_json TEXT DEFAULT '[]'")
                 if "gap_mm" not in s_cols:
                     cursor.execute("ALTER TABLE sessions ADD COLUMN gap_mm REAL DEFAULT 1.0")
+                if "margin_left" not in s_cols:
+                    cursor.execute("ALTER TABLE sessions ADD COLUMN margin_left REAL DEFAULT 10.0")
+                if "margin_right" not in s_cols:
+                    cursor.execute("ALTER TABLE sessions ADD COLUMN margin_right REAL DEFAULT 10.0")
+                if "margin_top" not in s_cols:
+                    cursor.execute("ALTER TABLE sessions ADD COLUMN margin_top REAL DEFAULT 10.0")
+                if "margin_bottom" not in s_cols:
+                    cursor.execute("ALTER TABLE sessions ADD COLUMN margin_bottom REAL DEFAULT 10.0")
 
                 cursor.execute("PRAGMA table_info(orders)")
                 o_cols = [c[1] for c in cursor.fetchall()]
@@ -325,6 +333,11 @@ class DatabaseManager:
                     cursor.execute("ALTER TABLE sessions ADD COLUMN gap_mm DOUBLE DEFAULT 1.0")
                 except Exception:
                     pass
+                for m_col in ("margin_left", "margin_right", "margin_top", "margin_bottom"):
+                    try:
+                        cursor.execute(f"ALTER TABLE sessions ADD COLUMN {m_col} DOUBLE DEFAULT 10.0")
+                    except Exception:
+                        pass
             else:
                 cursor.execute("""
                 CREATE TABLE IF NOT EXISTS job_folders (
@@ -1007,6 +1020,10 @@ class DatabaseManager:
                 d["params"] = d.get("params") or "stdNOTFill"
                 d["machine"] = d.get("machine") or "ATOM FlashCut Flex 3020"
                 d["gap_mm"] = float(d.get("gap_mm", 1.0) if d.get("gap_mm") is not None else 1.0)
+                d["margin_left"] = float(d.get("margin_left", 10.0) if d.get("margin_left") is not None else 10.0)
+                d["margin_right"] = float(d.get("margin_right", 10.0) if d.get("margin_right") is not None else 10.0)
+                d["margin_top"] = float(d.get("margin_top", 10.0) if d.get("margin_top") is not None else 10.0)
+                d["margin_bottom"] = float(d.get("margin_bottom", 10.0) if d.get("margin_bottom") is not None else 10.0)
 
                 for idx, s in enumerate(d["shapes"], start=1):
                     s_sz = str(s.get("size") or s.get("name") or "41")
@@ -1035,6 +1052,10 @@ class DatabaseManager:
                 return None
             d = dict(row)
             d["gap_mm"] = float(d.get("gap_mm", 1.0) if d.get("gap_mm") is not None else 1.0)
+            d["margin_left"] = float(d.get("margin_left", 10.0) if d.get("margin_left") is not None else 10.0)
+            d["margin_right"] = float(d.get("margin_right", 10.0) if d.get("margin_right") is not None else 10.0)
+            d["margin_top"] = float(d.get("margin_top", 10.0) if d.get("margin_top") is not None else 10.0)
+            d["margin_bottom"] = float(d.get("margin_bottom", 10.0) if d.get("margin_bottom") is not None else 10.0)
             d["placed_pieces"] = json.loads(d.get("placed_pieces_json") or "[]")
             for p in d["placed_pieces"]:
                 p_sz = p.get("size", "41")
@@ -1090,7 +1111,11 @@ class DatabaseManager:
         params: str = "stdNOTFill",
         machine: str = "ATOM FlashCut Flex 3020",
         shapes: Optional[List[Dict[str, Any]]] = None,
-        gap_mm: float = 1.0
+        gap_mm: float = 1.0,
+        margin_left: float = 10.0,
+        margin_right: float = 10.0,
+        margin_top: float = 10.0,
+        margin_bottom: float = 10.0
     ) -> int:
         with self.get_connection() as conn:
             cursor = conn.cursor()
@@ -1136,24 +1161,27 @@ class DatabaseManager:
             # 5. Gravação da sessão
             if conn.backend == "mysql":
                 cursor.execute("""
-                INSERT INTO sessions (id, code, order_id, material_id, name, job, status, yield_percent, cutting_time_sec, placed_pieces_json, strategy, params, machine, shapes_json, gap_mm)
-                VALUES (?, ?, ?, ?, ?, ?, ?, 0.0, 0.0, ?, ?, ?, ?, ?, ?)
+                INSERT INTO sessions (id, code, order_id, material_id, name, job, status, yield_percent, cutting_time_sec, placed_pieces_json, strategy, params, machine, shapes_json, gap_mm, margin_left, margin_right, margin_top, margin_bottom)
+                VALUES (?, ?, ?, ?, ?, ?, ?, 0.0, 0.0, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ON DUPLICATE KEY UPDATE
                     code = VALUES(code), name = VALUES(name), job = VALUES(job), status = VALUES(status),
                     material_id = VALUES(material_id), placed_pieces_json = VALUES(placed_pieces_json),
                     strategy = VALUES(strategy), params = VALUES(params), machine = VALUES(machine), shapes_json = VALUES(shapes_json),
-                    gap_mm = VALUES(gap_mm)
+                    gap_mm = VALUES(gap_mm), margin_left = VALUES(margin_left), margin_right = VALUES(margin_right),
+                    margin_top = VALUES(margin_top), margin_bottom = VALUES(margin_bottom)
                 """, (
                     session_id, code, valid_order_id, valid_mat_id, name, job, status,
-                    json.dumps(placed_pieces or []), strategy, params, machine, json.dumps(shapes or []), float(gap_mm)
+                    json.dumps(placed_pieces or []), strategy, params, machine, json.dumps(shapes or []), float(gap_mm),
+                    float(margin_left), float(margin_right), float(margin_top), float(margin_bottom)
                 ))
             else:
                 cursor.execute("""
-                REPLACE INTO sessions (id, code, order_id, material_id, name, job, status, yield_percent, cutting_time_sec, placed_pieces_json, strategy, params, machine, shapes_json, gap_mm)
-                VALUES (?, ?, ?, ?, ?, ?, ?, 0.0, 0.0, ?, ?, ?, ?, ?, ?)
+                REPLACE INTO sessions (id, code, order_id, material_id, name, job, status, yield_percent, cutting_time_sec, placed_pieces_json, strategy, params, machine, shapes_json, gap_mm, margin_left, margin_right, margin_top, margin_bottom)
+                VALUES (?, ?, ?, ?, ?, ?, ?, 0.0, 0.0, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """, (
                     session_id, code, valid_order_id, valid_mat_id, name, job, status,
-                    json.dumps(placed_pieces or []), strategy, params, machine, json.dumps(shapes or []), float(gap_mm)
+                    json.dumps(placed_pieces or []), strategy, params, machine, json.dumps(shapes or []), float(gap_mm),
+                    float(margin_left), float(margin_right), float(margin_top), float(margin_bottom)
                 ))
 
             # 6. Atualiza o contador permanente de último número de sessão
@@ -1171,7 +1199,7 @@ class DatabaseManager:
             conn.commit()
             return session_id
 
-    def update_session(self, session_id, name=None, status=None, placed_pieces=None, yield_pct=None, time_sec=None, material_id=_SENTINEL, strategy=None, params=None, machine=None, shapes=None, job=None, clear_material=False, gap_mm=None):
+    def update_session(self, session_id, name=None, status=None, placed_pieces=None, yield_pct=None, time_sec=None, material_id=_SENTINEL, strategy=None, params=None, machine=None, shapes=None, job=None, clear_material=False, gap_mm=None, margin_left=None, margin_right=None, margin_top=None, margin_bottom=None):
         with self.get_connection() as conn:
             cursor = conn.cursor()
             updates = []
@@ -1214,6 +1242,18 @@ class DatabaseManager:
             if gap_mm is not None:
                 updates.append("gap_mm = ?")
                 values.append(float(gap_mm))
+            if margin_left is not None:
+                updates.append("margin_left = ?")
+                values.append(float(margin_left))
+            if margin_right is not None:
+                updates.append("margin_right = ?")
+                values.append(float(margin_right))
+            if margin_top is not None:
+                updates.append("margin_top = ?")
+                values.append(float(margin_top))
+            if margin_bottom is not None:
+                updates.append("margin_bottom = ?")
+                values.append(float(margin_bottom))
             if updates:
                 values.append(session_id)
                 cursor.execute(f"UPDATE sessions SET {', '.join(updates)} WHERE id = ?", values)
