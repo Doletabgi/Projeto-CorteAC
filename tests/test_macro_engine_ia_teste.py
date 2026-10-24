@@ -391,6 +391,64 @@ class TestMacroEngineIATeste(unittest.TestCase):
         )
         self.assertGreater(len(pieces), 0)
 
+    def test_ia_teste_contour_nesting_density_and_gap(self):
+        """Valida que o motor 'IA-teste' realiza encaixe contorno a contorno 'bem colada' com gap exato e zero colisão."""
+        from cad.geometry import point_segment_distance_sq
+
+        def _calc_min_dist(poly_a, poly_b):
+            min_dist_sq = float("inf")
+            len_a = len(poly_a)
+            len_b = len(poly_b)
+            for pt in poly_a:
+                px, py = pt["x"], pt["y"]
+                for j in range(len_b):
+                    p1 = poly_b[j]
+                    p2 = poly_b[(j + 1) % len_b]
+                    d_sq = point_segment_distance_sq(px, py, p1["x"], p1["y"], p2["x"], p2["y"])
+                    if d_sq < min_dist_sq:
+                        min_dist_sq = d_sq
+            for pt in poly_b:
+                px, py = pt["x"], pt["y"]
+                for i in range(len_a):
+                    p1 = poly_a[i]
+                    p2 = poly_a[(i + 1) % len_a]
+                    d_sq = point_segment_distance_sq(px, py, p1["x"], p1["y"], p2["x"], p2["y"])
+                    if d_sq < min_dist_sq:
+                        min_dist_sq = d_sq
+            return math.sqrt(min_dist_sq)
+
+        pieces = auto_nest_pieces(
+            self.shapes,
+            bed_width_mm=1350.0,
+            bed_height_mm=1000.0,
+            target_count=16,
+            strategy="IA-teste",
+            gap_mm=1.0,
+            dieproc_params={"coupling": "0/0", "margins": {"left": 10.0, "right": 10.0, "top": 10.0, "bottom": 10.0}},
+            db=self.db
+        )
+        self.assertGreaterEqual(len(pieces), 10)
+
+        polys = [transform_contour(p["contour"], p["x"], p["y"], p["rotation"]) for p in pieces]
+        bboxes = [polygon_bbox(p) for p in polys]
+
+        # 1. Verifica ausência total de colisão
+        for i in range(len(polys)):
+            for j in range(i + 1, len(polys)):
+                self.assertFalse(
+                    polygons_collide(polys[i], polys[j], gap=0.0, bbox_a=bboxes[i], bbox_b=bboxes[j]),
+                    f"Colisão detectada entre peça {pieces[i]['id']} e {pieces[j]['id']}"
+                )
+
+        # 2. Verifica distância contorno a contorno entre peças adjacentes na fileira (1.0 mm <= gap < 1.3 mm)
+        row1 = sorted([p for p in pieces if p["y"] < 250], key=lambda p: p["x"])
+        self.assertGreaterEqual(len(row1), 2)
+        row1_polys = [transform_contour(p["contour"], p["x"], p["y"], p["rotation"]) for p in row1]
+        for i in range(len(row1_polys) - 1):
+            dist = _calc_min_dist(row1_polys[i], row1_polys[i+1])
+            self.assertGreaterEqual(dist, 1.0, f"Gap violado: {dist:.3f} mm < 1.0 mm")
+            self.assertLess(dist, 1.3, f"Gap excessivo (sem bumping contorno a contorno): {dist:.3f} mm >= 1.3 mm")
+
 
 if __name__ == "__main__":
     unittest.main()

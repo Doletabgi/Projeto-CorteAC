@@ -376,9 +376,21 @@ class OptionsDialog(tk.Toplevel):
         dp_frame = tk.Frame(grid_frame, bg=THEME["bg_surface"])
         dp_frame.grid(row=5, column=1, sticky="w", padx=(30, 0), pady=6)
 
+        dp_presets = []
+        if self.db:
+            try:
+                db_p = self.db.get_dieproc_presets()
+                if db_p:
+                    dp_presets = [k for k in sorted(db_p.keys()) if k != "GAP 2"]
+            except Exception:
+                pass
+        for item in ["ALTERNADO", "DIREITA", "ESQUERDA", "Fixo", "Variável", "Automático"]:
+            if item not in dp_presets and item != "GAP 2":
+                dp_presets.append(item)
+
         self.cb_die_proc = ttk.Combobox(
             dp_frame,
-            values=["ALTERNADO", "DIREITA", "ESQUERDA", "GAP 2", "Fixo", "Variável", "Automático"],
+            values=dp_presets,
             state="readonly",
             width=16
         )

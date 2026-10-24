@@ -1,5 +1,5 @@
 """
-JobManager 2000 (Python Edition for Windows 10)
+CorteAC (Python Edition)
 Configuration & Machine Presets
 """
 
@@ -32,8 +32,8 @@ EXPORTS_DIR = BASE_DIR / "exports"
 EXPORTS_DIR.mkdir(exist_ok=True)
 
 # Application Metadata
-APP_NAME = "teste dola"
-APP_VERSION = "2026.1 (Recriação de Jm2k/ATOM)"
+APP_NAME = "CorteAC"
+APP_VERSION = "2026.1"
 
 # UI Classic Windows XP Theme Palette (Amostrado exatamente dos prints do usuário)
 THEME = {

@@ -431,30 +431,31 @@ class DatabaseManager:
                 if not cursor.fetchone():
                     cursor.execute("INSERT INTO settings (`key`, `value`) VALUES (?, ?)", (k, str(v)))
 
-            # Inserir presets padrão DieProc
-            default_dieproc_presets = [
-                ("ALTERNADO", "0/0 0/180", 1.0, 30, -3.0, 3.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 1, 0),
-                ("DIREITA", "0/0", 1.0, 30, -3.0, 3.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 1, 0),
-                ("ESQUERDA", "180/180", 1.0, 30, -3.0, 3.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 1, 0),
-                ("GAP 2", "0/0 0/180", 1.0, 30, -3.0, 3.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 2.0, 0.0, 0.0, 1, 0),
-            ]
-            for dp in default_dieproc_presets:
-                cursor.execute("""
-                INSERT OR IGNORE INTO dieproc_presets 
-                (name, coupling, step, solutions, range1_from, range1_to, range1_step, range2_from, range2_to, range2_step, range3_from, range3_to, range3_step, gap1, gap2, gap3, row_interlock, diagonal)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                """, dp)
+            # Inserir presets padrão DieProc apenas se a tabela estiver vazia (evita ressuscitar presets excluídos pelo usuário)
+            cursor.execute("SELECT COUNT(*) FROM dieproc_presets")
+            if cursor.fetchone()[0] == 0:
+                default_dieproc_presets = [
+                    ("ALTERNADO", "0/0 0/180", 1.0, 30, -3.0, 3.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 1, 0),
+                    ("DIREITA", "0/0", 1.0, 30, -3.0, 3.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 1, 0),
+                    ("ESQUERDA", "180/180", 1.0, 30, -3.0, 3.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 1, 0),
+                ]
+                for dp in default_dieproc_presets:
+                    cursor.execute("""
+                    INSERT OR IGNORE INTO dieproc_presets 
+                    (name, coupling, step, solutions, range1_from, range1_to, range1_step, range2_from, range2_to, range2_step, range3_from, range3_to, range3_step, gap1, gap2, gap3, row_interlock, diagonal)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """, dp)
 
-            # Preset padrão do novo motor de cálculo IA-teste com macro declarativa
-            try:
-                from cad.macro_engine import DEFAULT_IA_TESTE_MACRO
-                cursor.execute("""
-                INSERT OR IGNORE INTO dieproc_presets
-                (name, coupling, step, solutions, range1_from, range1_to, range1_step, range2_from, range2_to, range2_step, range3_from, range3_to, range3_step, gap1, gap2, gap3, row_interlock, diagonal, macro_script)
-                VALUES ('MACRO_IA_TESTE', '0/0 0/180', 1.0, 30, -3.0, 3.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 1, 0, ?)
-                """, (DEFAULT_IA_TESTE_MACRO,))
-            except Exception:
-                pass
+                # Preset padrão do novo motor de cálculo IA-teste com macro declarativa
+                try:
+                    from cad.macro_engine import DEFAULT_IA_TESTE_MACRO
+                    cursor.execute("""
+                    INSERT OR IGNORE INTO dieproc_presets
+                    (name, coupling, step, solutions, range1_from, range1_to, range1_step, range2_from, range2_to, range2_step, range3_from, range3_to, range3_step, gap1, gap2, gap3, row_interlock, diagonal, macro_script)
+                    VALUES ('MACRO_IA_TESTE', '0/0 0/180', 1.0, 30, -3.0, 3.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 1, 0, ?)
+                    """, (DEFAULT_IA_TESTE_MACRO,))
+                except Exception:
+                    pass
 
             # Verificar se já existem ordens
             cursor.execute("SELECT COUNT(*) FROM orders")
@@ -1381,6 +1382,20 @@ class DatabaseManager:
             cursor = conn.cursor()
             cursor.execute("DELETE FROM dieproc_presets WHERE name = ?", (name,))
             conn.commit()
+
+        # Mantém arquivo SQLite de reserva sincronizado caso exista
+        try:
+            from db.config import SQLITE_PATH
+            import sqlite3
+            from pathlib import Path
+            sp = Path(SQLITE_PATH)
+            if sp.exists():
+                with sqlite3.connect(str(sp)) as sconn:
+                    sc = sconn.cursor()
+                    sc.execute("DELETE FROM dieproc_presets WHERE name = ?", (name,))
+                    sconn.commit()
+        except Exception:
+            pass
 
     # -------------------------------------------------------------
     # Gestão de Layouts de Corte (.lay) com Concorrência Otimista

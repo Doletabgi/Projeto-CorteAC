@@ -17,6 +17,7 @@ from ui.add_shapes_dialog import AddShapesDialog
 from ui.dieproc_dialog import DieProcDialog
 from ui.edit_shape_in_session_dialog import EditShapeInSessionDialog
 from cad.lay_parser import parse_lay, export_layout_from_pieces, validate_layout_placement
+from cad.dual_exporter import DualLayoutExporter
 from ui.sort_utils import natural_sort_key, size_sort_key, shape_area_sort_key, clean_session_display_name
 
 RECOMMENDED_COMBINATIONS = [
@@ -227,12 +228,17 @@ class SessionView(tk.Frame):
 
         self.cb_params = ttk.Combobox(
             col_left,
-            values=["ALTERNADO", "DIREITA", "ESQUERDA", "GAP 2", "FastNest", "HighYield", "stdNOTFill", "stdFill", "PrmSss_35"],
+            values=self._get_available_params_list(),
             state="readonly",
             font=("Segoe UI", 9),
             height=8
         )
-        self.cb_params.set(self.session_data.get("params") or "ALTERNADO")
+        init_p = self.session_data.get("params") or "ALTERNADO"
+        available_p = list(self.cb_params["values"])
+        if init_p == "GAP 2" or (available_p and init_p not in available_p):
+            init_p = available_p[0] if available_p else "ALTERNADO"
+            self.session_data["params"] = init_p
+        self.cb_params.set(init_p)
         self.cb_params.pack(fill="x", pady=(0, 4))
         self.cb_params.bind("<<ComboboxSelected>>", self.on_params_selected)
 
@@ -710,11 +716,12 @@ class SessionView(tk.Frame):
         tree_mat_frame = tk.Frame(tab_mat, bg="#ffffff", relief="sunken", bd=2)
         tree_mat_frame.pack(fill="both", expand=True)
 
-        cols_mat = ("sel", "defn", "code", "width", "len", "layers", "thick", "gap", "qty")
+        cols_mat = ("sel", "code", "desc", "defn", "width", "len", "layers", "thick", "gap", "qty")
         self.tree_mat = ttk.Treeview(tree_mat_frame, columns=cols_mat, show="headings", height=10, style="Layout.Treeview")
         self.tree_mat.heading("sel", text="", anchor="center")
-        self.tree_mat.heading("defn", text="Definição /", anchor="w")
-        self.tree_mat.heading("code", text="Código material", anchor="w")
+        self.tree_mat.heading("code", text="Cod. Mat.", anchor="w")
+        self.tree_mat.heading("desc", text="Descrição", anchor="w")
+        self.tree_mat.heading("defn", text="Definição", anchor="w")
         self.tree_mat.heading("width", text="Largura (m)", anchor="w")
         self.tree_mat.heading("len", text="Comprime...", anchor="w")
         self.tree_mat.heading("layers", text="Camadas", anchor="w")
@@ -723,14 +730,15 @@ class SessionView(tk.Frame):
         self.tree_mat.heading("qty", text="Quantidade", anchor="w")
 
         self.tree_mat.column("sel", width=24, anchor="center", stretch=False)
-        self.tree_mat.column("defn", width=125, anchor="w", stretch=False)
-        self.tree_mat.column("code", width=125, anchor="w", stretch=False)
+        self.tree_mat.column("code", width=85, anchor="w", stretch=False)
+        self.tree_mat.column("desc", width=160, anchor="w", stretch=False)
+        self.tree_mat.column("defn", width=95, anchor="w", stretch=False)
         self.tree_mat.column("width", width=85, anchor="e", stretch=False)
         self.tree_mat.column("len", width=80, anchor="e", stretch=False)
         self.tree_mat.column("layers", width=65, anchor="e", stretch=False)
-        self.tree_mat.column("thick", width=110, anchor="e", stretch=False)
-        self.tree_mat.column("gap", width=80, anchor="e", stretch=False)
-        self.tree_mat.column("qty", width=95, anchor="e", stretch=True)
+        self.tree_mat.column("thick", width=100, anchor="e", stretch=False)
+        self.tree_mat.column("gap", width=75, anchor="e", stretch=False)
+        self.tree_mat.column("qty", width=90, anchor="e", stretch=True)
         self.tree_mat.pack(fill="both", expand=True)
 
         # Barra inferior com botão de edição, remoção e dica de uso
@@ -845,6 +853,14 @@ class SessionView(tk.Frame):
         has_pieces = bool(self.session_data.get("placed_pieces")) if isinstance(self.session_data, dict) else False
         self.btn_open_editor.config(state="normal" if has_pieces else "disabled")
 
+        self.btn_print_layout = tk.Button(
+            lays_bot_bar, text="🖨️ Imprimir...",
+            relief="raised", bd=2, bg=THEME["bg_surface"], fg=THEME["text_main"],
+            font=("Segoe UI", 9), command=self.print_current_layout
+        )
+        self.btn_print_layout.pack(side="left", padx=2)
+        self.btn_print_layout.config(state="normal" if has_pieces else "disabled")
+
         tk.Button(
             lays_bot_bar, text="🗑️ Limpar",
             relief="raised", bd=2, bg=THEME["bg_surface"], fg=THEME["text_main"],
@@ -859,8 +875,11 @@ class SessionView(tk.Frame):
         self.lay_menu.add_command(label="💾 Exportar para .lay...", command=self.export_lay_file)
         self.lay_menu.add_separator()
         self.lay_menu.add_command(label="✏️ Abrir no Layout Editor", command=self.on_layout_row_double_click)
+        self.lay_menu.add_command(label="🖨️ Visualizar / Imprimir Layout (Ctrl+P)", command=self.print_current_layout)
         self.lay_menu.add_command(label="🗑️ Limpar Layout", command=self.clear_current_layout)
         self.tree_lays.bind("<Button-3>", self.show_lays_context_menu)
+        self.tree_lays.bind("<Control-p>", lambda e: (self.print_current_layout(), "break")[1])
+        self.tree_lays.bind("<Control-P>", lambda e: (self.print_current_layout(), "break")[1])
 
         # A tabela de Layout inicia em branco e só exibe linhas após a execução do encaixe (Nesting)
         self.tree_lays.bind("<Double-1>", self.on_layout_row_double_click)
@@ -934,6 +953,64 @@ class SessionView(tk.Frame):
         if self.on_open_layout_editor_cb:
             name = self.session_data.get("layout_name") or "[I0000]"
             self.on_open_layout_editor_cb(name)
+
+    def print_current_layout(self):
+        """Abre a visualização de impressão A4 do layout da sessão ativa com o material configurado."""
+        placed = self.session_data.get("placed_pieces", []) if isinstance(self.session_data, dict) else []
+        if not placed:
+            messagebox.showwarning(
+                "Imprimir Layout",
+                "Não há layout calculado para esta sessão.\nExecute o cálculo de encaixe (Nest) primeiro.",
+                parent=self
+            )
+            return
+
+        from ui.layout_print_dialog import LayoutPrintDialog
+
+        mat = (self.session_data.get("material") or {}) if isinstance(self.session_data, dict) else {}
+        sheet_w = float(mat.get("width_mm", 1380.0))
+        sheet_h = float(mat.get("height_mm", 1080.0))
+        mat_w_m = round(sheet_w / 1000.0, 2)
+        mat_h_m = round(sheet_h / 1000.0, 2)
+        mat_area = round((sheet_w * sheet_h) / 1_000_000.0, 2)
+        eff = float(self.session_data.get("yield_percent", 78.4))
+        used_area = round(mat_area * (eff / 100.0), 2)
+
+        # Lê dados de material diretamente da aba Materiais (tree_mat) se disponíveis
+        code_val = mat.get("code") or mat.get("id")
+        desc_val = mat.get("name") or mat.get("description") or mat.get("desc")
+        layers_val = mat.get("layers", 2)
+        if hasattr(self, "tree_mat"):
+            m_items = self.tree_mat.get_children()
+            if m_items:
+                r_vals = self.tree_mat.item(m_items[0], "values")
+                if len(r_vals) >= 7:
+                    code_val = r_vals[1] or code_val
+                    desc_val = r_vals[2] or desc_val
+                    try:
+                        layers_val = int(r_vals[6])
+                    except (ValueError, TypeError):
+                        pass
+
+        layout_data = {
+            "layout_name": self.session_data.get("layout_name") or f"{self.session_data.get('id', 10001)}.lay",
+            "sheet_w_mm": sheet_w,
+            "sheet_h_mm": sheet_h,
+            "dimensions_str": f"{sheet_h / 10.0:.2f} X {sheet_w / 10.0:.2f} cm ({mat_h_m:.2f} X {mat_w_m:.2f} M)",
+            "mat_area_str": f"{mat_area:.2f} sq.M.",
+            "used_area_str": f"{used_area:.2f} sq.M.",
+            "yield_pct": eff,
+            "shapes_count": len(self.session_data.get("shapes", [])) or min(len(placed), 15),
+            "instances_count": len(placed),
+            "gap_str": f"{float(mat.get('gap', 1.0)):.2f} mm" if (mat and 'gap' in mat) else "1.00 mm",
+            "placed_pieces": placed,
+            "material_code": code_val,
+            "material_desc": desc_val,
+            "material_layers": layers_val,
+            "material": mat,
+        }
+        dlg = LayoutPrintDialog(self, layout_data=layout_data)
+        dlg.focus_set()
 
     def import_lay_file(self):
         """Importa um arquivo de layout .lay (ATOM $$LAYOUT.v3$$) para a sessão ativa."""
@@ -1021,23 +1098,34 @@ class SessionView(tk.Frame):
             )
 
     def export_lay_file(self):
-        """Exporta o layout atual da sessão para arquivo .lay padrão ATOM $$LAYOUT.v3$$."""
+        """
+        Exporta o layout atual da sessão com suporte à Dupla Saída:
+        - ATOM (.lay)
+        - Comelz (.onx)
+        - Ambos (.lay + .onx)
+        """
         placed_pieces = self.session_data.get("placed_pieces", [])
         if not placed_pieces:
             messagebox.showwarning("Exportar Layout", "Não há peças posicionadas no layout para exportar.", parent=self)
             return
 
         sess_id = self.session_data.get("id", 1)
-        init_name = self.session_data.get("layout_name") or f"layout_sessao_{sess_id}.lay"
-        if not init_name.endswith(".lay"):
-            init_name += ".lay"
+        init_name = self.session_data.get("layout_name") or f"layout_sessao_{sess_id}"
+        for ext in (".lay", ".onx"):
+            if init_name.endswith(ext):
+                init_name = init_name[:-len(ext)]
 
         filepath = filedialog.asksaveasfilename(
             parent=self,
-            title="Exportar Layout de Corte ATOM (.lay)",
+            title="Exportar Layout de Corte (ATOM .lay / Comelz .onx)",
             defaultextension=".lay",
             initialfile=init_name,
-            filetypes=[("Layout de Corte ATOM (*.lay)", "*.lay"), ("Todos os Arquivos (*.*)", "*.*")]
+            filetypes=[
+                ("Dupla Saída - ATOM (.lay) + Comelz (.onx)", "*.lay;*.onx"),
+                ("Layout de Corte ATOM (*.lay)", "*.lay"),
+                ("Layout de Corte Comelz (*.onx)", "*.onx"),
+                ("Todos os Arquivos (*.*)", "*.*")
+            ]
         )
         if not filepath:
             return
@@ -1049,19 +1137,40 @@ class SessionView(tk.Frame):
                 "gap_mm": 1.0,
                 "name": "884412"
             }
-            content = export_layout_from_pieces(
-                placed_pieces,
-                material,
-                session_id=sess_id,
-                filename=Path(filepath).name
-            )
-            with open(filepath, "w", encoding="latin1", newline="") as fp:
-                fp.write(content)
-            messagebox.showinfo(
-                "Exportar Layout",
-                f"Layout exportado com sucesso para:\n{filepath}\nTotal de peças: {len(placed_pieces)}",
-                parent=self
-            )
+            p = Path(filepath)
+            is_dual = (p.suffix.lower() not in (".lay", ".onx")) or (";" in str(p))
+
+            if is_dual:
+                res = DualLayoutExporter.export_dual_layout(
+                    placed_pieces,
+                    material,
+                    base_path=p,
+                    session_id=sess_id
+                )
+                msg = (
+                    f"Dupla Saída concluída com sucesso!\n\n"
+                    f"✓ ATOM (.lay): {res['lay_path']}\n"
+                    f"✓ Comelz (.onx): {res['onx_path']}\n\n"
+                    f"Total de peças: {len(placed_pieces)}"
+                )
+            elif p.suffix.lower() == ".onx":
+                saved = DualLayoutExporter.export_comelz_onx(
+                    placed_pieces,
+                    material,
+                    file_path=p,
+                    session_id=sess_id
+                )
+                msg = f"Layout Comelz (.onx) exportado com sucesso:\n{saved}\nTotal de peças: {len(placed_pieces)}"
+            else:
+                saved = DualLayoutExporter.export_atom_lay(
+                    placed_pieces,
+                    material,
+                    file_path=p,
+                    session_id=sess_id
+                )
+                msg = f"Layout ATOM (.lay) exportado com sucesso:\n{saved}\nTotal de peças: {len(placed_pieces)}"
+
+            messagebox.showinfo("Exportar Layout", msg, parent=self)
         except Exception as e:
             messagebox.showerror("Erro ao Exportar Layout", f"Falha ao exportar layout:\n{e}", parent=self)
 
@@ -1262,6 +1371,52 @@ class SessionView(tk.Frame):
         if self.on_strategy_change_cb:
             self.on_strategy_change_cb(self.get_strategy(), params)
 
+    def _get_available_params_list(self) -> list:
+        params_list = []
+        if self.db:
+            try:
+                db_presets = self.db.get_dieproc_presets()
+                if db_presets:
+                    for k in sorted(db_presets.keys()):
+                        if k != "GAP 2":
+                            params_list.append(k)
+            except Exception:
+                pass
+        builtins = ["ALTERNADO", "DIREITA", "ESQUERDA", "FastNest", "HighYield", "stdNOTFill", "stdFill", "PrmSss_35"]
+        for b in builtins:
+            if b not in params_list and b != "GAP 2":
+                params_list.append(b)
+        return params_list
+
+    def refresh_params_list(self):
+        """Atualiza a lista de valores da combobox cb_params consultando o banco de dados."""
+        if not hasattr(self, "cb_params"):
+            return
+        available = self._get_available_params_list()
+        self.cb_params["values"] = available
+        curr = self.cb_params.get()
+        if curr == "GAP 2" or (curr and curr not in available):
+            new_val = available[0] if available else "ALTERNADO"
+            self.cb_params.set(new_val)
+            self.session_data["params"] = new_val
+            if self.on_strategy_change_cb:
+                self.on_strategy_change_cb(self.get_strategy(), new_val)
+        self.highlight_guide_matching()
+
+    def remove_param_from_list(self, name: str):
+        """Remove um parâmetro da combobox e atualiza a seleção se necessário."""
+        self.refresh_params_list()
+        if hasattr(self, "cb_params"):
+            cur_vals = [p for p in self.cb_params["values"] if p != name]
+            self.cb_params["values"] = cur_vals
+            if self.cb_params.get() == name:
+                new_val = cur_vals[0] if cur_vals else "ALTERNADO"
+                self.cb_params.set(new_val)
+                self.session_data["params"] = new_val
+                if self.on_strategy_change_cb:
+                    self.on_strategy_change_cb(self.get_strategy(), new_val)
+            self.highlight_guide_matching()
+
     def open_dieproc_configuration(self):
         if self.on_open_dieproc_cb:
             self.on_open_dieproc_cb(initial_preset=self.cb_params.get(), callback=self.on_dieproc_preset_selected)
@@ -1273,6 +1428,7 @@ class SessionView(tk.Frame):
             return
         name = preset_data.get("name", "ALTERNADO")
         self.active_dieproc_params = preset_data
+        self.refresh_params_list()
         cur_vals = list(self.cb_params["values"])
         if name not in cur_vals:
             cur_vals.insert(0, name)
@@ -1471,7 +1627,18 @@ class SessionView(tk.Frame):
             self.cb_strategy.set(strat)
             self.update_strategy_description(strat)
         if hasattr(self, "cb_params"):
-            self.cb_params.set(session_data.get("params") or "ALTERNADO")
+            self.refresh_params_list()
+            cur_p = session_data.get("params") or "ALTERNADO"
+            available_p = list(self.cb_params["values"])
+            if cur_p == "GAP 2" or (available_p and cur_p not in available_p):
+                cur_p = available_p[0] if available_p else "ALTERNADO"
+                session_data["params"] = cur_p
+                if self.db and session_data.get("id"):
+                    try:
+                        self.db.update_session(session_data["id"], params=cur_p)
+                    except Exception:
+                        pass
+            self.cb_params.set(cur_p)
         self.highlight_guide_matching()
         if hasattr(self, "cb_machine"):
             self.cb_machine.set(session_data.get("machine") or "ATOM FlashCut Flex 3020")
@@ -1526,9 +1693,11 @@ class SessionView(tk.Frame):
                 self.tree_lays.insert("", "end", iid="lay_0", values=("▶", "0", eff_str, "1", "0", time_str, pieces_cnt, area_str))
                 self.tree_lays.selection_set("lay_0")
 
+        has_pieces = bool(session_data.get("placed_pieces")) if isinstance(session_data, dict) else False
         if hasattr(self, "btn_open_editor"):
-            has_pieces = bool(session_data.get("placed_pieces")) if isinstance(session_data, dict) else False
             self.btn_open_editor.config(state="normal" if has_pieces else "disabled")
+        if hasattr(self, "btn_print_layout"):
+            self.btn_print_layout.config(state="normal" if has_pieces else "disabled")
 
         # Atualiza a tabela da aba Materiais
         if hasattr(self, "tree_mat"):
@@ -1638,23 +1807,28 @@ class SessionView(tk.Frame):
             if hasattr(self, "cb_mat_code"):
                 mat_id_str = str(material.get("id", ""))
                 mat_name_str = str(material.get("name", material.get("code", "")))
-                if mat_id_str and mat_name_str:
+                if mat_id_str and mat_name_str and mat_id_str != mat_name_str:
                     self.cb_mat_code.set(f"{mat_id_str} - {mat_name_str}")
                 elif mat_name_str:
                     self.cb_mat_code.set(mat_name_str)
+                elif mat_id_str:
+                    self.cb_mat_code.set(mat_id_str)
             defn = material.get("type_desc", material.get("type", "como placa"))
             if defn in ("sheet", "placa", "como placa"):
                 defn = "como placa"
             elif defn in ("leather", "couro", "como couro"):
                 defn = "como couro"
-            code = str(material.get("code", material.get("name", "853412")))
+            code = str(material.get("id") if material.get("id") is not None else material.get("code", "853412"))
+            desc = str(material.get("name") or material.get("desc") or material.get("description") or "")
+            if not desc and material.get("code") and material.get("id") and str(material.get("code")) != str(material.get("id")):
+                desc = str(material.get("code"))
             w_m = f"{material.get('width_mm', 1380) / 1000.0:.2f}".replace('.', ',')
             l_m = f"{material.get('height_mm', 1080) / 1000.0:.2f}".replace('.', ',')
             layers = str(material.get("layers", 2))
             thick = str(material.get("thickness", material.get("thickness_mm", 0)))
             gap = str(material.get("gap", material.get("gap_mm", 1)))
             qty = str(material.get("quantity", 0))
-            self.tree_mat.insert("", "end", iid="mat_0", values=("▶", defn, code, w_m, l_m, layers, thick, gap, qty))
+            self.tree_mat.insert("", "end", iid="mat_0", values=("▶", code, desc, defn, w_m, l_m, layers, thick, gap, qty))
             self.tree_mat.selection_set("mat_0")
         else:
             if hasattr(self, "cb_mat_code"):
@@ -1664,7 +1838,7 @@ class SessionView(tk.Frame):
         if event.char and (event.char.isdigit() or event.char in ".,"):
             sel = self.tree_mat.selection()
             row_id = sel[0] if sel else "mat_0"
-            self.start_cell_edit(row_id, "#4", initial_char=event.char)
+            self.start_cell_edit(row_id, "width", initial_char=event.char)
 
     def on_mat_single_click(self, event):
         if hasattr(self, "_active_commit_cb") and self._active_commit_cb:
@@ -1700,12 +1874,12 @@ class SessionView(tk.Frame):
     def on_mat_enter_key(self, event):
         sel = self.tree_mat.selection()
         row_id = sel[0] if sel else "mat_0"
-        self.start_cell_edit(row_id, "#4")
+        self.start_cell_edit(row_id, "width")
 
     def on_mat_f2_key(self, event):
         sel = self.tree_mat.selection()
         row_id = sel[0] if sel else "mat_0"
-        self.start_cell_edit(row_id, "#4")
+        self.start_cell_edit(row_id, "width")
 
     def dismiss_context_menu(self, event=None):
         if hasattr(self, "_active_mat_menu") and self._active_mat_menu:
@@ -1728,11 +1902,11 @@ class SessionView(tk.Frame):
         menu.add_command(label="📝 Editar Todos os Parâmetros... (Propriedades)", command=self.open_material_edit_dialog)
         menu.add_command(label="🗑️ Remover Material da Sessão (Del)", command=self.remove_session_material)
         menu.add_separator()
-        menu.add_command(label="📐 Editar Largura (m)", command=lambda: self.start_cell_edit("mat_0", "#4"))
-        menu.add_command(label="📏 Editar Comprimento / Altura (m)", command=lambda: self.start_cell_edit("mat_0", "#5"))
-        menu.add_command(label="📑 Editar Camadas", command=lambda: self.start_cell_edit("mat_0", "#6"))
-        menu.add_command(label="↔️ Editar Gap (mm)", command=lambda: self.start_cell_edit("mat_0", "#8"))
-        menu.add_command(label="🔢 Editar Quantidade", command=lambda: self.start_cell_edit("mat_0", "#9"))
+        menu.add_command(label="📐 Editar Largura (m)", command=lambda: self.start_cell_edit("mat_0", "width"))
+        menu.add_command(label="📏 Editar Comprimento / Altura (m)", command=lambda: self.start_cell_edit("mat_0", "len"))
+        menu.add_command(label="📑 Editar Camadas", command=lambda: self.start_cell_edit("mat_0", "layers"))
+        menu.add_command(label="↔️ Editar Gap (mm)", command=lambda: self.start_cell_edit("mat_0", "gap"))
+        menu.add_command(label="🔢 Editar Quantidade", command=lambda: self.start_cell_edit("mat_0", "qty"))
         self._active_mat_menu = menu
         try:
             menu.tk_popup(event.x_root, event.y_root)
@@ -1745,34 +1919,37 @@ class SessionView(tk.Frame):
         if not items:
             return
         row_id = items[0]
-        cols_mat = ("sel", "defn", "code", "width", "len", "layers", "thick", "gap", "qty")
+        cols_mat = ("sel", "code", "desc", "defn", "width", "len", "layers", "thick", "gap", "qty")
         if isinstance(col_key_or_idx, str):
             if col_key_or_idx in cols_mat:
                 col_index = cols_mat.index(col_key_or_idx)
+                col_key = col_key_or_idx
             elif col_key_or_idx.startswith("#"):
                 try:
                     col_index = int(col_key_or_idx[1:]) - 1
+                    col_key = cols_mat[col_index] if 0 <= col_index < len(cols_mat) else ""
                 except ValueError:
                     return
             else:
                 return
         else:
             col_index = int(col_key_or_idx)
+            col_key = cols_mat[col_index] if 0 <= col_index < len(cols_mat) else ""
 
         curr_vals = list(self.tree_mat.item(row_id, "values"))
         new_val_str = str(new_val).strip()
-        if col_index in (3, 4):  # largura, comprimento
+        if col_key in ("width", "len") or col_index in (4, 5):
             try:
                 f = float(new_val_str.replace(",", "."))
                 new_val_str = f"{f:.2f}".replace(".", ",")
             except ValueError:
                 pass
-        elif col_index in (5, 8):  # camadas, quantidade
+        elif col_key in ("layers", "qty") or col_index in (6, 9):
             try:
                 new_val_str = str(int(new_val_str))
             except ValueError:
                 pass
-        elif col_index in (6, 7):  # espessura, gap
+        elif col_key in ("thick", "gap") or col_index in (7, 8):
             try:
                 f = float(new_val_str.replace(",", "."))
                 new_val_str = f"{f:g}".replace(".", ",")
@@ -1815,9 +1992,9 @@ class SessionView(tk.Frame):
                 return
             row_id = items[0]
 
-        cols_mat = ("sel", "defn", "code", "width", "len", "layers", "thick", "gap", "qty")
+        cols_mat = ("sel", "code", "desc", "defn", "width", "len", "layers", "thick", "gap", "qty")
         if not col_id:
-            col_id = "#4"
+            col_id = "width"
 
         if isinstance(col_id, str) and col_id in cols_mat:
             col_index = cols_mat.index(col_id)
@@ -1892,18 +2069,18 @@ class SessionView(tk.Frame):
                 pass
 
             curr_vals = list(self.tree_mat.item(row_id, "values"))
-            if col_index in (3, 4):  # largura, comprimento
+            if col_key in ("width", "len") or col_index in (4, 5):
                 try:
                     f = float(new_val.replace(",", "."))
                     new_val = f"{f:.2f}".replace(".", ",")
                 except ValueError:
                     pass
-            elif col_index in (5, 8):  # camadas, quantidade
+            elif col_key in ("layers", "qty") or col_index in (6, 9):
                 try:
                     new_val = str(int(new_val))
                 except ValueError:
                     pass
-            elif col_index in (6, 7):  # espessura, gap
+            elif col_key in ("thick", "gap") or col_index in (7, 8):
                 try:
                     f = float(new_val.replace(",", "."))
                     new_val = f"{f:g}".replace(".", ",")
@@ -1932,17 +2109,23 @@ class SessionView(tk.Frame):
                     pass
 
         def on_tab(evt):
-            next_idx = col_index + 1
-            if next_idx >= len(cols_mat):
-                next_idx = 3  # volta para largura
-            commit(next_col=cols_mat[next_idx])
+            editable_cols = ["width", "len", "layers", "thick", "gap", "qty"]
+            if col_key in editable_cols:
+                curr_e_idx = editable_cols.index(col_key)
+                next_col = editable_cols[(curr_e_idx + 1) % len(editable_cols)]
+            else:
+                next_col = "width"
+            commit(next_col=next_col)
             return "break"
 
         def on_shift_tab(evt):
-            prev_idx = col_index - 1
-            if prev_idx < 3:
-                prev_idx = len(cols_mat) - 1
-            commit(next_col=cols_mat[prev_idx])
+            editable_cols = ["width", "len", "layers", "thick", "gap", "qty"]
+            if col_key in editable_cols:
+                curr_e_idx = editable_cols.index(col_key)
+                prev_col = editable_cols[(curr_e_idx - 1) % len(editable_cols)]
+            else:
+                prev_col = "qty"
+            commit(next_col=prev_col)
             return "break"
 
         self._active_commit_cb = commit
@@ -1968,18 +2151,20 @@ class SessionView(tk.Frame):
             return
         row_id = items[0]
         vals = list(self.tree_mat.item(row_id, "values"))
+        cols_mat = ("sel", "code", "desc", "defn", "width", "len", "layers", "thick", "gap", "qty")
+        val_map = {cols_mat[i]: vals[i] for i in range(min(len(cols_mat), len(vals)))}
 
         dialog = tk.Toplevel(self)
         dialog.title("Propriedades do Material da Sessão")
         dialog.transient(self)
         dialog.grab_set()
-        dialog.geometry("380x360")
+        dialog.geometry("400x390")
         dialog.resizable(False, False)
         dialog.configure(bg=THEME["bg_card"])
 
         self.update_idletasks()
-        rx = self.winfo_rootx() + (self.winfo_width() - 380) // 2
-        ry = self.winfo_rooty() + (self.winfo_height() - 360) // 2
+        rx = self.winfo_rootx() + (self.winfo_width() - 400) // 2
+        ry = self.winfo_rooty() + (self.winfo_height() - 390) // 2
         dialog.geometry(f"+{max(10, rx)}+{max(10, ry)}")
 
         hdr = tk.Frame(dialog, bg=THEME["title_bar_bg"], height=28, padx=8, pady=4)
@@ -1990,20 +2175,21 @@ class SessionView(tk.Frame):
         body.pack(fill="both", expand=True)
 
         fields = [
-            ("Definição / Tipo:", vals[1] if len(vals) > 1 else "como placa"),
-            ("Código do Material:", vals[2] if len(vals) > 2 else "853412"),
-            ("Largura (m):", vals[3] if len(vals) > 3 else "1,38"),
-            ("Comprimento / Altura (m):", vals[4] if len(vals) > 4 else "1,08"),
-            ("Camadas de corte:", vals[5] if len(vals) > 5 else "2"),
-            ("Espessura (%1):", vals[6] if len(vals) > 6 else "0"),
-            ("Gap / Distância entre peças (mm):", vals[7] if len(vals) > 7 else "1"),
-            ("Quantidade:", vals[8] if len(vals) > 8 else "0"),
+            ("Código do Material:", val_map.get("code", "853412")),
+            ("Descrição:", val_map.get("desc", "SINT-LOGAM-PRETO")),
+            ("Definição / Tipo:", val_map.get("defn", "como placa")),
+            ("Largura (m):", val_map.get("width", "1,38")),
+            ("Comprimento / Altura (m):", val_map.get("len", "1,08")),
+            ("Camadas de corte:", val_map.get("layers", "2")),
+            ("Espessura (%1):", val_map.get("thick", "0")),
+            ("Gap / Distância entre peças (mm):", val_map.get("gap", "1")),
+            ("Quantidade:", val_map.get("qty", "0")),
         ]
 
         entries = {}
         for row_idx, (lbl_txt, init_val) in enumerate(fields):
             tk.Label(body, text=lbl_txt, bg=THEME["bg_card"], fg=THEME["text_main"], font=("Segoe UI", 9), anchor="w").grid(row=row_idx, column=0, sticky="w", pady=3)
-            ent = tk.Entry(body, font=("Segoe UI", 9), relief="sunken", bd=2, width=18)
+            ent = tk.Entry(body, font=("Segoe UI", 9), relief="sunken", bd=2, width=20)
             ent.insert(0, str(init_val))
             ent.grid(row=row_idx, column=1, sticky="e", pady=3, padx=(10, 0))
             entries[row_idx] = ent
@@ -2016,12 +2202,13 @@ class SessionView(tk.Frame):
                 "▶",
                 entries[0].get().strip(),
                 entries[1].get().strip(),
-                entries[2].get().strip().replace(".", ","),
+                entries[2].get().strip(),
                 entries[3].get().strip().replace(".", ","),
-                entries[4].get().strip(),
+                entries[4].get().strip().replace(".", ","),
                 entries[5].get().strip(),
                 entries[6].get().strip(),
                 entries[7].get().strip(),
+                entries[8].get().strip(),
             ]
             self.tree_mat.item(row_id, values=new_vals)
             self.notify_material_changed()
@@ -2040,21 +2227,27 @@ class SessionView(tk.Frame):
         if not items:
             return
         row_vals = self.tree_mat.item(items[0], "values")
+        cols_mat = ("sel", "code", "desc", "defn", "width", "len", "layers", "thick", "gap", "qty")
+        val_map = {cols_mat[i]: row_vals[i] for i in range(min(len(cols_mat), len(row_vals)))}
         try:
-            defn = str(row_vals[1])
-            code = str(row_vals[2])
-            w_m = float(str(row_vals[3]).replace(",", "."))
-            l_m = float(str(row_vals[4]).replace(",", "."))
-            layers = int(str(row_vals[5]))
-            thick = float(str(row_vals[6]).replace(",", "."))
-            gap = float(str(row_vals[7]).replace(",", "."))
-            qty = int(str(row_vals[8]))
+            code = str(val_map.get("code", "853412"))
+            desc = str(val_map.get("desc", ""))
+            defn = str(val_map.get("defn", "como placa"))
+            w_m = float(str(val_map.get("width", "1,38")).replace(",", "."))
+            l_m = float(str(val_map.get("len", "1,08")).replace(",", "."))
+            layers = int(str(val_map.get("layers", 2)))
+            thick = float(str(val_map.get("thick", 0)).replace(",", "."))
+            gap = float(str(val_map.get("gap", 1)).replace(",", "."))
+            qty = int(str(val_map.get("qty", 0)))
         except (ValueError, IndexError):
             return
 
         mat_dict = {
             "type": defn,
             "code": code,
+            "id": code,
+            "name": desc,
+            "description": desc,
             "width_m": w_m,
             "length_m": l_m,
             "width_mm": w_m * 1000.0,
@@ -2114,7 +2307,7 @@ class SessionView(tk.Frame):
             tamanho = f"{color_badge} {s_size}"
             molde_nome = str(s.get("name", f"Shape #{idx}"))
             pares = str(s.get("pairs", 16))
-            resto = str(s.get("rest", 0))
+            resto = str(s.get("resto") if s.get("resto") is not None else s.get("rest", 0))
             seq = str(s.get("sequence", idx))
             self.tree_shapes.insert(
                 "", "end", iid=str(idx - 1),

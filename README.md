@@ -1,10 +1,10 @@
-# JobManager 2000 — Edição Python para Windows 10 / 11
+# CorteAC — Edição Python para Windows 10 / 11
 
-Recriação moderna em **Python** do sistema legado **JobManager 2000 (Jm2k)** e **Atom Nesting System** (originalmente desenvolvido em Visual Basic 6 para Windows XP).
+Recriação moderna em **Python** do sistema industrial **CorteAC** (evolução direta do legado **JobManager 2000 / Jm2k** e **ATOM Nesting System**, originalmente desenvolvido em Visual Basic 6 para Windows XP).
 
 ---
 
-## 🚀 Principais Melhorias em relação à versão do WinXP
+## 🚀 Principais Melhorias em relação à versão legada
 
 1. **Compatibilidade Nativa com Windows 10 / 11 e Linux**:
    - Não requer drivers legados de 16/32 bits de porta paralela ou USB (`eusk2par.sys`, `eusk3usb.sys`, `skeyvdd.dll`).
@@ -17,7 +17,7 @@ Recriação moderna em **Python** do sistema legado **JobManager 2000 (Jm2k)** e
    - Cálculo em tempo real do **Rendimento de Material (*Yield %*)** e área útil cortada.
 
 3. **Motor de Aninhamento Automático (*Auto-Nest*)**:
-   - Algoritmo de empacotamento inteligente de alta densidade que recria a função do antigo *FreeNest.exe*.
+   - Algoritmo de empacotamento inteligente de alta densidade que recria e aprimora a função do antigo *FreeNest.exe*.
 
 4. **Simulador de Corte e Estimador de Tempo ATOM**:
    - Animação do cabeçote de corte CNC percorrendo os contornos em tempo real.
@@ -29,7 +29,7 @@ Recriação moderna em **Python** do sistema legado **JobManager 2000 (Jm2k)** e
 
 ---
 
-## 💻 Como Executar no Windows 10
+## 💻 Como Executar no Windows 10 / 11
 
 ### Opção 1: Executar Direto pelo Arquivo BAT
 Basta dar um duplo clique no arquivo:
@@ -40,7 +40,6 @@ run.bat
 ### Opção 2: Pelo Prompt de Comando / PowerShell
 Certifique-se de ter o Python 3 instalado no Windows (disponível na Microsoft Store ou em [python.org](https://python.org)):
 ```cmd
-cd jobmanager-win10-python
 python main.py
 ```
 
@@ -48,21 +47,21 @@ python main.py
 
 ## 📦 Como Gerar e Usar o Executável Standalone (Sem necessidade do Python)
 
-### No Linux (Já Compilado!):
-O executável de teste já foi compilado e está disponível em:
-```bash
-./dist/teste_dola
-```
-Para recompilar a qualquer momento no Linux:
+### No Linux:
+Para compilar o executável standalone no Linux:
 ```bash
 ./build_linux.sh
+```
+O executável gerado estará em:
+```bash
+./dist/CorteAC
 ```
 
 ### No Windows 10 / 11:
 Para gerar o executável `.exe` direto no Windows:
 1. Dê um duplo clique no arquivo [`build_exe_windows.bat`](file:///home/dola/Documentos/clone%20do%20job/jobmanager-win10-python/build_exe_windows.bat).
-2. Ele instalará o PyInstaller e gerará o executável em `dist\teste_dola.exe`.
-3. Pronto! O arquivo `dist\teste_dola.exe` pode ser levado para qualquer Windows 10 sem precisar do Python instalado.
+2. Ele instalará o PyInstaller e gerará o executável em `dist\CorteAC.exe`.
+3. Pronto! O arquivo `dist\CorteAC.exe` pode ser levado para qualquer Windows 10/11 sem precisar do Python instalado.
 
 ---
 
@@ -77,7 +76,7 @@ python3 main.py
 
 ## 🗄️ Arquitetura de Banco de Dados Central (MySQL 8.0)
 
-O **JobManager 2000** opera conectado a uma instância central do **MySQL 8.0** na rede local da fábrica, atendendo até **8 PCs simultâneos** com suporte a alta concorrência (>1000 layouts/dia).
+O **CorteAC** opera conectado a uma instância central do **MySQL 8.0** na rede local da fábrica, atendendo até **8 PCs simultâneos** com suporte a alta concorrência (>1000 layouts/dia).
 
 O banco local **SQLite (`jobmanager.db`)** é mantido estritamente como **reserva offline / emergência / demonstração**.
 
@@ -190,4 +189,4 @@ Se o servidor MySQL estiver fora do ar ou o terminal for levado para campo/demon
    ```ini
    backend = sqlite
    ```
-3. O JobManager inicializará instantaneamente utilizando o banco local `jobmanager.db`, garantindo 100% das funcionalidades operacionais mesmo sem conexão com a rede.
+3. O CorteAC inicializará instantaneamente utilizando o banco local `jobmanager.db`, garantindo 100% das funcionalidades operacionais mesmo sem conexão com a rede.

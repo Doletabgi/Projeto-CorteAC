@@ -150,7 +150,20 @@ def parse_lay(source: Any, db=None) -> LayoutData:
     file_path = ""
     filename = "l0000.lay"
 
+    # Detecção automática do formato Comelz .onx (CZLIB v2 ou XML)
+    if (isinstance(source, (str, os.PathLike)) and str(source).lower().endswith(".onx")) or \
+       (isinstance(source, bytes) and source.startswith(b"CZLIB")):
+        from cad.onx_exporter import parse_onx
+        return parse_onx(source, db=db)
+
     if isinstance(source, (str, os.PathLike)) and os.path.exists(str(source)):
+        try:
+            with open(str(source), "rb") as probe_fp:
+                if probe_fp.read(6).startswith(b"CZLIB"):
+                    from cad.onx_exporter import parse_onx
+                    return parse_onx(source, db=db)
+        except Exception:
+            pass
         file_path = os.path.abspath(str(source))
         filename = os.path.basename(file_path)
         for enc in ("latin1", "utf-8", "cp1252", "iso-8859-1"):
@@ -625,7 +638,7 @@ def export_layout_from_pieces(
         version="$$LAYOUT.v3$$",
         path=path,
         filename=filename,
-        desc="JobManager 2000 Nesting CAM",
+        desc="CorteAC Nesting CAM",
         gap=gap,
         cod_r=mat_code,
         ris_w=ris_w,

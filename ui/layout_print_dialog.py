@@ -7,6 +7,7 @@ Reprodução idêntica ao modelo original ATOM FlashCut (media_1792071945871.jpg
 import sys
 import os
 import math
+import re
 from datetime import datetime
 from pathlib import Path
 import tkinter as tk
@@ -62,10 +63,55 @@ class LayoutPrintDialog(tk.Toplevel):
             rf"{self.unc_prefix}\Compiti\SEM 46-UP046_2°\129.046\10100\{self.layout_name}"
         )
         self.description = self.layout_data.get("description", "fn98 - v1.2.36 - 12.09.2012")
-        self.material_name = self.layout_data.get(
-            "material_name",
-            "132011 - VELCRO 4'' ARGOLA - PRETO ( 4 layer(s) )"
-        )
+        # Metadados do Material: Código, Descrição e Camadas dinâmicos
+        raw_mat_name = self.layout_data.get("material_name")
+        mat_code = self.layout_data.get("material_code")
+        mat_desc = self.layout_data.get("material_desc") or self.layout_data.get("material_description")
+        mat_layers = self.layout_data.get("material_layers")
+        if mat_layers is None:
+            mat_layers = self.layout_data.get("layers")
+
+        mat_obj = self.layout_data.get("material")
+        if isinstance(mat_obj, dict):
+            if mat_code is None:
+                mat_code = mat_obj.get("code") or mat_obj.get("id")
+            if mat_desc is None:
+                mat_desc = mat_obj.get("name") or mat_obj.get("description") or mat_obj.get("desc")
+            if mat_layers is None:
+                mat_layers = mat_obj.get("layers")
+
+        if mat_code is not None or mat_desc is not None or mat_layers is not None:
+            c_str = str(mat_code).strip() if mat_code is not None else ""
+            d_str = str(mat_desc).strip() if mat_desc is not None else ""
+            l_val = int(mat_layers) if mat_layers is not None else 1
+
+            if d_str and c_str:
+                if d_str.startswith(f"{c_str} -") or d_str == c_str:
+                    base_mat = d_str
+                else:
+                    base_mat = f"{c_str} - {d_str}"
+            elif d_str:
+                base_mat = d_str
+            elif c_str:
+                base_mat = c_str
+            else:
+                base_mat = "853412 - SINT-LOGAM-PRETO"
+
+            if "layer(s)" in base_mat.lower():
+                if mat_layers is not None:
+                    self.material_name = re.sub(r"\(\s*\d+\s*layer\(s\)\s*\)", f"( {l_val} layer(s) )", base_mat, flags=re.IGNORECASE)
+                else:
+                    self.material_name = base_mat
+            else:
+                self.material_name = f"{base_mat} ( {l_val} layer(s) )"
+        elif raw_mat_name:
+            if "layer(s)" not in raw_mat_name.lower():
+                self.material_name = f"{raw_mat_name} ( 1 layer(s) )"
+            else:
+                self.material_name = raw_mat_name
+        else:
+            self.material_name = "132011 - VELCRO 4'' ARGOLA - PRETO ( 4 layer(s) )"
+
         self.dimensions_str = self.layout_data.get("dimensions_str", "1.50 X 0.09 M")
         self.mat_area_str = self.layout_data.get("mat_area_str", "0.13 sq.M.")
         self.used_area_str = self.layout_data.get("used_area_str", "0.11 sq.M.")

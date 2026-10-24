@@ -1,5 +1,5 @@
 """
-JobManager 2000 (Python Edition para Windows 10)
+CorteAC (Python Edition para Windows 10 / 11)
 Ponto de Entrada da Aplicação
 """
 
@@ -40,7 +40,7 @@ def main():
             sys.exit(1)
 
     print("=" * 60)
-    print("  teste dola (Edição Python para Windows 10 / 11)")
+    print("  CorteAC (Edição Python para Windows 10 / 11)")
     print("  Recriação Moderna do Sistema Jm2k & ATOM Nesting")
     print("=" * 60)
     app = MainWindow()

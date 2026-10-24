@@ -6,6 +6,7 @@ __pycache__/
 build/
 dist/
 teste_dola_linux
+corteac_linux
 *.zip
 *.spec
 db.ini

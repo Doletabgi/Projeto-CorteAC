@@ -12,6 +12,7 @@ from config import THEME
 class DieProcDialog(tk.Toplevel):
     def __init__(self, parent, db, initial_preset=None, on_select=None):
         super().__init__(parent)
+        self.parent_window = parent
         self.db = db
         self.on_select_cb = on_select
         self.title("DieProc configuration")
@@ -82,6 +83,12 @@ class DieProcDialog(tk.Toplevel):
         list_scroll.pack(side="right", fill="y")
         self.preset_listbox.pack(side="left", fill="both", expand=True)
         self.preset_listbox.bind("<<ListboxSelect>>", self.on_listbox_select)
+        self.preset_listbox.bind("<Delete>", lambda e: self.on_delete_clicked())
+        self.preset_listbox.bind("<BackSpace>", lambda e: self.on_delete_clicked())
+
+        self.preset_menu = tk.Menu(self, tearoff=0)
+        self.preset_menu.add_command(label="Excluir Predefinição (Del)", command=self.on_delete_clicked)
+        self.preset_listbox.bind("<Button-3>", self._on_listbox_right_click)
 
         # -------------------------------------------------------------
         # Painel Direito: Notebook com DieProc e Macro/IA
@@ -268,6 +275,19 @@ class DieProcDialog(tk.Toplevel):
             command=self.on_update_clicked
         )
         self.btn_update.pack(side="left", padx=(0, 4))
+
+        self.btn_delete = tk.Button(
+            left_btns,
+            text="Excluir",
+            bg=THEME["bg_surface"],
+            fg=THEME["text_main"],
+            font=("Segoe UI", 8),
+            width=8,
+            relief="raised",
+            bd=2,
+            command=self.on_delete_clicked
+        )
+        self.btn_delete.pack(side="left", padx=4)
 
         self.btn_show_usage = tk.Button(
             left_btns,
@@ -485,11 +505,130 @@ class DieProcDialog(tk.Toplevel):
             name = self.preset_listbox.get(sel[0])
             self.select_preset(name)
 
+    def _on_listbox_right_click(self, event):
+        idx = self.preset_listbox.nearest(event.y)
+        if idx >= 0:
+            self.preset_listbox.selection_clear(0, "end")
+            self.preset_listbox.selection_set(idx)
+            name = self.preset_listbox.get(idx)
+            self.select_preset(name)
+            try:
+                self.preset_menu.tk_popup(event.x_root, event.y_root)
+            finally:
+                self.preset_menu.grab_release()
+
+    def on_delete_clicked(self):
+        sel = self.preset_listbox.curselection()
+        if sel:
+            name = self.preset_listbox.get(sel[0])
+        else:
+            name = self.ent_name.get().strip()
+
+        if not name or name not in self.presets:
+            messagebox.showwarning(
+                "Excluir Predefinição",
+                "Por favor, selecione uma predefinição válida na lista à esquerda para excluir.",
+                parent=self
+            )
+            return
+
+        confirm = messagebox.askyesno(
+            "Confirmar Exclusão",
+            f"Deseja realmente excluir a predefinição '{name}'?",
+            icon="warning",
+            parent=self
+        )
+        if not confirm:
+            return
+
+        self.db.delete_dieproc_preset(name)
+        self.populate_presets()
+
+        # Atualiza a combobox da janela pai (ex: SessionView, MainWindow, OptionsDialog) se existir
+        target_parent = getattr(self, "parent_window", self.master)
+
+        # 1. Se target_parent for diretamente SessionView
+        if hasattr(target_parent, "remove_param_from_list"):
+            try:
+                target_parent.remove_param_from_list(name)
+            except Exception:
+                pass
+        elif hasattr(target_parent, "cb_params"):
+            try:
+                cur_vals = [p for p in target_parent.cb_params["values"] if p != name]
+                target_parent.cb_params["values"] = cur_vals
+                if target_parent.cb_params.get() == name:
+                    new_val = cur_vals[0] if cur_vals else "ALTERNADO"
+                    target_parent.cb_params.set(new_val)
+                    if hasattr(target_parent, "session_data"):
+                        target_parent.session_data["params"] = new_val
+            except Exception:
+                pass
+
+        # 2. Se target_parent for MainWindow (que contém session_view)
+        if hasattr(target_parent, "session_view") and target_parent.session_view:
+            try:
+                sv = target_parent.session_view
+                if hasattr(sv, "remove_param_from_list"):
+                    sv.remove_param_from_list(name)
+                elif hasattr(sv, "cb_params"):
+                    cur_vals = [p for p in sv.cb_params["values"] if p != name]
+                    sv.cb_params["values"] = cur_vals
+                    if sv.cb_params.get() == name:
+                        new_val = cur_vals[0] if cur_vals else "ALTERNADO"
+                        sv.cb_params.set(new_val)
+                        if hasattr(sv, "session_data"):
+                            sv.session_data["params"] = new_val
+                if hasattr(target_parent, "current_session") and target_parent.current_session:
+                    if target_parent.current_session.get("params") == name:
+                        target_parent.current_session["params"] = sv.cb_params.get() if hasattr(sv, "cb_params") else "ALTERNADO"
+                        target_parent.db.update_session(target_parent.current_session["id"], params=target_parent.current_session["params"])
+            except Exception:
+                pass
+
+        # 3. Se target_parent for OptionsDialog (que contém cb_die_proc)
+        if hasattr(target_parent, "cb_die_proc"):
+            try:
+                cur_vals = [p for p in target_parent.cb_die_proc["values"] if p != name]
+                target_parent.cb_die_proc["values"] = cur_vals
+                if target_parent.cb_die_proc.get() == name:
+                    target_parent.cb_die_proc.set(cur_vals[0] if cur_vals else "ALTERNADO")
+                    if hasattr(target_parent, "mark_changed"):
+                        target_parent.mark_changed()
+            except Exception:
+                pass
+
+        remaining = sorted(list(self.presets.keys()))
+        if remaining:
+            self.select_preset(remaining[0])
+        else:
+            self.on_clear_clicked()
+
+        messagebox.showinfo(
+            "DieProc",
+            f"Predefinição '{name}' excluída com sucesso.",
+            parent=self
+        )
+
     def on_update_clicked(self):
         data = self.get_current_fields_dict()
         self.db.save_dieproc_preset(data)
         self.populate_presets()
         self.select_preset(data["name"])
+
+        # Sincroniza com a SessionView pai se existir
+        target_parent = getattr(self, "parent_window", self.master)
+        sv = None
+        if hasattr(target_parent, "refresh_params_list"):
+            sv = target_parent
+        elif hasattr(target_parent, "session_view") and hasattr(target_parent.session_view, "refresh_params_list"):
+            sv = target_parent.session_view
+        if sv:
+            try:
+                sv.refresh_params_list()
+            except Exception:
+                pass
+
         messagebox.showinfo("DieProc", f"Predefinição '{data['name']}' atualizada com sucesso no banco de dados.", parent=self)
 
     def on_clear_clicked(self):

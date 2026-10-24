@@ -1,7 +1,7 @@
 @echo off
-title teste dola (Win10 Edition)
+title CorteAC (Win10 Edition)
 echo ========================================================
-echo   Iniciando teste dola no Windows 10...
+echo   Iniciando CorteAC no Windows 10...
 echo   Linguagem: Python 3
 echo ========================================================
 python main.py

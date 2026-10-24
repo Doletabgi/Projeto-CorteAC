@@ -1,7 +1,7 @@
 @echo off
-title Compilando teste dola para Windows (.exe)
+title Compilando CorteAC para Windows (.exe)
 echo ========================================================
-echo   Compilando teste dola para Windows 10 / 11 (.exe)
+echo   Compilando CorteAC para Windows 10 / 11 (.exe)
 echo ========================================================
 echo.
 
@@ -13,8 +13,8 @@ if errorlevel 1 (
 )
 
 echo.
-echo Gerando executavel standalone (teste_dola.exe)...
-pyinstaller --clean --onefile --noconsole --icon "assets/app_icon.ico" --add-data "assets;assets" --add-data "samples;samples" --name "teste_dola" main.py
+echo Gerando executavel standalone (CorteAC.exe)...
+pyinstaller --clean --onefile --noconsole --icon "assets/app_icon.ico" --add-data "assets;assets" --add-data "samples;samples" --name "CorteAC" main.py
 
 if errorlevel 1 (
     echo.
@@ -26,6 +26,6 @@ if errorlevel 1 (
 echo.
 echo ========================================================
 echo   Compilacao concluida com sucesso!
-echo   Executavel gerado em: dist\teste_dola.exe
+echo   Executavel gerado em: dist\CorteAC.exe
 echo ========================================================
 pause

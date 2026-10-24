@@ -11,7 +11,7 @@ import json
 from datetime import datetime
 from typing import Optional, List, Dict, Any
 import tkinter as tk
-from tkinter import ttk, messagebox, colorchooser, filedialog
+from tkinter import ttk, messagebox, colorchooser, filedialog, simpledialog
 from pathlib import Path
 
 from config import THEME
@@ -20,6 +20,7 @@ from cad.colors import get_color_for_size, get_contrast_text_color
 from ui.layout_print_dialog import LayoutPrintDialog
 from ui.trim_layout_dialog import TrimLayoutDialog
 from cad.lay_parser import parse_lay, export_layout_from_pieces, validate_layout_placement
+from cad.dual_exporter import DualLayoutExporter
 from db.connection import VersionConflictError
 
 # -------------------------------------------------------------
@@ -163,6 +164,13 @@ class LayoutEditorView(tk.Frame):
         self.load_sample = load_sample
         self.session_id = kwargs.get("session_id", 1)
 
+        # Estado do material e camadas associados à sessão
+        self.material = kwargs.get("material", None)
+        self.material_cod_r = None
+        self.material_id = str(kwargs.get("material_id", "853412"))
+        self.material_name = str(kwargs.get("material_name", "SINT-LOGAM-PRETO"))
+        self.material_layers = int(kwargs.get("material_layers", kwargs.get("layers", 2)))
+
         # Estado da chapa (mm) - Horizontal = largura (X), Vertical = comprimento/altura (Y)
         self.sheet_width = 1380.0   # mm
         self.sheet_height = 1080.0  # mm
@@ -241,7 +249,7 @@ class LayoutEditorView(tk.Frame):
 
         icon_files = [
             "btn_bump_down.png", "btn_bump_right.png", "btn_bump_left.png", "btn_bump_up.png",
-            "btn_new.png", "btn_open.png", "btn_save.png", "btn_cut.png", "btn_copy.png", "btn_paste.png", "btn_print.png",
+            "btn_new.png", "btn_open.png", "btn_save.png", "btn_dual.png", "btn_cut.png", "btn_copy.png", "btn_paste.png", "btn_print.png",
             "btn_area_a.png", "btn_side_s.png", "btn_mat_m.png", "btn_fit.png", "btn_play.png",
             "btn_outline.png", "btn_zoom_fit.png", "btn_zoom.png", "btn_add.png", "btn_move.png", "btn_grid.png",
             "layout_icon.png"
@@ -324,10 +332,11 @@ class LayoutEditorView(tk.Frame):
         tb_row = tk.Frame(tb_container, bg=THEME["bg_surface"], height=26, padx=2, pady=1)
         tb_row.pack(side="left", fill="y")
 
-        # Grupo 1: Arquivo (New, Open, Save)
+        # Grupo 1: Arquivo (New, Open, Save, Dual Export)
         self.create_tb_btn(tb_row, "btn_new", "Novo Layout (Ctrl+N)", self.clear_all_pieces)
         self.create_tb_btn(tb_row, "btn_open", "Abrir Layout (Ctrl+O)", self.open_layout_dialog)
         self.create_tb_btn(tb_row, "btn_save", "Salvar Layout (Ctrl+S)", self.save_layout)
+        self.create_tb_btn(tb_row, "btn_dual", "⚡ Dupla Saída ATOM (.lay) + Comelz (.onx)", lambda: self.export_layout_dialog(target_format="dual"))
 
         self.create_tb_sep(tb_row)
 
@@ -654,7 +663,10 @@ class LayoutEditorView(tk.Frame):
             menu_obj.add_command(label="Open...\tCtrl+O", command=self.open_layout_dialog)
             menu_obj.add_command(label="Save\tCtrl+S", command=self.save_layout)
             menu_obj.add_command(label="Save As...", command=self.export_layout_dialog)
-            menu_obj.add_command(label="Export .lay...", command=self.export_layout_dialog)
+            menu_obj.add_separator()
+            menu_obj.add_command(label="Export ATOM (.lay)...", command=lambda: self.export_layout_dialog(target_format="lay"))
+            menu_obj.add_command(label="Export Comelz (.onx)...", command=lambda: self.export_layout_dialog(target_format="onx"))
+            menu_obj.add_command(label="⚡ Dupla Saída (.lay + .onx)...", command=lambda: self.export_layout_dialog(target_format="dual"))
             menu_obj.add_separator()
             menu_obj.add_command(label="Load Material...", command=lambda: None)
             menu_obj.add_command(label="Print...\tCtrl+P", command=self.print_layout)
@@ -681,10 +693,12 @@ class LayoutEditorView(tk.Frame):
             menu_obj.add_command(label="Calculate Nesting", command=self.run_auto_nest)
             menu_obj.add_command(label="Start SoleNest...", command=self.run_auto_nest)
             menu_obj.add_command(label="SoleNest Params...", command=lambda: None)
+            menu_obj.add_command(label="Camadas de Corte (Layers)...", command=self.edit_material_layers_dialog)
             menu_obj.add_separator()
             menu_obj.add_command(label="Refilar Chapa no Final das Peças (Gap 1mm)\tCtrl+T", command=self.trim_layout_dialog)
         elif menu_name == "Tools":
             menu_obj.add_command(label="Refilar Layout Automático (Gap 1mm)\tCtrl+T", command=self.trim_layout_dialog)
+            menu_obj.add_command(label="Alterar Camadas de Corte (Layers)...", command=self.edit_material_layers_dialog)
             menu_obj.add_separator()
             menu_obj.add_command(label="Colours...", command=lambda: None)
             menu_obj.add_command(label="Check Overlay	Ctrl+E", command=self.check_overlay)
@@ -763,7 +777,7 @@ class LayoutEditorView(tk.Frame):
 
                 # Pares requeridos e resto conforme tabela da sessão
                 req_pairs = int(shp.get("pairs") or (shp.get("required_qty", 2) // 2) or 1)
-                resto = int(shp.get("resto", 0))
+                resto = int(shp.get("resto") if shp.get("resto") is not None else (shp.get("rest") if shp.get("rest") is not None else 0))
 
                 targets.append({
                     "id": s_id,
@@ -840,14 +854,29 @@ class LayoutEditorView(tk.Frame):
                     if p_tid and t_id and p_tid == t_id:
                         placed_cnt += 1
                         continue
-                    if p_sz and t_sz and p_sz == t_sz:
-                        placed_cnt += 1
-                        continue
                     if p_nm and t_nm and p_nm == t_nm:
                         placed_cnt += 1
+                        continue
+                    if p_sz and t_sz and p_sz == t_sz and (not p_nm or not t_nm or p_nm == t_nm):
+                        placed_cnt += 1
+                        continue
 
             req_cnt = int(target.get("pairs", target.get("required", 0)))
-            resto_cnt = int(target.get("resto", 0))
+            
+            # Resolução das camadas de corte do material para converter peças em pares
+            layers = 2
+            if hasattr(self, "material_layers") and self.material_layers:
+                layers = self.material_layers
+            elif hasattr(self, "material") and isinstance(self.material, dict) and "layers" in self.material:
+                layers = self.material.get("layers", 2)
+            try:
+                layers = max(1, int(layers))
+            except (ValueError, TypeError):
+                layers = 2
+
+            # Quantidade de pares produzidos na mesa e saldo restante
+            placed_pairs = (placed_cnt * layers) // 2
+            resto_cnt = max(0, req_cnt - placed_pairs)
 
             # Destaque de seleção do molde ativo
             is_active = (i == self.active_target_index)
@@ -920,7 +949,9 @@ class LayoutEditorView(tk.Frame):
                 tags=("sidebar_element", f"sidebar_target_{i}", "sidebar_ui")
             )
 
-            # 4. Linha 2: Contadores de Produção (placed/req rem/req, ex: 18/36 0/36)
+            # 4. Linha 2: Contadores de Produção (peças_mesa/req_pares resto_pares/req_pares)
+            # Exemplo: Com 4 camadas e 20 pares: 10 peças no layout -> exibe 10/20 0/20
+            #          Com 2 camadas e 20 pares: 20 peças no layout -> exibe 20/20 0/20
             if t_nm == "grade_ch_0":
                 stat_disp = "0/0 0/0"
             else:
@@ -1064,6 +1095,68 @@ class LayoutEditorView(tk.Frame):
         self.update_sheet_status()
         self.redraw()
 
+    def set_material(self, mat_dict):
+        """Atualiza o material associado ao layout (código, descrição, camadas e dimensões)."""
+        if not mat_dict or not isinstance(mat_dict, dict):
+            return
+        self.material = dict(mat_dict)
+        self.material_id = str(mat_dict.get("code") or mat_dict.get("id") or getattr(self, "material_id", "853412"))
+        self.material_name = str(mat_dict.get("name") or mat_dict.get("description") or mat_dict.get("desc") or getattr(self, "material_name", ""))
+        try:
+            self.material_layers = int(mat_dict.get("layers", getattr(self, "material_layers", 2)))
+        except (ValueError, TypeError):
+            self.material_layers = 2
+        if "width_mm" in mat_dict and "height_mm" in mat_dict:
+            try:
+                self.set_sheet_size(float(mat_dict["width_mm"]), float(mat_dict["height_mm"]))
+            except (ValueError, TypeError):
+                pass
+        self.update_sidebar_targets()
+        self.redraw()
+
+    def edit_material_layers_dialog(self):
+        """Permite conferir ou alterar a quantidade de camadas (layers) na hora de editar/gerar o lay."""
+        curr_layers = getattr(self, "material_layers", 2)
+        if isinstance(getattr(self, "material", None), dict) and self.material.get("layers"):
+            try:
+                curr_layers = int(self.material["layers"])
+            except (ValueError, TypeError):
+                pass
+
+        val = simpledialog.askinteger(
+            "Camadas de Corte (Layers)",
+            "Informe o número de camadas para o corte:\n(Ex.: 2 para 2 camadas, 4 para 4 camadas)",
+            initialvalue=curr_layers,
+            minvalue=1,
+            maxvalue=50,
+            parent=self
+        )
+        if val is not None and val > 0:
+            self.material_layers = val
+            if isinstance(getattr(self, "material", None), dict):
+                self.material["layers"] = val
+
+            # Propaga para o MainWindow e SessionView se acessíveis
+            mw = getattr(self, "master", None)
+            if mw and hasattr(mw, "current_material") and isinstance(mw.current_material, dict):
+                mw.current_material["layers"] = val
+            if mw and hasattr(mw, "session_view") and mw.session_view:
+                sv = mw.session_view
+                if hasattr(sv, "tree_mat"):
+                    m_items = sv.tree_mat.get_children()
+                    if m_items:
+                        v = list(sv.tree_mat.item(m_items[0], "values"))
+                        if len(v) >= 7:
+                            v[6] = str(val)
+                            sv.tree_mat.item(m_items[0], values=v)
+                if hasattr(sv, "notify_material_changed"):
+                    sv.notify_material_changed()
+
+            self.update_sidebar_targets()
+            self.redraw()
+            if hasattr(self, "lbl_stat_pos"):
+                self.lbl_stat_pos.config(text=f"Camadas de corte definidas para: {val} camadas")
+
     def set_margins(self, left: float = 10.0, right: float = 10.0, top: float = 10.0, bottom: float = 10.0):
         """Define as margens de segurança da placa em milímetros e atualiza o Canvas."""
         self.margin_left = float(left)
@@ -1071,6 +1164,14 @@ class LayoutEditorView(tk.Frame):
         self.margin_top = float(top)
         self.margin_bottom = float(bottom)
         self.redraw()
+
+    def set_pieces(self, pieces):
+        """Define a lista de peças colocadas no layout e atualiza a interface."""
+        self.placed_pieces = list(pieces) if pieces else []
+        self.selected_index = -1
+        self.update_sidebar_targets()
+        self.redraw()
+        self.update_status()
 
     # -------------------------------------------------------------
     # Inicialização das Peças Conforme Print Autêntico
@@ -2305,6 +2406,10 @@ class LayoutEditorView(tk.Frame):
         pass
 
     def run_auto_nest(self):
+        mw = getattr(self, "master", None)
+        if mw and hasattr(mw, "on_auto_nest") and callable(mw.on_auto_nest):
+            mw.on_auto_nest()
+            return
         self.load_sample_nesting()
         self.set_modified(True)
         messagebox.showinfo("Layout Editor - SoleNest", "Nesting automático concluído com sucesso!\n21 peças encaixadas com 78.4% de aproveitamento de material.")
@@ -2425,11 +2530,16 @@ class LayoutEditorView(tk.Frame):
             self.lbl_stat_pos.config(text=f"x: {px:.2f} y: {py:.2f} - {pnm} - <Pasted>", fg=THEME.get("text_main", "#000000"))
 
     def open_layout_dialog(self, event=None):
-        """Abre e importa um arquivo de layout .lay (ATOM $$LAYOUT.v3$$)."""
+        """Abre e importa um arquivo de layout .lay (ATOM $$LAYOUT.v3$$) ou .onx (Comelz)."""
         filepath = filedialog.askopenfilename(
             parent=self,
-            title="Abrir Layout de Corte ATOM (.lay)",
-            filetypes=[("Layout de Corte ATOM (*.lay)", "*.lay"), ("Todos os Arquivos (*.*)", "*.*")]
+            title="Abrir Layout de Corte (ATOM .lay / Comelz .onx)",
+            filetypes=[
+                ("Layouts de Corte (*.lay;*.onx)", "*.lay;*.onx"),
+                ("Layout ATOM (*.lay)", "*.lay"),
+                ("Layout Comelz (*.onx)", "*.onx"),
+                ("Todos os Arquivos (*.*)", "*.*")
+            ]
         )
         if not filepath:
             return "break"
@@ -2437,7 +2547,7 @@ class LayoutEditorView(tk.Frame):
         try:
             lay = parse_lay(filepath, db=getattr(self, "db", None))
         except Exception as e:
-            messagebox.showerror("Erro ao Abrir Layout", f"Falha ao ler arquivo .lay:\n{e}", parent=self)
+            messagebox.showerror("Erro ao Abrir Layout", f"Falha ao ler arquivo de layout:\n{e}", parent=self)
             return "break"
 
         if lay.ris_w > 0 and lay.ris_l > 0:
@@ -2472,6 +2582,36 @@ class LayoutEditorView(tk.Frame):
         self.layout_filepath = filepath
         self.layout_id = getattr(lay, "id", None)
         self.layout_version = getattr(lay, "version", 1)
+        if getattr(lay, "cod_r", None):
+            self.material_cod_r = lay.cod_r
+            m = re.match(r"^(.*?)\s*-\s*(.*?)\s*\(\s*(\d+)\s*layer\(s\)\s*\)", lay.cod_r, re.IGNORECASE)
+            if m:
+                self.material_id = m.group(1).strip()
+                self.material_name = m.group(2).strip()
+                self.material_layers = int(m.group(3))
+                self.material = {
+                    "id": self.material_id,
+                    "code": self.material_id,
+                    "name": self.material_name,
+                    "description": self.material_name,
+                    "layers": self.material_layers,
+                    "width_mm": self.sheet_width,
+                    "height_mm": self.sheet_height
+                }
+            else:
+                m2 = re.match(r"^(.*?)\s*\(\s*(\d+)\s*layer\(s\)\s*\)", lay.cod_r, re.IGNORECASE)
+                if m2:
+                    self.material_name = m2.group(1).strip()
+                    self.material_layers = int(m2.group(2))
+                    self.material = {
+                        "id": getattr(self, "material_id", "853412"),
+                        "code": getattr(self, "material_id", "853412"),
+                        "name": self.material_name,
+                        "description": self.material_name,
+                        "layers": self.material_layers,
+                        "width_mm": self.sheet_width,
+                        "height_mm": self.sheet_height
+                    }
         self.is_modified = False
         self._saved_undo_index = 0
         self._update_window_title()
@@ -2495,19 +2635,62 @@ class LayoutEditorView(tk.Frame):
 
         return "break"
 
-    def export_layout_dialog(self, event=None):
-        """Exporta o layout atual para arquivo .lay padrão ATOM $$LAYOUT.v3$$."""
+    def export_layout_dialog(self, event=None, target_format="prompt"):
+        """
+        Exporta o layout atual:
+        - target_format="prompt": Pergunta ao usuário o tipo (Dupla Saída .lay + .onx, apenas .lay ou apenas .onx).
+        - target_format="dual": Exporta automaticamente para ambos os formatos.
+        - target_format="lay": Exporta para ATOM .lay.
+        - target_format="onx": Exporta para Comelz .onx.
+        """
         if not self.placed_pieces:
             messagebox.showwarning("Exportar Layout", "Não há peças posicionadas no layout para exportar.", parent=self)
             return "break"
 
-        init_name = self.layout_name if self.layout_name.endswith(".lay") else f"{self.layout_name}.lay"
+        init_name = self.layout_name
+        for ext in (".lay", ".onx"):
+            if init_name.endswith(ext):
+                init_name = init_name[:-len(ext)]
+
+        if target_format == "dual":
+            title = "Exportar Dupla Saída (.lay + .onx)"
+            def_ext = ".lay"
+            filetypes = [
+                ("Dupla Saída - ATOM (.lay) + Comelz (.onx)", "*.lay;*.onx"),
+                ("Layout de Corte ATOM (*.lay)", "*.lay"),
+                ("Layout de Corte Comelz (*.onx)", "*.onx"),
+                ("Todos os Arquivos (*.*)", "*.*")
+            ]
+        elif target_format == "onx":
+            title = "Exportar Layout de Corte Comelz (.onx)"
+            def_ext = ".onx"
+            filetypes = [
+                ("Layout de Corte Comelz (*.onx)", "*.onx"),
+                ("Todos os Arquivos (*.*)", "*.*")
+            ]
+        elif target_format == "lay":
+            title = "Exportar Layout de Corte ATOM (.lay)"
+            def_ext = ".lay"
+            filetypes = [
+                ("Layout de Corte ATOM (*.lay)", "*.lay"),
+                ("Todos os Arquivos (*.*)", "*.*")
+            ]
+        else:
+            title = "Exportar Layout de Corte (ATOM .lay / Comelz .onx)"
+            def_ext = ".lay"
+            filetypes = [
+                ("Dupla Saída - ATOM (.lay) + Comelz (.onx)", "*.lay;*.onx"),
+                ("Layout de Corte ATOM (*.lay)", "*.lay"),
+                ("Layout de Corte Comelz (*.onx)", "*.onx"),
+                ("Todos os Arquivos (*.*)", "*.*")
+            ]
+
         filepath = filedialog.asksaveasfilename(
             parent=self,
-            title="Exportar Layout de Corte ATOM (.lay)",
-            defaultextension=".lay",
+            title=title,
+            defaultextension=def_ext,
             initialfile=init_name,
-            filetypes=[("Layout de Corte ATOM (*.lay)", "*.lay"), ("Todos os Arquivos (*.*)", "*.*")]
+            filetypes=filetypes
         )
         if not filepath:
             return "break"
@@ -2520,18 +2703,42 @@ class LayoutEditorView(tk.Frame):
                 "name": getattr(self, "material_name", "884412"),
                 "id": getattr(self, "material_id", "884412")
             }
-            content = export_layout_from_pieces(
-                self.placed_pieces,
-                material,
-                filename=Path(filepath).name
-            )
-            with open(filepath, "w", encoding="latin1", newline="") as fp:
-                fp.write(content)
-            messagebox.showinfo(
-                "Exportar Layout",
-                f"Layout exportado com sucesso para:\n{filepath}\nTotal de peças: {len(self.placed_pieces)}",
-                parent=self
-            )
+
+            p = Path(filepath)
+            # Determina o modo pela extensão ou seleção
+            is_dual = (target_format == "dual") or (p.suffix.lower() not in (".lay", ".onx")) or (";" in str(p))
+
+            if is_dual:
+                res = DualLayoutExporter.export_dual_layout(
+                    self.placed_pieces,
+                    material,
+                    base_path=p,
+                    session_id=getattr(self, "session_id", 1)
+                )
+                msg = (
+                    f"Dupla Saída gerada com sucesso!\n\n"
+                    f"✓ ATOM (.lay): {res['lay_path']}\n"
+                    f"✓ Comelz (.onx): {res['onx_path']}\n\n"
+                    f"Total de peças: {len(self.placed_pieces)}"
+                )
+            elif p.suffix.lower() == ".onx":
+                saved = DualLayoutExporter.export_comelz_onx(
+                    self.placed_pieces,
+                    material,
+                    file_path=p,
+                    session_id=getattr(self, "session_id", 1)
+                )
+                msg = f"Layout Comelz (.onx) exportado com sucesso:\n{saved}\nTotal de peças: {len(self.placed_pieces)}"
+            else:
+                saved = DualLayoutExporter.export_atom_lay(
+                    self.placed_pieces,
+                    material,
+                    file_path=p,
+                    session_id=getattr(self, "session_id", 1)
+                )
+                msg = f"Layout ATOM (.lay) exportado com sucesso:\n{saved}\nTotal de peças: {len(self.placed_pieces)}"
+
+            messagebox.showinfo("Exportar Layout", msg, parent=self)
         except Exception as e:
             messagebox.showerror("Erro ao Exportar Layout", f"Falha ao exportar layout:\n{e}", parent=self)
 
@@ -2703,16 +2910,20 @@ class LayoutEditorView(tk.Frame):
                     "name": getattr(self, "material_name", "884412"),
                     "id": getattr(self, "material_id", "884412")
                 }
-                content = export_layout_from_pieces(
-                    self.placed_pieces,
-                    material,
-                    filename=filepath.name
-                )
-                with open(filepath, "w", encoding="latin1", newline="") as fp:
-                    fp.write(content)
+                if filepath.suffix.lower() == ".onx":
+                    from cad.onx_exporter import save_onx_file
+                    save_onx_file(self.placed_pieces, material, filepath)
+                else:
+                    content = export_layout_from_pieces(
+                        self.placed_pieces,
+                        material,
+                        filename=filepath.name
+                    )
+                    with open(filepath, "w", encoding="latin1", newline="") as fp:
+                        fp.write(content)
                 saved_file = True
             except Exception as e:
-                print(f"Erro ao regravar arquivo .lay: {e}")
+                print(f"Erro ao regravar arquivo de layout: {e}")
                 if not error_msg:
                     error_msg = f"Erro no arquivo: {e}"
 
@@ -2760,7 +2971,7 @@ class LayoutEditorView(tk.Frame):
         """
         try:
             dlg = tk.Toplevel(self)
-            dlg.title("Conflito de Concorrência - ATOM JobManager")
+            dlg.title("Conflito de Concorrência - CorteAC")
             dlg.transient(self)
             dlg.grab_set()
             dlg.resizable(False, False)
@@ -2962,6 +3173,37 @@ class LayoutEditorView(tk.Frame):
             instances = 40
             shapes = 15
 
+        # Resolve dados dinâmicos do material: código, descrição e camadas
+        mat = getattr(self, "material", None)
+        if not mat:
+            parent = getattr(self, "master", None) or getattr(self, "parent", None)
+            if parent:
+                curr_sess = getattr(parent, "current_session", None)
+                if curr_sess and isinstance(curr_sess, dict) and curr_sess.get("material"):
+                    mat = curr_sess["material"]
+                elif getattr(parent, "current_material", None):
+                    mat = getattr(parent, "current_material", None)
+                elif hasattr(parent, "session_view") and getattr(parent, "session_view", None):
+                    sess_v = parent.session_view
+                    if hasattr(sess_v, "session_data") and sess_v.session_data and sess_v.session_data.get("material"):
+                        mat = sess_v.session_data["material"]
+
+        mat_code = None
+        mat_desc = None
+        mat_layers = None
+        if mat and isinstance(mat, dict):
+            mat_code = mat.get("code") or mat.get("id") or getattr(self, "material_id", "853412")
+            mat_desc = mat.get("name") or mat.get("description") or mat.get("desc") or getattr(self, "material_name", "")
+            mat_layers = mat.get("layers", getattr(self, "material_layers", 2))
+        elif getattr(self, "material_cod_r", None):
+            mat_code = getattr(self, "material_id", None)
+            mat_desc = getattr(self, "material_name", None)
+            mat_layers = getattr(self, "material_layers", None)
+        else:
+            mat_code = getattr(self, "material_id", "853412")
+            mat_desc = getattr(self, "material_name", "SINT-LOGAM-PRETO")
+            mat_layers = getattr(self, "material_layers", 2)
+
         layout_data = {
             "layout_name": getattr(self, "layout_name", "10001.lay"),
             "sheet_w_mm": self.sheet_width,
@@ -2972,9 +3214,14 @@ class LayoutEditorView(tk.Frame):
             "yield_pct": yield_pct,
             "shapes_count": shapes,
             "instances_count": instances,
-            "gap_str": "1.00 mm",
+            "gap_str": f"{float(mat.get('gap', 1.0)):.2f} mm" if (mat and isinstance(mat, dict) and "gap" in mat) else "1.00 mm",
             "trim_cut_line": getattr(self, "trim_cut_line", None),
-            "placed_pieces": self.placed_pieces if self.placed_pieces else None
+            "placed_pieces": self.placed_pieces if self.placed_pieces else None,
+            "material_code": mat_code,
+            "material_desc": mat_desc,
+            "material_layers": mat_layers,
+            "material": mat,
+            "material_name": getattr(self, "material_cod_r", None) if not mat else None,
         }
 
         dlg = LayoutPrintDialog(self, layout_data=layout_data)
@@ -2983,7 +3230,7 @@ class LayoutEditorView(tk.Frame):
     def about_layout(self):
         info = (
             "ATOM LayoutNT / Layout Editor v3.2.7.0\n"
-            "JobManager 2000 Integration Suite\n"
+            "CorteAC Integration Suite\n"
             "(C) ATOM S.p.A. - Vigevano, Italy\n\n"
             "Atalhos de Operação CAM:\n"
             "• F1: Ajuste Fino (+2° Esquerda / Anti-horário)\n"

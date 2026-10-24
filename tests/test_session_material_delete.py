@@ -79,14 +79,15 @@ class TestSessionMaterialDelete(unittest.TestCase):
                 pass
 
     def test_initial_material_displayed_in_tree_mat(self):
-        """Verifica se o material da sessão é exibido corretamente na tabela tree_mat."""
+        """Verifica se o material da sessão é exibido corretamente na tabela tree_mat com Cod. Mat. e Descrição."""
         items = self.view.tree_mat.get_children()
         self.assertEqual(len(items), 1)
         vals = self.view.tree_mat.item(items[0], "values")
-        self.assertEqual(vals[1], "como placa")
+        self.assertEqual(vals[1], "1")
         self.assertEqual(vals[2], "SINT-LOGAM 1.4 PRETO")
-        self.assertEqual(vals[3], "1,38")
-        self.assertEqual(vals[4], "2,99")
+        self.assertEqual(vals[3], "como placa")
+        self.assertEqual(vals[4], "1,38")
+        self.assertEqual(vals[5], "2,99")
 
     @patch("tkinter.messagebox.askyesno", return_value=True)
     def test_remove_material_when_layout_not_calculated(self, mock_ask):

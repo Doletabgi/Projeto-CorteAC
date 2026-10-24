@@ -1,5 +1,6 @@
 import unittest
 import math
+import tkinter as tk
 from database import DatabaseManager
 from cad.nesting_engine import auto_nest_pieces
 from cad.geometry import transform_contour, polygon_bbox, polygons_collide, point_segment_distance_sq
@@ -214,7 +215,115 @@ class TestNestingContourGap(unittest.TestCase):
         finally:
             root.destroy()
 
+    def test_dieproc_dialog_delete_preset(self):
+        """Valida que o botão Excluir do DieProcDialog remove a predefinição do banco e da interface."""
+        from unittest.mock import patch
+        from ui.dieproc_dialog import DieProcDialog
+
+        # Cria uma predefinição de teste
+        test_preset_name = "TESTE_GAP_EXCLUIR"
+        self.db.save_dieproc_preset({
+            "name": test_preset_name,
+            "coupling": "0/0",
+            "step": 2.0,
+            "solutions": 20,
+            "gap1": 1.0,
+            "row_interlock": 1,
+            "diagonal": 0
+        })
+        self.assertIsNotNone(self.db.get_dieproc_preset(test_preset_name))
+
+        root = tk.Tk()
+        root.withdraw()
+        try:
+            dlg = DieProcDialog(root, self.db, initial_preset=test_preset_name)
+            self.assertIn(test_preset_name, dlg.preset_listbox.get(0, "end"))
+            self.assertEqual(dlg.ent_name.get(), test_preset_name)
+
+            # Verifica que o botão btn_delete existe com texto 'Excluir'
+            self.assertTrue(hasattr(dlg, "btn_delete"))
+            self.assertEqual(dlg.btn_delete.cget("text"), "Excluir")
+
+            # Simula clique em Excluir confirmando no diálogo
+            with patch("tkinter.messagebox.askyesno", return_value=True), \
+                 patch("tkinter.messagebox.showinfo"), \
+                 patch("tkinter.messagebox.showwarning"):
+                dlg.on_delete_clicked()
+
+            # Confirma que a predefinição foi excluída do banco de dados
+            self.assertIsNone(self.db.get_dieproc_preset(test_preset_name))
+            # Confirma que foi removida da Listbox
+            self.assertNotIn(test_preset_name, dlg.preset_listbox.get(0, "end"))
+
+            # Teste de validação quando nenhuma predefinição válida está selecionada
+            dlg.preset_listbox.selection_clear(0, "end")
+            dlg.ent_name.delete(0, "end")
+            with patch("tkinter.messagebox.showwarning") as mock_warn:
+                dlg.on_delete_clicked()
+                mock_warn.assert_called_once()
+        finally:
+            root.destroy()
+
+    def test_deleted_preset_not_in_session_view_combobox(self):
+        """Valida que presets excluídos (como GAP 2) não aparecem na cb_params e são sincronizados com a SessionView."""
+        from unittest.mock import patch
+        from ui.dieproc_dialog import DieProcDialog
+        from ui.session_view import SessionView
+
+        root = tk.Tk()
+        root.withdraw()
+        try:
+            sess_data = {"id": 1, "name": "Sessao Teste", "params": "GAP 2"}
+            view = SessionView(root, sess_data, db=self.db)
+
+            # 1. GAP 2 nunca deve aparecer na lista de valores nem ser selecionado
+            self.assertNotIn("GAP 2", view.cb_params["values"])
+            self.assertNotEqual(view.cb_params.get(), "GAP 2")
+
+            # 2. Cria predefinição temporária
+            tmp_name = "TEMP_PRESET_A_DELETAR"
+            self.db.save_dieproc_preset({
+                "name": tmp_name,
+                "coupling": "0/0",
+                "step": 1.0,
+                "solutions": 30,
+                "gap1": 1.5,
+                "row_interlock": 1,
+                "diagonal": 0
+            })
+            view.refresh_params_list()
+            self.assertIn(tmp_name, view.cb_params["values"])
+
+            # 3. Seleciona a predefinição na SessionView
+            view.cb_params.set(tmp_name)
+            view.session_data["params"] = tmp_name
+
+            # 4. Simula MainWindow com session_view sendo parent do DieProcDialog
+            root.session_view = view
+            root.current_session = sess_data
+
+            dlg = DieProcDialog(root, self.db, initial_preset=tmp_name)
+            with patch("tkinter.messagebox.askyesno", return_value=True), \
+                 patch("tkinter.messagebox.showinfo"):
+                dlg.on_delete_clicked()
+
+            # 5. Verifica que foi removido do banco, da lista do diálogo e da combobox da SessionView
+            self.assertIsNone(self.db.get_dieproc_preset(tmp_name))
+            self.assertNotIn(tmp_name, dlg.preset_listbox.get(0, "end"))
+            self.assertNotIn(tmp_name, view.cb_params["values"])
+            self.assertNotEqual(view.cb_params.get(), tmp_name)
+            self.assertNotEqual(sess_data.get("params"), tmp_name)
+
+            # 6. Recria DatabaseManager e valida que init_db não ressuscita presets deletados
+            from database import DatabaseManager
+            db_new = DatabaseManager()
+            self.assertIsNone(db_new.get_dieproc_preset("GAP 2"))
+            self.assertIsNone(db_new.get_dieproc_preset(tmp_name))
+        finally:
+            root.destroy()
+
 if __name__ == "__main__":
     unittest.main()
+
 
 

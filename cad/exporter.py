@@ -137,7 +137,7 @@ def export_gcode(placed_pieces, material, file_path, gap_mm=1.0):
 
     lines = [
         "; ========================================================",
-        "; ATOM FlashCut CNC Program - JobManager 2000 Win10",
+        "; ATOM FlashCut CNC Program - CorteAC Win10",
         f"; Date: {now}",
         f"; Machine: {ATOM_MACHINE['model']}",
         f"; Material: {material['name']} ({material['width_mm']}x{material['height_mm']}mm, {material['thickness_mm']}mm)",

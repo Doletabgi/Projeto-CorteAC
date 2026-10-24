@@ -1,5 +1,5 @@
 """
-JobManager 2000 (Edição Python para Windows 10 / 11)
+CorteAC (Edição Python para Windows 10 / 11)
 Main Window - Cópia 100% fiel das telas do Job Manager original (Windows XP)
 """
 
@@ -10,6 +10,7 @@ import threading
 import queue
 import tkinter as tk
 from tkinter import ttk, messagebox, filedialog, simpledialog
+import math
 import datetime
 from pathlib import Path
 
@@ -45,7 +46,7 @@ class MainWindow(tk.Tk):
         super().__init__()
 
         # Título da janela exatamente no formato original
-        self.title("teste dola - C:\\NSDATA\\")
+        self.title(f"{APP_NAME} - C:\\NSDATA\\")
         self.geometry("1180x720")
         self.minsize(980, 600)
         self.configure(bg=THEME["bg_main"])
@@ -241,6 +242,7 @@ class MainWindow(tk.Tk):
         file_menu.add_command(label="📂 Importar Molde (.die)...", command=self.on_import_die)
         file_menu.add_command(label="📂 Abrir Layout (.lay)...", command=self.on_open_lay_file)
         file_menu.add_command(label="💾 Exportar Layout (.lay)...", command=self.on_export_lay_file)
+        file_menu.add_command(label="⚡ Dupla Saída (.lay + .onx)...", command=self.on_export_dual_file)
         file_menu.add_command(label="Exportar G-Code (ATOM)...", command=self.on_export_gcode)
         file_menu.add_command(label="Exportar Relatório XML...", command=self.on_export_xml)
         file_menu.add_separator()
@@ -310,7 +312,7 @@ class MainWindow(tk.Tk):
         # Ajuda
         help_menu = tk.Menu(menubar, tearoff=0, bg=THEME["bg_surface"], fg=THEME["text_main"], activebackground=THEME["select_bg"], activeforeground=THEME["select_fg"])
         help_menu.add_command(label="Manual do Job Manager", command=lambda: messagebox.showinfo("Ajuda", "Manual em HTML disponível na pasta antigo/Help/JM2K"))
-        help_menu.add_command(label="Sobre teste dola", command=lambda: messagebox.showinfo("Sobre", f"{APP_NAME} - {APP_VERSION}\nRecriação moderna em Python para Windows 10 / 11"))
+        help_menu.add_command(label="Sobre CorteAC", command=lambda: messagebox.showinfo("Sobre", f"{APP_NAME} - {APP_VERSION}\nRecriação moderna em Python para Windows 10 / 11"))
         menubar.add_cascade(label="Ajuda", menu=help_menu)
 
         self.config(menu=menubar)
@@ -523,10 +525,13 @@ class MainWindow(tk.Tk):
             on_material_changed=self.refresh_materials_everywhere
         )
         if self.current_material:
-            self.layout_editor_view.set_sheet_size(
-                self.current_material["width_mm"],
-                self.current_material["height_mm"]
-            )
+            if hasattr(self.layout_editor_view, "set_material"):
+                self.layout_editor_view.set_material(self.current_material)
+            else:
+                self.layout_editor_view.set_sheet_size(
+                    self.current_material["width_mm"],
+                    self.current_material["height_mm"]
+                )
 
         # Inicializa a view da primeira sessão
         self.session_view = None
@@ -587,8 +592,10 @@ class MainWindow(tk.Tk):
                 return
             mat_dict = {
                 "id": mat_obj.get("id"),
+                "name": mat_obj.get("name", ""),
+                "description": mat_obj.get("name", ""),
                 "type": mat_obj.get("type", "como placa"),
-                "code": mat_obj.get("code", "853412"),
+                "code": mat_obj.get("id") or mat_obj.get("code", "853412"),
                 "width_m": float(mat_obj.get("width_mm", 1380.0)) / 1000.0,
                 "length_m": float(mat_obj.get("height_mm", 1080.0)) / 1000.0,
                 "width_mm": float(mat_obj.get("width_mm", 1380.0)),
@@ -612,7 +619,10 @@ class MainWindow(tk.Tk):
         self.current_material["gap_mm"] = mat_dict["gap"]
         self.current_material["code"] = mat_dict["code"]
         self.current_material["type"] = mat_dict["type"]
-        self.current_material["name"] = f"Chapa {mat_dict['code']} ({mat_dict['width_m']:.2f}x{mat_dict['length_m']:.2f}m)"
+        if mat_dict.get("name"):
+            self.current_material["name"] = mat_dict["name"]
+        elif not self.current_material.get("name"):
+            self.current_material["name"] = f"Chapa {mat_dict['code']} ({mat_dict.get('width_m', 1.38):.2f}x{mat_dict.get('length_m', 1.08):.2f}m)"
 
         mat_id = self.current_material.get("id")
         if mat_id:
@@ -630,9 +640,12 @@ class MainWindow(tk.Tk):
         # Atualiza o material na mesa CAD
         self.canvas.set_material(self.current_material)
 
-        # Atualiza a chapa no Layout Editor
+        # Atualiza a chapa e dados do material no Layout Editor
         if hasattr(self, "layout_editor_view"):
-            self.layout_editor_view.set_sheet_size(mat_dict["width_mm"], mat_dict["height_mm"])
+            if hasattr(self.layout_editor_view, "set_material"):
+                self.layout_editor_view.set_material(mat_dict)
+            else:
+                self.layout_editor_view.set_sheet_size(mat_dict["width_mm"], mat_dict["height_mm"])
 
         # Salva o estado da sessão
         if self.current_session:
@@ -881,6 +894,9 @@ class MainWindow(tk.Tk):
     def handle_ctrl_p(self, event=None):
         if hasattr(self, "layout_editor_view") and self.layout_editor_view and self.layout_editor_view.winfo_ismapped():
             self.layout_editor_view.print_layout()
+            return "break"
+        if hasattr(self, "session_view") and self.session_view and self.session_view.winfo_ismapped():
+            self.session_view.print_current_layout()
             return "break"
         return None
 
@@ -1172,6 +1188,8 @@ class MainWindow(tk.Tk):
         self.show_session_window(target_sess)
         if self.session_view:
             self.session_view.notebook.select(self.session_view.tab_lays)
+        if target_sess.get("material") and hasattr(self, "layout_editor_view") and hasattr(self.layout_editor_view, "set_material"):
+            self.layout_editor_view.set_material(target_sess["material"])
         self.update_all_metrics()
 
         if self.current_mode == "jobs":
@@ -1322,10 +1340,13 @@ class MainWindow(tk.Tk):
 
         if active_sess:
             sess_mat = active_sess.get("material") or self.current_material
-            if sess_mat and hasattr(self.layout_editor_view, "set_sheet_size"):
-                w = float(sess_mat.get("width_mm", 1350.0))
-                h = float(sess_mat.get("height_mm", 2553.38))
-                self.layout_editor_view.set_sheet_size(w, h)
+            if sess_mat:
+                if hasattr(self.layout_editor_view, "set_material"):
+                    self.layout_editor_view.set_material(sess_mat)
+                elif hasattr(self.layout_editor_view, "set_sheet_size"):
+                    w = float(sess_mat.get("width_mm", 1350.0))
+                    h = float(sess_mat.get("height_mm", 2553.38))
+                    self.layout_editor_view.set_sheet_size(w, h)
 
             if hasattr(self.layout_editor_view, "set_margins"):
                 self.layout_editor_view.set_margins(
@@ -2027,7 +2048,12 @@ class MainWindow(tk.Tk):
     def on_export_lay_file(self):
         """Exporta o layout atual para arquivo .lay compatível com fn98/dp98 e mesa ATOM CNC."""
         if hasattr(self, "layout_editor_view") and self.layout_editor_view:
-            self.layout_editor_view.export_layout_dialog()
+            self.layout_editor_view.export_layout_dialog(target_format="lay")
+
+    def on_export_dual_file(self):
+        """Exporta o layout atual simultaneamente para ATOM (.lay) e Comelz (.onx)."""
+        if hasattr(self, "layout_editor_view") and self.layout_editor_view:
+            self.layout_editor_view.export_layout_dialog(target_format="dual")
 
     def close_child_window(self):
         if self.active_child:
@@ -4419,8 +4445,32 @@ class MainWindow(tk.Tk):
             s_size = str(s.get("size", "41"))
             s["color"] = get_color_for_size(s_size, idx)
 
+        mat_layers = 2
+        # 1. Prioridade: Leitura direta da tabela da aba Materiais (se o operador editou na sessão)
+        if getattr(self, "session_view", None) and hasattr(self.session_view, "tree_mat"):
+            m_items = self.session_view.tree_mat.get_children()
+            if m_items:
+                r_vals = self.session_view.tree_mat.item(m_items[0], "values")
+                if len(r_vals) >= 7 and r_vals[6]:
+                    try:
+                        mat_layers = max(1, int(r_vals[6]))
+                    except (ValueError, TypeError):
+                        pass
+        elif getattr(self, "layout_editor_view", None) and hasattr(self.layout_editor_view, "material_layers") and self.layout_editor_view.material_layers:
+            mat_layers = max(1, int(self.layout_editor_view.material_layers))
+        elif self.current_material and "layers" in self.current_material:
+            try:
+                mat_layers = max(1, int(self.current_material["layers"]))
+            except (ValueError, TypeError):
+                mat_layers = 2
+        if self.current_material:
+            self.current_material["layers"] = mat_layers
+
         # 1 par de calçados = 2 peças físicas a cortar (pé esquerdo + pé direito)
-        target_count = sum(int(s.get("pairs", 24)) * 2 for s in sess_shapes)
+        # Com 'mat_layers' camadas de material, cada corte gera 'mat_layers' peças físicas.
+        # Quantidade de peças necessárias no layout (.lay) = ceil((pares * 2) / mat_layers).
+        # Ex: para 2 camadas, ceil((20 * 2) / 2) = 20 peças de cada número no layout.
+        target_count = sum(math.ceil((int(s.get("pairs", 24)) * 2) / mat_layers) for s in sess_shapes)
         target_count = max(1, target_count)
 
         mat_w = self.current_material["width_mm"]
@@ -4444,7 +4494,8 @@ class MainWindow(tk.Tk):
                     gap_mm=gap,
                     dieproc_params=dieproc_params,
                     db=self.db,
-                    margins=margins
+                    margins=margins,
+                    layers=mat_layers
                 )
                 nest_q.put(("SUCCESS", pieces))
             except Exception as e:
@@ -4452,13 +4503,13 @@ class MainWindow(tk.Tk):
 
         th = threading.Thread(target=_worker, daemon=True)
         th.start()
-        self.after(50, lambda: self._poll_nest_worker(nest_q, strategy, params, machine, gap, margins))
+        self.after(50, lambda: self._poll_nest_worker(nest_q, strategy, params, machine, gap, margins, mat_layers))
 
-    def _poll_nest_worker(self, q, strategy, params, machine, gap=1.0, margins=None):
+    def _poll_nest_worker(self, q, strategy, params, machine, gap=1.0, margins=None, layers=2):
         try:
             status, data = q.get_nowait()
         except queue.Empty:
-            self.after(50, lambda: self._poll_nest_worker(q, strategy, params, machine, gap, margins))
+            self.after(50, lambda: self._poll_nest_worker(q, strategy, params, machine, gap, margins, layers))
             return
 
         self._nesting_in_progress = False
@@ -4467,7 +4518,38 @@ class MainWindow(tk.Tk):
         if status == "SUCCESS":
             pieces = data
             self.canvas.set_pieces(pieces)
+            if hasattr(self, "layout_editor_view") and self.layout_editor_view:
+                if hasattr(self.layout_editor_view, "set_pieces"):
+                    self.layout_editor_view.set_pieces(pieces)
             self.save_current_session_state()
+
+            # Atualiza o saldo restante de pares (resto / rest) nos moldes da sessão
+            if hasattr(self, "current_shapes") and self.current_shapes:
+                for s in self.current_shapes:
+                    s_id = str(s.get("id", "")).strip()
+                    s_sz = str(s.get("size", "")).strip()
+                    s_nm = str(s.get("name", "")).strip()
+                    cnt_placed = 0
+                    for p in pieces:
+                        p_tid = str(p.get("target_id", "")).strip()
+                        p_sz = str(p.get("size", "")).strip()
+                        p_nm = str(p.get("name", "")).strip()
+                        if p_tid and s_id and p_tid == s_id:
+                            cnt_placed += 1
+                        elif p_nm and s_nm and p_nm == s_nm:
+                            cnt_placed += 1
+                        elif p_sz and s_sz and p_sz == s_sz and (not p_nm or not s_nm or p_nm == s_nm):
+                            cnt_placed += 1
+
+                    pairs_cut = (cnt_placed * max(1, layers)) // 2
+                    req_p = int(s.get("pairs", 0))
+                    rem = max(0, req_p - pairs_cut)
+                    s["rest"] = rem
+                    s["resto"] = rem
+
+                if self.current_session:
+                    self.db.update_session_shapes(self.current_session["id"], self.current_shapes)
+
             if self.current_session:
                 self.current_session["status"] = "Nested"
                 self.current_session["strategy"] = strategy
