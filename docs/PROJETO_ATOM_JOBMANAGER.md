@@ -4,7 +4,7 @@
 > **Regra de ouro:** o que está marcado `[CONFIRMADO]` veio do relatório, do código ou do usuário. O que está `[NÃO CONFIRMADO]` é suposição e não deve virar "fato" sem validação. O que está `[PREENCHER]` o Antigravity deve completar lendo o código real.
 
 <!-- AUTO:header:start -->
-**Última sincronização com o código:** 2026-10-24 17:10 (HEAD ao gerar: `ae12325`; 52 arquivos Python, ~32580 linhas)
+**Última sincronização com o código:** 2026-10-24 17:57 (HEAD ao gerar: `1bf2dc2`; 52 arquivos Python, ~32580 linhas)
 <!-- AUTO:header:end -->
 **Versão deste documento:** 1
 
@@ -1453,7 +1453,8 @@ Local: `/home/dola/Documentos/clone do job/antigo/arquivos pos instalacao/Common
 <!-- AUTO:gitlog:start -->
 | Commit | Data | Autor | Mensagem |
 |---|---|---|---|
-| `ae12325` | 2026-10-24 | Doletabgi | ci: esteira multi-plataforma de Release no GitHub para Windows (.exe) e Linux (tar.gz) |
+| `1bf2dc2` | 2026-10-24 | Doletabgi | docs: sincronizar gitlog |
+| `b53cc00` | 2026-10-24 | Doletabgi | ci: esteira multi-plataforma de Release no GitHub para Windows (.exe) e Linux (tar.gz) |
 | `0c0a889` | 2026-10-24 | Doletabgi | docs: mover documentacao tecnica e relatorios para pasta docs e atualizar sync_project_doc |
 | `f3d217a` | 2026-10-24 | Doletabgi | ci: adicionar workflow do GitHub Actions para compilar executavel Windows 10/11 e scripts de distribuicao |
 | `db856b0` | 2026-10-24 | Doletabgi | feat(layout-editor): selecao multipla por caixa elastica e rotacao livre 360 com botao direito (R-Drag) |
@@ -1467,7 +1468,6 @@ Local: `/home/dola/Documentos/clone do job/antigo/arquivos pos instalacao/Common
 | `0ee1652` | 2026-10-21 | Doletabgi | feat(nesting): centralizar gap na sessao como fonte unica de verdade e eliminar campos redundantes |
 | `3483b93` | 2026-10-21 | Doletabgi | feat(nesting): eliminar 100% de sobreposicao no motor IA-teste e adicionar controle de distancia pecas na sessao |
 | `cb48171` | 2026-10-20 | Doletabgi | test(ui): benchmark de latencia < 50ms para 100 frames com 50 pecas e teste explicito de feedback vermelho de colisao |
-| `eed775c` | 2026-10-20 | Doletabgi | feat(ui): eliminar lag de movimentacao manual com fast-path, ghost outline, snap magnetico e colisao dupla |
 <!-- AUTO:gitlog:end -->
 
 ---
