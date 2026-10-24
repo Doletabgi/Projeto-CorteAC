@@ -14,7 +14,7 @@ if errorlevel 1 (
 
 echo.
 echo Gerando executavel standalone (CorteAC.exe)...
-pyinstaller --clean --onefile --noconsole --icon "assets/app_icon.ico" --add-data "assets;assets" --add-data "samples;samples" --name "CorteAC" main.py
+pyinstaller --clean --onefile --noconsole --icon "assets/app_icon.ico" --add-data "assets;assets" --add-data "samples;samples" --add-data "jobmanager.db;." --add-data "db.example.ini;." --hidden-import pymysql --hidden-import cryptography --name "CorteAC" main.py
 
 if errorlevel 1 (
     echo.

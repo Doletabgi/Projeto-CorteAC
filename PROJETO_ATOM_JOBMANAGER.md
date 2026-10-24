@@ -4,7 +4,7 @@
 > **Regra de ouro:** o que está marcado `[CONFIRMADO]` veio do relatório, do código ou do usuário. O que está `[NÃO CONFIRMADO]` é suposição e não deve virar "fato" sem validação. O que está `[PREENCHER]` o Antigravity deve completar lendo o código real.
 
 <!-- AUTO:header:start -->
-**Última sincronização com o código:** 2026-10-24 16:41 (HEAD ao gerar: `c9a61f0`; 52 arquivos Python, ~32580 linhas)
+**Última sincronização com o código:** 2026-10-24 16:44 (HEAD ao gerar: `db856b0`; 52 arquivos Python, ~32580 linhas)
 <!-- AUTO:header:end -->
 **Versão deste documento:** 1
 
@@ -67,6 +67,7 @@ flowchart TD
 <!-- AUTO:tree:start -->
 ```
 README.md
+README_WINDOWS.md
 RELATORIO_IMPLEMENTACAO_MELHORIAS.md
 RELATORIO_SISTEMA_COMPLETO.md
 build_exe_windows.bat
@@ -75,6 +76,7 @@ config.py                                      # CorteAC (Python Edition)
 database.py                                    # JobManager 2000 (Python Edition)
 db.example.ini
 docker-compose.yml
+executar_windows.bat
 main.py                                        # CorteAC (Python Edition para Windows 10 / 11)
 run.bat
 run.sh
@@ -1451,6 +1453,7 @@ Local: `/home/dola/Documentos/clone do job/antigo/arquivos pos instalacao/Common
 <!-- AUTO:gitlog:start -->
 | Commit | Data | Autor | Mensagem |
 |---|---|---|---|
+| `db856b0` | 2026-10-24 | Doletabgi | feat(layout-editor): selecao multipla por caixa elastica e rotacao livre 360 com botao direito (R-Drag) |
 | `c9a61f0` | 2026-10-24 | DeepSeek | fix(layout-editor): keep cursor cache in sync and coalesce middle-button pan |
 | `953bff6` | 2026-10-24 | DeepSeek | perf(layout-editor): coalesce drag events and speed up redraw |
 | `6b21ea7` | 2026-10-24 | Doletabgi | docs(re): inventário de funções e atalhos do Layout original e comparação com o LayoutEditorView |
@@ -1465,7 +1468,6 @@ Local: `/home/dola/Documentos/clone do job/antigo/arquivos pos instalacao/Common
 | `048b051` | 2026-10-19 | Doletabgi | feat(nesting): criar e integrar motor IA-teste com macros declarativas e IA local embarcada |
 | `3006bb6` | 2026-10-19 | Doletabgi | feat(ui): remover combinacao flashnestsheet + HighYield da tabela de recomendacoes da sessao |
 | `d2f84e0` | 2026-10-19 | Doletabgi | feat(ui): mudar descricao de parametros para 'O Parametro define o comportamento das rotacoes, folgas e preenchimento da chapa:' |
-| `e82174c` | 2026-10-19 | Doletabgi | feat(ui): mudar descricao de estrategia para 'A Estrategia define a geometria fisica do corte e do material' |
 <!-- AUTO:gitlog:end -->
 
 ---

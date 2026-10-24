@@ -29,23 +29,33 @@ Recriação moderna em **Python** do sistema industrial **CorteAC** (evolução 
 
 ---
 
-## 💻 Como Executar no Windows 10 / 11
+## 💻 Como Baixar e Executar no Windows 10 / 11
 
-### Opção 1: Executar Direto pelo Arquivo BAT
-Basta dar um duplo clique no arquivo:
+### Opção 1: Baixar a Versão Pronta (.exe Standalone) — [Recomendada]
+Não é necessário instalar Python nem configurar nada:
+1. Acesse a aba **[Releases](https://github.com/Doletabgi/Projeto-CorteAC/releases)** do repositório.
+2. Baixe o pacote **`CorteAC-Windows-x64.zip`** (ou o executável direto `CorteAC.exe`).
+3. Extraia o conteúdo e dê dois cliques em **`CorteAC.exe`**.
+4. O sistema cria automaticamente o banco SQLite local (`jobmanager.db`) e abre imediatamente!
+
+👉 Para o guia passo a passo completo, consulte o [README_WINDOWS.md](README_WINDOWS.md).
+
+### Opção 2: Executar Direto pelo Arquivo BAT
+Se você baixou o código-fonte, basta dar um duplo clique no arquivo:
 ```cmd
-run.bat
+executar_windows.bat
 ```
+*(ou `run.bat`)*
 
-### Opção 2: Pelo Prompt de Comando / PowerShell
-Certifique-se de ter o Python 3 instalado no Windows (disponível na Microsoft Store ou em [python.org](https://python.org)):
+### Opção 3: Pelo Prompt de Comando / PowerShell
+Certifique-se de ter o Python 3 instalado no Windows (marcando "Add python.exe to PATH"):
 ```cmd
 python main.py
 ```
 
 ---
 
-## 📦 Como Gerar e Usar o Executável Standalone (Sem necessidade do Python)
+## 📦 Como Gerar o Executável Standalone Localmente
 
 ### No Linux:
 Para compilar o executável standalone no Linux:
@@ -59,7 +69,7 @@ O executável gerado estará em:
 
 ### No Windows 10 / 11:
 Para gerar o executável `.exe` direto no Windows:
-1. Dê um duplo clique no arquivo [`build_exe_windows.bat`](file:///home/dola/Documentos/clone%20do%20job/jobmanager-win10-python/build_exe_windows.bat).
+1. Dê um duplo clique no arquivo `build_exe_windows.bat`.
 2. Ele instalará o PyInstaller e gerará o executável em `dist\CorteAC.exe`.
 3. Pronto! O arquivo `dist\CorteAC.exe` pode ser levado para qualquer Windows 10/11 sem precisar do Python instalado.
 
