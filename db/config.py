@@ -35,8 +35,11 @@ def _get_int(section: str, key: str, env_var: str, default: int) -> int:
     except ValueError:
         return default
 
-# Configurações globais
-DB_BACKEND = _get_val("database", "backend", "DB_BACKEND", "mysql").lower()
+# Configurações globais:
+# Se existir db.ini configurado ou variável de ambiente, usa o valor indicado.
+# Se NÃO existir db.ini (ex: máquina de testes, VM ou cliente avulso), o padrão seguro é 'sqlite'
+default_backend = "mysql" if (INI_FILE.exists() and _parser.has_section("database")) else "sqlite"
+DB_BACKEND = _get_val("database", "backend", "DB_BACKEND", default_backend).lower()
 
 # Parâmetros MySQL 8.0 Central
 MYSQL_HOST = _get_val("database", "host", "MYSQL_HOST", "127.0.0.1")

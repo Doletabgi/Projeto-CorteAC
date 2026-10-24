@@ -60,10 +60,23 @@ class DatabaseManager:
             return self._memory_conn
         if self.db_path and self.db_path != ":memory:":
             return db_get_connection(database_override=self.db_path)
-        return db_get_connection()
+        try:
+            return db_get_connection()
+        except ServerUnreachableError as e:
+            # Se o servidor MySQL estiver inacessível (ex: VM de teste, máquina offline), comuta para SQLite
+            print(f"[AVISO] {e}. Alternando automaticamente para backend SQLite de contingência.")
+            set_active_backend("sqlite")
+            return db_get_connection()
 
     def init_db(self):
-        with self.get_connection() as conn:
+        try:
+            conn_ctx = self.get_connection()
+        except ServerUnreachableError as e:
+            print(f"[AVISO] {e}. Alternando automaticamente para backend SQLite de contingência.")
+            set_active_backend("sqlite")
+            conn_ctx = self.get_connection()
+
+        with conn_ctx as conn:
             cursor = conn.cursor()
 
             if conn.backend == "mysql":
