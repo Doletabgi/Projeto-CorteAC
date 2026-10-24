@@ -1638,10 +1638,8 @@ class LayoutEditorView(tk.Frame):
             desired_cursor = "crosshair"
         else:
             desired_cursor = "arrow"
-        # config(cursor=...) a cada evento forca o Tk a reconfigurar o widget; so troca quando muda
-        if desired_cursor != getattr(self, "_last_cursor_name", None):
-            self.canvas.config(cursor=desired_cursor)
-            self._last_cursor_name = desired_cursor
+        # so reconfigura o widget quando o cursor realmente muda
+        self._set_cursor(desired_cursor)
 
         # 2. Coordenadas da mesa e status (limitado a ~30 Hz; o arraste tem seu proprio caminho)
         now = time.monotonic()
@@ -1671,7 +1669,7 @@ class LayoutEditorView(tk.Frame):
         # 1. Clique na linha divisória lateral (com tolerância de ±6 pixels)
         if hasattr(self, "sidebar_div_x") and abs(event.x - self.sidebar_div_x) <= 6:
             self.is_dragging_divider = True
-            self.canvas.config(cursor="sb_h_double_arrow")
+            self._set_cursor("sb_h_double_arrow")
             self.redraw()
             return
 
@@ -1751,7 +1749,7 @@ class LayoutEditorView(tk.Frame):
                 self.is_panning = True
                 self.pan_start_x = event.x
                 self.pan_start_y = event.y
-                self.canvas.config(cursor="fleur")
+                self._set_cursor("fleur")
             self.redraw()
 
     def on_canvas_drag(self, event):
@@ -1794,6 +1792,17 @@ class LayoutEditorView(tk.Frame):
     # -------------------------------------------------------------
     # Coalescência de eventos (arraste de peça, pan e divisor)
     # -------------------------------------------------------------
+    def _set_cursor(self, cursor_name):
+        """Troca o cursor do canvas apenas quando ele realmente muda.
+
+        O Tk reconfigura o widget a cada `config(cursor=...)`; chamar isso em todo
+        evento de mouse era um dos custos do arraste. O cache evita chamadas
+        redundantes e tambem impede que o cursor fique preso ao sair da divisoria.
+        """
+        if cursor_name != getattr(self, "_last_cursor_name", None):
+            self.canvas.config(cursor=cursor_name)
+            self._last_cursor_name = cursor_name
+
     def _cancel_drag_job(self):
         """Descarta a atualização de arraste agendada, se houver."""
         if self._drag_job is not None:
@@ -1993,18 +2002,15 @@ class LayoutEditorView(tk.Frame):
 
         if getattr(self, "is_panning", False):
             self.is_panning = False
-            self.canvas.config(cursor="arrow")
-            self._last_cursor_name = "arrow"
+            self._set_cursor("arrow")
 
         # 1. Conclusão do arrasto da linha divisória
         if getattr(self, "is_dragging_divider", False):
             self.is_dragging_divider = False
             if hasattr(self, "sidebar_div_x") and abs(event.x - self.sidebar_div_x) <= 6:
-                self.canvas.config(cursor="sb_h_double_arrow")
-                self._last_cursor_name = "sb_h_double_arrow"
+                self._set_cursor("sb_h_double_arrow")
             else:
-                self.canvas.config(cursor="arrow")
-                self._last_cursor_name = "arrow"
+                self._set_cursor("arrow")
             self.redraw()
             return
 
@@ -2271,14 +2277,14 @@ class LayoutEditorView(tk.Frame):
         try:
             cx = self.canvas.winfo_pointerx() - self.canvas.winfo_rootx()
             if hasattr(self, "sidebar_div_x") and 0 <= cx < self.sidebar_div_x:
-                self.canvas.config(cursor="crosshair")
+                self._set_cursor("crosshair")
         except Exception:
             pass
 
     def _on_ctrl_release(self, event=None):
         try:
             if not getattr(self, "is_panning", False) and not getattr(self, "is_dragging_divider", False):
-                self.canvas.config(cursor="arrow")
+                self._set_cursor("arrow")
         except Exception:
             pass
 
@@ -2286,7 +2292,7 @@ class LayoutEditorView(tk.Frame):
         self.is_panning = True
         self.pan_start_x = event.x
         self.pan_start_y = event.y
-        self.canvas.config(cursor="fleur")
+        self._set_cursor("fleur")
         return "break"
 
     def on_pan_drag(self, event):
@@ -2297,12 +2303,14 @@ class LayoutEditorView(tk.Frame):
             self.pan_start_y = event.y
             self.pan_offset_x = getattr(self, "pan_offset_x", 0.0) + dx
             self.pan_offset_y = getattr(self, "pan_offset_y", 0.0) + dy
-            self.redraw()
+            self._schedule_redraw(PAN_REDRAW_INTERVAL_MS)
         return "break"
 
     def on_pan_end(self, event):
         self.is_panning = False
-        self.canvas.config(cursor="arrow")
+        self._cancel_redraw_job()
+        self._set_cursor("arrow")
+        self.redraw()
         return "break"
 
     def on_ctrl_mousewheel(self, event):

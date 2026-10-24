@@ -4,7 +4,7 @@
 > **Regra de ouro:** o que está marcado `[CONFIRMADO]` veio do relatório, do código ou do usuário. O que está `[NÃO CONFIRMADO]` é suposição e não deve virar "fato" sem validação. O que está `[PREENCHER]` o Antigravity deve completar lendo o código real.
 
 <!-- AUTO:header:start -->
-**Última sincronização com o código:** 2026-10-24 15:07 (HEAD ao gerar: `6b21ea7`; 52 arquivos Python, ~31476 linhas)
+**Última sincronização com o código:** 2026-10-24 15:09 (HEAD ao gerar: `953bff6`; 52 arquivos Python, ~31484 linhas)
 <!-- AUTO:header:end -->
 **Versão deste documento:** 1
 
@@ -286,7 +286,7 @@ ui/trim_layout_dialog.py                       # JobManager 2000 (Python Edition
 - `class EditShapeInSessionDialog` (linha 11, 6 métodos)
 
 ### `ui/layout_editor_view.py`
-- `class LayoutEditorView` (linha 159, 94 métodos)
+- `class LayoutEditorView` (linha 159, 95 métodos)
 - funções: `rotate_piece_in_place`
 
 ### `ui/layout_print_dialog.py`
@@ -1444,6 +1444,7 @@ Local: `/home/dola/Documentos/clone do job/antigo/arquivos pos instalacao/Common
 <!-- AUTO:gitlog:start -->
 | Commit | Data | Autor | Mensagem |
 |---|---|---|---|
+| `953bff6` | 2026-10-24 | DeepSeek | perf(layout-editor): coalesce drag events and speed up redraw |
 | `6b21ea7` | 2026-10-24 | Doletabgi | docs(re): inventário de funções e atalhos do Layout original e comparação com o LayoutEditorView |
 | `0847e6a` | 2026-10-24 | Doletabgi | feat(core): centralizar desenvolvimento no jobmanager-win10-python, corrigir contadores de camadas e remover grade_ch_0 |
 | `418895c` | 2026-10-24 | Doletabgi | feat: renomear aplicacao para CorteAC e preparar publicacao no repositorio |
@@ -1458,7 +1459,6 @@ Local: `/home/dola/Documentos/clone do job/antigo/arquivos pos instalacao/Common
 | `d2f84e0` | 2026-10-19 | Doletabgi | feat(ui): mudar descricao de parametros para 'O Parametro define o comportamento das rotacoes, folgas e preenchimento da chapa:' |
 | `e82174c` | 2026-10-19 | Doletabgi | feat(ui): mudar descricao de estrategia para 'A Estrategia define a geometria fisica do corte e do material' |
 | `eb1757a` | 2026-10-19 | Doletabgi | feat(ui): adicionar planilha interativa de consulta de estrategias e parametros na sessao |
-| `0fa43b2` | 2026-10-19 | Doletabgi | feat(ui): substituir coluna partida por descricao no estoque de material |
 <!-- AUTO:gitlog:end -->
 
 ---
