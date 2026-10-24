@@ -401,12 +401,18 @@ def replace_block(doc, name, body):
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawTextHelpFormatter)
     ap.add_argument("--root", default=".", help="raiz do projeto (padrão: diretório atual)")
-    ap.add_argument("--doc", default=None, help=f"documento (padrão: <root>/{DOC_NAME})")
+    ap.add_argument("--doc", default=None, help=f"documento (padrão: <root>/docs/{DOC_NAME} ou <root>/{DOC_NAME})")
     ap.add_argument("--check", action="store_true", help="não grava; exit 1 se desatualizado")
     args = ap.parse_args()
 
     root = Path(args.root).resolve()
-    doc_path = Path(args.doc) if args.doc else root / DOC_NAME
+    if args.doc:
+        doc_path = Path(args.doc)
+    elif (root / "docs" / DOC_NAME).exists():
+        doc_path = root / "docs" / DOC_NAME
+    else:
+        doc_path = root / DOC_NAME
+
     if not doc_path.exists():
         print(f"ERRO: documento não encontrado: {doc_path}", file=sys.stderr)
         return 2

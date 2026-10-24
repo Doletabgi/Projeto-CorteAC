@@ -4,7 +4,7 @@
 > **Regra de ouro:** o que está marcado `[CONFIRMADO]` veio do relatório, do código ou do usuário. O que está `[NÃO CONFIRMADO]` é suposição e não deve virar "fato" sem validação. O que está `[PREENCHER]` o Antigravity deve completar lendo o código real.
 
 <!-- AUTO:header:start -->
-**Última sincronização com o código:** 2026-10-24 16:44 (HEAD ao gerar: `db856b0`; 52 arquivos Python, ~32580 linhas)
+**Última sincronização com o código:** 2026-10-24 16:49 (HEAD ao gerar: `f3d217a`; 52 arquivos Python, ~32580 linhas)
 <!-- AUTO:header:end -->
 **Versão deste documento:** 1
 
@@ -68,8 +68,6 @@ flowchart TD
 ```
 README.md
 README_WINDOWS.md
-RELATORIO_IMPLEMENTACAO_MELHORIAS.md
-RELATORIO_SISTEMA_COMPLETO.md
 build_exe_windows.bat
 build_linux.sh
 config.py                                      # CorteAC (Python Edition)
@@ -99,7 +97,9 @@ db/migrations/001_initial_mysql_schema.sql
 docs/FORMATO_LAY.md
 docs/LAYOUT_EDITOR_RE.md
 docs/MOTORES_NESTING_PARAMETROS.md
+docs/RELATORIO_IMPLEMENTACAO_MELHORIAS.md
 docs/RELATORIO_REVERSA_COMELZ_ONX.md
+docs/RELATORIO_SISTEMA_COMPLETO.md
 docs/ref/layout_re/help_topics.json
 tests/test_db_layer.py                         # Testes Unitários da Camada de Banco de Dados Central (MySQL 8.0 & SQLite Reserva)
 tests/test_dual_exporter.py                    # JobManager 2000 (Python Edition)
@@ -1453,6 +1453,7 @@ Local: `/home/dola/Documentos/clone do job/antigo/arquivos pos instalacao/Common
 <!-- AUTO:gitlog:start -->
 | Commit | Data | Autor | Mensagem |
 |---|---|---|---|
+| `f3d217a` | 2026-10-24 | Doletabgi | ci: adicionar workflow do GitHub Actions para compilar executavel Windows 10/11 e scripts de distribuicao |
 | `db856b0` | 2026-10-24 | Doletabgi | feat(layout-editor): selecao multipla por caixa elastica e rotacao livre 360 com botao direito (R-Drag) |
 | `c9a61f0` | 2026-10-24 | DeepSeek | fix(layout-editor): keep cursor cache in sync and coalesce middle-button pan |
 | `953bff6` | 2026-10-24 | DeepSeek | perf(layout-editor): coalesce drag events and speed up redraw |
@@ -1467,7 +1468,6 @@ Local: `/home/dola/Documentos/clone do job/antigo/arquivos pos instalacao/Common
 | `eed775c` | 2026-10-20 | Doletabgi | feat(ui): eliminar lag de movimentacao manual com fast-path, ghost outline, snap magnetico e colisao dupla |
 | `048b051` | 2026-10-19 | Doletabgi | feat(nesting): criar e integrar motor IA-teste com macros declarativas e IA local embarcada |
 | `3006bb6` | 2026-10-19 | Doletabgi | feat(ui): remover combinacao flashnestsheet + HighYield da tabela de recomendacoes da sessao |
-| `d2f84e0` | 2026-10-19 | Doletabgi | feat(ui): mudar descricao de parametros para 'O Parametro define o comportamento das rotacoes, folgas e preenchimento da chapa:' |
 <!-- AUTO:gitlog:end -->
 
 ---
