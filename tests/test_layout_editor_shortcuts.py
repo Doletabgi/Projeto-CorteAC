@@ -1376,6 +1376,7 @@ class TestLayoutEditorShortcuts(unittest.TestCase):
         col_cx = self.view.plate_x1 + wx1 * self.view.plate_scale
         col_cy = self.view.plate_y2 - wy1 * self.view.plate_scale
         self.view.on_canvas_drag(DummyMouseEvent(col_cx, col_cy))
+        self.view.flush_pending_drag()
         self.assertEqual(self.view.canvas.itemcget(poly0_item, "outline"), "#ef4444")
 
         # 2. Arraste para fora da Placa (invasão de borda) -> outline="#ef4444"
@@ -1384,6 +1385,7 @@ class TestLayoutEditorShortcuts(unittest.TestCase):
         out_cx = self.view.plate_x1 + out_wx * self.view.plate_scale
         out_cy = self.view.plate_y2 - out_wy * self.view.plate_scale
         self.view.on_canvas_drag(DummyMouseEvent(out_cx, out_cy))
+        self.view.flush_pending_drag()
         self.assertEqual(self.view.canvas.itemcget(poly0_item, "outline"), "#ef4444")
 
         # 3. Arraste para área livre e válida dentro da Placa -> outline="#22c55e"
@@ -1392,6 +1394,7 @@ class TestLayoutEditorShortcuts(unittest.TestCase):
         free_cx = self.view.plate_x1 + free_wx * self.view.plate_scale
         free_cy = self.view.plate_y2 - free_wy * self.view.plate_scale
         self.view.on_canvas_drag(DummyMouseEvent(free_cx, free_cy))
+        self.view.flush_pending_drag()
         self.assertEqual(self.view.canvas.itemcget(poly0_item, "outline"), "#22c55e")
 
         # Release na área livre
@@ -1426,6 +1429,7 @@ class TestLayoutEditorShortcuts(unittest.TestCase):
         target_cx = self.view.plate_x1 + target_wx * self.view.plate_scale
         target_cy = self.view.plate_y2 - target_wy * self.view.plate_scale
         self.view.on_canvas_drag(DummyMouseEvent(target_cx, target_cy))
+        self.view.flush_pending_drag()
 
         poly0_item = self.view.canvas.find_withtag("piece_poly_0")[0]
         self.assertEqual(self.view.canvas.itemcget(poly0_item, "outline"), "#22c55e")
@@ -1439,6 +1443,7 @@ class TestLayoutEditorShortcuts(unittest.TestCase):
         col_cx = self.view.plate_x1 + wx1 * self.view.plate_scale
         col_cy = self.view.plate_y2 - wy1 * self.view.plate_scale
         self.view.on_canvas_drag(DummyMouseEvent(col_cx, col_cy))
+        self.view.flush_pending_drag()
 
         self.assertEqual(self.view.canvas.itemcget(poly0_item, "outline"), "#ef4444")
         poly1_item = self.view.canvas.find_withtag("piece_poly_1")[0]

@@ -8,6 +8,7 @@ import copy
 import math
 import re
 import json
+import time
 from datetime import datetime
 from typing import Optional, List, Dict, Any
 import tkinter as tk
@@ -35,6 +36,12 @@ ROT_DIR_F3 = 1                  # Sentido de rotação do F3 (+90°)
 UNDO_MAX_LEVELS = 100           # Níveis máximos de desfazer (Ctrl+Z)
 UNDO_GROUP_AUTOREPEAT = True    # Agrupar repetições rápidas de F1/F2 em uma única entrada de Undo
 SAVE_TARGET = "db+file"         # Salva em SQLite e regrava arquivo .lay (se associado)
+
+# Coalescencia de eventos de arraste/pan: limita o trabalho pesado por segundo e
+# evita backlog de <B1-Motion> em maquinas mais lentas (Windows da fabrica).
+DRAG_MIN_INTERVAL_S = 0.008      # ~125 atualizacoes de peca por segundo
+STATUS_MIN_INTERVAL_S = 0.033    # ~30 atualizacoes por segundo na barra de status
+PAN_REDRAW_INTERVAL_MS = 8       # ~125 redraws por segundo ao arrastar a mesa
 
 
 def rotate_piece_in_place(p, delta_deg):
@@ -215,6 +222,14 @@ class LayoutEditorView(tk.Frame):
         self._saved_undo_index = 0
         self.undo_stack = []
         self._pre_drag_pieces = None
+
+        # Estado da coalescencia de movimento (arraste de peca / pan / divisor)
+        self._drag_job = None
+        self._pending_drag_xy = None
+        self._last_drag_update_ts = 0.0
+        self._last_status_update_ts = 0.0
+        self._last_cursor_name = None
+        self._redraw_job = None
 
         # Controle de debounce e agrupamento de auto-repeat (F1/F2/F3/F4)
         self._in_fine_rot_sequence = False
@@ -1444,13 +1459,27 @@ class LayoutEditorView(tk.Frame):
             bbox = polygon_bbox(poly)
             cached_geoms.append((poly, bbox))
 
-        for i in range(num_pieces):
-            poly_i, bbox_i = cached_geoms[i]
-            for j in range(i + 1, num_pieces):
-                poly_j, bbox_j = cached_geoms[j]
-                if polygons_collide(poly_i, poly_j, gap=0.0, bbox_a=bbox_i, bbox_b=bbox_j):
-                    colliding_indices.add(i)
-                    colliding_indices.add(j)
+        if num_pieces > 60:
+            # Acima de 60 peças o par a par vira O(n²); a grade espacial reduz para
+            # apenas vizinhos de célula (mesmo resultado, menos comparações de bbox).
+            collision_grid = SpatialGrid(cell_size=200.0)
+            for idx, (poly, bbox) in enumerate(cached_geoms):
+                collision_grid.insert(idx, poly, bbox)
+            for i, (poly_i, bbox_i) in enumerate(cached_geoms):
+                for j, poly_j, bbox_j in collision_grid.query_items(bbox_i, gap=0.0):
+                    if j <= i:
+                        continue
+                    if polygons_collide(poly_i, poly_j, gap=0.0, bbox_a=bbox_i, bbox_b=bbox_j):
+                        colliding_indices.add(i)
+                        colliding_indices.add(j)
+        else:
+            for i in range(num_pieces):
+                poly_i, bbox_i = cached_geoms[i]
+                for j in range(i + 1, num_pieces):
+                    poly_j, bbox_j = cached_geoms[j]
+                    if polygons_collide(poly_i, poly_j, gap=0.0, bbox_a=bbox_i, bbox_b=bbox_j):
+                        colliding_indices.add(i)
+                        colliding_indices.add(j)
 
         # 6. Peças Aninhadas com Cores Sólidas e Destaque de Colisão
         for idx, p in enumerate(self.placed_pieces):
@@ -1593,18 +1622,32 @@ class LayoutEditorView(tk.Frame):
     # Rastreamento de Movimento do Mouse e Interações
     # -------------------------------------------------------------
     def on_mouse_move(self, event):
+        # Durante o arraste de peca, on_canvas_drag e o dono do cursor/status (com throttle).
+        # Sem isso, o Tk dispara <Motion> e <B1-Motion> para o mesmo evento fisico e cada
+        # pixel movido reconfigurava a barra de status (custo de layout no Tk).
+        if getattr(self, "is_dragging_piece", False):
+            return
+
         # 1. Indicador de redimensionamento ao passar o cursor sobre a linha divisória lateral
         is_over_div = hasattr(self, "sidebar_div_x") and abs(event.x - self.sidebar_div_x) <= 6
         if is_over_div or getattr(self, "is_dragging_divider", False):
-            self.canvas.config(cursor="sb_h_double_arrow")
+            desired_cursor = "sb_h_double_arrow"
         elif getattr(self, "is_panning", False):
-            self.canvas.config(cursor="fleur")
+            desired_cursor = "fleur"
         elif bool(event.state & 0x0004) and hasattr(self, "sidebar_div_x") and event.x < self.sidebar_div_x:
-            self.canvas.config(cursor="crosshair")
+            desired_cursor = "crosshair"
         else:
-            self.canvas.config(cursor="arrow")
+            desired_cursor = "arrow"
+        # config(cursor=...) a cada evento forca o Tk a reconfigurar o widget; so troca quando muda
+        if desired_cursor != getattr(self, "_last_cursor_name", None):
+            self.canvas.config(cursor=desired_cursor)
+            self._last_cursor_name = desired_cursor
 
-        # 2. Coordenadas da mesa e status
+        # 2. Coordenadas da mesa e status (limitado a ~30 Hz; o arraste tem seu proprio caminho)
+        now = time.monotonic()
+        if now - getattr(self, "_last_status_update_ts", 0.0) < STATUS_MIN_INTERVAL_S:
+            return
+        self._last_status_update_ts = now
         if self.plate_scale > 0:
             wx = (event.x - self.plate_x1) / self.plate_scale
             wy = (self.plate_y2 - event.y) / self.plate_scale
@@ -1621,6 +1664,10 @@ class LayoutEditorView(tk.Frame):
 
     def on_canvas_click(self, event):
         self.canvas.focus_set()
+        # Um clique novo encerra qualquer atualizacao/redraw pendente do gesto anterior
+        self._cancel_drag_job()
+        self._pending_drag_xy = None
+        self._cancel_redraw_job()
         # 1. Clique na linha divisória lateral (com tolerância de ±6 pixels)
         if hasattr(self, "sidebar_div_x") and abs(event.x - self.sidebar_div_x) <= 6:
             self.is_dragging_divider = True
@@ -1708,7 +1755,7 @@ class LayoutEditorView(tk.Frame):
             self.redraw()
 
     def on_canvas_drag(self, event):
-        # 1. Movimentação da linha divisória para os lados
+        # 1. Movimentação da linha divisória para os lados (redraw coalescido)
         if getattr(self, "is_dragging_divider", False):
             cw = self.canvas.winfo_width()
             min_div = 150
@@ -1716,10 +1763,10 @@ class LayoutEditorView(tk.Frame):
             new_div = max(min_div, min(max_div, event.x))
             self.custom_divider_x = new_div
             self.custom_divider_ratio = new_div / max(1.0, float(cw))
-            self.redraw()
+            self._schedule_redraw(PAN_REDRAW_INTERVAL_MS)
             return
 
-        # 2. Pan na mesa ao arrastar espaço vazio com zoom
+        # 2. Pan na mesa ao arrastar espaço vazio com zoom (redraw coalescido)
         if getattr(self, "is_panning", False):
             dx = event.x - self.pan_start_x
             dy = event.y - self.pan_start_y
@@ -1727,100 +1774,178 @@ class LayoutEditorView(tk.Frame):
             self.pan_start_y = event.y
             self.pan_offset_x = getattr(self, "pan_offset_x", 0.0) + dx
             self.pan_offset_y = getattr(self, "pan_offset_y", 0.0) + dy
-            self.redraw()
+            self._schedule_redraw(PAN_REDRAW_INTERVAL_MS)
             return
 
-        # 3. Arrastar peça na mesa (Fast-Path Visual via canvas.move)
+        # 3. Arrastar peça na mesa: movimento coalescido (~125 aplicações/s).
+        # O Tk pode entregar <B1-Motion> a 500+ Hz; aplicar cada evento custava
+        # transformação + colisão + itemconfig + labels e criava backlog em PCs lentos.
         if self.is_dragging_piece and 0 <= self.selected_index < len(self.placed_pieces):
-            dx_px = event.x - getattr(self, "_drag_last_canvas_x", event.x)
-            dy_px = event.y - getattr(self, "_drag_last_canvas_y", event.y)
-            if abs(dx_px) < 1 and abs(dy_px) < 1:
+            self._pending_drag_xy = (event.x, event.y)
+            if self._drag_job is not None:
                 return
+            elapsed = time.monotonic() - getattr(self, "_last_drag_update_ts", 0.0)
+            if elapsed >= DRAG_MIN_INTERVAL_S:
+                self._flush_drag_update()
+            else:
+                delay_ms = max(1, int((DRAG_MIN_INTERVAL_S - elapsed) * 1000) + 1)
+                self._drag_job = self.after(delay_ms, self._flush_drag_update)
 
-            self._drag_last_canvas_x = event.x
-            self._drag_last_canvas_y = event.y
+    # -------------------------------------------------------------
+    # Coalescência de eventos (arraste de peça, pan e divisor)
+    # -------------------------------------------------------------
+    def _cancel_drag_job(self):
+        """Descarta a atualização de arraste agendada, se houver."""
+        if self._drag_job is not None:
+            try:
+                self.after_cancel(self._drag_job)
+            except (tk.TclError, ValueError):
+                pass
+            self._drag_job = None
 
-            wx, wy = self.screen_to_world(event.x, event.y)
-            offset_x, offset_y = self.drag_start
-            target_x = wx - offset_x
-            target_y = wy - offset_y
+    def _cancel_redraw_job(self):
+        """Descarta o redraw agendado de pan/divisor, se houver."""
+        if self._redraw_job is not None:
+            try:
+                self.after_cancel(self._redraw_job)
+            except (tk.TclError, ValueError):
+                pass
+            self._redraw_job = None
 
-            p = self.placed_pieces[self.selected_index]
+    def _schedule_redraw(self, delay_ms=PAN_REDRAW_INTERVAL_MS):
+        """Agenda um único redraw para o próximo frame (evita N redraws por gesto)."""
+        if self._redraw_job is not None:
+            return
+        self._redraw_job = self.after(delay_ms, self._run_scheduled_redraw)
 
-            # Encosto Magnético Suave (Snap) nas bordas da chapa se a menos de 2.0 mm
-            gap = getattr(self, "gap_mm", 1.0)
-            test_poly = transform_contour(p["contour"], target_x, target_y, p["rotation"])
-            bx0, by0, bx1, by1 = polygon_bbox(test_poly)
-            snap_thresh = 2.0
+    def _run_scheduled_redraw(self):
+        self._redraw_job = None
+        try:
+            if not self.winfo_exists():
+                return
+        except tk.TclError:
+            return
+        self.redraw()
 
-            # Margem esquerda
-            if abs(bx0 - gap) <= snap_thresh:
-                target_x += (gap - bx0)
-            # Margem direita
-            elif abs(bx1 - (self.sheet_width - gap)) <= snap_thresh:
-                target_x += ((self.sheet_width - gap) - bx1)
+    def _flush_drag_update(self):
+        """Aplica o último movimento pendente do arraste (uma vez por frame)."""
+        self._cancel_drag_job()
+        pending = self._pending_drag_xy
+        self._pending_drag_xy = None
+        if not pending or not getattr(self, "is_dragging_piece", False):
+            return
+        if not (0 <= self.selected_index < len(self.placed_pieces)):
+            return
+        self._last_drag_update_ts = time.monotonic()
+        self._apply_drag_update(pending[0], pending[1])
 
-            # Margem inferior
-            if abs(by0 - gap) <= snap_thresh:
-                target_y += (gap - by0)
-            # Margem superior
-            elif abs(by1 - (self.sheet_height - gap)) <= snap_thresh:
-                target_y += ((self.sheet_height - gap) - by1)
+    def flush_pending_drag(self):
+        """Aplica imediatamente o ultimo movimento pendente.
 
-            # Calcula deslocamento real de tela da peça
-            old_sx = self.plate_x1 + p["x"] * self.plate_scale
-            old_sy = self.plate_y2 - p["y"] * self.plate_scale
-            new_sx = self.plate_x1 + target_x * self.plate_scale
-            new_sy = self.plate_y2 - target_y * self.plate_scale
-            move_dx = new_sx - old_sx
-            move_dy = new_sy - old_sy
+        O arraste e coalescido (~125 Hz) para nao acumular eventos em PCs lentos.
+        Testes e integracoes que chamam on_canvas_drag diretamente usam este metodo
+        para garantir que o frame pendente foi processado antes de inspecionar o canvas.
+        """
+        self._flush_drag_update()
 
-            p["x"] = target_x
-            p["y"] = target_y
+    def _apply_drag_update(self, canvas_x, canvas_y):
+        """Move a peça selecionada para a posição do mouse (coalescida)."""
+        if not (0 <= self.selected_index < len(self.placed_pieces)):
+            return
+        last = (getattr(self, "_drag_last_canvas_x", None), getattr(self, "_drag_last_canvas_y", None))
+        if (canvas_x, canvas_y) == last:
+            return
+        self._drag_last_canvas_x = canvas_x
+        self._drag_last_canvas_y = canvas_y
 
-            # Fast-path visual: move todos os itens da peça no canvas
-            self.canvas.move(f"piece_{self.selected_index}", move_dx, move_dy)
-            self.canvas.tag_raise(f"piece_{self.selected_index}")
-            self.canvas.tag_raise("sidebar_ui")
+        wx, wy = self.screen_to_world(canvas_x, canvas_y)
+        offset_x, offset_y = self.drag_start
+        target_x = wx - offset_x
+        target_y = wy - offset_y
 
-            # Detecção de colisão ultrarrápida via SpatialGrid
+        p = self.placed_pieces[self.selected_index]
+
+        # Encosto Magnético Suave (Snap) nas bordas da chapa se a menos de 2.0 mm
+        gap = getattr(self, "gap_mm", 1.0)
+        poly_curr = transform_contour(p["contour"], target_x, target_y, p["rotation"])
+        bx0, by0, bx1, by1 = polygon_bbox(poly_curr)
+        snap_thresh = 2.0
+        snapped = False
+
+        if abs(bx0 - gap) <= snap_thresh:
+            target_x += (gap - bx0)
+            snapped = True
+        elif abs(bx1 - (self.sheet_width - gap)) <= snap_thresh:
+            target_x += ((self.sheet_width - gap) - bx1)
+            snapped = True
+
+        if abs(by0 - gap) <= snap_thresh:
+            target_y += (gap - by0)
+            snapped = True
+        elif abs(by1 - (self.sheet_height - gap)) <= snap_thresh:
+            target_y += ((self.sheet_height - gap) - by1)
+            snapped = True
+
+        # Reaproveita a transformação quando não houve snap (era feita 2x por evento)
+        if snapped:
             poly_curr = transform_contour(p["contour"], target_x, target_y, p["rotation"])
-            bbox_curr = polygon_bbox(poly_curr)
+        bbox_curr = polygon_bbox(poly_curr)
 
-            out_of_bounds = (
-                bbox_curr[0] < -0.01 or
-                bbox_curr[1] < -0.01 or
-                bbox_curr[2] > self.sheet_width + 0.01 or
-                bbox_curr[3] > self.sheet_height + 0.01
-            )
+        old_sx = self.plate_x1 + p["x"] * self.plate_scale
+        old_sy = self.plate_y2 - p["y"] * self.plate_scale
+        new_sx = self.plate_x1 + target_x * self.plate_scale
+        new_sy = self.plate_y2 - target_y * self.plate_scale
+        move_dx = new_sx - old_sx
+        move_dy = new_sy - old_sy
+        if abs(move_dx) < 0.01 and abs(move_dy) < 0.01:
+            return
 
-            colliding_with = set()
-            if hasattr(self, "_drag_spatial_grid") and self._drag_spatial_grid is not None:
-                candidates = self._drag_spatial_grid.query_items(bbox_curr, gap=0.0)
-                for j, other_poly, other_bbox in candidates:
-                    if polygons_collide(poly_curr, other_poly, gap=0.0, bbox_a=bbox_curr, bbox_b=other_bbox):
-                        colliding_with.add(j)
+        p["x"] = target_x
+        p["y"] = target_y
 
-            is_collision = out_of_bounds or bool(colliding_with)
+        # Fast-path visual: move todos os itens da peça no canvas
+        self.canvas.move(f"piece_{self.selected_index}", move_dx, move_dy)
+        self.canvas.tag_raise(f"piece_{self.selected_index}")
+        self.canvas.tag_raise("sidebar_ui")
 
+        # Detecção de colisão ultrarrápida via SpatialGrid
+        out_of_bounds = (
+            bbox_curr[0] < -0.01 or
+            bbox_curr[1] < -0.01 or
+            bbox_curr[2] > self.sheet_width + 0.01 or
+            bbox_curr[3] > self.sheet_height + 0.01
+        )
+
+        colliding_with = set()
+        if hasattr(self, "_drag_spatial_grid") and self._drag_spatial_grid is not None:
+            candidates = self._drag_spatial_grid.query_items(bbox_curr, gap=0.0)
+            for j, other_poly, other_bbox in candidates:
+                if polygons_collide(poly_curr, other_poly, gap=0.0, bbox_a=bbox_curr, bbox_b=other_bbox):
+                    colliding_with.add(j)
+
+        is_collision = out_of_bounds or bool(colliding_with)
+
+        # Só reconfigura contornos quando o estado de colisão realmente mudou
+        outline_state = (is_collision, frozenset(colliding_with))
+        if outline_state != getattr(self, "_drag_outline_state", None):
+            self._drag_outline_state = outline_state
             if is_collision:
-                # Contorno vermelho alerta na peça arrastada
                 self.canvas.itemconfig(f"piece_poly_{self.selected_index}", outline="#ef4444", width=3.0)
-                # Destaque âmbar nas peças estáticas atingidas
                 for j in colliding_with:
                     self.canvas.itemconfig(f"piece_poly_{j}", outline="#f59e0b", width=2.5)
             else:
-                # Contorno verde seleção válida
                 self.canvas.itemconfig(f"piece_poly_{self.selected_index}", outline="#22c55e", width=2.5)
 
-            # Restaura contorno das peças estáticas que deixaram de colidir
             prev_colliding = getattr(self, "_drag_colliding_others", set())
             for prev_j in prev_colliding:
                 if prev_j not in colliding_with:
                     self.canvas.itemconfig(f"piece_poly_{prev_j}", outline="#1e293b", width=1.2)
             self._drag_colliding_others = colliding_with
 
-            # Atualização leve de coordenadas na barra de status
+        # Barra de status limitada a ~30 Hz (configurar label a cada pixel custa layout)
+        now = time.monotonic()
+        if now - getattr(self, "_last_status_update_ts", 0.0) >= STATUS_MIN_INTERVAL_S:
+            self._last_status_update_ts = now
             if hasattr(self, "lbl_stat_pos"):
                 pnm = p.get("name", "Molde")
                 status_drag = " [COLISÃO]" if is_collision else ""
@@ -1832,6 +1957,9 @@ class LayoutEditorView(tk.Frame):
 
     def cancel_drag(self, event=None):
         """Cancela o arraste em andamento via Escape e restaura a peça na posição do drag_ghost."""
+        self._cancel_drag_job()
+        self._pending_drag_xy = None
+        self._drag_outline_state = None
         if getattr(self, "is_dragging_piece", False) and 0 <= self.selected_index < len(self.placed_pieces):
             p = self.placed_pieces[self.selected_index]
             if hasattr(self, "_drag_origin_x") and hasattr(self, "_drag_origin_y"):
@@ -1853,17 +1981,30 @@ class LayoutEditorView(tk.Frame):
         return None
 
     def on_canvas_release(self, event):
+        # Consolida a ultima posicao pendente antes de validar colisao/limites
+        if getattr(self, "is_dragging_piece", False):
+            pending = self._pending_drag_xy
+            self._pending_drag_xy = None
+            self._cancel_drag_job()
+            if pending:
+                self._apply_drag_update(pending[0], pending[1])
+        self._cancel_redraw_job()
+        self._drag_outline_state = None
+
         if getattr(self, "is_panning", False):
             self.is_panning = False
             self.canvas.config(cursor="arrow")
+            self._last_cursor_name = "arrow"
 
         # 1. Conclusão do arrasto da linha divisória
         if getattr(self, "is_dragging_divider", False):
             self.is_dragging_divider = False
             if hasattr(self, "sidebar_div_x") and abs(event.x - self.sidebar_div_x) <= 6:
                 self.canvas.config(cursor="sb_h_double_arrow")
+                self._last_cursor_name = "sb_h_double_arrow"
             else:
                 self.canvas.config(cursor="arrow")
+                self._last_cursor_name = "arrow"
             self.redraw()
             return
 
