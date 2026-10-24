@@ -4,7 +4,7 @@
 > **Regra de ouro:** o que está marcado `[CONFIRMADO]` veio do relatório, do código ou do usuário. O que está `[NÃO CONFIRMADO]` é suposição e não deve virar "fato" sem validação. O que está `[PREENCHER]` o Antigravity deve completar lendo o código real.
 
 <!-- AUTO:header:start -->
-**Última sincronização com o código:** 2026-10-24 17:57 (HEAD ao gerar: `1bf2dc2`; 52 arquivos Python, ~32580 linhas)
+**Última sincronização com o código:** 2026-10-24 18:06 (HEAD ao gerar: `d425ed9`; 52 arquivos Python, ~32596 linhas)
 <!-- AUTO:header:end -->
 **Versão deste documento:** 1
 
@@ -1453,6 +1453,8 @@ Local: `/home/dola/Documentos/clone do job/antigo/arquivos pos instalacao/Common
 <!-- AUTO:gitlog:start -->
 | Commit | Data | Autor | Mensagem |
 |---|---|---|---|
+| `d425ed9` | 2026-10-24 | Doletabgi | docs: sincronizar gitlog |
+| `02c9273` | 2026-10-24 | Doletabgi | fix(ci): remover testes locais com mysql/display para permitir build limpo do .exe no GitHub |
 | `1bf2dc2` | 2026-10-24 | Doletabgi | docs: sincronizar gitlog |
 | `b53cc00` | 2026-10-24 | Doletabgi | ci: esteira multi-plataforma de Release no GitHub para Windows (.exe) e Linux (tar.gz) |
 | `0c0a889` | 2026-10-24 | Doletabgi | docs: mover documentacao tecnica e relatorios para pasta docs e atualizar sync_project_doc |
@@ -1466,8 +1468,6 @@ Local: `/home/dola/Documentos/clone do job/antigo/arquivos pos instalacao/Common
 | `fe38092` | 2026-10-21 | Doletabgi | feat(ui): alterar controle de margem de seguranca para botoes de check de 10, 15, 20 e 30 mm |
 | `8694992` | 2026-10-21 | Doletabgi | feat(nesting): adicionar controles de margem de seguranca da placa na sessao e aplicar no nesting |
 | `0ee1652` | 2026-10-21 | Doletabgi | feat(nesting): centralizar gap na sessao como fonte unica de verdade e eliminar campos redundantes |
-| `3483b93` | 2026-10-21 | Doletabgi | feat(nesting): eliminar 100% de sobreposicao no motor IA-teste e adicionar controle de distancia pecas na sessao |
-| `cb48171` | 2026-10-20 | Doletabgi | test(ui): benchmark de latencia < 50ms para 100 frames com 50 pecas e teste explicito de feedback vermelho de colisao |
 <!-- AUTO:gitlog:end -->
 
 ---
