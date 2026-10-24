@@ -36,6 +36,7 @@ ROT_DIR_F3 = 1                  # Sentido de rotação do F3 (+90°)
 UNDO_MAX_LEVELS = 100           # Níveis máximos de desfazer (Ctrl+Z)
 UNDO_GROUP_AUTOREPEAT = True    # Agrupar repetições rápidas de F1/F2 em uma única entrada de Undo
 SAVE_TARGET = "db+file"         # Salva em SQLite e regrava arquivo .lay (se associado)
+SELECTED_OUTLINE_ONLY = True    # Fiel à Secção E.2: apenas o contorno da peça selecionada é visível (sem preenchimento opaco)
 
 # Coalescencia de eventos de arraste/pan: limita o trabalho pesado por segundo e
 # evita backlog de <B1-Motion> em maquinas mais lentas (Windows da fabrica).
@@ -223,6 +224,35 @@ class LayoutEditorView(tk.Frame):
         self.undo_stack = []
         self._pre_drag_pieces = None
 
+        # Estado de seleção e manipulação de peças (Seleção Múltipla & Rubberband)
+        self.selected_indices = []
+        self.is_rubberbanding = False
+        self._rubberband_start_screen = (0, 0)
+        self._rubberband_is_shift = False
+        self._rubberband_moved = False
+        self._drag_clicked_in_multi = False
+        self._drag_hit_idx = None
+        self._drag_start_event_xy = (0, 0)
+        self._drag_indices = []
+        self._drag_piece_origins = {}
+        self._drag_anchor_idx = None
+
+        # Estado da rotação livre 360° com botão direito do mouse (R-Drag)
+        self._rdrag_active = False
+        self._rdrag_rotating = False
+        self._rdrag_start_x = 0
+        self._rdrag_start_y = 0
+        self._rdrag_pre_pieces = None
+        self._rdrag_selected_indices = []
+        self._rdrag_is_ctrl = False
+        self._rdrag_pivot_world = (0.0, 0.0)
+        self._rdrag_pivot_screen = (0.0, 0.0)
+        self._rdrag_theta0 = 0.0
+        self._rdrag_last_theta = 0.0
+        self._rdrag_cum_delta = 0.0
+        self._rdrag_piece_init_centers = {}
+        self._rdrag_piece_base_centers = {}
+
         # Estado da coalescencia de movimento (arraste de peca / pan / divisor)
         self._drag_job = None
         self._pending_drag_xy = None
@@ -265,7 +295,6 @@ class LayoutEditorView(tk.Frame):
         icon_files = [
             "btn_bump_down.png", "btn_bump_right.png", "btn_bump_left.png", "btn_bump_up.png",
             "btn_new.png", "btn_open.png", "btn_save.png", "btn_dual.png", "btn_cut.png", "btn_copy.png", "btn_paste.png", "btn_print.png",
-            "btn_area_a.png", "btn_side_s.png", "btn_mat_m.png", "btn_fit.png", "btn_play.png",
             "btn_outline.png", "btn_zoom_fit.png", "btn_zoom.png", "btn_add.png", "btn_move.png", "btn_grid.png",
             "layout_icon.png"
         ]
@@ -363,11 +392,7 @@ class LayoutEditorView(tk.Frame):
 
         self.create_tb_sep(tb_row)
 
-        # Grupo 3: Visualização e Filtros de Qualidade (A, Fit/Fill, S, Mat/Fill, Outline)
-        self.create_tb_btn(tb_row, "btn_area_a", "Mostrar Todas as Áreas [A]", self.toggle_filter)
-        self.create_tb_btn(tb_row, "btn_fit", "Ajustar Peças [Fit]", self.reset_view)
-        self.create_tb_btn(tb_row, "btn_side_s", "Áreas de Qualidade [S]", self.toggle_filter)
-        self.create_tb_btn(tb_row, "btn_mat_m", "Manual Nesting [M]", self.toggle_filter)
+        # Grupo 3: Estilo e Cores CAD (Paleta de Cores por Número)
         self.create_tb_btn(tb_row, "btn_outline", "Paleta de Cores por Número (Alterar Cor)", self.choose_number_color)
 
         self.create_tb_sep(tb_row)
@@ -379,34 +404,18 @@ class LayoutEditorView(tk.Frame):
 
         self.create_tb_sep(tb_row)
 
-        # Grupo 5: Modos CAD (Move, + Adicionar, Grade)
+        # Grupo 5: Modos CAD e Seleção (Move, + Adicionar, Grade)
         self.create_tb_btn(tb_row, "btn_move", "Modo Mover Peça", lambda: None)
         self.create_tb_btn(tb_row, "btn_add", "Adicionar Peça (+)", self.add_active_target)
         self.create_tb_btn(tb_row, "btn_grid", "Grade Milimétrica", self.toggle_grid)
 
         self.create_tb_sep(tb_row)
 
-        # Grupo 6: 4 Botões Quadrados Win32 (Bump Direcionais conforme crop_toolbar.png)
-        for tip, cmd in [
-            ("Bump Left", lambda: self.nudge_selected(-10, 0)),
-            ("Bump Right", lambda: self.nudge_selected(10, 0)),
-            ("Bump Up", lambda: self.nudge_selected(0, 10)),
-            ("Bump Down", lambda: self.nudge_selected(0, -10))
-        ]:
-            b = tk.Button(
-                tb_row,
-                text="",
-                bg=THEME["bg_surface"],
-                activebackground=THEME["bg_hover"],
-                relief="raised",
-                bd=1,
-                width=2,
-                height=1,
-                command=cmd,
-                padx=1,
-                pady=1
-            )
-            b.pack(side="left", padx=1)
+        # Grupo 6: Deslocamento Fino (Bump Direcional 10 mm)
+        self.create_tb_btn(tb_row, "btn_bump_left", "Deslocar Selecionada para Esquerda (10mm)", lambda: self.nudge_selected(-10, 0))
+        self.create_tb_btn(tb_row, "btn_bump_right", "Deslocar Selecionada para Direita (10mm)", lambda: self.nudge_selected(10, 0))
+        self.create_tb_btn(tb_row, "btn_bump_up", "Deslocar Selecionada para Cima (10mm)", lambda: self.nudge_selected(0, 10))
+        self.create_tb_btn(tb_row, "btn_bump_down", "Deslocar Selecionada para Baixo (10mm)", lambda: self.nudge_selected(0, -10))
 
         self.create_tb_sep(tb_row)
 
@@ -451,10 +460,14 @@ class LayoutEditorView(tk.Frame):
         self.canvas.bind("<Configure>", lambda e: self.redraw())
         self.canvas.bind("<ButtonPress-1>", self.on_canvas_click)
         self.canvas.bind("<Control-Button-1>", self.on_ctrl_canvas_click)
-        self.canvas.bind("<Control-ButtonPress-1>", self.on_ctrl_canvas_click)
-        self.canvas.bind("<Control-Button-3>", lambda e: self.zoom_out(e.x, e.y))
-        self.canvas.bind("<Control-ButtonPress-3>", lambda e: self.zoom_out(e.x, e.y))
-        self.canvas.bind("<Control-Shift-Button-1>", lambda e: self.zoom_out(e.x, e.y))
+        # Rotação Livre 360° com Botão Direito do Mouse (R-Drag)
+        self.canvas.bind("<ButtonPress-3>", self.on_rbutton_press)
+        self.canvas.bind("<Control-ButtonPress-3>", self.on_rbutton_press)
+        self.canvas.bind("<Control-Button-3>", self.on_rbutton_press)
+        self.canvas.bind("<B3-Motion>", self.on_rbutton_drag)
+        self.canvas.bind("<Control-B3-Motion>", self.on_rbutton_drag)
+        self.canvas.bind("<ButtonRelease-3>", self.on_rbutton_release)
+        self.canvas.bind("<Control-ButtonRelease-3>", self.on_rbutton_release)
         self.canvas.bind("<Double-Button-1>", self.on_canvas_double_click)
         self.canvas.bind("<B1-Motion>", self.on_canvas_drag)
         self.canvas.bind("<ButtonRelease-1>", self.on_canvas_release)
@@ -549,10 +562,16 @@ class LayoutEditorView(tk.Frame):
             w.bind("<KeyRelease-F4>", self.on_f4_release)
 
             w.bind("<Escape>", self.cancel_drag)
+            w.bind("<Control-a>", self.select_all)
+            w.bind("<Control-A>", self.select_all)
+            w.bind("<Control-Key-a>", self.select_all)
+            w.bind("<Control-Key-A>", self.select_all)
 
         self.bind_all("<Key-r>", lambda e: self.rotate_selected(45))
         self.bind_all("<Key-R>", lambda e: self.rotate_selected(45))
         self.bind_all("<Delete>", lambda e: self.delete_selected())
+        self.bind_all("<Control-a>", self.select_all)
+        self.bind_all("<Control-A>", self.select_all)
         self.bind_all("<Left>", lambda e: self.nudge_selected(-5, 0))
         self.bind_all("<Right>", lambda e: self.nudge_selected(5, 0))
         self.bind_all("<Up>", lambda e: self.nudge_selected(0, 5))
@@ -645,19 +664,22 @@ class LayoutEditorView(tk.Frame):
             activebackground=THEME["bg_hover"],
             relief="raised",
             bd=1,
-            width=22 if img else 4,
-            height=20 if img else 1,
+            width=22 if img is None else None,
+            height=20 if img is None else None,
             command=command,
-            padx=1,
-            pady=1
+            padx=2,
+            pady=1,
+            cursor="hand2"
         )
         btn.pack(side="left", padx=1)
         if tooltip:
             def _on_enter(e):
+                btn.config(bg=THEME["bg_hover"])
                 if hasattr(self, "lbl_stat_pos"):
                     self._last_status_pos_text = self.lbl_stat_pos.cget("text")
                     self.lbl_stat_pos.config(text=tooltip)
             def _on_leave(e):
+                btn.config(bg=THEME["bg_surface"])
                 if hasattr(self, "lbl_stat_pos") and hasattr(self, "_last_status_pos_text"):
                     self.lbl_stat_pos.config(text=self._last_status_pos_text)
             btn.bind("<Enter>", _on_enter)
@@ -1008,6 +1030,23 @@ class LayoutEditorView(tk.Frame):
                     if 0 <= clicked_idx < len(self.sidebar_targets):
                         self.active_target_index = clicked_idx
                         self.add_piece_for_target(self.sidebar_targets[clicked_idx])
+            return
+
+        # Duplo-clique na mesa CAD: se em área vazia (fora de qualquer peça), desmarca tudo
+        wx, wy = self.screen_to_world(event.x, event.y)
+        hit_piece = False
+        for idx in reversed(range(len(self.placed_pieces))):
+            p = self.placed_pieces[idx]
+            poly = transform_contour(p["contour"], p["x"], p["y"], p["rotation"])
+            if point_in_polygon(wx, wy, poly):
+                hit_piece = True
+                break
+
+        if not hit_piece:
+            self.selected_indices = []
+            self.selected_index = None
+            self.redraw()
+            self.update_status()
 
     def add_active_target(self):
         """Adiciona peça do molde ativo atualmente na barra lateral (+)."""
@@ -1483,7 +1522,7 @@ class LayoutEditorView(tk.Frame):
 
         # 6. Peças Aninhadas com Cores Sólidas e Destaque de Colisão
         for idx, p in enumerate(self.placed_pieces):
-            is_sel = (idx == self.selected_index)
+            is_sel = (idx == self.selected_index) or (hasattr(self, "selected_indices") and idx in self.selected_indices)
             is_col = (idx in colliding_indices)
             poly, _ = cached_geoms[idx]
 
@@ -1503,8 +1542,8 @@ class LayoutEditorView(tk.Frame):
                 size_str = str(p.get("name") or "")
 
             # Determina cor exclusiva por número (sem repetições entre numerações)
-            fill_col = get_color_for_size(size_str, idx)
-            p["color"] = fill_col
+            base_col = get_color_for_size(size_str, idx)
+            p["color"] = base_col
 
             if is_col:
                 outline_col = "#dc2626"  # Alerta vermelho de colisão
@@ -1515,6 +1554,8 @@ class LayoutEditorView(tk.Frame):
             else:
                 outline_col = "#1e293b"
                 line_w = 1.2
+
+            fill_col = "" if (SELECTED_OUTLINE_ONLY and is_sel) else base_col
 
             self.canvas.create_polygon(
                 screen_pts,
@@ -1653,7 +1694,7 @@ class LayoutEditorView(tk.Frame):
             cur_y_mm = max(0.0, wy)
             if hasattr(self, "lbl_stat_pos"):
                 zoom_prefix = f"[Zoom: {int(round(self.zoom_factor * 100))}%] " if getattr(self, "zoom_factor", 1.0) != 1.0 else ""
-                if 0 <= self.selected_index < len(self.placed_pieces):
+                if self.selected_index is not None and 0 <= self.selected_index < len(self.placed_pieces):
                     sel_p = self.placed_pieces[self.selected_index]
                     pnm = sel_p.get("name", "Molde")
                     self.lbl_stat_pos.config(text=f"{zoom_prefix}x: {cur_x_mm:.2f} y: {cur_y_mm:.2f} - {pnm} - <Pasted>")
@@ -1686,8 +1727,9 @@ class LayoutEditorView(tk.Frame):
             self.zoom_in(event.x, event.y)
             return "break"
 
-        # 4. Clique na mesa CAD (seleção e arrasto de peças)
+        # 4. Clique na mesa CAD (seleção e arrasto de peças / rubberband)
         wx, wy = self.screen_to_world(event.x, event.y)
+        is_shift = bool(event.state & 0x0001)
 
         hit_idx = -1
         for idx in reversed(range(len(self.placed_pieces))):
@@ -1697,60 +1739,106 @@ class LayoutEditorView(tk.Frame):
                 hit_idx = idx
                 break
 
-        self.selected_index = hit_idx
         if hit_idx >= 0:
-            self.is_dragging_piece = True
-            self._pre_drag_pieces = [dict(p) for p in self.placed_pieces]
-            p = self.placed_pieces[hit_idx]
-            self.drag_start = (wx - p["x"], wy - p["y"])
-            self._drag_last_canvas_x = event.x
-            self._drag_last_canvas_y = event.y
-            self._drag_origin_x = p["x"]
-            self._drag_origin_y = p["y"]
-            self._drag_colliding_others = set()
+            self.is_rubberbanding = False
+            self.canvas.delete("rubberband_box")
 
-            # Constrói SpatialGrid e cache com todas as OUTRAS peças estáticas da mesa
-            self._drag_spatial_grid = SpatialGrid(cell_size=100.0)
-            self._drag_static_data = []
-            for j, other in enumerate(self.placed_pieces):
-                if j == hit_idx:
-                    continue
-                other_poly = transform_contour(other["contour"], other["x"], other["y"], other["rotation"])
-                other_bbox = polygon_bbox(other_poly)
-                self._drag_spatial_grid.insert(j, other_poly, other_bbox)
-                self._drag_static_data.append((j, other_poly, other_bbox))
+            if not isinstance(self.selected_indices, list):
+                self.selected_indices = list(self.selected_indices)
 
-            self.redraw()
+            if is_shift:
+                # Shift + Clique Esquerdo sobre Peça:
+                # Alterna (toggle) a peça clicada na lista self.selected_indices
+                if hit_idx in self.selected_indices:
+                    self.selected_indices.remove(hit_idx)
+                    self.selected_index = self.selected_indices[-1] if self.selected_indices else None
+                else:
+                    self.selected_indices.append(hit_idx)
+                    self.selected_index = hit_idx
+                self.is_dragging_piece = False
+                self._pre_drag_pieces = None
+                self._drag_indices = []
+                self.redraw()
+                self.update_status()
+                return "break"
+            else:
+                # Clique Esquerdo Simples sobre Peça (sem Shift):
+                if hit_idx not in self.selected_indices:
+                    self.selected_indices = [hit_idx]
+                    self.selected_index = hit_idx
+                    self._drag_clicked_in_multi = False
+                else:
+                    self._drag_clicked_in_multi = (len(self.selected_indices) > 1)
+                    self._drag_hit_idx = hit_idx
 
-            # Cria Contorno Fantasma (drag_ghost) na posição inicial de saída da peça
-            poly_ghost = transform_contour(p["contour"], p["x"], p["y"], p["rotation"])
-            ghost_screen_pts = []
-            for pt in poly_ghost:
-                gx = self.plate_x1 + pt["x"] * self.plate_scale
-                gy = self.plate_y2 - pt["y"] * self.plate_scale
-                ghost_screen_pts.extend([gx, gy])
-            self.canvas.delete("drag_ghost")
-            if len(ghost_screen_pts) >= 6:
-                self.canvas.create_polygon(
-                    ghost_screen_pts,
-                    fill="",
-                    outline="#64748b",
-                    dash=(4, 4),
-                    width=1.5,
-                    tags="drag_ghost"
-                )
+                self.is_dragging_piece = True
+                self._drag_start_event_xy = (event.x, event.y)
+                self._pre_drag_pieces = [dict(p) for p in self.placed_pieces]
+                self._drag_indices = [i for i in self.selected_indices if 0 <= i < len(self.placed_pieces)]
+                if hit_idx not in self._drag_indices:
+                    self._drag_indices.append(hit_idx)
+
+                p = self.placed_pieces[hit_idx]
+                self.drag_start = (wx - p["x"], wy - p["y"])
+                self._drag_piece_origins = {i: (self.placed_pieces[i]["x"], self.placed_pieces[i]["y"]) for i in self._drag_indices}
+                self._drag_anchor_idx = hit_idx
+                self._drag_last_canvas_x = event.x
+                self._drag_last_canvas_y = event.y
+                self._drag_origin_x = p["x"]
+                self._drag_origin_y = p["y"]
+                self._drag_colliding_others = set()
+
+                # Constrói SpatialGrid e cache com todas as OUTRAS peças estáticas da mesa
+                self._drag_spatial_grid = SpatialGrid(cell_size=100.0)
+                self._drag_static_data = []
+                for j, other in enumerate(self.placed_pieces):
+                    if j in self._drag_indices:
+                        continue
+                    other_poly = transform_contour(other["contour"], other["x"], other["y"], other["rotation"])
+                    other_bbox = polygon_bbox(other_poly)
+                    self._drag_spatial_grid.insert(j, other_poly, other_bbox)
+                    self._drag_static_data.append((j, other_poly, other_bbox))
+
+                self.redraw()
+
+                # Cria Contorno Fantasma (drag_ghost) para as peças arrastadas
+                self.canvas.delete("drag_ghost")
+                for didx in self._drag_indices:
+                    dp = self.placed_pieces[didx]
+                    poly_ghost = transform_contour(dp["contour"], dp["x"], dp["y"], dp["rotation"])
+                    ghost_screen_pts = []
+                    for pt in poly_ghost:
+                        gx = self.plate_x1 + pt["x"] * self.plate_scale
+                        gy = self.plate_y2 - pt["y"] * self.plate_scale
+                        ghost_screen_pts.extend([gx, gy])
+                    if len(ghost_screen_pts) >= 6:
+                        self.canvas.create_polygon(
+                            ghost_screen_pts,
+                            fill="",
+                            outline="#64748b",
+                            dash=(4, 4),
+                            width=1.5,
+                            tags="drag_ghost"
+                        )
         else:
             self.is_dragging_piece = False
             self._pre_drag_pieces = None
+            self._drag_indices = []
             self._drag_spatial_grid = None
             self._drag_static_data = []
             self.canvas.delete("drag_ghost")
-            if getattr(self, "zoom_factor", 1.0) > 1.0:
-                self.is_panning = True
-                self.pan_start_x = event.x
-                self.pan_start_y = event.y
-                self._set_cursor("fleur")
-            self.redraw()
+            self.canvas.delete("rubberband_box")
+
+            self.is_rubberbanding = True
+            self._rubberband_start_screen = (event.x, event.y)
+            self._rubberband_is_shift = is_shift
+            self._rubberband_moved = False
+
+            if not is_shift:
+                self.selected_indices = []
+                self.selected_index = None
+                self.redraw()
+                self.update_status()
 
     def on_canvas_drag(self, event):
         # 1. Movimentação da linha divisória para os lados (redraw coalescido)
@@ -1764,7 +1852,23 @@ class LayoutEditorView(tk.Frame):
             self._schedule_redraw(PAN_REDRAW_INTERVAL_MS)
             return
 
-        # 2. Pan na mesa ao arrastar espaço vazio com zoom (redraw coalescido)
+        # 2. Caixa de Seleção Elástica (Rubberband)
+        if getattr(self, "is_rubberbanding", False):
+            sx0, sy0 = self._rubberband_start_screen
+            sx1, sy1 = event.x, event.y
+            if (sx1 - sx0)**2 + (sy1 - sy0)**2 > 7:
+                self._rubberband_moved = True
+            self.canvas.delete("rubberband_box")
+            self.canvas.create_rectangle(
+                sx0, sy0, sx1, sy1,
+                outline="#3b82f6",
+                dash=(4, 4),
+                width=1.5,
+                tags="rubberband_box"
+            )
+            return "break"
+
+        # 3. Pan na mesa ao arrastar espaço vazio com zoom (redraw coalescido)
         if getattr(self, "is_panning", False):
             dx = event.x - self.pan_start_x
             dy = event.y - self.pan_start_y
@@ -1775,10 +1879,8 @@ class LayoutEditorView(tk.Frame):
             self._schedule_redraw(PAN_REDRAW_INTERVAL_MS)
             return
 
-        # 3. Arrastar peça na mesa: movimento coalescido (~125 aplicações/s).
-        # O Tk pode entregar <B1-Motion> a 500+ Hz; aplicar cada evento custava
-        # transformação + colisão + itemconfig + labels e criava backlog em PCs lentos.
-        if self.is_dragging_piece and 0 <= self.selected_index < len(self.placed_pieces):
+        # 4. Arrastar peça(s) na mesa: movimento coalescido (~125 aplicações/s).
+        if getattr(self, "is_dragging_piece", False) and getattr(self, "_drag_indices", None):
             self._pending_drag_xy = (event.x, event.y)
             if self._drag_job is not None:
                 return
@@ -1793,12 +1895,7 @@ class LayoutEditorView(tk.Frame):
     # Coalescência de eventos (arraste de peça, pan e divisor)
     # -------------------------------------------------------------
     def _set_cursor(self, cursor_name):
-        """Troca o cursor do canvas apenas quando ele realmente muda.
-
-        O Tk reconfigura o widget a cada `config(cursor=...)`; chamar isso em todo
-        evento de mouse era um dos custos do arraste. O cache evita chamadas
-        redundantes e tambem impede que o cursor fique preso ao sair da divisoria.
-        """
+        """Troca o cursor do canvas apenas quando ele realmente muda."""
         if cursor_name != getattr(self, "_last_cursor_name", None):
             self.canvas.config(cursor=cursor_name)
             self._last_cursor_name = cursor_name
@@ -1843,23 +1940,18 @@ class LayoutEditorView(tk.Frame):
         self._pending_drag_xy = None
         if not pending or not getattr(self, "is_dragging_piece", False):
             return
-        if not (0 <= self.selected_index < len(self.placed_pieces)):
+        if not getattr(self, "_drag_indices", None):
             return
         self._last_drag_update_ts = time.monotonic()
         self._apply_drag_update(pending[0], pending[1])
 
     def flush_pending_drag(self):
-        """Aplica imediatamente o ultimo movimento pendente.
-
-        O arraste e coalescido (~125 Hz) para nao acumular eventos em PCs lentos.
-        Testes e integracoes que chamam on_canvas_drag diretamente usam este metodo
-        para garantir que o frame pendente foi processado antes de inspecionar o canvas.
-        """
+        """Aplica imediatamente o ultimo movimento pendente."""
         self._flush_drag_update()
 
     def _apply_drag_update(self, canvas_x, canvas_y):
-        """Move a peça selecionada para a posição do mouse (coalescida)."""
-        if not (0 <= self.selected_index < len(self.placed_pieces)):
+        """Move todas as peças selecionadas para a nova posição do mouse (coalescida)."""
+        if not getattr(self, "_drag_indices", None):
             return
         last = (getattr(self, "_drag_last_canvas_x", None), getattr(self, "_drag_last_canvas_y", None))
         if (canvas_x, canvas_y) == last:
@@ -1869,111 +1961,160 @@ class LayoutEditorView(tk.Frame):
 
         wx, wy = self.screen_to_world(canvas_x, canvas_y)
         offset_x, offset_y = self.drag_start
-        target_x = wx - offset_x
-        target_y = wy - offset_y
-
-        p = self.placed_pieces[self.selected_index]
-
-        # Encosto Magnético Suave (Snap) nas bordas da chapa se a menos de 2.0 mm
-        gap = getattr(self, "gap_mm", 1.0)
-        poly_curr = transform_contour(p["contour"], target_x, target_y, p["rotation"])
-        bx0, by0, bx1, by1 = polygon_bbox(poly_curr)
-        snap_thresh = 2.0
-        snapped = False
-
-        if abs(bx0 - gap) <= snap_thresh:
-            target_x += (gap - bx0)
-            snapped = True
-        elif abs(bx1 - (self.sheet_width - gap)) <= snap_thresh:
-            target_x += ((self.sheet_width - gap) - bx1)
-            snapped = True
-
-        if abs(by0 - gap) <= snap_thresh:
-            target_y += (gap - by0)
-            snapped = True
-        elif abs(by1 - (self.sheet_height - gap)) <= snap_thresh:
-            target_y += ((self.sheet_height - gap) - by1)
-            snapped = True
-
-        # Reaproveita a transformação quando não houve snap (era feita 2x por evento)
-        if snapped:
-            poly_curr = transform_contour(p["contour"], target_x, target_y, p["rotation"])
-        bbox_curr = polygon_bbox(poly_curr)
-
-        old_sx = self.plate_x1 + p["x"] * self.plate_scale
-        old_sy = self.plate_y2 - p["y"] * self.plate_scale
-        new_sx = self.plate_x1 + target_x * self.plate_scale
-        new_sy = self.plate_y2 - target_y * self.plate_scale
-        move_dx = new_sx - old_sx
-        move_dy = new_sy - old_sy
-        if abs(move_dx) < 0.01 and abs(move_dy) < 0.01:
-            return
-
-        p["x"] = target_x
-        p["y"] = target_y
-
-        # Fast-path visual: move todos os itens da peça no canvas
-        self.canvas.move(f"piece_{self.selected_index}", move_dx, move_dy)
-        self.canvas.tag_raise(f"piece_{self.selected_index}")
-        self.canvas.tag_raise("sidebar_ui")
-
-        # Detecção de colisão ultrarrápida via SpatialGrid
-        out_of_bounds = (
-            bbox_curr[0] < -0.01 or
-            bbox_curr[1] < -0.01 or
-            bbox_curr[2] > self.sheet_width + 0.01 or
-            bbox_curr[3] > self.sheet_height + 0.01
+        anchor_idx = getattr(self, "_drag_anchor_idx", self._drag_indices[0])
+        anchor_orig_x, anchor_orig_y = self._drag_piece_origins.get(
+            anchor_idx,
+            (self.placed_pieces[anchor_idx]["x"], self.placed_pieces[anchor_idx]["y"])
         )
 
+        target_anchor_x = wx - offset_x
+        target_anchor_y = wy - offset_y
+
+        delta_x = target_anchor_x - anchor_orig_x
+        delta_y = target_anchor_y - anchor_orig_y
+
+        # Snap magnético suave nas bordas da chapa se a menos de 2.0 mm
+        gap = getattr(self, "gap_mm", 1.0)
+        snap_thresh = 2.0
+
+        group_xmin = float("inf")
+        group_ymin = float("inf")
+        group_xmax = float("-inf")
+        group_ymax = float("-inf")
+
+        piece_polys = {}
+        piece_bboxes = {}
+        for didx in self._drag_indices:
+            dp = self.placed_pieces[didx]
+            orig_px, orig_py = self._drag_piece_origins[didx]
+            prop_x = orig_px + delta_x
+            prop_y = orig_py + delta_y
+            poly_prop = transform_contour(dp["contour"], prop_x, prop_y, dp["rotation"])
+            bx0, by0, bx1, by1 = polygon_bbox(poly_prop)
+            piece_polys[didx] = poly_prop
+            piece_bboxes[didx] = (bx0, by0, bx1, by1)
+            group_xmin = min(group_xmin, bx0)
+            group_ymin = min(group_ymin, by0)
+            group_xmax = max(group_xmax, bx1)
+            group_ymax = max(group_ymax, by1)
+
+        snapped = False
+        if abs(group_xmin - gap) <= snap_thresh:
+            delta_x += (gap - group_xmin)
+            snapped = True
+        elif abs(group_xmax - (self.sheet_width - gap)) <= snap_thresh:
+            delta_x += ((self.sheet_width - gap) - group_xmax)
+            snapped = True
+
+        if abs(group_ymin - gap) <= snap_thresh:
+            delta_y += (gap - group_ymin)
+            snapped = True
+        elif abs(group_ymax - (self.sheet_height - gap)) <= snap_thresh:
+            delta_y += ((self.sheet_height - gap) - group_ymax)
+            snapped = True
+
+        if snapped:
+            piece_polys.clear()
+            piece_bboxes.clear()
+            for didx in self._drag_indices:
+                dp = self.placed_pieces[didx]
+                orig_px, orig_py = self._drag_piece_origins[didx]
+                prop_x = orig_px + delta_x
+                prop_y = orig_py + delta_y
+                poly_prop = transform_contour(dp["contour"], prop_x, prop_y, dp["rotation"])
+                bx0, by0, bx1, by1 = polygon_bbox(poly_prop)
+                piece_polys[didx] = poly_prop
+                piece_bboxes[didx] = (bx0, by0, bx1, by1)
+
+        # Atualiza coordenadas das peças e move no canvas
+        for didx in self._drag_indices:
+            dp = self.placed_pieces[didx]
+            orig_px, orig_py = self._drag_piece_origins[didx]
+            new_px = orig_px + delta_x
+            new_py = orig_py + delta_y
+
+            old_sx = self.plate_x1 + dp["x"] * self.plate_scale
+            old_sy = self.plate_y2 - dp["y"] * self.plate_scale
+            new_sx = self.plate_x1 + new_px * self.plate_scale
+            new_sy = self.plate_y2 - new_py * self.plate_scale
+            move_dx = new_sx - old_sx
+            move_dy = new_sy - old_sy
+
+            dp["x"] = new_px
+            dp["y"] = new_py
+
+            self.canvas.move(f"piece_{didx}", move_dx, move_dy)
+            self.canvas.tag_raise(f"piece_{didx}")
+
+        self.canvas.tag_raise("sidebar_ui")
+
+        # Detecção de colisão do grupo
+        is_collision = False
         colliding_with = set()
-        if hasattr(self, "_drag_spatial_grid") and self._drag_spatial_grid is not None:
-            candidates = self._drag_spatial_grid.query_items(bbox_curr, gap=0.0)
-            for j, other_poly, other_bbox in candidates:
-                if polygons_collide(poly_curr, other_poly, gap=0.0, bbox_a=bbox_curr, bbox_b=other_bbox):
-                    colliding_with.add(j)
+        for didx in self._drag_indices:
+            bx0, by0, bx1, by1 = piece_bboxes[didx]
+            if (bx0 < -0.01 or by0 < -0.01 or
+                bx1 > self.sheet_width + 0.01 or bx1 > self.sheet_height + 0.01):
+                is_collision = True
+            if hasattr(self, "_drag_spatial_grid") and self._drag_spatial_grid is not None:
+                candidates = self._drag_spatial_grid.query_items((bx0, by0, bx1, by1), gap=0.0)
+                poly_d = piece_polys[didx]
+                for j, other_poly, other_bbox in candidates:
+                    if polygons_collide(poly_d, other_poly, gap=0.0, bbox_a=(bx0, by0, bx1, by1), bbox_b=other_bbox):
+                        is_collision = True
+                        colliding_with.add(j)
 
-        is_collision = out_of_bounds or bool(colliding_with)
-
-        # Só reconfigura contornos quando o estado de colisão realmente mudou
         outline_state = (is_collision, frozenset(colliding_with))
         if outline_state != getattr(self, "_drag_outline_state", None):
             self._drag_outline_state = outline_state
             if is_collision:
-                self.canvas.itemconfig(f"piece_poly_{self.selected_index}", outline="#ef4444", width=3.0)
+                for didx in self._drag_indices:
+                    self.canvas.itemconfig(f"piece_poly_{didx}", outline="#ef4444", width=3.0)
                 for j in colliding_with:
                     self.canvas.itemconfig(f"piece_poly_{j}", outline="#f59e0b", width=2.5)
             else:
-                self.canvas.itemconfig(f"piece_poly_{self.selected_index}", outline="#22c55e", width=2.5)
+                for didx in self._drag_indices:
+                    self.canvas.itemconfig(f"piece_poly_{didx}", outline="#22c55e", width=2.5)
 
             prev_colliding = getattr(self, "_drag_colliding_others", set())
             for prev_j in prev_colliding:
-                if prev_j not in colliding_with:
+                if prev_j not in colliding_with and prev_j not in self._drag_indices:
                     self.canvas.itemconfig(f"piece_poly_{prev_j}", outline="#1e293b", width=1.2)
             self._drag_colliding_others = colliding_with
 
-        # Barra de status limitada a ~30 Hz (configurar label a cada pixel custa layout)
+        # Barra de status
         now = time.monotonic()
         if now - getattr(self, "_last_status_update_ts", 0.0) >= STATUS_MIN_INTERVAL_S:
             self._last_status_update_ts = now
+            primary_p = self.placed_pieces[anchor_idx]
             if hasattr(self, "lbl_stat_pos"):
-                pnm = p.get("name", "Molde")
+                pnm = primary_p.get("name", "Molde")
                 status_drag = " [COLISÃO]" if is_collision else ""
-                self.lbl_stat_pos.config(text=f"x: {p['x']:.2f} y: {p['y']:.2f} - {pnm}{status_drag}")
+                cnt = len(self._drag_indices)
+                tag_grp = f" ({cnt} peças)" if cnt > 1 else ""
+                self.lbl_stat_pos.config(text=f"x: {primary_p['x']:.2f} y: {primary_p['y']:.2f} - {pnm}{tag_grp}{status_drag}")
             if hasattr(self, "lbl_stat_x"):
-                self.lbl_stat_x.config(text=f"X: {p['x']:.2f}")
+                self.lbl_stat_x.config(text=f"X: {primary_p['x']:.2f}")
             if hasattr(self, "lbl_stat_y"):
-                self.lbl_stat_y.config(text=f"Y: {p['y']:.2f}")
+                self.lbl_stat_y.config(text=f"Y: {primary_p['y']:.2f}")
 
     def cancel_drag(self, event=None):
-        """Cancela o arraste em andamento via Escape e restaura a peça na posição do drag_ghost."""
+        """Cancela o arraste em andamento, a caixa elástica ou a rotação livre R-Drag via Escape."""
+        if getattr(self, "is_rubberbanding", False):
+            self.canvas.delete("rubberband_box")
+            self.is_rubberbanding = False
+            return "break"
+        if getattr(self, "_rdrag_rotating", False) or getattr(self, "_rdrag_active", False):
+            return self.cancel_rdrag(event)
         self._cancel_drag_job()
         self._pending_drag_xy = None
         self._drag_outline_state = None
-        if getattr(self, "is_dragging_piece", False) and 0 <= self.selected_index < len(self.placed_pieces):
-            p = self.placed_pieces[self.selected_index]
-            if hasattr(self, "_drag_origin_x") and hasattr(self, "_drag_origin_y"):
-                p["x"] = self._drag_origin_x
-                p["y"] = self._drag_origin_y
+        if getattr(self, "is_dragging_piece", False):
+            if self._pre_drag_pieces is not None:
+                for idx, p_old in enumerate(self._pre_drag_pieces):
+                    if idx < len(self.placed_pieces):
+                        self.placed_pieces[idx]["x"] = p_old["x"]
+                        self.placed_pieces[idx]["y"] = p_old["y"]
             self.canvas.delete("drag_ghost")
             prev_colliding = getattr(self, "_drag_colliding_others", set())
             for prev_j in prev_colliding:
@@ -1981,6 +2122,7 @@ class LayoutEditorView(tk.Frame):
             self._drag_colliding_others = set()
             self.is_dragging_piece = False
             self._pre_drag_pieces = None
+            self._drag_indices = []
             self._drag_spatial_grid = None
             self._drag_static_data = []
             self.redraw()
@@ -1990,7 +2132,49 @@ class LayoutEditorView(tk.Frame):
         return None
 
     def on_canvas_release(self, event):
-        # Consolida a ultima posicao pendente antes de validar colisao/limites
+        # 1. Conclusão da Caixa Elástica (Rubberband)
+        if getattr(self, "is_rubberbanding", False):
+            self.canvas.delete("rubberband_box")
+            self.is_rubberbanding = False
+            sx0, sy0 = self._rubberband_start_screen
+            sx1, sy1 = event.x, event.y
+            dist_sq = (sx1 - sx0)**2 + (sy1 - sy0)**2
+            if dist_sq > 7:
+                wx0, wy0 = self.screen_to_world(sx0, sy0)
+                wx1, wy1 = self.screen_to_world(sx1, sy1)
+                box_xmin = min(wx0, wx1)
+                box_xmax = max(wx0, wx1)
+                box_ymin = min(wy0, wy1)
+                box_ymax = max(wy0, wy1)
+
+                contained = []
+                for idx, p in enumerate(self.placed_pieces):
+                    poly = transform_contour(p["contour"], p["x"], p["y"], p["rotation"])
+                    p_xmin, p_ymin, p_xmax, p_ymax = polygon_bbox(poly)
+                    if (box_xmin <= p_xmin and p_xmax <= box_xmax and
+                        box_ymin <= p_ymin and p_ymax <= box_ymax):
+                        contained.append(idx)
+
+                if getattr(self, "_rubberband_is_shift", False):
+                    if not isinstance(self.selected_indices, list):
+                        self.selected_indices = list(self.selected_indices)
+                    for c in contained:
+                        if c not in self.selected_indices:
+                            self.selected_indices.append(c)
+                else:
+                    self.selected_indices = list(contained)
+
+                self.selected_index = self.selected_indices[-1] if self.selected_indices else None
+            else:
+                if not getattr(self, "_rubberband_is_shift", False):
+                    self.selected_indices = []
+                    self.selected_index = None
+
+            self.redraw()
+            self.update_status()
+            return "break"
+
+        # Consolida a última posição pendente antes de validar colisão/limites
         if getattr(self, "is_dragging_piece", False):
             pending = self._pending_drag_xy
             self._pending_drag_xy = None
@@ -2004,7 +2188,7 @@ class LayoutEditorView(tk.Frame):
             self.is_panning = False
             self._set_cursor("arrow")
 
-        # 1. Conclusão do arrasto da linha divisória
+        # 2. Conclusão do arrasto da linha divisória
         if getattr(self, "is_dragging_divider", False):
             self.is_dragging_divider = False
             if hasattr(self, "sidebar_div_x") and abs(event.x - self.sidebar_div_x) <= 6:
@@ -2014,7 +2198,7 @@ class LayoutEditorView(tk.Frame):
             self.redraw()
             return
 
-        # 2. Conclusão do arrasto de peças (validação estrita e consolidação)
+        # 3. Conclusão do arrasto de peças (validação estrita e consolidação)
         self.canvas.delete("drag_ghost")
         prev_colliding = getattr(self, "_drag_colliding_others", set())
         for prev_j in prev_colliding:
@@ -2023,32 +2207,54 @@ class LayoutEditorView(tk.Frame):
         self._drag_spatial_grid = None
         self._drag_static_data = []
 
-        if self._pre_drag_pieces is not None:
-            # Regra Estrita: JAMAIS uma peça poderá ficar sobreposta a outra ou fora da chapa!
+        if getattr(self, "is_dragging_piece", False) and hasattr(self, "_drag_start_event_xy"):
+            dx = event.x - self._drag_start_event_xy[0]
+            dy = event.y - self._drag_start_event_xy[1]
+            if getattr(self, "_drag_clicked_in_multi", False) and (dx*dx + dy*dy <= 7):
+                self.selected_indices = [self._drag_hit_idx]
+                self.selected_index = self._drag_hit_idx
+                self.is_dragging_piece = False
+                self._pre_drag_pieces = None
+                self._drag_indices = []
+                self.redraw()
+                self.update_status()
+                return "break"
+
+        if self._pre_drag_pieces is not None and getattr(self, "_drag_indices", None):
             has_collision = False
-            if 0 <= self.selected_index < len(self.placed_pieces):
-                p_curr = self.placed_pieces[self.selected_index]
+            drag_set = set(self._drag_indices)
+
+            dragged_geoms = {}
+            for didx in self._drag_indices:
+                p_curr = self.placed_pieces[didx]
                 poly_curr = transform_contour(p_curr["contour"], p_curr["x"], p_curr["y"], p_curr["rotation"])
                 bbox_curr = polygon_bbox(poly_curr)
+                dragged_geoms[didx] = (poly_curr, bbox_curr)
                 if (bbox_curr[0] < -0.01 or bbox_curr[1] < -0.01 or
                     bbox_curr[2] > self.sheet_width + 0.01 or bbox_curr[3] > self.sheet_height + 0.01):
                     has_collision = True
-                else:
+                    break
+
+            if not has_collision:
+                for didx in self._drag_indices:
+                    poly_curr, bbox_curr = dragged_geoms[didx]
                     for j, other in enumerate(self.placed_pieces):
-                        if j == self.selected_index:
+                        if j in drag_set:
                             continue
                         other_poly = transform_contour(other["contour"], other["x"], other["y"], other["rotation"])
                         other_bbox = polygon_bbox(other_poly)
                         if polygons_collide(poly_curr, other_poly, gap=0.0, bbox_a=bbox_curr, bbox_b=other_bbox):
                             has_collision = True
                             break
+                    if has_collision:
+                        break
 
             if has_collision:
-                # Reverte a peça para a posição anterior livre de colisão
-                self.placed_pieces[self.selected_index]["x"] = self._pre_drag_pieces[self.selected_index]["x"]
-                self.placed_pieces[self.selected_index]["y"] = self._pre_drag_pieces[self.selected_index]["y"]
+                for didx in self._drag_indices:
+                    self.placed_pieces[didx]["x"] = self._pre_drag_pieces[didx]["x"]
+                    self.placed_pieces[didx]["y"] = self._pre_drag_pieces[didx]["y"]
                 if hasattr(self, "lbl_stat_left"):
-                    self.lbl_stat_left.config(text="⚠️ Bloqueio de Colisão: Peça retornou à posição anterior (sobreposição proibida).")
+                    self.lbl_stat_left.config(text="⚠️ Bloqueio de Colisão: Peças retornaram à posição anterior (sobreposição proibida).")
             elif self.placed_pieces != self._pre_drag_pieces:
                 state = {
                     "pieces": [dict(p) for p in self._pre_drag_pieces],
@@ -2060,10 +2266,388 @@ class LayoutEditorView(tk.Frame):
                 if len(self.undo_stack) > UNDO_MAX_LEVELS:
                     self.undo_stack.pop(0)
                 self.set_modified(True)
+
             self._pre_drag_pieces = None
+            self._drag_indices = []
+
         self.is_dragging_piece = False
         self.redraw()
         self.update_status()
+
+    # -------------------------------------------------------------
+    # Rotação Livre 360° com o Mouse (R-Drag / Botão Direito)
+    # Fiel ao Layout.exe (OnRButtonDown 0x418550, OnMouseMove 0x4269c4, OnRButtonUp 0x421fd0)
+    # -------------------------------------------------------------
+    def get_selected_indices(self):
+        """Retorna a lista de índices das peças atualmente selecionadas."""
+        if hasattr(self, "selected_indices") and self.selected_indices is not None:
+            valid = [i for i in self.selected_indices if 0 <= i < len(self.placed_pieces)]
+            if valid:
+                return valid
+        if self.selected_index is not None and 0 <= self.selected_index < len(self.placed_pieces):
+            return [self.selected_index]
+        return []
+
+    def cancel_rdrag(self, event=None):
+        """
+        Cancela imediatamente a rotação livre R-Drag em andamento via Escape,
+        restaura o estado original prévio das peças, limpa a guia visual
+        e NÃO empilha nada no undo_stack.
+        """
+        try:
+            self.canvas.delete("rdrag_guide")
+        except Exception:
+            pass
+
+        if getattr(self, "_rdrag_pre_pieces", None) is not None:
+            for i, p_old in enumerate(self._rdrag_pre_pieces):
+                if i < len(self.placed_pieces):
+                    self.placed_pieces[i].clear()
+                    self.placed_pieces[i].update(dict(p_old))
+
+        self._rdrag_active = False
+        self._rdrag_rotating = False
+        self._rdrag_pre_pieces = None
+        self._rdrag_selected_indices = []
+        if hasattr(self, "_rdrag_piece_init_centers"):
+            self._rdrag_piece_init_centers.clear()
+        if hasattr(self, "_rdrag_piece_base_centers"):
+            self._rdrag_piece_base_centers.clear()
+
+        self.redraw()
+        self.update_status()
+        if hasattr(self, "lbl_stat_left"):
+            self.lbl_stat_left.config(text="Rotação cancelada via Escape.")
+        return "break"
+
+    def on_rbutton_press(self, event):
+        """
+        Inicia a preparação para Rotação Livre 360° (OnRButtonDown 0x418550).
+        - Se nenhuma peça estiver selecionada, busca peça sob o cursor e seleciona.
+        - Registra snapshot prévio e ponto inicial (x0, y0).
+        """
+        try:
+            self.canvas.focus_set()
+        except Exception:
+            pass
+
+        self._cancel_drag_job()
+        self._pending_drag_xy = None
+        self._cancel_redraw_job()
+
+        # Se não houver peça selecionada, verifica se há uma peça sob o cursor
+        sel_indices = self.get_selected_indices()
+        if not sel_indices:
+            wx, wy = self.screen_to_world(event.x, event.y)
+            hit_idx = -1
+            for idx in reversed(range(len(self.placed_pieces))):
+                p = self.placed_pieces[idx]
+                poly = transform_contour(p.get("contour", []), p.get("x", 0.0), p.get("y", 0.0), p.get("rotation", 0.0))
+                if poly and point_in_polygon(wx, wy, poly):
+                    hit_idx = idx
+                    break
+            if hit_idx >= 0:
+                self.selected_index = hit_idx
+                self.selected_indices = {hit_idx}
+                sel_indices = [hit_idx]
+                self.redraw()
+
+        if not sel_indices:
+            # Nenhuma peça selecionada e nenhuma sob o cursor
+            if bool(getattr(event, "state", 0) & 0x0004):
+                self.zoom_out(event.x, event.y)
+                return "break"
+            self._rdrag_active = False
+            self._rdrag_rotating = False
+            return
+
+        # Snapshot das peças antes de qualquer alteração
+        self._rdrag_active = True
+        self._rdrag_rotating = False
+        self._rdrag_start_x = event.x
+        self._rdrag_start_y = event.y
+        self._rdrag_is_ctrl = bool(getattr(event, "state", 0) & 0x0004)
+        self._rdrag_selected_indices = list(sel_indices)
+        self._rdrag_pre_pieces = [dict(p) for p in self.placed_pieces]
+        self._rdrag_piece_init_centers = {}
+        self._rdrag_piece_base_centers = {}
+
+        # Determina centros de base e centros iniciais na chapa de cada peça selecionada
+        for idx in self._rdrag_selected_indices:
+            p = self.placed_pieces[idx]
+            contour = p.get("contour", [])
+            if contour:
+                min_x, min_y, max_x, max_y = polygon_bbox(contour)
+                cx0 = (min_x + max_x) / 2.0
+                cy0 = (min_y + max_y) / 2.0
+            else:
+                cx0, cy0 = 0.0, 0.0
+            self._rdrag_piece_base_centers[idx] = (cx0, cy0)
+            cur_rot = float(p.get("rotation", 0.0))
+            cx_old, cy_old = rotate_point(cx0, cy0, cur_rot)
+            cp_x = float(p.get("x", 0.0)) + cx_old
+            cp_y = float(p.get("y", 0.0)) + cy_old
+            self._rdrag_piece_init_centers[idx] = (cp_x, cp_y)
+
+        # Determina o pivô (Cx, Cy) em coordenadas de mundo (chapa)
+        if self._rdrag_is_ctrl and len(self._rdrag_selected_indices) > 1:
+            # Com Ctrl: média dos limites do bounding box coletivo de todas as peças selecionadas (0x418683)
+            all_min_x, all_min_y = float("inf"), float("inf")
+            all_max_x, all_max_y = float("-inf"), float("-inf")
+            for idx in self._rdrag_selected_indices:
+                p = self.placed_pieces[idx]
+                poly = transform_contour(p.get("contour", []), p.get("x", 0.0), p.get("y", 0.0), p.get("rotation", 0.0))
+                if poly:
+                    b_min_x, b_min_y, b_max_x, b_max_y = polygon_bbox(poly)
+                    all_min_x = min(all_min_x, b_min_x)
+                    all_min_y = min(all_min_y, b_min_y)
+                    all_max_x = max(all_max_x, b_max_x)
+                    all_max_y = max(all_max_y, b_max_y)
+            if all_min_x != float("inf"):
+                Cx = (all_min_x + all_max_x) / 2.0
+                Cy = (all_min_y + all_max_y) / 2.0
+            else:
+                primary_idx = self.selected_index if (self.selected_index is not None and 0 <= self.selected_index < len(self.placed_pieces)) else self._rdrag_selected_indices[0]
+                Cx, Cy = self._rdrag_piece_init_centers[primary_idx]
+        else:
+            # Sem modificador / seleção única: centro do bounding box da peça selecionada (0x4186f5)
+            primary_idx = self.selected_index if (self.selected_index is not None and 0 <= self.selected_index < len(self.placed_pieces)) else self._rdrag_selected_indices[0]
+            Cx, Cy = self._rdrag_piece_init_centers[primary_idx]
+
+        self._rdrag_pivot_world = (Cx, Cy)
+        Cx_px, Cy_px = self.world_to_screen(Cx, Cy)
+        self._rdrag_pivot_screen = (Cx_px, Cy_px)
+
+        # Ângulo inicial cartesiano do cursor em relação ao pivô
+        dx0 = float(event.x - Cx_px)
+        dy0 = float(Cy_px - event.y)
+        theta0 = math.degrees(math.atan2(dy0, dx0))
+        self._rdrag_theta0 = theta0
+        self._rdrag_last_theta = theta0
+        self._rdrag_cum_delta = 0.0
+        return "break"
+
+    def on_rbutton_drag(self, event):
+        """
+        Executa a rotação angular contínua em tempo real (OnMouseMove 0x4269c4).
+        - Filtro de ruído / deadzone: dx^2 + dy^2 <= 7 (~2.65 px).
+        - Cálculo angular via atan2 sem acúmulo de erro incremental.
+        - Desenha os 2 raios e o arco de ~42 px (tag: rdrag_guide).
+        - Exibe o ângulo em tempo real na barra de status.
+        """
+        if not getattr(self, "_rdrag_active", False):
+            return
+
+        # Filtro de ruído / deadzone: enquanto (dx^2 + dy^2) <= 7, mantém clique estático
+        dx_click = event.x - self._rdrag_start_x
+        dy_click = event.y - self._rdrag_start_y
+        dist_sq = dx_click * dx_click + dy_click * dy_click
+        if not self._rdrag_rotating:
+            if dist_sq <= 7:
+                return
+            self._rdrag_rotating = True
+
+        Cx_px, Cy_px = self._rdrag_pivot_screen
+        cur_dx = float(event.x - Cx_px)
+        cur_dy = float(Cy_px - event.y)
+        theta1 = math.degrees(math.atan2(cur_dy, cur_dx))
+
+        step = theta1 - self._rdrag_last_theta
+        if step > 180.0:
+            step -= 360.0
+        elif step < -180.0:
+            step += 360.0
+        self._rdrag_cum_delta += step
+        self._rdrag_last_theta = theta1
+        delta_rot = self._rdrag_cum_delta
+
+        Cx, Cy = self._rdrag_pivot_world
+        is_ctrl_group = self._rdrag_is_ctrl and len(self._rdrag_selected_indices) > 1
+
+        for idx in self._rdrag_selected_indices:
+            p = self.placed_pieces[idx]
+            orig_p = self._rdrag_pre_pieces[idx]
+            orig_rot = float(orig_p.get("rotation", 0.0))
+            new_rot = (orig_rot + delta_rot) % 360.0
+            if abs(new_rot - round(new_rot)) < 1e-9:
+                new_rot = float(round(new_rot))
+            else:
+                new_rot = round(new_rot, 4)
+
+            cx0, cy0 = self._rdrag_piece_base_centers[idx]
+            cx_new, cy_new = rotate_point(cx0, cy0, new_rot)
+
+            if is_ctrl_group:
+                # Rotação coletiva em grupo (corpo rígido) em torno de (Cx, Cy)
+                cp_x0, cp_y0 = self._rdrag_piece_init_centers[idx]
+                vx = cp_x0 - Cx
+                vy = cp_y0 - Cy
+                rvx, rvy = rotate_point(vx, vy, delta_rot)
+                cp_x_new = Cx + rvx
+                cp_y_new = Cy + rvy
+                new_x = cp_x_new - cx_new
+                new_y = cp_y_new - cy_new
+            else:
+                # Rotação individual em torno do próprio centro
+                cp_x0, cp_y0 = self._rdrag_piece_init_centers[idx]
+                new_x = cp_x0 - cx_new
+                new_y = cp_y0 - cy_new
+
+            if abs(new_x - round(new_x)) < 1e-9:
+                new_x = float(round(new_x))
+            else:
+                new_x = round(new_x, 4)
+            if abs(new_y - round(new_y)) < 1e-9:
+                new_y = float(round(new_y))
+            else:
+                new_y = round(new_y, 4)
+
+            p["x"] = new_x
+            p["y"] = new_y
+            p["rotation"] = new_rot
+            if "rotation_rad" in p:
+                p["rotation_rad"] = math.radians(new_rot)
+
+            self.redraw_single_piece(idx)
+
+        # Guia Visual no Canvas (tag: rdrag_guide)
+        try:
+            self.canvas.delete("rdrag_guide")
+            arc_r = 42.0
+
+            # Pivô: marcador circular no centro (Cx_px, Cy_px)
+            self.canvas.create_oval(
+                Cx_px - 3, Cy_px - 3, Cx_px + 3, Cy_px + 3,
+                fill="#3b82f6", outline="#1d4ed8", width=1.5,
+                tags="rdrag_guide"
+            )
+
+            # Raio 1: linha tracejada do pivô na direção de theta0
+            r1_len = max(arc_r, math.hypot(self._rdrag_start_x - Cx_px, self._rdrag_start_y - Cy_px))
+            r1_rad = math.radians(self._rdrag_theta0)
+            r1_x = Cx_px + r1_len * math.cos(r1_rad)
+            r1_y = Cy_px - r1_len * math.sin(r1_rad)
+            self.canvas.create_line(
+                Cx_px, Cy_px, r1_x, r1_y,
+                dash=(4, 4), fill="#3b82f6", width=1.5,
+                tags="rdrag_guide"
+            )
+
+            # Raio 2: linha contínua do pivô até o cursor atual
+            self.canvas.create_line(
+                Cx_px, Cy_px, event.x, event.y,
+                fill="#2563eb", width=1.5,
+                tags="rdrag_guide"
+            )
+
+            # Arco circular de raio ~42 px centrado no pivô, começando em theta0 com extensão delta_rot
+            bbox_arc = (Cx_px - arc_r, Cy_px - arc_r, Cx_px + arc_r, Cy_px + arc_r)
+            if abs(delta_rot) >= 359.9:
+                self.canvas.create_oval(
+                    bbox_arc,
+                    outline="#3b82f6", width=2.0,
+                    tags="rdrag_guide"
+                )
+            elif abs(delta_rot) > 0.1:
+                self.canvas.create_arc(
+                    bbox_arc,
+                    start=self._rdrag_theta0,
+                    extent=delta_rot,
+                    style="arc",
+                    outline="#3b82f6", width=2.0,
+                    tags="rdrag_guide"
+                )
+
+            self.canvas.tag_raise("rdrag_guide")
+        except Exception:
+            pass
+
+        # Barra de status em tempo real com ângulo atual e variação (duas casas decimais)
+        primary_idx = self.selected_index if (self.selected_index is not None and 0 <= self.selected_index < len(self.placed_pieces)) else self._rdrag_selected_indices[0]
+        curr_rot = self.placed_pieces[primary_idx]["rotation"]
+        sign = "+" if delta_rot >= 0 else ""
+        status_msg = f"Rotação: {curr_rot:.2f}° (Δ {sign}{delta_rot:.2f}°) | ESC para cancelar"
+        if hasattr(self, "lbl_stat_pos"):
+            self.lbl_stat_pos.config(text=status_msg)
+        return "break"
+
+    def on_rbutton_release(self, event):
+        """
+        Finaliza a rotação livre 360° (OnRButtonUp 0x421fd0).
+        - Remove guias visuais 'rdrag_guide'.
+        - Registra 1 único nível de Undo se houve rotação.
+        - Marca layout como modificado (*).
+        - Executa validação não-bloqueante na barra de status (sem pop-ups).
+        """
+        if not getattr(self, "_rdrag_active", False):
+            return
+
+        try:
+            self.canvas.delete("rdrag_guide")
+        except Exception:
+            pass
+
+        was_rotating = getattr(self, "_rdrag_rotating", False)
+        self._rdrag_active = False
+        self._rdrag_rotating = False
+
+        if not was_rotating:
+            # Soltura dentro da deadzone sem giro: mantém clique estático
+            self._rdrag_pre_pieces = None
+            self._rdrag_selected_indices = []
+            if hasattr(self, "_rdrag_piece_init_centers"):
+                self._rdrag_piece_init_centers.clear()
+            if hasattr(self, "_rdrag_piece_base_centers"):
+                self._rdrag_piece_base_centers.clear()
+            return
+
+        # Conclusão do giro: verifica se houve alteração real
+        pieces_changed = False
+        if self._rdrag_pre_pieces:
+            for idx in self._rdrag_selected_indices:
+                if idx >= len(self.placed_pieces) or idx >= len(self._rdrag_pre_pieces):
+                    continue
+                p_now = self.placed_pieces[idx]
+                p_old = self._rdrag_pre_pieces[idx]
+                if (abs(p_now.get("rotation", 0.0) - p_old.get("rotation", 0.0)) > 1e-4 or
+                    abs(p_now.get("x", 0.0) - p_old.get("x", 0.0)) > 1e-4 or
+                    abs(p_now.get("y", 0.0) - p_old.get("y", 0.0)) > 1e-4):
+                    pieces_changed = True
+                    break
+
+        if pieces_changed and self._rdrag_pre_pieces:
+            state = {
+                "pieces": [dict(p) for p in self._rdrag_pre_pieces],
+                "sheet_height": self.sheet_height,
+                "trim_cut_line": copy.deepcopy(getattr(self, "trim_cut_line", None)),
+                "original_sheet_height": getattr(self, "original_sheet_height", None)
+            }
+            self.undo_stack.append(state)
+            if len(self.undo_stack) > UNDO_MAX_LEVELS:
+                self.undo_stack.pop(0)
+            self.set_modified(True)
+
+        self._rdrag_pre_pieces = None
+        self._rdrag_selected_indices = []
+        if hasattr(self, "_rdrag_piece_init_centers"):
+            self._rdrag_piece_init_centers.clear()
+        if hasattr(self, "_rdrag_piece_base_centers"):
+            self._rdrag_piece_base_centers.clear()
+
+        self.redraw()
+        self.update_status()
+
+        # Validação não-bloqueante na barra de status
+        primary_idx = self.selected_index if (self.selected_index is not None and 0 <= self.selected_index < len(self.placed_pieces)) else 0
+        curr_rot = self.placed_pieces[primary_idx]["rotation"] if (0 <= primary_idx < len(self.placed_pieces)) else 0.0
+        warn = self.validate_placement_status()
+        if warn and hasattr(self, "lbl_stat_left"):
+            self.lbl_stat_left.config(text=warn)
+        elif hasattr(self, "lbl_stat_left"):
+            self.lbl_stat_left.config(text="Rotação livre concluída.")
+        if hasattr(self, "lbl_stat_pos"):
+            self.lbl_stat_pos.config(text=f"Rotação finalizada em {curr_rot:.2f}°.")
+        return "break"
 
     def redraw_single_piece(self, piece_idx):
         """
@@ -2112,10 +2696,10 @@ class LayoutEditorView(tk.Frame):
         if not size_str:
             size_str = str(p.get("name") or "")
 
-        fill_col = p.get("color") or get_color_for_size(size_str, piece_idx)
-        p["color"] = fill_col
+        base_col = p.get("color") or get_color_for_size(size_str, piece_idx)
+        p["color"] = base_col
 
-        is_sel = (piece_idx == self.selected_index)
+        is_sel = (piece_idx == self.selected_index) or (hasattr(self, "selected_indices") and piece_idx in self.selected_indices)
         if is_col:
             outline_col = "#ef4444"
             line_w = 3.0
@@ -2125,6 +2709,8 @@ class LayoutEditorView(tk.Frame):
         else:
             outline_col = "#1e293b"
             line_w = 1.2
+
+        fill_col = "" if (SELECTED_OUTLINE_ONLY and is_sel) else base_col
 
         self.canvas.create_polygon(
             screen_pts,
@@ -2197,7 +2783,7 @@ class LayoutEditorView(tk.Frame):
             elif isinstance(prev_state, list):
                 self.placed_pieces = prev_state
 
-            if self.selected_index >= len(self.placed_pieces):
+            if self.selected_index is not None and self.selected_index >= len(self.placed_pieces):
                 self.selected_index = len(self.placed_pieces) - 1
             self.is_modified = (len(self.undo_stack) != getattr(self, "_saved_undo_index", -1))
             self._update_window_title()
@@ -2222,7 +2808,7 @@ class LayoutEditorView(tk.Frame):
             return
 
         if center_x is None or center_y is None:
-            if 0 <= self.selected_index < len(self.placed_pieces):
+            if self.selected_index is not None and 0 <= self.selected_index < len(self.placed_pieces):
                 p = self.placed_pieces[self.selected_index]
                 center_x, center_y = self.world_to_screen(p["x"], p["y"])
             else:
@@ -2333,39 +2919,55 @@ class LayoutEditorView(tk.Frame):
     # -------------------------------------------------------------
     # Operações CAD nas Peças (Bump, Rotate, Delete, Duplicate)
     # -------------------------------------------------------------
+    def select_all(self, event=None):
+        """Seleciona todas as peças posicionadas na chapa (Ctrl+A)."""
+        focused = self.focus_get()
+        if isinstance(focused, (tk.Entry, ttk.Entry, tk.Text, ttk.Treeview)):
+            return
+        if self.placed_pieces:
+            self.selected_indices = list(range(len(self.placed_pieces)))
+            self.selected_index = len(self.placed_pieces) - 1
+            self.redraw()
+            self.update_status()
+        return "break"
+
     def nudge_selected(self, dx_mm, dy_mm):
         focused = self.focus_get()
         if isinstance(focused, (tk.Entry, ttk.Entry, tk.Text, ttk.Treeview)):
             return
-        if 0 <= self.selected_index < len(self.placed_pieces):
+        sel_indices = self.get_selected_indices()
+        if sel_indices:
             self.push_undo()
-            p = self.placed_pieces[self.selected_index]
-            p["x"] += dx_mm
-            p["y"] += dy_mm
+            for idx in sel_indices:
+                p = self.placed_pieces[idx]
+                p["x"] += dx_mm
+                p["y"] += dy_mm
+                self.redraw_single_piece(idx)
             self.set_modified(True)
-            self.redraw_single_piece(self.selected_index)
             self.update_status()
 
     def rotate_selected(self, delta_deg, group_autorepeat=False):
         """
-        Rotaciona a peça selecionada por delta_deg (graus).
+        Rotaciona a(s) peça(s) selecionada(s) por delta_deg (graus).
         Usa rotação matemática invariante centrada no contorno base unrotated.
         """
         focused = self.focus_get()
         if isinstance(focused, (tk.Entry, ttk.Entry, tk.Text, ttk.Treeview)):
             return
-        if 0 <= self.selected_index < len(self.placed_pieces):
+        sel_indices = self.get_selected_indices()
+        if sel_indices:
             if not group_autorepeat:
                 self.push_undo()
-            p = self.placed_pieces[self.selected_index]
-            rotate_piece_in_place(p, delta_deg)
+            for idx in sel_indices:
+                p = self.placed_pieces[idx]
+                rotate_piece_in_place(p, delta_deg)
+                self.redraw_single_piece(idx)
             self.set_modified(True)
-            self.redraw_single_piece(self.selected_index)
             self.update_status()
 
     def on_f1_press(self, event=None):
-        """F1: Ajuste fino, gira a peça selecionada 2° para a ESQUERDA (anti-horário). Suporta auto-repeat."""
-        if 0 <= self.selected_index < len(self.placed_pieces):
+        """F1: Ajuste fino, gira a(s) peça(s) selecionada(s) 2° para a ESQUERDA (anti-horário). Suporta auto-repeat."""
+        if self.get_selected_indices():
             delta = ROT_DIR_LEFT * ROT_FINE_STEP_DEG
             if UNDO_GROUP_AUTOREPEAT:
                 if not self._in_fine_rot_sequence:
@@ -2386,8 +2988,8 @@ class LayoutEditorView(tk.Frame):
         return "break"
 
     def on_f2_press(self, event=None):
-        """F2: Ajuste fino, gira a peça selecionada 2° para a DIREITA (horário). Suporta auto-repeat."""
-        if 0 <= self.selected_index < len(self.placed_pieces):
+        """F2: Ajuste fino, gira a(s) peça(s) selecionada(s) 2° para a DIREITA (horário). Suporta auto-repeat."""
+        if self.get_selected_indices():
             delta = ROT_DIR_RIGHT * ROT_FINE_STEP_DEG
             if UNDO_GROUP_AUTOREPEAT:
                 if not self._in_fine_rot_sequence:
@@ -2416,7 +3018,7 @@ class LayoutEditorView(tk.Frame):
         if getattr(self, "_f3_pressed", False):
             return "break"
         self._f3_pressed = True
-        if 0 <= self.selected_index < len(self.placed_pieces):
+        if self.get_selected_indices():
             delta = ROT_DIR_F3 * ROT_90_STEP_DEG
             self.rotate_selected(delta, group_autorepeat=False)
         return "break"
@@ -2428,11 +3030,11 @@ class LayoutEditorView(tk.Frame):
         return "break"
 
     def on_f4_press(self, event=None):
-        """F4: Gira a peça selecionada 180° ('o pé oposto'). SEM auto-repeat."""
+        """F4: Gira a(s) peça(s) selecionada(s) 180° ('o pé oposto'). SEM auto-repeat."""
         if getattr(self, "_f4_pressed", False):
             return "break"
         self._f4_pressed = True
-        if 0 <= self.selected_index < len(self.placed_pieces):
+        if self.get_selected_indices():
             delta = ROT_FLIP_STEP_DEG
             self.rotate_selected(delta, group_autorepeat=False)
         return "break"
@@ -2444,11 +3046,14 @@ class LayoutEditorView(tk.Frame):
         return "break"
 
     def mirror_selected(self):
-        if 0 <= self.selected_index < len(self.placed_pieces):
+        sel_indices = self.get_selected_indices()
+        if sel_indices:
             self.push_undo()
-            p = self.placed_pieces[self.selected_index]
-            p["contour"] = [{"x": -pt["x"], "y": pt["y"]} for pt in p["contour"]]
-            p["is_mirrored"] = not p.get("is_mirrored", False)
+            for idx in sel_indices:
+                p = self.placed_pieces[idx]
+                p["contour"] = [{"x": -pt["x"], "y": pt["y"]} for pt in p["contour"]]
+                p["is_mirrored"] = not p.get("is_mirrored", False)
+                self.redraw_single_piece(idx)
             self.set_modified(True)
             self.redraw()
             self.update_status()
@@ -2457,23 +3062,32 @@ class LayoutEditorView(tk.Frame):
         focused = self.focus_get()
         if isinstance(focused, (tk.Entry, ttk.Entry, tk.Text, ttk.Treeview)):
             return
-        if 0 <= self.selected_index < len(self.placed_pieces):
+        sel_indices = sorted(set(self.get_selected_indices()), reverse=True)
+        if sel_indices:
             self.push_undo()
-            self.placed_pieces.pop(self.selected_index)
-            self.selected_index = -1
+            for idx in sel_indices:
+                if 0 <= idx < len(self.placed_pieces):
+                    self.placed_pieces.pop(idx)
+            self.selected_indices = []
+            self.selected_index = None
             self.set_modified(True)
             self.redraw()
             self.update_status()
 
     def duplicate_selected(self):
-        if 0 <= self.selected_index < len(self.placed_pieces):
+        sel_indices = self.get_selected_indices()
+        if sel_indices:
             self.push_undo()
-            orig = self.placed_pieces[self.selected_index]
-            new_p = dict(orig)
-            new_p["x"] += 25.0
-            new_p["y"] += 15.0
-            self.placed_pieces.append(new_p)
-            self.selected_index = len(self.placed_pieces) - 1
+            new_indices = []
+            for idx in sel_indices:
+                orig = self.placed_pieces[idx]
+                new_p = dict(orig)
+                new_p["x"] += 25.0
+                new_p["y"] += 15.0
+                self.placed_pieces.append(new_p)
+                new_indices.append(len(self.placed_pieces) - 1)
+            self.selected_indices = new_indices
+            self.selected_index = new_indices[-1] if new_indices else None
             self.set_modified(True)
             self.redraw()
             self.update_status()
@@ -2482,7 +3096,8 @@ class LayoutEditorView(tk.Frame):
         if messagebox.askyesno("Layout Editor", "Deseja remover todas as peças do layout atual?"):
             self.push_undo()
             self.placed_pieces = []
-            self.selected_index = -1
+            self.selected_indices = []
+            self.selected_index = None
             self.set_modified(True)
             self.redraw()
             self.update_status()
@@ -2501,7 +3116,7 @@ class LayoutEditorView(tk.Frame):
             messagebox.showinfo("Paleta de Cores", "Não há peças na mesa para colorir.", parent=self)
             return
 
-        if self.selected_index < 0 or self.selected_index >= len(self.placed_pieces):
+        if self.selected_index is None or self.selected_index < 0 or self.selected_index >= len(self.placed_pieces):
             self.selected_index = 0
 
         target_piece = self.placed_pieces[self.selected_index]
@@ -2551,7 +3166,7 @@ class LayoutEditorView(tk.Frame):
         if not self.placed_pieces:
             return None
 
-        idx = self.selected_index if (0 <= self.selected_index < len(self.placed_pieces)) else -1
+        idx = self.selected_index if (self.selected_index is not None and 0 <= self.selected_index < len(self.placed_pieces)) else -1
         target_p = self.placed_pieces[idx] if idx >= 0 else None
 
         # 1. Limites da chapa
@@ -2619,7 +3234,7 @@ class LayoutEditorView(tk.Frame):
             self.lbl_stat_yield.config(text=f"{yd:.2f}%")
 
         p_target = None
-        if 0 <= self.selected_index < len(self.placed_pieces):
+        if self.selected_index is not None and 0 <= self.selected_index < len(self.placed_pieces):
             p_target = self.placed_pieces[self.selected_index]
             p_id = p_target.get("id", self.selected_index + 1)
         elif self.placed_pieces:

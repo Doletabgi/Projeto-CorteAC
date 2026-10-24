@@ -24,6 +24,7 @@ from ui.layout_editor_view import (
     UNDO_GROUP_AUTOREPEAT,
     SAVE_TARGET,
     CONTOUR_CON,
+    SELECTED_OUTLINE_ONLY,
 )
 from cad.geometry import polygon_bbox, transform_contour, polygon_area
 
@@ -1544,6 +1545,486 @@ class TestLayoutEditorShortcuts(unittest.TestCase):
         self.assertEqual(len(cad.find_withtag("drag_ghost")), 0)
         self.assertAlmostEqual(cad.placed_pieces[0]["x"], 100.0, places=1)
         cad.destroy()
+
+    def test_rdrag_deadzone_no_rotation_no_undo(self):
+        """Clique rápido com botão direito dentro da deadzone (dx^2 + dy^2 <= 7) não altera o ângulo nem suja o undo_stack."""
+        self.view.selected_index = 0
+        p = self.view.placed_pieces[0]
+        orig_rot = p["rotation"]
+        orig_x, orig_y = p["x"], p["y"]
+        undo_len_before = len(self.view.undo_stack)
+
+        # Press
+        self.view.on_rbutton_press(DummyMouseEvent(x=150, y=150))
+        self.assertTrue(self.view._rdrag_active)
+        self.assertFalse(self.view._rdrag_rotating)
+
+        # Motion dentro da deadzone (dx=2, dy=1 -> 4 + 1 = 5 <= 7)
+        self.view.on_rbutton_drag(DummyMouseEvent(x=152, y=151))
+        self.assertFalse(self.view._rdrag_rotating)
+        self.assertEqual(p["rotation"], orig_rot)
+
+        # Release dentro da deadzone
+        self.view.on_rbutton_release(DummyMouseEvent(x=152, y=151))
+        self.assertFalse(self.view._rdrag_active)
+        self.assertFalse(self.view._rdrag_rotating)
+        self.assertEqual(p["rotation"], orig_rot)
+        self.assertEqual(p["x"], orig_x)
+        self.assertEqual(p["y"], orig_y)
+        self.assertEqual(len(self.view.undo_stack), undo_len_before)
+
+    def test_rdrag_continuous_rotation_and_single_undo(self):
+        """Arrasto com botão direito (dx^2 + dy^2 > 7) gira continuamente conforme atan2, gera 1 nível de Undo e Ctrl+Z restaura."""
+        self.view.selected_index = 0
+        p = self.view.placed_pieces[0]
+        orig_rot = p["rotation"]
+        undo_len_before = len(self.view.undo_stack)
+
+        # Pivô na tela para a peça 0
+        p_poly = transform_contour(p["contour"], p["x"], p["y"], p["rotation"])
+        b = polygon_bbox(p_poly)
+        Cx_world = (b[0] + b[2]) / 2.0
+        Cy_world = (b[1] + b[3]) / 2.0
+        Cx_px, Cy_px = self.view.world_to_screen(Cx_world, Cy_world)
+
+        # Pressiona botão direito a 50px à direita do pivô (theta0 = 0.0°)
+        self.view.on_rbutton_press(DummyMouseEvent(x=Cx_px + 50.0, y=Cy_px))
+        self.assertTrue(self.view._rdrag_active)
+        piv_x, piv_y = self.view._rdrag_pivot_screen
+
+        # Arrasta para 50px acima do pivô (em tela, y menor é para cima -> theta1 = +90.0°)
+        self.view.on_rbutton_drag(DummyMouseEvent(x=piv_x, y=piv_y - 50.0))
+        self.assertTrue(self.view._rdrag_rotating)
+        expected_rot_90 = (orig_rot + 90.0) % 360.0
+        self.assertAlmostEqual(p["rotation"], expected_rot_90, places=1)
+        # Guia visual ativa
+        self.assertTrue(len(self.view.canvas.find_withtag("rdrag_guide")) > 0)
+
+        # Arrasta mais para 50px à esquerda do pivô (theta1 = 180° -> delta = +180°)
+        self.view.on_rbutton_drag(DummyMouseEvent(x=piv_x - 50.0, y=piv_y))
+        expected_rot_180 = (orig_rot + 180.0) % 360.0
+        self.assertAlmostEqual(p["rotation"], expected_rot_180, places=1)
+
+        # Solta o botão direito
+        self.view.on_rbutton_release(DummyMouseEvent(x=piv_x - 50.0, y=piv_y))
+        self.assertFalse(self.view._rdrag_active)
+        self.assertFalse(self.view._rdrag_rotating)
+        # Guia visual apagada
+        self.assertEqual(len(self.view.canvas.find_withtag("rdrag_guide")), 0)
+        # Apenas 1 nível de Undo para todo o arrasto
+        self.assertEqual(len(self.view.undo_stack), undo_len_before + 1)
+        self.assertTrue(self.view.is_modified)
+
+        # Ctrl+Z desfaz a rotação inteira e restaura o ângulo original
+        self.view.undo_action()
+        self.assertAlmostEqual(self.view.placed_pieces[0]["rotation"], orig_rot, places=2)
+
+    def test_rdrag_escape_cancellation(self):
+        """Pressionar Escape no meio do arrasto rotacional restaura ângulo original e não adiciona item ao undo_stack."""
+        self.view.selected_index = 0
+        p = self.view.placed_pieces[0]
+        orig_rot = p["rotation"]
+        orig_x, orig_y = p["x"], p["y"]
+        undo_len_before = len(self.view.undo_stack)
+
+        self.view.on_rbutton_press(DummyMouseEvent(x=100, y=100))
+        # Move além da deadzone para girar
+        self.view.on_rbutton_drag(DummyMouseEvent(x=160, y=80))
+        self.assertTrue(self.view._rdrag_rotating)
+        self.assertNotEqual(p["rotation"], orig_rot)
+
+        # Pressiona Escape
+        res = self.view.cancel_drag(DummyEvent(keysym="Escape"))
+        self.assertEqual(res, "break")
+        self.assertFalse(self.view._rdrag_active)
+        self.assertFalse(self.view._rdrag_rotating)
+        p_res = self.view.placed_pieces[0]
+        self.assertAlmostEqual(p_res["rotation"], orig_rot, places=2)
+        self.assertAlmostEqual(p_res["x"], orig_x, places=2)
+        self.assertAlmostEqual(p_res["y"], orig_y, places=2)
+        # Nada adicionado ao undo_stack
+        self.assertEqual(len(self.view.undo_stack), undo_len_before)
+        # Guia visual limpa
+        self.assertEqual(len(self.view.canvas.find_withtag("rdrag_guide")), 0)
+
+    def test_rdrag_ctrl_group_rigid_body_rotation(self):
+        """Arrasto com Ctrl pressionado e 2 peças selecionadas gira ambas em grupo ao redor do centro comum."""
+        self.assertTrue(len(self.view.placed_pieces) >= 2)
+        # Configura duas peças em posições controladas
+        self.view.placed_pieces[0]["x"] = 100.0
+        self.view.placed_pieces[0]["y"] = 150.0
+        self.view.placed_pieces[0]["rotation"] = 0.0
+        self.view.placed_pieces[1]["x"] = 250.0
+        self.view.placed_pieces[1]["y"] = 150.0
+        self.view.placed_pieces[1]["rotation"] = 0.0
+
+        p0 = self.view.placed_pieces[0]
+        p1 = self.view.placed_pieces[1]
+        self.view.selected_indices = {0, 1}
+        self.view.selected_index = 0
+        undo_len_before = len(self.view.undo_stack)
+
+        # Distância inicial entre as duas peças
+        dist_before = math.hypot(p1["x"] - p0["x"], p1["y"] - p0["y"])
+
+        # Calcula bounding box coletivo inicial
+        poly0 = transform_contour(p0["contour"], p0["x"], p0["y"], p0["rotation"])
+        poly1 = transform_contour(p1["contour"], p1["x"], p1["y"], p1["rotation"])
+        b0 = polygon_bbox(poly0)
+        b1 = polygon_bbox(poly1)
+        coll_Cx = (min(b0[0], b1[0]) + max(b0[2], b1[2])) / 2.0
+        coll_Cy = (min(b0[1], b1[1]) + max(b0[3], b1[3])) / 2.0
+        coll_Cx_px, coll_Cy_px = self.view.world_to_screen(coll_Cx, coll_Cy)
+
+        # Inicia arrasto com Ctrl (state=0x0004) a 60px à direita do centro coletivo (theta0 = 0.0°)
+        self.view.on_rbutton_press(DummyMouseEvent(x=coll_Cx_px + 60.0, y=coll_Cy_px, state=0x0004))
+        self.assertTrue(self.view._rdrag_is_ctrl)
+        piv_x, piv_y = self.view._rdrag_pivot_screen
+
+        # Gira 90° no sentido anti-horário (em tela: 60px para cima)
+        self.view.on_rbutton_drag(DummyMouseEvent(x=piv_x, y=piv_y - 60.0, state=0x0004))
+        self.assertTrue(self.view._rdrag_rotating)
+
+        # Ambas as peças devem estar orientadas a 90°
+        self.assertAlmostEqual(p0["rotation"], 90.0, places=1)
+        self.assertAlmostEqual(p1["rotation"], 90.0, places=1)
+
+        # Como corpo rígido, a distância mútua entre peças é preservada
+        dist_after = math.hypot(p1["x"] - p0["x"], p1["y"] - p0["y"])
+        self.assertAlmostEqual(dist_before, dist_after, places=1)
+
+        # E as peças translacionaram ao redor do centro coletivo
+        self.assertAlmostEqual(p0["x"], p1["x"], delta=20.0)
+
+        # Conclui giro e verifica Undo
+        self.view.on_rbutton_release(DummyMouseEvent(x=piv_x, y=piv_y - 60.0, state=0x0004))
+        self.assertEqual(len(self.view.undo_stack), undo_len_before + 1)
+
+        # Ctrl+Z restaura as duas peças à orientação 0° e posições originais
+        self.view.undo_action()
+        self.assertAlmostEqual(self.view.placed_pieces[0]["rotation"], 0.0, places=2)
+        self.assertAlmostEqual(self.view.placed_pieces[1]["rotation"], 0.0, places=2)
+        self.assertAlmostEqual(self.view.placed_pieces[0]["x"], 100.0, places=1)
+        self.assertAlmostEqual(self.view.placed_pieces[1]["x"], 250.0, places=1)
+
+    def test_rdrag_auto_select_under_cursor_and_empty_space_ignore(self):
+        """Sem peça selecionada, botão direito sobre peça seleciona-a; em espaço vazio, ignora e não inicia rotação."""
+        self.view.selected_index = -1
+        self.view.selected_indices = set()
+
+        # 1. Clique com botão direito em espaço vazio (longe das peças)
+        self.view.on_rbutton_press(DummyMouseEvent(x=5, y=5))
+        self.assertFalse(self.view._rdrag_active)
+        self.assertFalse(self.view._rdrag_rotating)
+        self.assertEqual(self.view.selected_index, -1)
+
+        # 2. Clique com botão direito sobre a peça 0
+        p0 = self.view.placed_pieces[0]
+        poly0 = transform_contour(p0["contour"], p0["x"], p0["y"], p0["rotation"])
+        b0 = polygon_bbox(poly0)
+        c_x = (b0[0] + b0[2]) / 2.0
+        c_y = (b0[1] + b0[3]) / 2.0
+        sx, sy = self.view.world_to_screen(c_x, c_y)
+
+        self.view.on_rbutton_press(DummyMouseEvent(x=sx, y=sy))
+        self.assertEqual(self.view.selected_index, 0)
+        self.assertTrue(self.view._rdrag_active)
+
+        self.view.on_rbutton_release(DummyMouseEvent(x=sx, y=sy))
+        self.assertFalse(self.view._rdrag_active)
+
+    def test_rubberband_100_percent_contained_only(self):
+        """Rubberband: seleciona APENAS peças cujo bounding box esteja 100% contido. Peças parcialmente cruzadas são ignoradas."""
+        self.view.placed_pieces = [
+            {"x": 100.0, "y": 100.0, "rotation": 0.0, "contour": [{"x": 0, "y": 0}, {"x": 40, "y": 0}, {"x": 40, "y": 40}, {"x": 0, "y": 40}]},
+            {"x": 200.0, "y": 100.0, "rotation": 0.0, "contour": [{"x": 0, "y": 0}, {"x": 40, "y": 0}, {"x": 40, "y": 40}, {"x": 0, "y": 40}]},
+            {"x": 300.0, "y": 100.0, "rotation": 0.0, "contour": [{"x": 0, "y": 0}, {"x": 40, "y": 0}, {"x": 40, "y": 40}, {"x": 0, "y": 40}]}
+        ]
+        self.view.selected_indices = []
+        self.view.selected_index = None
+        self.view.redraw()
+
+        # Peça 0: X em [100, 140], Y em [100, 140]
+        # Peça 1: X em [200, 240], Y em [100, 140]
+        # Peça 2: X em [300, 340], Y em [100, 140]
+        # Caixa elástica cobre X de 80 a 220, Y de 80 a 160:
+        # - Peça 0: 100% contida ([100, 140] está dentro de [80, 220])
+        # - Peça 1: Cruza parcialmente a borda (vai de 200 a 240, mas a caixa acaba em 220) -> NÃO deve ser selecionada!
+        # - Peça 2: Totalmente fora -> NÃO deve ser selecionada!
+        sx0, sy0 = self.view.world_to_screen(80.0, 80.0)
+        sx1, sy1 = self.view.world_to_screen(220.0, 160.0)
+
+        # Inicia rubberband no ponto (sx0, sy0)
+        self.view.on_canvas_click(DummyMouseEvent(x=sx0, y=sy0))
+        self.assertTrue(self.view.is_rubberbanding)
+
+        # Arrasta até (sx1, sy1)
+        self.view.on_canvas_drag(DummyMouseEvent(x=sx1, y=sy1))
+        boxes = self.view.canvas.find_withtag("rubberband_box")
+        self.assertTrue(len(boxes) > 0)
+
+        # Solta o botão
+        self.view.on_canvas_release(DummyMouseEvent(x=sx1, y=sy1))
+        self.assertFalse(self.view.is_rubberbanding)
+        self.assertEqual(len(self.view.canvas.find_withtag("rubberband_box")), 0)
+
+        # Apenas peça 0 deve estar selecionada!
+        self.assertEqual(self.view.selected_indices, [0])
+        self.assertEqual(self.view.selected_index, 0)
+
+    def test_rubberband_with_shift_accumulates(self):
+        """Rubberband segurando Shift soma as peças 100% contidas à seleção pré-existente."""
+        self.view.placed_pieces = [
+            {"x": 50.0, "y": 50.0, "rotation": 0.0, "contour": [{"x": 0, "y": 0}, {"x": 30, "y": 0}, {"x": 30, "y": 30}, {"x": 0, "y": 30}]},
+            {"x": 150.0, "y": 50.0, "rotation": 0.0, "contour": [{"x": 0, "y": 0}, {"x": 30, "y": 0}, {"x": 30, "y": 30}, {"x": 0, "y": 30}]},
+            {"x": 250.0, "y": 50.0, "rotation": 0.0, "contour": [{"x": 0, "y": 0}, {"x": 30, "y": 0}, {"x": 30, "y": 30}, {"x": 0, "y": 30}]}
+        ]
+        self.view.selected_indices = [0]
+        self.view.selected_index = 0
+        self.view.redraw()
+
+        # Caixa sobre a peça 2 com Shift (state=0x0001)
+        sx0, sy0 = self.view.world_to_screen(240.0, 40.0)
+        sx1, sy1 = self.view.world_to_screen(290.0, 90.0)
+
+        self.view.on_canvas_click(DummyMouseEvent(x=sx0, y=sy0, state=0x0001))
+        self.view.on_canvas_drag(DummyMouseEvent(x=sx1, y=sy1, state=0x0001))
+        self.view.on_canvas_release(DummyMouseEvent(x=sx1, y=sy1, state=0x0001))
+
+        self.assertIn(0, self.view.selected_indices)
+        self.assertIn(2, self.view.selected_indices)
+        self.assertNotIn(1, self.view.selected_indices)
+
+    def test_shift_click_toggle_pieces(self):
+        """Shift + Clique sobre peça alterna (toggle) sua presença em selected_indices."""
+        self.view.placed_pieces = [
+            {"x": 100.0, "y": 100.0, "rotation": 0.0, "contour": [{"x": 0, "y": 0}, {"x": 40, "y": 0}, {"x": 40, "y": 40}, {"x": 0, "y": 40}]},
+            {"x": 200.0, "y": 100.0, "rotation": 0.0, "contour": [{"x": 0, "y": 0}, {"x": 40, "y": 0}, {"x": 40, "y": 40}, {"x": 0, "y": 40}]}
+        ]
+        self.view.selected_indices = []
+        self.view.selected_index = None
+        self.view.redraw()
+
+        sx0, sy0 = self.view.world_to_screen(120.0, 120.0)
+        sx1, sy1 = self.view.world_to_screen(220.0, 120.0)
+
+        # 1. Shift+Clique na peça 0: adiciona
+        self.view.on_canvas_click(DummyMouseEvent(x=sx0, y=sy0, state=0x0001))
+        self.assertIn(0, self.view.selected_indices)
+
+        # 2. Shift+Clique na peça 1: adiciona
+        self.view.on_canvas_click(DummyMouseEvent(x=sx1, y=sy1, state=0x0001))
+        self.assertIn(0, self.view.selected_indices)
+        self.assertIn(1, self.view.selected_indices)
+
+        # 3. Shift+Clique na peça 0: remove
+        self.view.on_canvas_click(DummyMouseEvent(x=sx0, y=sy0, state=0x0001))
+        self.assertNotIn(0, self.view.selected_indices)
+        self.assertIn(1, self.view.selected_indices)
+
+        # 4. Shift+Clique na peça 1: remove
+        self.view.on_canvas_click(DummyMouseEvent(x=sx1, y=sy1, state=0x0001))
+        self.assertEqual(len(self.view.selected_indices), 0)
+        self.assertIsNone(self.view.selected_index)
+
+    def test_single_and_double_click_empty_clears_selection(self):
+        """Clique simples ou duplo-clique no vazio desmarca todas as peças selecionadas."""
+        self.view.placed_pieces = [
+            {"x": 100.0, "y": 100.0, "rotation": 0.0, "contour": [{"x": 0, "y": 0}, {"x": 40, "y": 0}, {"x": 40, "y": 40}, {"x": 0, "y": 40}]}
+        ]
+        self.view.selected_indices = [0]
+        self.view.selected_index = 0
+        self.view.redraw()
+
+        empty_sx, empty_sy = self.view.world_to_screen(10.0, 10.0)
+
+        # Clique simples no vazio (sem arrastar)
+        self.view.on_canvas_click(DummyMouseEvent(x=empty_sx, y=empty_sy, state=0))
+        self.view.on_canvas_release(DummyMouseEvent(x=empty_sx, y=empty_sy, state=0))
+        self.assertEqual(self.view.selected_indices, [])
+        self.assertIsNone(self.view.selected_index)
+
+        # Re-seleciona para testar duplo-clique
+        self.view.selected_indices = [0]
+        self.view.selected_index = 0
+        self.view.on_canvas_double_click(DummyMouseEvent(x=empty_sx, y=empty_sy))
+        self.assertEqual(self.view.selected_indices, [])
+        self.assertIsNone(self.view.selected_index)
+
+    def test_click_multi_selection_drag_vs_click_release(self):
+        """Clicar em peça já selecionada no grupo mantém grupo; soltar sem arrastar isola a peça."""
+        self.view.placed_pieces = [
+            {"x": 100.0, "y": 100.0, "rotation": 0.0, "contour": [{"x": 0, "y": 0}, {"x": 40, "y": 0}, {"x": 40, "y": 40}, {"x": 0, "y": 40}]},
+            {"x": 200.0, "y": 100.0, "rotation": 0.0, "contour": [{"x": 0, "y": 0}, {"x": 40, "y": 0}, {"x": 40, "y": 40}, {"x": 0, "y": 40}]}
+        ]
+        self.view.selected_indices = [0, 1]
+        self.view.selected_index = 1
+        self.view.redraw()
+
+        sx0, sy0 = self.view.world_to_screen(120.0, 120.0)
+
+        # 1. Clique sobre a peça 0: mantém grupo selecionado no Press
+        self.view.on_canvas_click(DummyMouseEvent(x=sx0, y=sy0, state=0))
+        self.assertEqual(set(self.view.selected_indices), {0, 1})
+        self.assertTrue(self.view.is_dragging_piece)
+
+        # 2. Solta no mesmo ponto (sem arrastar: dx^2 + dy^2 <= 7): isola apenas a peça 0
+        self.view.on_canvas_release(DummyMouseEvent(x=sx0, y=sy0, state=0))
+        self.assertEqual(self.view.selected_indices, [0])
+        self.assertEqual(self.view.selected_index, 0)
+
+    def test_group_drag_moves_all_pieces_equally_and_single_undo(self):
+        """Arrastar uma peça do grupo move todas as selecionadas pelo mesmo (Δx, Δy); 1 único Ctrl+Z desfaz tudo."""
+        self.view.placed_pieces = [
+            {"x": 100.0, "y": 100.0, "rotation": 0.0, "contour": [{"x": 0, "y": 0}, {"x": 40, "y": 0}, {"x": 40, "y": 40}, {"x": 0, "y": 40}]},
+            {"x": 200.0, "y": 100.0, "rotation": 0.0, "contour": [{"x": 0, "y": 0}, {"x": 40, "y": 0}, {"x": 40, "y": 40}, {"x": 0, "y": 40}]},
+            {"x": 300.0, "y": 250.0, "rotation": 0.0, "contour": [{"x": 0, "y": 0}, {"x": 40, "y": 0}, {"x": 40, "y": 40}, {"x": 0, "y": 40}]}
+        ]
+        self.view.selected_indices = [0, 1]
+        self.view.selected_index = 0
+        self.view.redraw()
+
+        undo_before = len(self.view.undo_stack)
+        sx0, sy0 = self.view.world_to_screen(120.0, 120.0)
+
+        # Inicia arraste na peça 0
+        self.view.on_canvas_click(DummyMouseEvent(x=sx0, y=sy0, state=0))
+        self.assertTrue(self.view.is_dragging_piece)
+
+        # Arrasta +30 mm em X e +20 mm em Y no mundo
+        new_wx, new_wy = 120.0 + 30.0, 120.0 + 20.0
+        sx_drag, sy_drag = self.view.world_to_screen(new_wx, new_wy)
+        self.view.on_canvas_drag(DummyMouseEvent(x=sx_drag, y=sy_drag, state=0))
+        self.view.flush_pending_drag()
+
+        # Solta o mouse
+        self.view.on_canvas_release(DummyMouseEvent(x=sx_drag, y=sy_drag, state=0))
+
+        # Ambas as peças 0 e 1 devem ter se deslocado exatamente +30 em X e +20 em Y
+        p0 = self.view.placed_pieces[0]
+        p1 = self.view.placed_pieces[1]
+        p2 = self.view.placed_pieces[2]
+        self.assertAlmostEqual(p0["x"], 130.0, places=1)
+        self.assertAlmostEqual(p0["y"], 120.0, places=1)
+        self.assertAlmostEqual(p1["x"], 230.0, places=1)
+        self.assertAlmostEqual(p1["y"], 120.0, places=1)
+        # Peça 2 não selecionada permanece intacta
+        self.assertAlmostEqual(p2["x"], 300.0, places=1)
+        self.assertAlmostEqual(p2["y"], 250.0, places=1)
+
+        # Apenas 1 nível adicionado ao undo_stack
+        self.assertEqual(len(self.view.undo_stack), undo_before + 1)
+
+        # Um único Ctrl+Z restaura ambas as peças às coordenadas originais
+        self.view.undo_action()
+        self.assertAlmostEqual(self.view.placed_pieces[0]["x"], 100.0, places=1)
+        self.assertAlmostEqual(self.view.placed_pieces[0]["y"], 100.0, places=1)
+        self.assertAlmostEqual(self.view.placed_pieces[1]["x"], 200.0, places=1)
+        self.assertAlmostEqual(self.view.placed_pieces[1]["y"], 100.0, places=1)
+
+    def test_group_drag_escape_aborts_without_undo(self):
+        """Pressionar Escape durante o arrasto em grupo aborta e restaura posições sem sujar undo_stack."""
+        self.view.placed_pieces = [
+            {"x": 100.0, "y": 100.0, "rotation": 0.0, "contour": [{"x": 0, "y": 0}, {"x": 40, "y": 0}, {"x": 40, "y": 40}, {"x": 0, "y": 40}]},
+            {"x": 200.0, "y": 100.0, "rotation": 0.0, "contour": [{"x": 0, "y": 0}, {"x": 40, "y": 0}, {"x": 40, "y": 40}, {"x": 0, "y": 40}]}
+        ]
+        self.view.selected_indices = [0, 1]
+        self.view.selected_index = 0
+        self.view.redraw()
+
+        undo_before = len(self.view.undo_stack)
+        sx0, sy0 = self.view.world_to_screen(120.0, 120.0)
+
+        self.view.on_canvas_click(DummyMouseEvent(x=sx0, y=sy0, state=0))
+        sx_drag, sy_drag = self.view.world_to_screen(160.0, 160.0)
+        self.view.on_canvas_drag(DummyMouseEvent(x=sx_drag, y=sy_drag, state=0))
+        self.view.flush_pending_drag()
+
+        # Tecla Escape durante o arrasto
+        self.view.cancel_drag(DummyEvent(keysym="Escape"))
+
+        # Posições originais restauradas
+        self.assertAlmostEqual(self.view.placed_pieces[0]["x"], 100.0, places=1)
+        self.assertAlmostEqual(self.view.placed_pieces[1]["x"], 200.0, places=1)
+        self.assertFalse(self.view.is_dragging_piece)
+        # Nenhum snapshot criado no undo_stack
+        self.assertEqual(len(self.view.undo_stack), undo_before)
+
+    def test_ctrl_a_selects_all_pieces(self):
+        """Ctrl+A seleciona todas as peças posicionadas no layout."""
+        self.view.placed_pieces = [
+            {"x": 100.0, "y": 100.0, "rotation": 0.0, "contour": CONTOUR_CON},
+            {"x": 200.0, "y": 100.0, "rotation": 0.0, "contour": CONTOUR_CON},
+            {"x": 300.0, "y": 100.0, "rotation": 0.0, "contour": CONTOUR_CON}
+        ]
+        self.view.selected_indices = []
+        self.view.selected_index = None
+
+        self.view.select_all()
+        self.assertEqual(self.view.selected_indices, [0, 1, 2])
+        self.assertEqual(self.view.selected_index, 2)
+
+    def test_group_delete_and_shortcuts_single_undo(self):
+        """Delete, F1-F4 e Setas operam em todas as peças selecionadas gerando apenas 1 nível de Undo."""
+        self.view.placed_pieces = [
+            {"x": 100.0, "y": 100.0, "rotation": 0.0, "contour": CONTOUR_CON},
+            {"x": 200.0, "y": 100.0, "rotation": 0.0, "contour": CONTOUR_CON}
+        ]
+        self.view.selected_indices = [0, 1]
+        self.view.selected_index = 0
+        self.view.redraw()
+
+        # 1. F1 (+2°) no grupo
+        undo_before = len(self.view.undo_stack)
+        self.view.on_f1_press(DummyEvent(keysym="F1"))
+        self.assertAlmostEqual(self.view.placed_pieces[0]["rotation"], 2.0, places=1)
+        self.assertAlmostEqual(self.view.placed_pieces[1]["rotation"], 2.0, places=1)
+        self.assertEqual(len(self.view.undo_stack), undo_before + 1)
+
+        # 2. Setas (Nudge dx=+10, dy=+5) no grupo
+        undo_before = len(self.view.undo_stack)
+        p0_x = self.view.placed_pieces[0]["x"]
+        p0_y = self.view.placed_pieces[0]["y"]
+        p1_x = self.view.placed_pieces[1]["x"]
+        p1_y = self.view.placed_pieces[1]["y"]
+        self.view.nudge_selected(10.0, 5.0)
+        self.assertAlmostEqual(self.view.placed_pieces[0]["x"], p0_x + 10.0, places=1)
+        self.assertAlmostEqual(self.view.placed_pieces[1]["x"], p1_x + 10.0, places=1)
+        self.assertAlmostEqual(self.view.placed_pieces[0]["y"], p0_y + 5.0, places=1)
+        self.assertAlmostEqual(self.view.placed_pieces[1]["y"], p1_y + 5.0, places=1)
+        self.assertEqual(len(self.view.undo_stack), undo_before + 1)
+
+        # 3. Delete no grupo exclui ambas as peças em 1 nível de Undo
+        undo_before = len(self.view.undo_stack)
+        self.view.delete_selected()
+        self.assertEqual(len(self.view.placed_pieces), 0)
+        self.assertEqual(self.view.selected_indices, [])
+        self.assertEqual(len(self.view.undo_stack), undo_before + 1)
+
+        # Ctrl+Z restaura as duas peças excluídas
+        self.view.undo_action()
+        self.assertEqual(len(self.view.placed_pieces), 2)
+
+    def test_selected_outline_only_style(self):
+        """SELECTED_OUTLINE_ONLY = True renderiza contorno destacado sem preenchimento opaco (fill="")."""
+        self.assertTrue(SELECTED_OUTLINE_ONLY)
+        self.view.placed_pieces = [
+            {"x": 100.0, "y": 100.0, "rotation": 0.0, "contour": CONTOUR_CON},
+            {"x": 200.0, "y": 100.0, "rotation": 0.0, "contour": CONTOUR_CON}
+        ]
+        self.view.selected_indices = [0]
+        self.view.selected_index = 0
+        self.view.redraw()
+
+        poly0_id = self.view.canvas.find_withtag("piece_poly_0")
+        self.assertTrue(len(poly0_id) > 0)
+        fill0 = self.view.canvas.itemcget(poly0_id[0], "fill")
+        self.assertEqual(fill0, "")
+
+        poly1_id = self.view.canvas.find_withtag("piece_poly_1")
+        self.assertTrue(len(poly1_id) > 0)
+        fill1 = self.view.canvas.itemcget(poly1_id[0], "fill")
+        self.assertNotEqual(fill1, "")
 
 
 if __name__ == "__main__":
