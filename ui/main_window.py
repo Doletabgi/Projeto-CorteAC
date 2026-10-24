@@ -1368,8 +1368,9 @@ class MainWindow(tk.Tk):
                     name = p.get("name") or shp.get("name") or "Peça"
                     size = str(p.get("size") or shp.get("size") or "41")
                     color = get_color_for_size(size)
+                    target_id = p.get("target_id") or p.get("shape_id") or (shp.get("id") if isinstance(shp, dict) else "")
                     le_pieces.append({
-                        "target_id": p.get("id", 1),
+                        "target_id": target_id,
                         "name": name,
                         "size": size,
                         "color": color,
@@ -4534,6 +4535,8 @@ class MainWindow(tk.Tk):
                         p_tid = str(p.get("target_id", "")).strip()
                         p_sz = str(p.get("size", "")).strip()
                         p_nm = str(p.get("name", "")).strip()
+                        if p_sz and s_sz and p_sz != s_sz:
+                            continue
                         if p_tid and s_id and p_tid == s_id:
                             cnt_placed += 1
                         elif p_nm and s_nm and p_nm == s_nm:

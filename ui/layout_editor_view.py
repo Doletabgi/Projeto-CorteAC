@@ -790,19 +790,6 @@ class LayoutEditorView(tk.Frame):
                     "resto": resto
                 })
 
-            # Garante a presença do elemento 'grade_ch_0' como 16º item da grade 4x4 (conforme Imagem 1)
-            if not any(t["name"] == "grade_ch_0" for t in targets):
-                targets.append({
-                    "id": "grade_ch_0",
-                    "name": "grade_ch_0",
-                    "size": "",
-                    "color": "#a0a0a0",
-                    "contour": [],
-                    "required": 0,
-                    "pairs": 0,
-                    "resto": 0
-                })
-
             self.sidebar_targets = targets
         else:
             if getattr(self, "load_sample", False):
@@ -830,7 +817,7 @@ class LayoutEditorView(tk.Frame):
 
         y_start, item_h, col_width, num_cols = self._get_sidebar_grid_layout()
 
-        for i, target in enumerate(self.sidebar_targets[:16]):
+        for i, target in enumerate(self.sidebar_targets):
             col_idx = i % num_cols
             row_idx = i // num_cols
             col_cx = div_x + 15 + col_width // 2 + col_idx * col_width
@@ -845,21 +832,24 @@ class LayoutEditorView(tk.Frame):
             t_sz = str(target.get("size", "")).strip()
             t_nm = str(target.get("name", "")).strip()
 
-            if t_nm != "grade_ch_0":
-                for p in self.placed_pieces:
-                    p_tid = str(p.get("target_id", "")).strip()
-                    p_sz = str(p.get("size", "")).strip()
-                    p_nm = str(p.get("name", "")).strip()
+            for p in self.placed_pieces:
+                p_tid = str(p.get("target_id", "")).strip()
+                p_sz = str(p.get("size", "")).strip()
+                p_nm = str(p.get("name", "")).strip()
 
-                    if p_tid and t_id and p_tid == t_id:
-                        placed_cnt += 1
-                        continue
-                    if p_nm and t_nm and p_nm == t_nm:
-                        placed_cnt += 1
-                        continue
-                    if p_sz and t_sz and p_sz == t_sz and (not p_nm or not t_nm or p_nm == t_nm):
-                        placed_cnt += 1
-                        continue
+                # Se ambos têm tamanho definido e são diferentes, não pode ser o mesmo molde
+                if p_sz and t_sz and p_sz != t_sz:
+                    continue
+
+                if p_tid and t_id and p_tid == t_id:
+                    placed_cnt += 1
+                    continue
+                if p_nm and t_nm and p_nm == t_nm:
+                    placed_cnt += 1
+                    continue
+                if p_sz and t_sz and p_sz == t_sz and (not p_nm or not t_nm or p_nm == t_nm):
+                    placed_cnt += 1
+                    continue
 
             req_cnt = int(target.get("pairs", target.get("required", 0)))
             
@@ -892,51 +882,33 @@ class LayoutEditorView(tk.Frame):
             thumb_cx = col_cx
             thumb_cy = item_y + 18
 
-            if target.get("id") == "grade_ch_0" or target.get("name") == "grade_ch_0":
-                # Ícone retangular de chapa com linhas verticais (conforme Imagem 1)
-                self.canvas.create_rectangle(
-                    thumb_cx - 9, thumb_cy - 12, thumb_cx + 9, thumb_cy + 12,
-                    fill="#b0b0b0", outline="#000000", width=1.0,
+            contour = target.get("contour") or CONTOUR_CON
+            fill_col = get_color_for_size(target.get("size") or target.get("name"))
+            if contour and len(contour) >= 3:
+                xs = [pt["x"] for pt in contour]
+                ys = [pt["y"] for pt in contour]
+                min_x, max_x = min(xs), max(xs)
+                min_y, max_y = min(ys), max(ys)
+                bw = max(0.1, max_x - min_x)
+                bh = max(0.1, max_y - min_y)
+
+                scale_thumb = min(18.0 / bw, 28.0 / bh)
+                mid_x = (min_x + max_x) / 2.0
+                mid_y = (min_y + max_y) / 2.0
+
+                pts = []
+                for pt in contour:
+                    px = thumb_cx + (pt["x"] - mid_x) * scale_thumb
+                    py = thumb_cy - (pt["y"] - mid_y) * scale_thumb
+                    pts.extend([px, py])
+
+                self.canvas.create_polygon(
+                    pts,
+                    fill=fill_col,
+                    outline="#000000",
+                    width=1.0,
                     tags=("sidebar_element", f"sidebar_target_{i}", "sidebar_ui")
                 )
-                self.canvas.create_line(
-                    thumb_cx - 5, thumb_cy - 12, thumb_cx - 5, thumb_cy + 12,
-                    fill="#505050", width=1.0,
-                    tags=("sidebar_element", f"sidebar_target_{i}", "sidebar_ui")
-                )
-                self.canvas.create_line(
-                    thumb_cx + 5, thumb_cy - 12, thumb_cx + 5, thumb_cy + 12,
-                    fill="#505050", width=1.0,
-                    tags=("sidebar_element", f"sidebar_target_{i}", "sidebar_ui")
-                )
-            else:
-                contour = target.get("contour") or CONTOUR_CON
-                fill_col = get_color_for_size(target.get("size") or target.get("name"))
-                if contour and len(contour) >= 3:
-                    xs = [pt["x"] for pt in contour]
-                    ys = [pt["y"] for pt in contour]
-                    min_x, max_x = min(xs), max(xs)
-                    min_y, max_y = min(ys), max(ys)
-                    bw = max(0.1, max_x - min_x)
-                    bh = max(0.1, max_y - min_y)
-
-                    scale_thumb = min(18.0 / bw, 28.0 / bh)
-                    mid_x = (min_x + max_x) / 2.0
-                    mid_y = (min_y + max_y) / 2.0
-
-                    pts = []
-                    for pt in contour:
-                        px = thumb_cx + (pt["x"] - mid_x) * scale_thumb
-                        py = thumb_cy - (pt["y"] - mid_y) * scale_thumb
-                        pts.extend([px, py])
-
-                    self.canvas.create_polygon(
-                        pts,
-                        fill=fill_col,
-                        outline="#000000",
-                        width=1.0,
-                        tags=("sidebar_element", f"sidebar_target_{i}", "sidebar_ui")
-                    )
 
             # 3. Linha 1: Nome do Molde (ex: 323_PalAcb_36a)
             name_raw = target.get("name", "Molde")
@@ -952,10 +924,7 @@ class LayoutEditorView(tk.Frame):
             # 4. Linha 2: Contadores de Produção (peças_mesa/req_pares resto_pares/req_pares)
             # Exemplo: Com 4 camadas e 20 pares: 10 peças no layout -> exibe 10/20 0/20
             #          Com 2 camadas e 20 pares: 20 peças no layout -> exibe 20/20 0/20
-            if t_nm == "grade_ch_0":
-                stat_disp = "0/0 0/0"
-            else:
-                stat_disp = f"{placed_cnt}/{req_cnt} {resto_cnt}/{req_cnt}"
+            stat_disp = f"{placed_cnt}/{req_cnt} {resto_cnt}/{req_cnt}"
 
             self.canvas.create_text(
                 col_cx, item_y + 52,

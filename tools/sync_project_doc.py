@@ -438,25 +438,6 @@ def main():
         print("Rode: python tools/sync_project_doc.py")
         return 1
     doc_path.write_text(new, encoding="utf-8", newline="\n")
-    # Sincroniza também as cópias na raiz do projeto pai para manter integridade
-    parent_doc = root.parent / DOC_NAME
-    if parent_doc != doc_path and root.parent.exists():
-        try:
-            parent_doc.write_text(new, encoding="utf-8", newline="\n")
-        except Exception:
-            pass
-    parent_doc_space = root.parent / "PROJETO_ATOM_JOBMANAGER "
-    if parent_doc_space.exists():
-        try:
-            parent_doc_space.write_text(new, encoding="utf-8", newline="\n")
-        except Exception:
-            pass
-    parent_doc_raw = root.parent / "PROJETO_ATOM_JOBMANAGER"
-    if parent_doc_raw.exists():
-        try:
-            parent_doc_raw.write_text(new, encoding="utf-8", newline="\n")
-        except Exception:
-            pass
     print("Documento atualizado. Blocos alterados: " + ", ".join(changed))
     return 0
 

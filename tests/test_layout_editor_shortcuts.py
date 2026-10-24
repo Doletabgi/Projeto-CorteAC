@@ -387,12 +387,12 @@ class TestLayoutEditorShortcuts(unittest.TestCase):
         ]
         self.view.add_session_shapes(grade)
         self.assertEqual(len(self.view.session_shapes), 15)
-        # Na barra lateral, os 15 moldes formam grade 4x4 preenchida com 'grade_ch_0' como 16º item
-        self.assertEqual(len(self.view.sidebar_targets), 16)
+        # Na barra lateral, os 15 moldes formam exatamente os 15 alvos
+        self.assertEqual(len(self.view.sidebar_targets), 15)
         # O primeiro da lista de alvos deve ser o tamanho 36 (ordenação decrescente)
         self.assertEqual(self.view.sidebar_targets[0]["size"], "36")
-        self.assertEqual(self.view.sidebar_targets[-2]["size"], "22")
-        self.assertEqual(self.view.sidebar_targets[-1]["name"], "grade_ch_0")
+        self.assertEqual(self.view.sidebar_targets[-1]["size"], "22")
+        self.assertFalse(any(t.get("name") == "grade_ch_0" for t in self.view.sidebar_targets))
 
     def test_session_view_add_shapes_batch(self):
         """Testa add_shapes em lote no SessionView com preservação de sequência e callback."""
