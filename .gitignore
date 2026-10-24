@@ -12,3 +12,4 @@ corteac_linux
 db.ini
 *.bak
 jobmanager.db.bak
+.~lock*

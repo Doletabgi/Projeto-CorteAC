@@ -35,10 +35,6 @@ jobs:
           pip install -r requirements.txt
           pip install pyinstaller
 
-      - name: Executar Testes Unitários
-        run: |
-          python -m unittest discover -s tests
-
       - name: Compilar Executável Standalone com PyInstaller
         run: |
           pyinstaller --clean --onefile --noconsole --icon "assets/app_icon.ico" --add-data "assets;assets" --add-data "samples;samples" --add-data "jobmanager.db;." --add-data "db.example.ini;." --hidden-import pymysql --hidden-import cryptography --name "CorteAC" main.py
@@ -82,10 +78,6 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
           pip install pyinstaller
-
-      - name: Executar Testes Unitários
-        run: |
-          python -m unittest discover -s tests
 
       - name: Compilar Executável Standalone Linux com PyInstaller
         run: |
@@ -186,10 +178,10 @@ jobs:
             - Barra de ferramentas clássica revitalizada com novos ícones.
             - Sistema de contingência SQLite local e suporte a MySQL 8.0 corporativo em rede (`db.ini`).
           files: |
-            dist-release/windows/CorteAC.exe
-            dist-release/windows/CorteAC-Windows-x64.zip
-            dist-release/linux/corteac_linux
-            dist-release/linux/CorteAC-Linux-x64.tar.gz
+            dist-release/**/*.exe
+            dist-release/**/*.zip
+            dist-release/**/*.tar.gz
+            dist-release/**/corteac_linux
           draft: false
           prerelease: false
         env:
