@@ -1592,19 +1592,49 @@ class LayoutEditorView(tk.Frame):
                     tags=(f"piece_{idx}", f"piece_box_{idx}", "piece_item")
                 )
 
-        # 6.5. Linha de Corte de Refile Automático (CAM / Guilhotina no final das peças)
+        # 6.5. Linhas de Corte de Refile Automático CAM (Topo Y e Comprimento X)
         if getattr(self, "trim_cut_line", None) and self.trim_cut_line.get("enabled", True):
             cut_y = float(self.trim_cut_line.get("y", self.sheet_height))
+            cut_x = float(self.trim_cut_line.get("x", self.sheet_width))
+            orig_w = float(self.trim_cut_line.get("orig_w", self.sheet_width))
+            orig_h = float(self.trim_cut_line.get("orig_h", self.sheet_height))
             sy_cut = y2 - cut_y * scale
+            sx_cut = x1 + cut_x * scale
+            orig_x2 = x1 + orig_w * scale
+            orig_y1 = y2 - orig_h * scale
 
-            # Linha transversal vermelha contínua de corte CAM no topo exato das peças
+            # Desenha área descartada da chapa original se foi refilada na lateral X
+            if orig_w > cut_x + 0.5:
+                self.canvas.create_rectangle(
+                    sx_cut, y1, orig_x2, y2,
+                    fill="#f1f5f9",
+                    outline="#dc2626",
+                    dash=(4, 3),
+                    width=1.0,
+                    tags="trim_cut_scrap_x"
+                )
+                sobra_w_cm = (orig_w - cut_x) / 10.0
+                scx = (sx_cut + orig_x2) / 2.0
+                scy = (y1 + y2) / 2.0
+                if orig_x2 - sx_cut > 40:
+                    self.canvas.create_text(
+                        scx, scy,
+                        text=f"Sobra\n{sobra_w_cm:.1f} cm",
+                        fill="#991b1b",
+                        font=("Segoe UI", 8, "italic"),
+                        justify="center",
+                        tags="trim_cut_scrap_lbl"
+                    )
+
+            # 1. Linha transversal vermelha de corte CAM no topo das peças (Refile Y)
+            line_right = max(x2 + 6, orig_x2 + 6) if orig_w > cut_x + 0.5 else x2 + 6
             self.canvas.create_line(
-                x1 - 6, sy_cut, x2 + 6, sy_cut,
+                x1 - 6, sy_cut, line_right, sy_cut,
                 fill="#dc2626",
                 width=2.5,
                 tags="trim_cut_line"
             )
-            # Ícones de tesoura nas extremidades esquerda e direita
+            # Ícone de tesoura na esquerda
             self.canvas.create_text(
                 x1 - 16, sy_cut,
                 text="✂",
@@ -1612,23 +1642,39 @@ class LayoutEditorView(tk.Frame):
                 font=("Segoe UI", 12, "bold"),
                 tags="trim_cut_icon_left"
             )
+
+            # 2. Linha vertical vermelha de corte CAM no final das peças (Refile X / Comprimento total)
+            self.canvas.create_line(
+                sx_cut, y1 - 6, sx_cut, y2 + 6,
+                fill="#dc2626",
+                width=2.5,
+                tags="trim_cut_line_v"
+            )
+            # Ícones de tesoura no corte vertical (topo e base)
             self.canvas.create_text(
-                x2 + 16, sy_cut,
+                sx_cut, y1 - 16,
                 text="✂",
                 fill="#dc2626",
                 font=("Segoe UI", 12, "bold"),
-                tags="trim_cut_icon_right"
+                tags="trim_cut_icon_v_top"
+            )
+            self.canvas.create_text(
+                sx_cut, y2 + 16,
+                text="✂",
+                fill="#dc2626",
+                font=("Segoe UI", 12, "bold"),
+                tags="trim_cut_icon_v_bot"
             )
 
-            # Badge CAM unificado e posicionado ACIMA da chapa (100% fora da área dos moldes, sem encobrir as peças)
-            h_cm = cut_y / 10.0
-            h_m = cut_y / 1000.0
+            # 3. Badge CAM unificado e posicionado ACIMA da chapa
+            h_cm = self.sheet_height / 10.0
+            h_m = self.sheet_height / 1000.0
             w_cm = self.sheet_width / 10.0
-            badge_text = f"✂ CORTE DE REFILE: {h_cm:.2f} cm ({h_m:.2f} m)  |  Placa ({h_cm:.2f} X {w_cm:.2f} cm)"
-            bx = (x1 + x2) / 2.0
+            badge_text = f"✂ CORTE DE REFIL TOTAL: {h_cm:.2f} cm ({h_m:.2f} m)  |  Placa ({h_cm:.2f} X {w_cm:.2f} cm)"
+            bx = (x1 + sx_cut) / 2.0
             by = max(11.0, sy_cut - 14.0)
             self.canvas.create_rectangle(
-                bx - 165, by - 9, bx + 165, by + 9,
+                bx - 175, by - 9, bx + 175, by + 9,
                 fill="#fef2f2",
                 outline="#dc2626",
                 width=1.5,
@@ -2762,8 +2808,10 @@ class LayoutEditorView(tk.Frame):
         """Salva o estado atual do layout na pilha de desfazer (Ctrl+Z) de forma leve."""
         state = {
             "pieces": [dict(p) for p in self.placed_pieces],
+            "sheet_width": self.sheet_width,
             "sheet_height": self.sheet_height,
             "trim_cut_line": copy.deepcopy(getattr(self, "trim_cut_line", None)),
+            "original_sheet_width": getattr(self, "original_sheet_width", None),
             "original_sheet_height": getattr(self, "original_sheet_height", None)
         }
         self.undo_stack.append(state)
@@ -2776,9 +2824,12 @@ class LayoutEditorView(tk.Frame):
             prev_state = self.undo_stack.pop()
             if isinstance(prev_state, dict):
                 self.placed_pieces = prev_state.get("pieces", [])
+                if "sheet_width" in prev_state:
+                    self.sheet_width = prev_state["sheet_width"]
                 if "sheet_height" in prev_state:
                     self.sheet_height = prev_state["sheet_height"]
                 self.trim_cut_line = copy.deepcopy(prev_state.get("trim_cut_line", None))
+                self.original_sheet_width = prev_state.get("original_sheet_width", None)
                 self.original_sheet_height = prev_state.get("original_sheet_height", None)
             elif isinstance(prev_state, list):
                 self.placed_pieces = prev_state
@@ -3480,7 +3531,8 @@ class LayoutEditorView(tk.Frame):
     def trim_layout_auto(self, event=None):
         """
         Refila o layout automaticamente no final exato das peças respeitando o gap 1 (1.0 mm),
-        com corte transversal automático (CAM / guilhotina), sem abrir caixa de diálogo.
+        refilando a placa inteira (tanto a altura Y quanto o comprimento/largura X),
+        com cortes de acabamento automáticos (CAM / guilhotina), sem abrir caixa de diálogo.
         Atalho: Ctrl+T / Botão ✂ Refilar.
         """
         if not self.placed_pieces:
@@ -3490,7 +3542,8 @@ class LayoutEditorView(tk.Frame):
                 messagebox.showinfo("Refilar Layout", "Não há peças posicionadas no layout para refilar.", parent=self)
             return "break"
 
-        # Calcula o Y máximo de todas as peças considerando a geometria poligonal real rotacionada
+        # Calcula X máximo e Y máximo de todas as peças considerando a geometria poligonal real rotacionada
+        max_x = 0.0
         max_y = 0.0
         for p in self.placed_pieces:
             c = p.get("contour", [])
@@ -3499,53 +3552,79 @@ class LayoutEditorView(tk.Frame):
             rot = float(p.get("rotation", 0.0))
             if c:
                 poly = transform_contour(c, px, py, rot)
-                _, _, _, p_max_y = polygon_bbox(poly)
+                _, _, p_max_x, p_max_y = polygon_bbox(poly)
+                if p_max_x > max_x:
+                    max_x = p_max_x
                 if p_max_y > max_y:
                     max_y = p_max_y
             else:
+                if px > max_x:
+                    max_x = px
                 if py > max_y:
                     max_y = py
 
+        if max_x <= 0.0:
+            max_x = max(float(p.get("x", 0.0)) for p in self.placed_pieces)
         if max_y <= 0.0:
             max_y = max(float(p.get("y", 0.0)) for p in self.placed_pieces)
 
-        # Refilo no final exato da peça com gap 1 (1.0 mm) automático
+        # Refilo no final exato das peças com gap 1 (1.0 mm) automático
         gap_mm = 1.0
+        target_w_mm = round(max_x + gap_mm, 2)
         target_h_mm = round(max_y + gap_mm, 2)
 
-        # Se já estiver refilado exatamente nessa cota, apenas informa na barra de status
-        if abs(self.sheet_height - target_h_mm) < 0.1 and getattr(self, "trim_cut_line", None):
+        # Não ultrapassa a chapa atual (não expande se já for menor)
+        target_w_mm = min(self.sheet_width, target_w_mm)
+        target_h_mm = min(self.sheet_height, target_h_mm)
+
+        # Se já estiver refilado exatamente nessas cotas, apenas informa na barra de status
+        already_trimmed_h = abs(self.sheet_height - target_h_mm) < 0.1
+        already_trimmed_w = abs(self.sheet_width - target_w_mm) < 0.1
+        if already_trimmed_h and already_trimmed_w and getattr(self, "trim_cut_line", None):
             h_cm = target_h_mm / 10.0
+            w_cm = target_w_mm / 10.0
             if hasattr(self, "lbl_stat_pos"):
-                self.lbl_stat_pos.config(text=f"Layout já está refilado a {h_cm:.2f} cm no final das peças (Gap 1.0 mm).", fg="#0f766e")
+                self.lbl_stat_pos.config(
+                    text=f"Layout já está refilado a {h_cm:.2f} X {w_cm:.2f} cm no final das peças (Gap 1.0 mm).",
+                    fg="#0f766e"
+                )
             return "break"
 
-        # Aplica o refile imediato com a linha de corte transversal CAM
-        self.apply_trim_layout(target_h_mm, add_cut_line=True)
+        # Aplica o refile imediato na chapa inteira (X e Y) com cortes CAM
+        self.apply_trim_layout(target_h_mm, add_cut_line=True, target_w_mm=target_w_mm)
         return "break"
 
     trim_layout_dialog = trim_layout_auto
 
-    def apply_trim_layout(self, target_h_mm: float, add_cut_line: bool = True):
+    def apply_trim_layout(self, target_h_mm: float, add_cut_line: bool = True, target_w_mm=None):
         """
-        Aplica o refile da chapa para a nova altura target_h_mm,
-        configurando opcionalmente a linha de corte transversal de acabamento (CAM).
+        Aplica o refile da chapa para a nova altura target_h_mm e largura target_w_mm (refile total),
+        configurando opcionalmente as linhas de corte CAM de acabamento (guilhotina).
         Suporta desfazer completo via Ctrl+Z.
         """
         # 1. Salva estado anterior para Undo (Ctrl+Z)
         self.push_undo()
 
-        # 2. Armazena a altura original da chapa para cálculo de sobra/economia
+        # 2. Armazena as dimensões originais da chapa para cálculo de sobra/economia
         if not hasattr(self, "original_sheet_height") or self.original_sheet_height is None:
             self.original_sheet_height = self.sheet_height
+        if not hasattr(self, "original_sheet_width") or self.original_sheet_width is None:
+            self.original_sheet_width = self.sheet_width
 
         # 3. Atualiza as dimensões da chapa
         self.sheet_height = float(target_h_mm)
+        if target_w_mm is not None:
+            self.sheet_width = float(target_w_mm)
 
-        # 4. Configura ou remove a linha de corte transversal CAM
+        # 4. Configura ou remove as linhas de corte transversal/longitudinal CAM
         if add_cut_line:
             self.trim_cut_line = {
-                "y": float(target_h_mm),
+                "y": float(self.sheet_height),
+                "x": float(self.sheet_width),
+                "orig_w": float(self.original_sheet_width),
+                "orig_h": float(self.original_sheet_height),
+                "has_cut_y": (self.original_sheet_height - self.sheet_height > 0.5),
+                "has_cut_x": (self.original_sheet_width - self.sheet_width > 0.5),
                 "enabled": True,
                 "created_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
             }
@@ -3563,12 +3642,23 @@ class LayoutEditorView(tk.Frame):
         self.reset_view()
 
         # 8. Feedback visual na barra de status
-        h_cm = target_h_mm / 10.0
-        h_m = target_h_mm / 1000.0
-        saved_mm = max(0.0, getattr(self, "original_sheet_height", target_h_mm) - target_h_mm)
-        saved_cm = saved_mm / 10.0
-        pct_saved = (saved_mm / max(1.0, getattr(self, "original_sheet_height", target_h_mm))) * 100.0
-        msg = f"✂ Refile no final das peças: {h_cm:.2f} cm ({h_m:.2f} m) com Gap 1.0 mm | Economia: {saved_cm:.1f} cm ({pct_saved:.1f}%). Ctrl+Z para desfazer."
+        h_cm = self.sheet_height / 10.0
+        w_cm = self.sheet_width / 10.0
+        saved_h_cm = max(0.0, self.original_sheet_height - self.sheet_height) / 10.0
+        saved_w_cm = max(0.0, self.original_sheet_width - self.sheet_width) / 10.0
+        orig_area = (self.original_sheet_width * self.original_sheet_height)
+        new_area = (self.sheet_width * self.sheet_height)
+        saved_area_pct = max(0.0, (orig_area - new_area) / max(1.0, orig_area)) * 100.0
+
+        parts = []
+        if saved_h_cm > 0.05:
+            parts.append(f"Topo (Y): -{saved_h_cm:.1f} cm")
+        if saved_w_cm > 0.05:
+            parts.append(f"Lateral (X): -{saved_w_cm:.1f} cm")
+        cut_summary = ", ".join(parts) if parts else "ajustado"
+
+        msg = (f"✂ Refile total da placa: {h_cm:.2f} X {w_cm:.2f} cm (Gap 1.0 mm) | "
+               f"Sobra eliminada ({cut_summary}) - Economia: {saved_area_pct:.1f}%. Ctrl+Z para desfazer.")
 
         if hasattr(self, "lbl_stat_pos"):
             self.lbl_stat_pos.config(text=msg, fg="#0f766e")

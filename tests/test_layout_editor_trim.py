@@ -153,26 +153,33 @@ class TestLayoutEditorTrim(unittest.TestCase):
         self.assertTrue(callable(self.view.trim_layout_dialog))
 
     def test_trim_layout_auto_without_dialog(self):
-        """Valida que o acionamento do botão Refilar executa o refile imediatamente no final das peças com gap 1mm sem abrir diálogo."""
+        """Valida que o acionamento do botão Refilar executa o refile imediatamente no final das peças em X e Y com gap 1mm."""
+        max_x = 0.0
         max_y = 0.0
         for p in self.view.placed_pieces:
             poly = transform_contour(p["contour"], p["x"], p["y"], p["rotation"])
-            _, _, _, by2 = polygon_bbox(poly)
+            _, _, bx2, by2 = polygon_bbox(poly)
+            if bx2 > max_x:
+                max_x = bx2
             if by2 > max_y:
                 max_y = by2
 
-        expected_target_h = round(max_y + 1.0, 2)
+        expected_target_w = min(1380.0, round(max_x + 1.0, 2))
+        expected_target_h = min(2980.0, round(max_y + 1.0, 2))
 
         # Executa trim_layout_auto (chamado pelo botão ✂ Refilar e Ctrl+T)
         self.view.trim_layout_auto()
 
+        self.assertAlmostEqual(self.view.sheet_width, expected_target_w, places=2)
         self.assertAlmostEqual(self.view.sheet_height, expected_target_h, places=2)
         self.assertIsNotNone(self.view.trim_cut_line)
+        self.assertAlmostEqual(self.view.trim_cut_line["x"], expected_target_w, places=2)
         self.assertAlmostEqual(self.view.trim_cut_line["y"], expected_target_h, places=2)
         self.assertTrue(self.view.trim_cut_line["enabled"])
 
-        # Testa desfazer
+        # Testa desfazer com Ctrl+Z
         self.view.undo_action()
+        self.assertEqual(self.view.sheet_width, 1380.0)
         self.assertEqual(self.view.sheet_height, 2980.0)
         self.assertIsNone(self.view.trim_cut_line)
 
