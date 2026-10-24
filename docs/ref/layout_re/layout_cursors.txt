@@ -1,0 +1,21 @@
+# Dump completo de Cursores (RT_GROUP_CURSOR e RT_CURSOR) do Layout.exe
+================================================================================
+
+=== GROUP CURSOR ID 135 (1 imagem(ns)) ===
+  Imagem [0]: Dim: 32x64 px, BPP: 1, Cursor ID: 5, Hotspot: (13, 13), Size: 308 bytes
+
+=== GROUP CURSOR ID 136 (1 imagem(ns)) ===
+  Imagem [0]: Dim: 32x64 px, BPP: 1, Cursor ID: 6, Hotspot: (12, 13), Size: 308 bytes
+
+=== GROUP CURSOR ID 149 (1 imagem(ns)) ===
+  Imagem [0]: Dim: 32x64 px, BPP: 1, Cursor ID: 7, Hotspot: (28, 14), Size: 308 bytes
+
+=== GROUP CURSOR ID 157 (1 imagem(ns)) ===
+  Imagem [0]: Dim: 32x64 px, BPP: 1, Cursor ID: 8, Hotspot: (0, 0), Size: 308 bytes
+
+=== GROUP CURSOR ID 162 (1 imagem(ns)) ===
+  Imagem [0]: Dim: 32x64 px, BPP: 1, Cursor ID: 9, Hotspot: (0, 0), Size: 308 bytes
+
+=== GROUP CURSOR ID 177 (1 imagem(ns)) ===
+  Imagem [0]: Dim: 32x64 px, BPP: 1, Cursor ID: 10, Hotspot: (16, 15), Size: 308 bytes
+

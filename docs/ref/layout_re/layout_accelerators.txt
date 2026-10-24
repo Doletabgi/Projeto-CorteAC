@@ -1,0 +1,52 @@
+# Dump completo de RT_ACCELERATOR extraído do Layout.exe (3 Tabelas)
+================================================================================
+
+=== TABELA DE ACELERADORES ID 4 (Lang 1033) ===
+  Ctrl+VK_0x5a         -> CMD ID 57643  | Undo the last action | Tooltip: Undo
+  Ctrl+VK_0x58         -> CMD ID 57635  | Cut the selection and put in on the Clipboard | Tooltip: Cut
+  Ctrl+VK_0x43         -> CMD ID 57634  | Copy the selection to the Clipboard | Tooltip: Copy
+  Ctrl+VK_0x56         -> CMD ID 57637  | Insert Clipboard contents | Tooltip: Paste
+  Alt+VK_BACK          -> CMD ID 57643  | Undo the last action | Tooltip: Undo
+  Shift+VK_DELETE      -> CMD ID 57635  | Cut the selection and put in on the Clipboard | Tooltip: Cut
+  Ctrl+VK_INSERT       -> CMD ID 57634  | Copy the selection to the Clipboard | Tooltip: Copy
+  Shift+VK_INSERT      -> CMD ID 57637  | Insert Clipboard contents | Tooltip: Paste
+  VK_ESCAPE            -> CMD ID 32769  | 
+
+=== TABELA DE ACELERADORES ID 5 (Lang 1033) ===
+  Ctrl+VK_0x43         -> CMD ID 57634  | Copy the selection to the Clipboard | Tooltip: Copy
+  Ctrl+VK_0x4c         -> CMD ID 51111  | Open Next Document | Tooltip: Open Next
+  Ctrl+VK_0x4e         -> CMD ID 57600  | Create a new document | Tooltip: New
+  Ctrl+VK_0x4f         -> CMD ID 57601  | Open an existing document | Tooltip: Open
+  Ctrl+VK_0x50         -> CMD ID 57607  | Print the active document | Tooltip: Print
+  Ctrl+VK_0x53         -> CMD ID 57610  | Update the container to show any changes | Tooltip: Update
+  Ctrl+VK_0x56         -> CMD ID 57637  | Insert Clipboard contents | Tooltip: Paste
+  Alt+VK_BACK          -> CMD ID 57643  | Undo the last action | Tooltip: Undo
+  Shift+VK_DELETE      -> CMD ID 57635  | Cut the selection and put in on the Clipboard | Tooltip: Cut
+  VK_F6                -> CMD ID 57680  | Switch to the next window pane | Tooltip: Next Pane
+  Shift+VK_F6          -> CMD ID 57681  | Switch back to the previous window pane | Tooltip: Previous Pane
+  Ctrl+VK_INSERT       -> CMD ID 57634  | Copy the selection to the Clipboard | Tooltip: Copy
+  Shift+VK_INSERT      -> CMD ID 57637  | Insert Clipboard contents | Tooltip: Paste
+  Ctrl+VK_0x58         -> CMD ID 57635  | Cut the selection and put in on the Clipboard | Tooltip: Cut
+  Ctrl+VK_0x5a         -> CMD ID 57643  | Undo the last action | Tooltip: Undo
+
+=== TABELA DE ACELERADORES ID 128 (Lang 1033) ===
+  Ctrl+VK_0x43         -> CMD ID 57634  | Copy the selection to the Clipboard | Tooltip: Copy
+  Ctrl+VK_0x45         -> CMD ID 32835  | Check Overlay | Tooltip: Check Overlay
+  Ctrl+VK_0x49         -> CMD ID 33906  | 
+  Ctrl+VK_0x4c         -> CMD ID 51111  | Open Next Document | Tooltip: Open Next
+  Ctrl+VK_0x4e         -> CMD ID 57600  | Create a new document | Tooltip: New
+  Ctrl+VK_0x4f         -> CMD ID 57601  | Open an existing document | Tooltip: Open
+  Ctrl+VK_0x50         -> CMD ID 57607  | Print the active document | Tooltip: Print
+  Ctrl+VK_0x51         -> CMD ID 32778  | Enable/Disable zooming | Tooltip: Zoom
+  Ctrl+VK_0x53         -> CMD ID 57603  | Save the active document | Tooltip: Save
+  Ctrl+VK_0x56         -> CMD ID 57637  | Insert Clipboard contents | Tooltip: Paste
+  Alt+VK_BACK          -> CMD ID 57643  | Undo the last action | Tooltip: Undo
+  Shift+VK_DELETE      -> CMD ID 57635  | Cut the selection and put in on the Clipboard | Tooltip: Cut
+  VK_F6                -> CMD ID 57680  | Switch to the next window pane | Tooltip: Next Pane
+  Shift+VK_F6          -> CMD ID 57681  | Switch back to the previous window pane | Tooltip: Previous Pane
+  Ctrl+VK_INSERT       -> CMD ID 57634  | Copy the selection to the Clipboard | Tooltip: Copy
+  Shift+VK_INSERT      -> CMD ID 57637  | Insert Clipboard contents | Tooltip: Paste
+  Ctrl+VK_0x57         -> CMD ID 57602  | Close the active document | Tooltip: Close
+  Ctrl+VK_0x58         -> CMD ID 57635  | Cut the selection and put in on the Clipboard | Tooltip: Cut
+  Ctrl+VK_0x5a         -> CMD ID 57643  | Undo the last action | Tooltip: Undo
+

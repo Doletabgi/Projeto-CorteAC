@@ -1,0 +1,42 @@
+# Dump completo de RT_TOOLBAR (Tipo 241) extraído do Layout.exe (4 Toolbars)
+================================================================================
+
+=== TOOLBAR ID 4 (Tamanho 18x19 px, 4 Itens) ===
+  [00] CMD ID 57635  | Cut the selection and put in on the Clipboard | Tooltip: Cut
+  [01] CMD ID 57634  | Copy the selection to the Clipboard | Tooltip: Copy
+  [02] CMD ID 57637  | Insert Clipboard contents | Tooltip: Paste
+  [03] --- SEPARADOR ---
+
+=== TOOLBAR ID 128 (Tamanho 16x15 px, 9 Itens) ===
+  [00] CMD ID 57600  | Create a new document | Tooltip: New
+  [01] CMD ID 57601  | Open an existing document | Tooltip: Open
+  [02] CMD ID 57603  | Save the active document | Tooltip: Save
+  [03] --- SEPARADOR ---
+  [04] CMD ID 57635  | Cut the selection and put in on the Clipboard | Tooltip: Cut
+  [05] CMD ID 57634  | Copy the selection to the Clipboard | Tooltip: Copy
+  [06] CMD ID 57637  | Insert Clipboard contents | Tooltip: Paste
+  [07] --- SEPARADOR ---
+  [08] CMD ID 57607  | Print the active document | Tooltip: Print
+
+=== TOOLBAR ID 137 (Tamanho 16x15 px, 14 Itens) ===
+  [00] CMD ID 32790  | Show quality areas on hide | Tooltip: Show QAreas on hide
+  [01] CMD ID 32799  | Fill Quality Areas | Tooltip: Fill QAreas
+  [02] CMD ID 32794  | Show Shapes | Tooltip: Show Shapes
+  [03] CMD ID 32774  | Fill Shapes | Tooltip: Fill Shapes
+  [04] --- SEPARADOR ---
+  [05] CMD ID 32835  | Check Overlay | Tooltip: Check Overlay
+  [06] --- SEPARADOR ---
+  [07] CMD ID 32771  | Zoom the view to display the complete layout | Tooltip: Display complete Layout
+  [08] CMD ID 32778  | Enable/Disable zooming | Tooltip: Zoom
+  [09] --- SEPARADOR ---
+  [10] CMD ID 32820  | Add a Shape Target | Tooltip: Add Shape
+  [11] CMD ID 32817  | Edit Instance position | Tooltip: Edit position
+  [12] --- SEPARADOR ---
+  [13] CMD ID 33923  | <SEM TEXTO>
+
+=== TOOLBAR ID 150 (Tamanho 16x15 px, 4 Itens) ===
+  [00] CMD ID 32831  | Bump the Selection Down | Tooltip: Bump Down
+  [01] CMD ID 32832  | Bump the Selection Right | Tooltip: Bump Right
+  [02] CMD ID 32833  | Bump the Selection Left | Tooltip: Bump Left
+  [03] CMD ID 51000  | Bump the Selection Up | Tooltip: Bump Up
+

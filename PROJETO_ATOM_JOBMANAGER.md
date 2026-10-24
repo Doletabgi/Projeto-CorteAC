@@ -4,7 +4,7 @@
 > **Regra de ouro:** o que está marcado `[CONFIRMADO]` veio do relatório, do código ou do usuário. O que está `[NÃO CONFIRMADO]` é suposição e não deve virar "fato" sem validação. O que está `[PREENCHER]` o Antigravity deve completar lendo o código real.
 
 <!-- AUTO:header:start -->
-**Última sincronização com o código:** 2026-10-24 12:57 (HEAD ao gerar: `418895c`; 47 arquivos Python, ~29374 linhas)
+**Última sincronização com o código:** 2026-10-24 14:08 (HEAD ao gerar: `0847e6a`; 51 arquivos Python, ~31160 linhas)
 <!-- AUTO:header:end -->
 **Versão deste documento:** 1
 
@@ -71,62 +71,69 @@ RELATORIO_IMPLEMENTACAO_MELHORIAS.md
 RELATORIO_SISTEMA_COMPLETO.md
 build_exe_windows.bat
 build_linux.sh
-config.py                                   # CorteAC (Python Edition)
-database.py                                 # JobManager 2000 (Python Edition)
+config.py                                      # CorteAC (Python Edition)
+database.py                                    # JobManager 2000 (Python Edition)
 db.example.ini
 docker-compose.yml
-main.py                                     # CorteAC (Python Edition para Windows 10 / 11)
+main.py                                        # CorteAC (Python Edition para Windows 10 / 11)
 run.bat
 run.sh
-cad/ai_learner.py                           # JobManager 2000 (Python Edition)
-cad/colors.py                               # JobManager 2000 (Python Edition)
-cad/czlib.py                                # JobManager 2000 (Python Edition)
-cad/die_parser.py                           # JobManager 2000 (Python Edition)
-cad/dual_exporter.py                        # JobManager 2000 (Python Edition)
-cad/exporter.py                             # JobManager 2000 (Python Edition)
-cad/geometry.py                             # JobManager 2000 (Python Edition)
-cad/lay_parser.py                           # JobManager 2000 (Python Edition)
-cad/macro_engine.py                         # JobManager 2000 (Python Edition)
-cad/nesting_engine.py                       # JobManager 2000 (Python Edition)
-cad/onx_exporter.py                         # JobManager 2000 (Python Edition)
-db/__init__.py                              # Camada de Acesso a Dados do JobManager (MySQL 8.0 / SQLite Reserva)
-db/config.py                                # JobManager 2000 - Configuração de Banco de Dados Central
-db/connection.py                            # JobManager 2000 - Camada Única de Acesso a Banco de Dados
+cad/ai_learner.py                              # JobManager 2000 (Python Edition)
+cad/colors.py                                  # JobManager 2000 (Python Edition)
+cad/czlib.py                                   # JobManager 2000 (Python Edition)
+cad/die_parser.py                              # JobManager 2000 (Python Edition)
+cad/dual_exporter.py                           # JobManager 2000 (Python Edition)
+cad/exporter.py                                # JobManager 2000 (Python Edition)
+cad/geometry.py                                # JobManager 2000 (Python Edition)
+cad/lay_parser.py                              # JobManager 2000 (Python Edition)
+cad/macro_engine.py                            # JobManager 2000 (Python Edition)
+cad/nesting_engine.py                          # JobManager 2000 (Python Edition)
+cad/onx_exporter.py                            # JobManager 2000 (Python Edition)
+db/__init__.py                                 # Camada de Acesso a Dados do JobManager (MySQL 8.0 / SQLite Reserva)
+db/config.py                                   # JobManager 2000 - Configuração de Banco de Dados Central
+db/connection.py                               # JobManager 2000 - Camada Única de Acesso a Banco de Dados
 db/schema_mysql.sql
 db/migrations/001_initial_mysql_schema.sql
 docs/FORMATO_LAY.md
+docs/LAYOUT_EDITOR_RE.md
 docs/MOTORES_NESTING_PARAMETROS.md
 docs/RELATORIO_REVERSA_COMELZ_ONX.md
-tests/test_db_layer.py                      # Testes Unitários da Camada de Banco de Dados Central (MySQL 8.0 & SQLite Reserva)
-tests/test_dual_exporter.py                 # JobManager 2000 (Python Edition)
-tests/test_lay_parser.py                    # Testes Unitários para o Parser e Gerador de Arquivos .lay (ATOM $$LAYOUT.v3$$)
-tests/test_layers_pairs_nesting.py          # Testes unitários para validação da regra de camadas (layers) no cálculo de peças
-tests/test_layout_editor_shortcuts.py       # Testes Automatizados para Atalhos do LayoutEditorView:
-tests/test_layout_editor_trim.py            # Testes Automatizados para a Funcionalidade de Refilar Layout (Corte Automático CAM):
-tests/test_layout_print_material.py         # Testes unitários para validação da sincronização e formatação automática
-tests/test_macro_engine_ia_teste.py         # Testes de Homologação para o Motor de Cálculo "IA-teste":
-tests/test_mysql_concurrency.py             # JobManager 2000 (Python Edition)
+docs/ref/layout_re/help_topics.json
+tests/test_db_layer.py                         # Testes Unitários da Camada de Banco de Dados Central (MySQL 8.0 & SQLite Reserva)
+tests/test_dual_exporter.py                    # JobManager 2000 (Python Edition)
+tests/test_lay_parser.py                       # Testes Unitários para o Parser e Gerador de Arquivos .lay (ATOM $$LAYOUT.v3$$)
+tests/test_layers_pairs_nesting.py             # Testes unitários para validação da regra de camadas (layers) no cálculo de peças
+tests/test_layout_editor_shortcuts.py          # Testes Automatizados para Atalhos do LayoutEditorView:
+tests/test_layout_editor_trim.py               # Testes Automatizados para a Funcionalidade de Refilar Layout (Corte Automático CAM):
+tests/test_layout_print_material.py            # Testes unitários para validação da sincronização e formatação automática
+tests/test_macro_engine_ia_teste.py            # Testes de Homologação para o Motor de Cálculo "IA-teste":
+tests/test_mysql_concurrency.py                # JobManager 2000 (Python Edition)
 tests/test_nesting_contour_gap.py
-tests/test_session_material_delete.py       # Testes automatizados para remoção de material na sessão via tecla Delete / botão / menu:
-tests/test_session_monotonic.py             # Testes Unitários: Monotonicidade Estrita de Sessões e Persistência contra Re-semeadura
-tests/test_shape_sorting.py                 # Testes Unitários: Classificação e Ordenação de Moldes e Tamanhos (Maior para Menor / Menor para Maior)
-tests/test_strategy_removal.py              # Testes automatizados para validação da remoção da estratégia flashnestroll (bobinas contínuas):
-tools/migrate_sqlite_to_mysql.py            # tools/migrate_sqlite_to_mysql.py - Migra jobmanager.db (SQLite) para MySQL 8.0 Central.
-ui/add_shapes_dialog.py                     # JobManager 2000 (Python Edition)
-ui/cad_canvas.py                            # JobManager 2000 (Python Edition)
-ui/dieproc_dialog.py                        # JobManager 2000 (Python Edition)
-ui/edit_shape_in_session_dialog.py          # JobManager 2000 (Python Edition)
-ui/layout_editor_view.py                    # JobManager 2000 (Python Edition)
-ui/layout_print_dialog.py                   # JobManager 2000 (Python Edition)
-ui/main_window.py                           # CorteAC (Edição Python para Windows 10 / 11)
-ui/material_codes_view.py                   # JobManager 2000 (Python Edition)
-ui/options_dialog.py                        # JobManager 2000 (Python Edition)
-ui/order_view.py                            # JobManager 2000 (Python Edition)
-ui/params_dialog.py                         # JobManager 2000 (Python Edition)
-ui/session_view.py                          # JobManager 2000 (Python Edition)
-ui/shape_editor_view.py                     # JobManager 2000 (Python Edition)
-ui/sort_utils.py                            # JobManager 2000 (Python Edition)
-ui/trim_layout_dialog.py                    # JobManager 2000 (Python Edition)
+tests/test_session_material_delete.py          # Testes automatizados para remoção de material na sessão via tecla Delete / botão / menu:
+tests/test_session_monotonic.py                # Testes Unitários: Monotonicidade Estrita de Sessões e Persistência contra Re-semeadura
+tests/test_shape_sorting.py                    # Testes Unitários: Classificação e Ordenação de Moldes e Tamanhos (Maior para Menor / Menor para Maior)
+tests/test_strategy_removal.py                 # Testes automatizados para validação da remoção da estratégia flashnestroll (bobinas contínuas):
+tools/migrate_sqlite_to_mysql.py               # tools/migrate_sqlite_to_mysql.py - Migra jobmanager.db (SQLite) para MySQL 8.0 Central.
+tools/re_dump/build_layout_inventory.py        # tools/re_dump/build_layout_inventory.py
+tools/re_dump/extract_help_docs.py             # tools/re_dump/extract_help_docs.py
+tools/re_dump/extract_pe_resources.py          # tools/re_dump/extract_pe_resources.py
+tools/re_dump/generate_layout_editor_re_md.py  # generate_layout_editor_re_md.py
+tools/re_dump/layout_inventory.json
+ui/add_shapes_dialog.py                        # JobManager 2000 (Python Edition)
+ui/cad_canvas.py                               # JobManager 2000 (Python Edition)
+ui/dieproc_dialog.py                           # JobManager 2000 (Python Edition)
+ui/edit_shape_in_session_dialog.py             # JobManager 2000 (Python Edition)
+ui/layout_editor_view.py                       # JobManager 2000 (Python Edition)
+ui/layout_print_dialog.py                      # JobManager 2000 (Python Edition)
+ui/main_window.py                              # CorteAC (Edição Python para Windows 10 / 11)
+ui/material_codes_view.py                      # JobManager 2000 (Python Edition)
+ui/options_dialog.py                           # JobManager 2000 (Python Edition)
+ui/order_view.py                               # JobManager 2000 (Python Edition)
+ui/params_dialog.py                            # JobManager 2000 (Python Edition)
+ui/session_view.py                             # JobManager 2000 (Python Edition)
+ui/shape_editor_view.py                        # JobManager 2000 (Python Edition)
+ui/sort_utils.py                               # JobManager 2000 (Python Edition)
+ui/trim_layout_dialog.py                       # JobManager 2000 (Python Edition)
 ```
 <!-- AUTO:tree:end -->
 
@@ -248,6 +255,19 @@ ui/trim_layout_dialog.py                    # JobManager 2000 (Python Edition)
 
 ### `tools/migrate_sqlite_to_mysql.py`
 - funções: `make_backup`, `migrate`, `main`
+
+### `tools/re_dump/build_layout_inventory.py`
+- funções: `load_text_lines`, `main`
+
+### `tools/re_dump/extract_help_docs.py`
+- `class HTMLTextExtractor` (linha 26, 5 métodos)
+- funções: `extract_file`, `main`
+
+### `tools/re_dump/extract_pe_resources.py`
+- funções: `get_resources`, `get_string_table`, `parse_menu`, `format_menu_tree`, `parse_dialog`, `main`
+
+### `tools/re_dump/generate_layout_editor_re_md.py`
+- funções: `main`
 
 ### `ui/add_shapes_dialog.py`
 - `class AddShapesDialog` (linha 13, 14 métodos)
@@ -1272,6 +1292,7 @@ Amostras autênticas de arquivos `.lay` (`teste.lay`, `A40118.LAY`) foram locali
 - [ ] `.die` com múltiplas sagomas
 - [ ] `scale_factor` configurável
 - [ ] Validação do driver ANP em máquina real
+- [ ] Implementar as lacunas do LAYOUT_EDITOR_RE.md, após confirmação do usuário
 - [x] Arrasto de grade completa (múltipla seleção e pastas) para moldes do layout e correção de corte em ícones da toolbar — Concluído (`ui/main_window.py`, `ui/session_view.py`, `ui/layout_editor_view.py`, `assets/`)
 - [x] Selecionar e apagar múltiplas sessões ao mesmo tempo (Shift/Ctrl/Ctrl+A + Del/Menu) — Concluído (`database.py`, `ui/main_window.py`, `tests/test_db_layer.py`, `tests/test_layout_editor_shortcuts.py`)
 - [x] Recompilar executável Linux e pacote Windows após cada entrega — Concluído (`dist/teste_dola`, `teste_dola_linux`, `teste_dola_win11_pendrive.zip`)
@@ -1364,12 +1385,14 @@ Local: `/home/dola/Documentos/clone do job/antigo/arquivos pos instalacao/Common
 | Sáb, 24/10/2026 | 10:45 | Antigravity | Implementação da regra calçadista de Camadas de Corte (Layers) para cálculo de nesting e contadores no layout: fórmula de produção $N_{lay} = \lceil (P \times 2) / L \rceil$ diferenciando pares solicitados de peças físicas na mesa CAD (4 camadas com 20 pares $\rightarrow$ 10 peças na mesa e exibição `10/20 0/20`; 2 camadas com 20 pares $\rightarrow$ 20 peças na mesa e exibição `20/20 0/20`); configuração de camadas puxada do material cadastrado, com edição direta na aba Materiais da sessão e diálogo interativo nos menus do Layout Editor (`Nesting -> Camadas de Corte (Layers)...` e `Tools -> Alterar Camadas de Corte (Layers)...`); novos testes unitários dedicados em `tests/test_layers_pairs_nesting.py`. | `cad/nesting_engine.py`, `cad/macro_engine.py`, `ui/main_window.py`, `ui/session_view.py`, `ui/layout_editor_view.py`, `tests/test_layers_pairs_nesting.py`, `PROJETO_ATOM_JOBMANAGER.md` |
 | Sáb, 24/10/2026 | 11:15 | Antigravity | Correção estrutural do Molde 36a (19/20 vs 18 peças) e contadores da barra lateral no Layout Editor: eliminação da colisão entre o ID sequencial da peça (141) e o ID do molde 36a (141) que gerava contagem fantasma; implementação de trava estrita de compatibilidade de tamanho (`if p_sz and t_sz and p_sz != t_sz: continue`) em `draw_sidebar` e `_poll_nest_worker`; inclusão e posicionamento das 2 peças faltantes do tamanho 36a a 90° na faixa livre superior da chapa ($Y=2910\text{ mm}$, $H=83\text{ mm}$ em vão de $129.3\text{ mm}$ com 0 colisão), totalizando exatamente 300 peças na Sessão 3 (20 peças para todos os 15 tamanhos do 22a ao 36a) e exibição uniforme de `20/20 0/20`; sincronização com MySQL e SQLite de reserva; recompilação do executável Linux standalone (`teste_dola_linux`) e atualização do pendrive Windows 11. | `ui/main_window.py`, `ui/layout_editor_view.py`, `database.py`, `jobmanager.db`, `teste_dola_linux`, `teste_dola_win11_pendrive/app/`, `PROJETO_ATOM_JOBMANAGER.md` |
 | Sáb, 24/10/2026 | 12:45 | Antigravity | Remoção definitiva do item artificial 'grade_ch_0' (0/0 0/0) da barra lateral do Layout Editor: eliminação da injeção forçada do elemento dummy em `update_sidebar_targets` e das rotinas de desenho especial em `draw_sidebar`; renderização estrita e exclusiva dos moldes reais pertencentes à sessão ativa; atualização do teste unitário em `tests/test_layout_editor_shortcuts.py` (55/55 testes passando na suíte); recompilação do executável Linux (`teste_dola_linux`) e sincronização dos pacotes. | `ui/layout_editor_view.py`, `tests/test_layout_editor_shortcuts.py`, `teste_dola_linux`, `teste_dola_win11_pendrive/app/`, `PROJETO_ATOM_JOBMANAGER.md` |
+| Sáb, 24/10/2026 | 14:15 | Antigravity | Inventário completo de engenharia reversa do editor de layout original (ATOM Layout.exe / LayoutNT, v3.2.7.0) e FreeNest.exe (v1.0.8.1): extração de 8 menus Win32, 4 toolbars, 3 tabelas de aceleradores, 23 caixas de diálogo, cursores, help oficial e engenharia reversa da rotação livre 360° com mouse, setas de bump magnético e comparação sistemática com o LayoutEditorView do CorteAC (`docs/LAYOUT_EDITOR_RE.md`, `tools/re_dump/`, `docs/ref/layout_re/`). | `docs/LAYOUT_EDITOR_RE.md`, `tools/re_dump/`, `docs/ref/layout_re/`, `PROJETO_ATOM_JOBMANAGER.md` |
 
 **Commits recentes (automático):**
 
 <!-- AUTO:gitlog:start -->
 | Commit | Data | Autor | Mensagem |
 |---|---|---|---|
+| `0847e6a` | 2026-10-24 | Doletabgi | feat(core): centralizar desenvolvimento no jobmanager-win10-python, corrigir contadores de camadas e remover grade_ch_0 |
 | `418895c` | 2026-10-24 | Doletabgi | feat: renomear aplicacao para CorteAC e preparar publicacao no repositorio |
 | `fe38092` | 2026-10-21 | Doletabgi | feat(ui): alterar controle de margem de seguranca para botoes de check de 10, 15, 20 e 30 mm |
 | `8694992` | 2026-10-21 | Doletabgi | feat(nesting): adicionar controles de margem de seguranca da placa na sessao e aplicar no nesting |
@@ -1384,7 +1407,6 @@ Local: `/home/dola/Documentos/clone do job/antigo/arquivos pos instalacao/Common
 | `eb1757a` | 2026-10-19 | Doletabgi | feat(ui): adicionar planilha interativa de consulta de estrategias e parametros na sessao |
 | `0fa43b2` | 2026-10-19 | Doletabgi | feat(ui): substituir coluna partida por descricao no estoque de material |
 | `ac9c3be` | 2026-10-19 | Doletabgi | feat(nesting): remover estrategia flashnestroll e referencias a bobinas continuas |
-| `d9e5e15` | 2026-10-19 | Doletabgi | feat(ui): remocao de material via Delete com bloqueio condicional por layout calculado |
 <!-- AUTO:gitlog:end -->
 
 ---

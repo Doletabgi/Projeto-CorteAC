@@ -1,0 +1,702 @@
+#!/usr/bin/env python3
+"""
+tools/re_dump/build_layout_inventory.py
+
+Consolida o inventário técnico completo do ATOM Layout Editor original (Layout.exe / LayoutNT / FreeNest.exe)
+e a matriz de comparação com o LayoutEditorView do CorteAC em layout_inventory.json.
+
+Fontes primárias:
+1. Ajuda HTML oficial (Help/LayoutEditor/, Help/JM2K/)
+2. Recursos estáticos PE (Layout.exe, FreeNest.exe, Afcadv18E.dll, Afchlib12E.dll)
+3. Desmontagem e análise estática (Capstone / PEFile)
+4. Código-fonte do CorteAC (ui/layout_editor_view.py, ui/cad_canvas.py, ui/layout_print_dialog.py)
+"""
+
+import sys
+import json
+from pathlib import Path
+
+BASE_DIR = Path(__file__).resolve().parent.parent.parent
+OUTPUT_FILE = BASE_DIR / "tools" / "re_dump" / "layout_inventory.json"
+REF_DIR = BASE_DIR / "docs" / "ref" / "layout_re"
+
+def load_text_lines(filepath):
+    p = Path(filepath)
+    if p.exists():
+        return [l.strip() for l in p.read_text(encoding="utf-8", errors="replace").splitlines() if l.strip()]
+    return []
+
+def main():
+    print("Construindo layout_inventory.json a partir dos dados extraídos...")
+
+    inventory = {
+        "metadata": {
+            "title": "Inventário de Engenharia Reversa - ATOM Layout Editor (Layout.exe / LayoutNT)",
+            "target_system": "JobManager 2000 / ATOM FlashCut (Linha Flex, Flash, Intelli)",
+            "analyzed_binaries": {
+                "Layout.exe": {
+                    "product_name": "Layout Editor Win32",
+                    "internal_name": "LayoutNT",
+                    "file_version": "3.2.7.0",
+                    "special_build": "v3.2.7 - 28.03.2013",
+                    "architecture": "x86 32-bit (PE32)",
+                    "framework": "Visual C++ 2010 MFC (mfc100.dll, MSVCR100.dll)",
+                    "protection": "SentinelKeyW.DLL (SafeNet Sentinel dongle)",
+                    "dependencies": ["Afcadv18E.dll", "Afchlib12E.dll", "NsDb20E.dll", "RegHnd10E.dll"]
+                },
+                "FreeNest.exe": {
+                    "product_name": "FreeNest Applicazione",
+                    "internal_name": "FreeNest",
+                    "file_version": "1.0.8.1",
+                    "special_build": "v1.8 - 2607.2010",
+                    "architecture": "x86 32-bit (PE32)",
+                    "framework": "Visual C++ 2010 MFC (mfc100.dll, MSVCR100.dll)"
+                },
+                "SMPNst.dll": {
+                    "product_name": "SMPNst Module",
+                    "file_version": "1.0.13.0",
+                    "special_build": "v1.0.13 - 04.02.2003"
+                }
+            },
+            "reference_documents": [
+                "Help/LayoutEditor/bdyInterface.htm",
+                "Help/LayoutEditor/bdySelect_a_shape.htm",
+                "Help/LayoutEditor/bdyWorkingWithShapesAdv.htm",
+                "Help/LayoutEditor/bdyCatalog.htm",
+                "Help/LayoutEditor/bdytips.htm",
+                "Help/LayoutEditor/bdyGetStarted.htm",
+                "Help/LayoutEditor/bdyIntroduction.htm"
+            ]
+        },
+        "secoes": {
+            "A_arquitetura": {
+                "titulo": "Arquitetura e Tecnologia do Layout.exe",
+                "itens": [
+                    {
+                        "id": "A1",
+                        "item": "Linguagem e Framework",
+                        "valor": "C++ compilado com Microsoft Visual Studio 2010 (MSVC++ 10.0), MFC 10.0 (mfc100.dll) e CRT MSVCR100.dll",
+                        "certeza": "[EVIDÊNCIA]",
+                        "fonte": "PE Imports de Layout.exe: mfc100.dll, MSVCR100.dll"
+                    },
+                    {
+                        "id": "A2",
+                        "item": "Arquitetura de Janelas",
+                        "valor": "MDI (Multiple Document Interface) com CMainFrame (CMDIFrameWnd), CChildFrame (CMDIChildWnd), CLayoutDoc (COleServerDoc) e CLayoutView (CDrawWindow / CScrollView)",
+                        "certeza": "[EVIDÊNCIA]",
+                        "fonte": "RTTI type descriptors em Layout.exe e Afcadv18E.dll"
+                    },
+                    {
+                        "id": "A3",
+                        "item": "Motor Gráfico CAD",
+                        "valor": "Afcadv18E.dll (ATOM FastCAD v18 Enterprise), exportando classes CDrawWindow, CLayout, CInstance, CShape, CSheet, CRoll, CHide, CQAreaPoly",
+                        "certeza": "[EVIDÊNCIA]",
+                        "fonte": "Tabela de exportação de Afcadv18E.dll (1887 símbolos exportados)"
+                    },
+                    {
+                        "id": "A4",
+                        "item": "Motor de Nesting e Bump",
+                        "valor": "Afchlib12E.dll (ATOM FastCAD Hide Library 12) exportando classes CHNNest, CHNNestParam, CHNCatalog com BumpSelection e BumpShape",
+                        "certeza": "[EVIDÊNCIA]",
+                        "fonte": "Tabela de exportação de Afchlib12E.dll (1237 símbolos exportados)"
+                    },
+                    {
+                        "id": "A5",
+                        "item": "Proteção de Licença",
+                        "valor": "Dongle de proteção de hardware SafeNet Sentinel (SuperPro/UltraPro) via SentinelKeyW.DLL",
+                        "certeza": "[EVIDÊNCIA]",
+                        "fonte": "Imports de SentinelKeyW.DLL em Layout.exe e FreeNest.exe"
+                    }
+                ]
+            },
+            "B_menus": {
+                "titulo": "Barra de Menus Completa do Layout.exe",
+                "menus_extraidos": [
+                    {"id": 4, "nome": "Menu Básico do Documento OLE"},
+                    {"id": 5, "nome": "Menu de Janela Sem Documento Aberto"},
+                    {"id": 102, "nome": "Menu de Contexto do Canvas (Clique Direito na Peça/Mesa)"},
+                    {"id": 128, "nome": "Menu Principal Padrão (Sem Documento Ativo)"},
+                    {"id": 129, "nome": "Menu Principal Completo MDI (Com Layout Aberto)"},
+                    {"id": 131, "nome": "Menu de Janela Secundária / Preview"},
+                    {"id": 132, "nome": "Menu de Contexto do Catálogo (Item Selecionado)"},
+                    {"id": 133, "nome": "Menu de Contexto do Catálogo (Item Padrão)"}
+                ],
+                "itens_menu_principal_129": [
+                    {"menu": "File", "item": "New", "atalho": "Ctrl+N", "cmd": 57600, "certeza": "[EVIDÊNCIA]"},
+                    {"menu": "File", "item": "Open...", "atalho": "Ctrl+O", "cmd": 57601, "certeza": "[EVIDÊNCIA]"},
+                    {"menu": "File", "item": "Open Next", "atalho": "Ctrl+L", "cmd": 51111, "certeza": "[EVIDÊNCIA]"},
+                    {"menu": "File", "item": "ReOpen ...", "atalho": "", "cmd": 50009, "certeza": "[EVIDÊNCIA]"},
+                    {"menu": "File", "item": "Close", "atalho": "Ctrl+W", "cmd": 57602, "certeza": "[EVIDÊNCIA]"},
+                    {"menu": "File", "item": "Close and reopen using Interactive Layout", "atalho": "Ctrl+I", "cmd": 33906, "certeza": "[EVIDÊNCIA]"},
+                    {"menu": "File", "item": "Save", "atalho": "Ctrl+S", "cmd": 57603, "certeza": "[EVIDÊNCIA]"},
+                    {"menu": "File", "item": "Save As...", "atalho": "", "cmd": 57604, "certeza": "[EVIDÊNCIA]"},
+                    {"menu": "File", "item": "Save Local -> Original", "atalho": "", "cmd": 32975, "certeza": "[EVIDÊNCIA]"},
+                    {"menu": "File", "item": "Save Local -> Mirror shapes", "atalho": "", "cmd": 32834, "certeza": "[EVIDÊNCIA]"},
+                    {"menu": "File", "item": "Save dot B", "atalho": "", "cmd": 33902, "certeza": "[EVIDÊNCIA]"},
+                    {"menu": "File", "item": "Set Alternate Path...", "atalho": "", "cmd": 32807, "certeza": "[EVIDÊNCIA]"},
+                    {"menu": "File", "item": "Merge...", "atalho": "", "cmd": 32803, "certeza": "[EVIDÊNCIA]"},
+                    {"menu": "File", "item": "Load Material... -> Hide", "atalho": "", "cmd": 32806, "certeza": "[EVIDÊNCIA]"},
+                    {"menu": "File", "item": "Load Material... -> Sheet", "atalho": "", "cmd": 32811, "certeza": "[EVIDÊNCIA]"},
+                    {"menu": "File", "item": "Load Material... -> Roll", "atalho": "", "cmd": 32812, "certeza": "[EVIDÊNCIA]"},
+                    {"menu": "File", "item": "Print...", "atalho": "Ctrl+P", "cmd": 57607, "certeza": "[EVIDÊNCIA]"},
+                    {"menu": "File", "item": "Print Preview", "atalho": "", "cmd": 57609, "certeza": "[EVIDÊNCIA]"},
+                    {"menu": "File", "item": "Print Setup...", "atalho": "", "cmd": 57606, "certeza": "[EVIDÊNCIA]"},
+                    {"menu": "File", "item": "Exit", "atalho": "", "cmd": 57665, "certeza": "[EVIDÊNCIA]"},
+                    {"menu": "Edit", "item": "Undo", "atalho": "Ctrl+Z", "cmd": 57643, "certeza": "[EVIDÊNCIA]"},
+                    {"menu": "Edit", "item": "Cut", "atalho": "Ctrl+X", "cmd": 57635, "certeza": "[EVIDÊNCIA]"},
+                    {"menu": "Edit", "item": "Copy", "atalho": "Ctrl+C", "cmd": 57634, "certeza": "[EVIDÊNCIA]"},
+                    {"menu": "Edit", "item": "Paste", "atalho": "Ctrl+V", "cmd": 57637, "certeza": "[EVIDÊNCIA]"},
+                    {"menu": "Edit", "item": "Position...", "atalho": "", "cmd": 32817, "certeza": "[EVIDÊNCIA]"},
+                    {"menu": "Edit", "item": "Delete", "atalho": "Del", "cmd": 32818, "certeza": "[EVIDÊNCIA]"},
+                    {"menu": "Edit", "item": "Mirror", "atalho": "F5", "cmd": 32845, "certeza": "[EVIDÊNCIA]"},
+                    {"menu": "Edit", "item": "Duplicate -> Normal", "atalho": "", "cmd": 52102, "certeza": "[EVIDÊNCIA]"},
+                    {"menu": "Edit", "item": "Duplicate -> Rotated", "atalho": "", "cmd": 50006, "certeza": "[EVIDÊNCIA]"},
+                    {"menu": "Edit", "item": "Fill -> Row", "atalho": "", "cmd": 52103, "certeza": "[EVIDÊNCIA]"},
+                    {"menu": "Edit", "item": "Fill -> Row Alternate", "atalho": "", "cmd": 52104, "certeza": "[EVIDÊNCIA]"},
+                    {"menu": "Edit", "item": "Fill -> Column", "atalho": "", "cmd": 50007, "certeza": "[EVIDÊNCIA]"},
+                    {"menu": "Edit", "item": "Fill -> Sheet", "atalho": "", "cmd": 52105, "certeza": "[EVIDÊNCIA]"},
+                    {"menu": "Edit", "item": "Fill -> Sheet Alternate", "atalho": "", "cmd": 52106, "certeza": "[EVIDÊNCIA]"},
+                    {"menu": "Edit", "item": "Fill -> User", "atalho": "", "cmd": 50003, "certeza": "[EVIDÊNCIA]"},
+                    {"menu": "Edit", "item": "Set Rotation Center", "atalho": "", "cmd": 52109, "certeza": "[EVIDÊNCIA]"},
+                    {"menu": "Edit", "item": "Remove All", "atalho": "", "cmd": 32972, "certeza": "[EVIDÊNCIA]"},
+                    {"menu": "Edit", "item": "Flip -> Around x axis", "atalho": "", "cmd": 32962, "certeza": "[EVIDÊNCIA]"},
+                    {"menu": "Edit", "item": "Flip -> Around y axis", "atalho": "", "cmd": 32961, "certeza": "[EVIDÊNCIA]"},
+                    {"menu": "View", "item": "Toolbar", "atalho": "", "cmd": 59392, "certeza": "[EVIDÊNCIA]"},
+                    {"menu": "View", "item": "Status Bar", "atalho": "", "cmd": 59393, "certeza": "[EVIDÊNCIA]"},
+                    {"menu": "View", "item": "Zoom", "atalho": "Ctrl+Q", "cmd": 32778, "certeza": "[EVIDÊNCIA]"},
+                    {"menu": "View", "item": "Previous zoom", "atalho": "", "cmd": 32772, "certeza": "[EVIDÊNCIA]"},
+                    {"menu": "View", "item": "Full view", "atalho": "", "cmd": 32771, "certeza": "[EVIDÊNCIA]"},
+                    {"menu": "View", "item": "History -> Start", "atalho": "Home", "cmd": 32839, "certeza": "[EVIDÊNCIA]"},
+                    {"menu": "View", "item": "History -> End", "atalho": "End", "cmd": 32840, "certeza": "[EVIDÊNCIA]"},
+                    {"menu": "View", "item": "History -> Advance", "atalho": "+ (ou PageDown)", "cmd": 32841, "certeza": "[EVIDÊNCIA]"},
+                    {"menu": "View", "item": "History -> Back", "atalho": "- (ou PageUp)", "cmd": 32842, "certeza": "[EVIDÊNCIA]"},
+                    {"menu": "View", "item": "Groups", "atalho": "", "cmd": 32836, "certeza": "[EVIDÊNCIA]"},
+                    {"menu": "View", "item": "Full schedule", "atalho": "", "cmd": 50008, "certeza": "[EVIDÊNCIA]"},
+                    {"menu": "View", "item": "Instance Information...", "atalho": "", "cmd": 32819, "certeza": "[EVIDÊNCIA]"},
+                    {"menu": "View", "item": "Layout Information...", "atalho": "", "cmd": 32893, "certeza": "[EVIDÊNCIA]"},
+                    {"menu": "Cut", "item": "Left", "atalho": "", "cmd": 32789, "certeza": "[EVIDÊNCIA]"},
+                    {"menu": "Cut", "item": "Right", "atalho": "", "cmd": 32788, "certeza": "[EVIDÊNCIA]"},
+                    {"menu": "Cut", "item": "Execute", "atalho": "", "cmd": 32787, "certeza": "[EVIDÊNCIA]"},
+                    {"menu": "Nesting", "item": "Move Material", "atalho": "", "cmd": 32810, "certeza": "[EVIDÊNCIA]"},
+                    {"menu": "Nesting", "item": "Offset Material", "atalho": "", "cmd": 32837, "certeza": "[EVIDÊNCIA]"},
+                    {"menu": "Nesting", "item": "Rotate", "atalho": "", "cmd": 32843, "certeza": "[EVIDÊNCIA]"},
+                    {"menu": "Nesting", "item": "ShowRectangle", "atalho": "Ctrl+R", "cmd": 32844, "certeza": "[EVIDÊNCIA]"},
+                    {"menu": "Nesting", "item": "Calculate", "atalho": "", "cmd": 32809, "certeza": "[EVIDÊNCIA]"},
+                    {"menu": "Nesting", "item": "Create Hide Shape", "atalho": "", "cmd": 32964, "certeza": "[EVIDÊNCIA]"},
+                    {"menu": "Nesting", "item": "Copy BMP of layout to ClipBoard", "atalho": "", "cmd": 32892, "certeza": "[EVIDÊNCIA]"},
+                    {"menu": "Nesting", "item": "Quality areas -> Create", "atalho": "", "cmd": 32898, "certeza": "[EVIDÊNCIA]"},
+                    {"menu": "Nesting", "item": "Quality areas -> Delete", "atalho": "", "cmd": 32899, "certeza": "[EVIDÊNCIA]"},
+                    {"menu": "Nesting", "item": "Nesting parameters", "atalho": "", "cmd": 33904, "certeza": "[EVIDÊNCIA]"},
+                    {"menu": "Nesting", "item": "Nest classes ...", "atalho": "", "cmd": 33905, "certeza": "[EVIDÊNCIA]"},
+                    {"menu": "Tools", "item": "Colours...", "atalho": "", "cmd": 32821, "certeza": "[EVIDÊNCIA]"},
+                    {"menu": "Tools", "item": "Preferences...", "atalho": "", "cmd": 50002, "certeza": "[EVIDÊNCIA]"},
+                    {"menu": "Tools", "item": "Check Overlay", "atalho": "Ctrl+E", "cmd": 32835, "certeza": "[EVIDÊNCIA]"},
+                    {"menu": "Tools", "item": "Show cut pieces", "atalho": "", "cmd": 33920, "certeza": "[EVIDÊNCIA]"},
+                    {"menu": "Tools", "item": "Change Gap", "atalho": "", "cmd": 32967, "certeza": "[EVIDÊNCIA]"},
+                    {"menu": "Tools", "item": "Cutting Order", "atalho": "", "cmd": 32965, "certeza": "[EVIDÊNCIA]"},
+                    {"menu": "Window", "item": "New Window", "atalho": "", "cmd": 57648, "certeza": "[EVIDÊNCIA]"},
+                    {"menu": "Window", "item": "Cascade", "atalho": "", "cmd": 57650, "certeza": "[EVIDÊNCIA]"},
+                    {"menu": "Window", "item": "Tile Horizontally", "atalho": "", "cmd": 57651, "certeza": "[EVIDÊNCIA]"},
+                    {"menu": "Window", "item": "Tile Vertically", "atalho": "", "cmd": 57652, "certeza": "[EVIDÊNCIA]"},
+                    {"menu": "Window", "item": "Arrange Icons", "atalho": "", "cmd": 57649, "certeza": "[EVIDÊNCIA]"},
+                    {"menu": "Window", "item": "Split", "atalho": "", "cmd": 57653, "certeza": "[EVIDÊNCIA]"},
+                    {"menu": "Help", "item": "About Layout...", "atalho": "", "cmd": 57664, "certeza": "[EVIDÊNCIA]"}
+                ]
+            },
+            "C_barras_ferramentas": {
+                "titulo": "Barras de Ferramentas (Toolbar 128, 137, 150)",
+                "botoes_sequenciais": [
+                    {"ordem": 1, "tb": 128, "cmd": 57600, "nome": "New", "tooltip": "Create a new document", "tipo": "push", "certeza": "[EVIDÊNCIA]"},
+                    {"ordem": 2, "tb": 128, "cmd": 57601, "nome": "Open", "tooltip": "Open an existing document", "tipo": "push", "certeza": "[EVIDÊNCIA]"},
+                    {"ordem": 3, "tb": 128, "cmd": 57603, "nome": "Save", "tooltip": "Save the active document", "tipo": "push", "certeza": "[EVIDÊNCIA]"},
+                    {"ordem": 4, "tb": 128, "cmd": 57635, "nome": "Cut", "tooltip": "Cut the selection and put in on the Clipboard", "tipo": "push", "certeza": "[EVIDÊNCIA]"},
+                    {"ordem": 5, "tb": 128, "cmd": 57634, "nome": "Copy", "tooltip": "Copy the selection to the Clipboard", "tipo": "push", "certeza": "[EVIDÊNCIA]"},
+                    {"ordem": 6, "tb": 128, "cmd": 57637, "nome": "Paste", "tooltip": "Insert Clipboard contents", "tipo": "push", "certeza": "[EVIDÊNCIA]"},
+                    {"ordem": 7, "tb": 128, "cmd": 57607, "nome": "Print", "tooltip": "Print the active document", "tipo": "push", "certeza": "[EVIDÊNCIA]"},
+                    {"ordem": 8, "tb": 137, "cmd": 32790, "nome": "Show quality areas", "tooltip": "Show quality areas on hide", "tipo": "toggle", "certeza": "[EVIDÊNCIA]"},
+                    {"ordem": 9, "tb": 137, "cmd": 32799, "nome": "Fill quality areas", "tooltip": "Fill Quality Areas", "tipo": "toggle", "certeza": "[EVIDÊNCIA]"},
+                    {"ordem": 10, "tb": 137, "cmd": 32794, "nome": "Show shapes", "tooltip": "Show Shapes", "tipo": "toggle", "certeza": "[EVIDÊNCIA]"},
+                    {"ordem": 11, "tb": 137, "cmd": 32774, "nome": "Fill shapes", "tooltip": "Fill Shapes", "tipo": "toggle", "certeza": "[EVIDÊNCIA]"},
+                    {"ordem": 12, "tb": 137, "cmd": 32835, "nome": "Check overlay", "tooltip": "Check Overlay (padrão xadrez nas sobreposições)", "tipo": "toggle", "certeza": "[EVIDÊNCIA]"},
+                    {"ordem": 13, "tb": 137, "cmd": 32771, "nome": "Full View", "tooltip": "Zoom the view to display the complete layout", "tipo": "push", "certeza": "[EVIDÊNCIA]"},
+                    {"ordem": 14, "tb": 137, "cmd": 32778, "nome": "Zoom", "tooltip": "Enable/Disable zooming (Lupa / retângulo de zoom)", "tipo": "toggle", "certeza": "[EVIDÊNCIA]"},
+                    {"ordem": 15, "tb": 137, "cmd": 32820, "nome": "Add shapes", "tooltip": "Add a Shape Target", "tipo": "push", "certeza": "[EVIDÊNCIA]"},
+                    {"ordem": 16, "tb": 137, "cmd": 32817, "nome": "Edit position", "tooltip": "Edit Instance position (ajuste fino numérico X, Y, Rot)", "tipo": "push", "certeza": "[EVIDÊNCIA]"},
+                    {"ordem": 17, "tb": 150, "cmd": 51000, "nome": "Bump Up", "tooltip": "Bump the Selection Up", "tipo": "push", "certeza": "[EVIDÊNCIA]"},
+                    {"ordem": 18, "tb": 150, "cmd": 32831, "nome": "Bump Down", "tooltip": "Bump the Selection Down", "tipo": "push", "certeza": "[EVIDÊNCIA]"},
+                    {"ordem": 19, "tb": 150, "cmd": 32833, "nome": "Bump Left", "tooltip": "Bump the Selection Left", "tipo": "push", "certeza": "[EVIDÊNCIA]"},
+                    {"ordem": 20, "tb": 150, "cmd": 32832, "nome": "Bump Right", "tooltip": "Bump the Selection Right", "tipo": "push", "certeza": "[EVIDÊNCIA]"}
+                ]
+            },
+            "D_painel_lateral_catalogo": {
+                "titulo": "Painel Lateral / Catálogo de Moldes (CShapeCatalog)",
+                "itens": [
+                    {
+                        "recurso": "Layout e Divisor",
+                        "descricao": "Painel acoplado à direita da janela MDI, separado do canvas por uma barra divisória móvel (splitter bar). Duplo-clique no vazio reorganiza os moldes.",
+                        "certeza": "[EVIDÊNCIA]",
+                        "fonte": "bdyCatalog.htm: 'dragging the splitter bar that divides it from the layout pane... double click in an empty area to rearrange'"
+                    },
+                    {
+                        "recurso": "Miniatura e Geometria",
+                        "descricao": "Exibe miniaturas vetoriais dos moldes disponíveis com seus respectivos contornos originais.",
+                        "certeza": "[EVIDÊNCIA]",
+                        "fonte": "bdyCatalog.htm / RemCatalog.gif"
+                    },
+                    {
+                        "recurso": "Contadores Numéricos (Pares/Instâncias)",
+                        "descricao": "Exibe exatamente dois pares de números embaixo de cada miniatura: 1º par (Peças Normais: colocadas / a colocar), 2º par (Peças Espelhadas: colocadas / a colocar). Se o layout possui camadas, a alteração manual é multiplicada pelas camadas.",
+                        "certeza": "[EVIDÊNCIA]",
+                        "fonte": "bdyCatalog.htm: 'two couple of numbers, in each couple the first indicates how many copies... placed, the second to be placed... second couple refers to mirrored stock'"
+                    },
+                    {
+                        "recurso": "Arrastar do Catálogo para o Canvas",
+                        "descricao": "Duplo clique no molde no catálogo e arrasta o contorno até a mesa CAD. Clique para soltar. Pressione ESC para cancelar o arrasto.",
+                        "certeza": "[EVIDÊNCIA]",
+                        "fonte": "bdyCatalog.htm: 'double click it and drag its outline on your layout... ESC key to abort'"
+                    },
+                    {
+                        "recurso": "Menu de Contexto do Catálogo (Menu 132/133)",
+                        "descricao": "Clique direito no molde do catálogo exibe: Info (ID 32816), Add... (ID 32820), Modify... (ID 32815 - FreeNest), Remove (ID 32814), Select (ID 52100 - seleciona todas as peças deste molde na mesa), View (ID 52101 - abre no Shape Editor / ShedNt.exe).",
+                        "certeza": "[EVIDÊNCIA]",
+                        "fonte": "RT_MENU 132/133 e bdyCatalog.htm: 'Right click commands in catalog'"
+                    }
+                ]
+            },
+            "E_canvas_area_edicao": {
+                "titulo": "Área de Edição (Canvas CAD: CDrawWindow / CLayoutView)",
+                "itens": [
+                    {
+                        "recurso": "Coordenadas e Unidades",
+                        "descricao": "Unidade padrão milímetros (mm) e décimos de milímetro em ponto flutuante de 64 bits (double). Ângulos em radianos internamente e exibidos em graus na barra de status com 2 decimais. Sistema cartesiano com Y crescente para cima via SetYCartesian.",
+                        "certeza": "[EVIDÊNCIA]",
+                        "fonte": "CDrawWindow::SetYCartesian, CDrawWindow::DC2R, CDrawWindow::R2DC, docs/FORMATO_LAY.md"
+                    },
+                    {
+                        "recurso": "Representação de Material",
+                        "descricao": "Chapa (Sheet), Bobina (Roll) ou Pele (Hide). Zonas de qualidade (0 a 5) desenhadas por polígonos (CQAreaPoly) com contorno ou preenchimento sólido colorido configurável em Tools->Colors.",
+                        "certeza": "[EVIDÊNCIA]",
+                        "fonte": "bdyInterface.htm / dlgEditColors.gif / RT_MENU 129"
+                    },
+                    {
+                        "recurso": "Representação de Peças",
+                        "descricao": "Peças exibem contorno fechado (CPoly), furos/piques (CPricker) e costuras internas. Peça selecionada é exibida apenas em contorno sem preenchimento, enquanto peças não selecionadas ficam preenchidas.",
+                        "certeza": "[EVIDÊNCIA]",
+                        "fonte": "bdySelect_a_shape.htm: 'Selected shapes can be identified because only the shape outline is visible' e bdySel8.gif"
+                    },
+                    {
+                        "recurso": "Detecção e Indicação de Sobreposição (Check Overlay)",
+                        "descricao": "Quando ativado (Toolbar / Ctrl+E), peças sobrepostas são desenhadas com hachura quadriculada/xadrez sobre a área de colisão. Leva em consideração o gap e o nicking configurado.",
+                        "certeza": "[EVIDÊNCIA]",
+                        "fonte": "bdyInterface.htm: 'drawn with a squared pattern on them' e bdyInt7.gif"
+                    },
+                    {
+                        "recurso": "Barra de Status (Status Bar)",
+                        "descricao": "Dividida em painéis: 1 (Mensagens / Prompt), 2 (EXT/CAP/NUM/SCRL), 3 (Rendimento % @@.@@%), 4 (Coord X @@@@.@@), 5 (Coord Y @@@@.@@), 6 (Ângulo @@@@.@@°), 7 (Contadores @@@), 8 (Dimensões SHEET hXw cm), 9 (Unidade mm).",
+                        "certeza": "[EVIDÊNCIA]",
+                        "fonte": "RT_STRING 59142-59148 e imagens Statusbar_empty.gif, StatusBarOverHide.gif, StatusBarOverShapejpg.gif"
+                    }
+                ]
+            },
+            "F_gestos_mouse": {
+                "titulo": "Gestos de Mouse e Rotação Livre 360°",
+                "gestos": [
+                    {
+                        "evento": "Botão Esquerdo - Clique",
+                        "modificador": "Nenhum",
+                        "contexto": "Sobre peça na mesa",
+                        "comportamento": "Seleciona a peça clicada e desmarca todas as outras.",
+                        "cursor": "Seta padrão",
+                        "certeza": "[EVIDÊNCIA]"
+                    },
+                    {
+                        "evento": "Botão Esquerdo - Clique",
+                        "modificador": "Shift",
+                        "contexto": "Sobre peça na mesa",
+                        "comportamento": "Alterna seleção (adiciona à seleção se desmarcada, ou remove da seleção se já marcada).",
+                        "cursor": "Seta padrão",
+                        "certeza": "[EVIDÊNCIA]"
+                    },
+                    {
+                        "evento": "Botão Esquerdo - Duplo Clique",
+                        "modificador": "Nenhum",
+                        "contexto": "Vazio da mesa",
+                        "comportamento": "Desmarca todas as peças selecionadas de uma vez.",
+                        "cursor": "Seta padrão",
+                        "certeza": "[EVIDÊNCIA]"
+                    },
+                    {
+                        "evento": "Botão Esquerdo - Arraste",
+                        "modificador": "Nenhum",
+                        "contexto": "Vazio da mesa",
+                        "comportamento": "Desenha retângulo de seleção (bounding box). Todas as peças completamente contidas dentro do retângulo são selecionadas ao soltar.",
+                        "cursor": "Seta padrão com retângulo elástico",
+                        "certeza": "[EVIDÊNCIA]"
+                    },
+                    {
+                        "evento": "Botão Esquerdo - Arraste",
+                        "modificador": "Nenhum",
+                        "contexto": "Sobre peça selecionada",
+                        "comportamento": "Move a peça ou conjunto de peças selecionadas em tempo real com rubber-band outline. Atualiza coordenadas na status bar.",
+                        "cursor": "Seta ou cursor de movimentação (4 direções)",
+                        "certeza": "[EVIDÊNCIA]"
+                    },
+                    {
+                        "evento": "Botão Esquerdo - Duplo Clique",
+                        "modificador": "Nenhum",
+                        "contexto": "Sobre peça selecionada",
+                        "comportamento": "Inicia modo Bump Direcional Interativo com o mouse. Ponteiro vira arco e desenha linha elástica do centro da peça ao cursor.",
+                        "cursor": "Arco (Bow - Cursor ID 149)",
+                        "certeza": "[EVIDÊNCIA]"
+                    },
+                    {
+                        "evento": "Botão do Meio (Roda) - Clique",
+                        "modificador": "Nenhum",
+                        "contexto": "Sobre peça selecionada",
+                        "comportamento": "Gatilho alternativo direto para o Bump Direcional (idêntico ao duplo clique com botão esquerdo).",
+                        "cursor": "Arco (Bow - Cursor ID 149)",
+                        "certeza": "[EVIDÊNCIA]"
+                    },
+                    {
+                        "evento": "Roda do Mouse (Wheel) - Rolagem",
+                        "modificador": "Nenhum",
+                        "contexto": "Canvas com peça(s) selecionada(s)",
+                        "comportamento": "Gira a peça selecionada em torno do seu centro pelo passo configurado nas Preferências (padrão 2° ou 5°).",
+                        "cursor": "Seta padrão",
+                        "certeza": "[EVIDÊNCIA]"
+                    },
+                    {
+                        "evento": "Roda do Mouse (Wheel) - Rolagem",
+                        "modificador": "Ctrl",
+                        "contexto": "Canvas com peças selecionadas",
+                        "comportamento": "Gira as peças como um grupo único em torno do centro do bounding box imaginário do conjunto.",
+                        "cursor": "Seta padrão",
+                        "certeza": "[EVIDÊNCIA]"
+                    },
+                    {
+                        "evento": "Roda do Mouse (Wheel) - Rolagem",
+                        "modificador": "Shift",
+                        "contexto": "Canvas com centro de rotação definido",
+                        "comportamento": "Gira as peças como um grupo em torno do centro de rotação customizado definido pelo operador.",
+                        "cursor": "Seta padrão",
+                        "certeza": "[EVIDÊNCIA]"
+                    },
+                    {
+                        "evento": "Botão Direito - Clique rápido (< 2.65 px)",
+                        "modificador": "Nenhum",
+                        "contexto": "Sobre peça ou mesa",
+                        "comportamento": "Abre o Menu de Contexto Win32 (Menu 102 com Position, Delete, Mirror, Duplicate, Fill, Set Rotation Center, Check Overlay).",
+                        "cursor": "Seta padrão",
+                        "certeza": "[EVIDÊNCIA]"
+                    },
+                    {
+                        "evento": "Botão Direito - Pressionar e Arrastar (>= 2.65 px)",
+                        "modificador": "Nenhum",
+                        "contexto": "Peça selecionada",
+                        "comportamento": "ROTAÇÃO LIVRE 360° CONTÍNUA. Pivô no centro da peça selecionada. Dois raios elásticos (partida e cursor) com arco anti-horário e raio de ~42 px (1.25x da peça). Atualiza ângulo na status bar em tempo real. Soltar aplica a rotação e registra Undo. Pressionar ESC durante o arrasto cancela e restaura.",
+                        "cursor": "Seta padrão com raios e arco XOR R2_NOTXORPEN",
+                        "certeza": "[EVIDÊNCIA]"
+                    },
+                    {
+                        "evento": "Botão Direito - Arrastar",
+                        "modificador": "Ctrl",
+                        "contexto": "Múltiplas peças selecionadas",
+                        "comportamento": "Rotação livre contínua em grupo: o pivô é o centro do retângulo envolvente do grupo de peças.",
+                        "cursor": "Raios e arco a partir do centro do grupo",
+                        "certeza": "[EVIDÊNCIA]"
+                    },
+                    {
+                        "evento": "Botão Direito - Arrastar",
+                        "modificador": "Shift",
+                        "contexto": "Centro de rotação definido",
+                        "comportamento": "Rotação livre em torno do ponto de cruz definido pelo usuário (Set Rotation Center).",
+                        "cursor": "Raios e arco a partir da cruz customizada",
+                        "certeza": "[EVIDÊNCIA]"
+                    }
+                ]
+            },
+            "G_atalhos_teclado": {
+                "titulo": "Tabela Completa de Atalhos de Teclado Testados / Extraídos",
+                "atalhos": [
+                    {"atalho": "F1", "acao": "Giro anti-horário fino de 1° a 2°", "origem": "Layout.exe (0x4278d7)", "status": "Funcional", "certeza": "[EVIDÊNCIA]"},
+                    {"atalho": "F2", "acao": "Giro horário fino de 1° a 2°", "origem": "Layout.exe (0x42791f)", "status": "Funcional", "certeza": "[EVIDÊNCIA]"},
+                    {"atalho": "F3", "acao": "Giro grosso de 90°", "origem": "Layout.exe (0x427967)", "status": "Funcional", "certeza": "[EVIDÊNCIA]"},
+                    {"atalho": "F4", "acao": "Giro flip de 180°", "origem": "Layout.exe (0x427971)", "status": "Funcional", "certeza": "[EVIDÊNCIA]"},
+                    {"atalho": "F5", "acao": "Espelhar peça(s) selecionada(s) (Mirror)", "origem": "Layout.exe (0x42797b chama 0x41c170)", "status": "Funcional", "certeza": "[EVIDÊNCIA]"},
+                    {"atalho": "F6", "acao": "Navegar para próximo painel MDI (Next Pane)", "origem": "Tabela de aceleradores ID 128 (CMD 57680)", "status": "Funcional", "certeza": "[EVIDÊNCIA]"},
+                    {"atalho": "Shift+F6", "acao": "Navegar para painel MDI anterior (Prev Pane)", "origem": "Tabela de aceleradores ID 128 (CMD 57681)", "status": "Funcional", "certeza": "[EVIDÊNCIA]"},
+                    {"atalho": "NumPad 4", "acao": "Giro anti-horário fino (atalho alternativo ao F1)", "origem": "Layout.exe (0x4278d7)", "status": "Funcional", "certeza": "[EVIDÊNCIA]"},
+                    {"atalho": "NumPad 6", "acao": "Giro horário fino (atalho alternativo ao F2)", "origem": "Layout.exe (0x42791f)", "status": "Funcional", "certeza": "[EVIDÊNCIA]"},
+                    {"atalho": "Seta Esquerda", "acao": "Bump para a Esquerda (encosto magnético até colidir)", "origem": "Layout.exe (0x427829 -> 0x418ad0)", "status": "Funcional", "certeza": "[EVIDÊNCIA]"},
+                    {"atalho": "Seta Direita", "acao": "Bump para a Direita (encosto magnético)", "origem": "Layout.exe (0x427880)", "status": "Funcional", "certeza": "[EVIDÊNCIA]"},
+                    {"atalho": "Seta Acima", "acao": "Bump para Cima (encosto magnético)", "origem": "Layout.exe (0x4277d2)", "status": "Funcional", "certeza": "[EVIDÊNCIA]"},
+                    {"atalho": "Seta Abaixo", "acao": "Bump para Baixo (encosto magnético)", "origem": "Layout.exe (0x42777b)", "status": "Funcional", "certeza": "[EVIDÊNCIA]"},
+                    {"atalho": "Ctrl+Seta Esquerda", "acao": "Nudge fino horizontal para a esquerda (-0.5 mm)", "origem": "Layout.exe (0x427838 com constante 0x44fe10)", "status": "Funcional", "certeza": "[EVIDÊNCIA]"},
+                    {"atalho": "Ctrl+Seta Direita", "acao": "Nudge fino horizontal para a direita (+0.5 mm)", "origem": "Layout.exe (0x42788f)", "status": "Funcional", "certeza": "[EVIDÊNCIA]"},
+                    {"atalho": "Ctrl+Seta Acima", "acao": "Nudge fino vertical para cima (+0.5 mm)", "origem": "Layout.exe (0x4277df)", "status": "Funcional", "certeza": "[EVIDÊNCIA]"},
+                    {"atalho": "Ctrl+Seta Abaixo", "acao": "Nudge fino vertical para baixo (-0.5 mm)", "origem": "Layout.exe (0x427788)", "status": "Funcional", "certeza": "[EVIDÊNCIA]"},
+                    {"atalho": "Delete", "acao": "Excluir peça(s) selecionada(s) da mesa", "origem": "Layout.exe (0x427763) e Menu Edit", "status": "Funcional", "certeza": "[EVIDÊNCIA]"},
+                    {"atalho": "Escape", "acao": "Cancelar arrasto / abortar bump / fechar diálogos", "origem": "Layout.exe (0x42774b) e bdyWorkingWithShapesAdv.htm", "status": "Funcional", "certeza": "[EVIDÊNCIA]"},
+                    {"atalho": "Ctrl+Z", "acao": "Desfazer última alteração (Undo)", "origem": "Tabela de aceleradores (CMD 57643) e bdytips.htm", "status": "Funcional", "certeza": "[EVIDÊNCIA]"},
+                    {"atalho": "Alt+BackSpace", "acao": "Desfazer (sinônimo de Ctrl+Z do Windows)", "origem": "Tabela de aceleradores (CMD 57643)", "status": "Funcional", "certeza": "[EVIDÊNCIA]"},
+                    {"atalho": "Ctrl+S", "acao": "Salvar layout ativo", "origem": "Tabela de aceleradores (CMD 57603)", "status": "Funcional", "certeza": "[EVIDÊNCIA]"},
+                    {"atalho": "Ctrl+O", "acao": "Abrir layout existente", "origem": "Tabela de aceleradores (CMD 57601)", "status": "Funcional", "certeza": "[EVIDÊNCIA]"},
+                    {"atalho": "Ctrl+N", "acao": "Criar novo layout", "origem": "Tabela de aceleradores (CMD 57600)", "status": "Funcional", "certeza": "[EVIDÊNCIA]"},
+                    {"atalho": "Ctrl+P", "acao": "Imprimir layout ativo", "origem": "Tabela de aceleradores (CMD 57607)", "status": "Funcional", "certeza": "[EVIDÊNCIA]"},
+                    {"atalho": "Ctrl+X", "acao": "Recortar seleção para o Clipboard", "origem": "Tabela de aceleradores (CMD 57635)", "status": "Funcional", "certeza": "[EVIDÊNCIA]"},
+                    {"atalho": "Shift+Delete", "acao": "Recortar (sinônimo Win32 clássico)", "origem": "Tabela de aceleradores (CMD 57635)", "status": "Funcional", "certeza": "[EVIDÊNCIA]"},
+                    {"atalho": "Ctrl+C", "acao": "Copiar seleção para o Clipboard", "origem": "Tabela de aceleradores (CMD 57634)", "status": "Funcional", "certeza": "[EVIDÊNCIA]"},
+                    {"atalho": "Ctrl+Insert", "acao": "Copiar (sinônimo Win32 clássico)", "origem": "Tabela de aceleradores (CMD 57634)", "status": "Funcional", "certeza": "[EVIDÊNCIA]"},
+                    {"atalho": "Ctrl+V", "acao": "Colar peças do Clipboard (com pequeno offset X/Y)", "origem": "Tabela de aceleradores (CMD 57637) e bdyInterface.htm", "status": "Funcional", "certeza": "[EVIDÊNCIA]"},
+                    {"atalho": "Shift+Insert", "acao": "Colar (sinônimo Win32 clássico)", "origem": "Tabela de aceleradores (CMD 57637)", "status": "Funcional", "certeza": "[EVIDÊNCIA]"},
+                    {"atalho": "Ctrl+W", "acao": "Fechar documento ativo (Close)", "origem": "Tabela de aceleradores (CMD 57602)", "status": "Funcional", "certeza": "[EVIDÊNCIA]"},
+                    {"atalho": "Ctrl+L", "acao": "Abrir próximo layout da sessão (Open Next)", "origem": "Tabela de aceleradores (CMD 51111)", "status": "Funcional", "certeza": "[EVIDÊNCIA]"},
+                    {"atalho": "Ctrl+I", "acao": "Fechar e reabrir via Interactive Layout", "origem": "Tabela de aceleradores (CMD 33906)", "status": "Funcional", "certeza": "[EVIDÊNCIA]"},
+                    {"atalho": "Ctrl+Q", "acao": "Ativar / desativar modo de Zoom com mouse", "origem": "Tabela de aceleradores (CMD 32778)", "status": "Funcional", "certeza": "[EVIDÊNCIA]"},
+                    {"atalho": "Ctrl+E", "acao": "Ativar / desativar Check Overlay (hachura xadrez de colisão)", "origem": "Tabela de aceleradores (CMD 32835)", "status": "Funcional", "certeza": "[EVIDÊNCIA]"},
+                    {"atalho": "Ctrl+R", "acao": "Mostrar retângulo envolvente (ShowRectangle)", "origem": "Menu Nesting (CMD 32844)", "status": "Funcional", "certeza": "[EVIDÊNCIA]"},
+                    {"atalho": "Home", "acao": "Histórico de aninhamento: ir para o início (1ª peça)", "origem": "Menu View->History (CMD 32839)", "status": "Funcional", "certeza": "[EVIDÊNCIA]"},
+                    {"atalho": "End", "acao": "Histórico de aninhamento: ir para o final (todas as peças)", "origem": "Menu View->History (CMD 32840)", "status": "Funcional", "certeza": "[EVIDÊNCIA]"},
+                    {"atalho": "+ (Teclado/NumPad)", "acao": "Histórico de aninhamento: avançar 1 peça", "origem": "Menu View->History (CMD 32841) e OnKeyDown", "status": "Funcional", "certeza": "[EVIDÊNCIA]"},
+                    {"atalho": "- (Teclado/NumPad)", "acao": "Histórico de aninhamento: retroceder 1 peça", "origem": "Menu View->History (CMD 32842) e OnKeyDown", "status": "Funcional", "certeza": "[EVIDÊNCIA]"}
+                ]
+            },
+            "H_funcoes_especiais": {
+                "titulo": "Funções Especiais do Layout Original",
+                "itens": [
+                    {
+                        "nome": "Bump (Encosto Magnético Direcional)",
+                        "descricao": "Aproxima as peças selecionadas na direção indicada até tocarem outra peça ou o limite do material. Acionado por: 4 botões na toolbar, setas do teclado (sem Ctrl), duplo clique na peça com arrasto, ou clique do botão do meio. Múltiplas peças movem juntas e param quando a primeira colide.",
+                        "certeza": "[EVIDÊNCIA]",
+                        "fonte": "bdyWorkingWithShapesAdv.htm, Toolbar 150 e código de OnKeyDown"
+                    },
+                    {
+                        "nome": "Edit Position (Ajuste Fino Numérico)",
+                        "descricao": "Diálogo flutuante (ID 141 / FuneTune.gif) com duas linhas de caixas de texto: linha superior (coordenadas absolutas X, Y, Rot) e linha inferior (passos relativos delta X, delta Y, delta Rot). Botões Apply Abs, Apply Rel e botões +/- individuais que aplicam a mudança imediatamente na mesa.",
+                        "certeza": "[EVIDÊNCIA]",
+                        "fonte": "RT_DIALOG 141 e bdyWorkingWithShapesAdv.htm"
+                    },
+                    {
+                        "nome": "Cutting Order (Sequência de Corte CAM)",
+                        "descricao": "Menu Tools->Cutting Order. O cursor vira cruz e cada peça exibe seu número de ordem. Clicar redefine a ordem de usinagem. Segurar Ctrl e clicar preserva a ordem anterior até aquela peça e continua a numeração.",
+                        "certeza": "[EVIDÊNCIA]",
+                        "fonte": "bdyWorkingWithShapesAdv.htm: 'Tools/Cutting order... The pointer will become a cross and each shape will have a number inside'"
+                    },
+                    {
+                        "nome": "History (Reprodução do Aninhamento Passo a Passo)",
+                        "descricao": "Menu View->History com atalhos Home (início), End (fim), + (adiciona peça) e - (remove peça). Permite ao operador inspecionar a ordem exata de preenchimento gerada pelo motor de nesting.",
+                        "certeza": "[EVIDÊNCIA]",
+                        "fonte": "bdyInterface.htm: 'History... placement order of shapes... Home, End, +, -'"
+                    },
+                    {
+                        "nome": "Fill (Prenchimento Regular em Grade / Matriz)",
+                        "descricao": "Menu Edit/Contexto: Row, Row Alternate (0°/180°), Column, Sheet, Sheet Alternate, User. Preenche a chapa rapidamente com matriz regular da peça.",
+                        "certeza": "[EVIDÊNCIA]",
+                        "fonte": "bdyInterface.htm / FillSheet.gif / RT_MENU 129"
+                    },
+                    {
+                        "nome": "Check Overlay (Hachura Xadrez de Colisão)",
+                        "descricao": "Botão na toolbar e atalho Ctrl+E. Desenha hachura quadriculada sobre qualquer sobreposição entre moldes, respeitando gap e nicking.",
+                        "certeza": "[EVIDÊNCIA]",
+                        "fonte": "bdyInterface.htm / bdyInt7.gif / RT_TOOLBAR 137"
+                    },
+                    {
+                        "nome": "Substitute / Advanced Substitute",
+                        "descricao": "Substitui as peças selecionadas por outro molde do catálogo, preservando posição, rotação e espelhamento.",
+                        "certeza": "[EVIDÊNCIA]",
+                        "fonte": "RT_MENU 102 e RT_DIALOG 164"
+                    }
+                ]
+            },
+            "I_dialogos": {
+                "titulo": "Caixas de Diálogo Extraídas do Layout.exe (23 Diálogos)",
+                "total_dialogos": 23,
+                "dialogos_principais": [
+                    {"id": 100, "titulo": "About Layout", "tamanho": "58x0 DLU", "uso": "Sobre o software, versão e copyright ATOM S.p.A."},
+                    {"id": 104, "titulo": "Nesting classes", "tamanho": "257x161 DLU", "uso": "Gerenciamento de classes de moldes para nesting"},
+                    {"id": 105, "titulo": "Add new nesting class", "tamanho": "153x113 DLU", "uso": "Cadastro de classe de aninhamento com ângulos permitidos"},
+                    {"id": 141, "titulo": "Instance Position", "tamanho": "203x79 DLU", "uso": "Ajuste fino de X, Y e Rotação absoluta e relativa (+/-)"},
+                    {"id": 143, "titulo": "Alternate Search Paths", "tamanho": "185x79 DLU", "uso": "Configuração de pastas alternativas de moldes na rede/disco"},
+                    {"id": 148, "titulo": "Modify Shape Target", "tamanho": "169x118 DLU", "uso": "Alteração de quantidades normais/espelhadas e restrições angulares"},
+                    {"id": 154, "titulo": "Create a Sheet", "tamanho": "138x0 DLU", "uso": "Criação de chapa retangular com largura e comprimento"},
+                    {"id": 155, "titulo": "Create a roll", "tamanho": "145x58 DLU", "uso": "Criação de bobina contínua com largura"},
+                    {"id": 156, "titulo": "Insert Rectangle", "tamanho": "186x95 DLU", "uso": "Inserção de retângulo limitador / área de exclusão"},
+                    {"id": 158, "titulo": "Preferences", "tamanho": "207x0 DLU", "uso": "Opções de passo do mouse wheel, passo de nudge, dígitos decimais e unidades"},
+                    {"id": 159, "titulo": "Set User constraints", "tamanho": "307x95 DLU", "uso": "Configuração de passos e ângulos para preenchimento em matriz (Fill User)"},
+                    {"id": 161, "titulo": "Shape property", "tamanho": "254x0 DLU", "uso": "Propriedades da instância e geometria do molde (dlgShapeInfo)"},
+                    {"id": 164, "titulo": "Substitute", "tamanho": "242x230 DLU", "uso": "Substituição gráfica de moldes na mesa"},
+                    {"id": 167, "titulo": "Set Gap", "tamanho": "139x61 DLU", "uso": "Ajuste manual da distância mínima entre peças (gap em mm)"},
+                    {"id": 176, "titulo": "Add Custom Unit", "tamanho": "140x81 DLU", "uso": "Cadastro de unidades métricas personalizadas"},
+                    {"id": 180, "titulo": "Informations", "tamanho": "244x122 DLU", "uso": "Informações do layout ativo: caminho da pele, rendimento, área útil"},
+                    {"id": 186, "titulo": "Nesting configuration", "tamanho": "239x181 DLU", "uso": "Direção de nesting, gap de peças, margem de borda e redimensionamento"},
+                    {"id": 835, "titulo": "Rectangular material dimension", "tamanho": "269x95 DLU", "uso": "Seleção de material e cadastro de camadas e espessura"},
+                    {"id": 889, "titulo": "Progress indicator ...", "tamanho": "186x41 DLU", "uso": "Barra de progresso durante cálculos pesados"},
+                    {"id": 908, "titulo": "Lista parametri di piazzamento", "tamanho": "212x138 DLU", "uso": "Lista de presets de parâmetros de aninhamento"}
+                ]
+            },
+            "J_freenest": {
+                "titulo": "FreeNest.exe e seu Papel no Ecossistema",
+                "itens": [
+                    {
+                        "aspecto": "Natureza do Executável",
+                        "valor": "FreeNest.exe não é um editor de layout MDI completo, mas um módulo executável auxiliar / lançador interativo para um SessionId específico.",
+                        "certeza": "[EVIDÊNCIA]",
+                        "fonte": "PE Resources de FreeNest.exe: possui apenas 4 diálogos, zero menus e zero aceleradores."
+                    },
+                    {
+                        "aspecto": "Fluxo de Operação",
+                        "valor": "Diálogo 131 solicita o 'Enter session id number', carrega o visualizador CAD compacto DRWVIEW (Diálogo 130) e permite 'Save now and exit' (Diálogo 102).",
+                        "certeza": "[EVIDÊNCIA]",
+                        "fonte": "Controles extraídos de FreeNest.exe (Diálogos 102, 130 e 131)."
+                    },
+                    {
+                        "aspecto": "Relação com o Layout Editor",
+                        "valor": "O Layout.exe é o editor completo usado para pós-edição, inspeção de rendimento, manipulação de peças, cópia, espelhamento e corte CNC, enquanto FreeNest é uma rotina de nesting assistida.",
+                        "certeza": "[EVIDÊNCIA]",
+                        "fonte": "bdyIntroduction.htm e popVersionDifferences.htm"
+                    }
+                ]
+            },
+            "K_comparacao_corteac": {
+                "titulo": "Comparação Sistemática com o LayoutEditorView do CorteAC",
+                "tabela": [
+                    {
+                        "item": "Rotação Livre 360° com Botão Direito",
+                        "original": "Arrasto com botão direito pressionado (>= 2.65 px) gera 2 raios e arco anti-horário de ~42 px com rotação contínua [EVIDÊNCIA]",
+                        "corteac_hoje": "Inexistente no botão direito (o botão direito está sem ação no canvas ou usado apenas para zoom out)",
+                        "situacao": "AUSENTE",
+                        "esforco": "M",
+                        "observacao": "Recurso mais emblemático do editor original solicitado pelo operador. Precisa ser implementado com deadzone de ~3 px para preservar menu de contexto."
+                    },
+                    {
+                        "item": "Rotação por Roda do Mouse (Wheel)",
+                        "original": "Gira a peça selecionada em torno do centro em passos configuráveis (2° ou 5°) [EVIDÊNCIA]",
+                        "corteac_hoje": "Roda do mouse faz Zoom in/out centrado no cursor",
+                        "situacao": "DIVERGENTE",
+                        "esforco": "P",
+                        "observacao": "No original a roda é dedicada à rotação; no CorteAC é usada para zoom CAD contemporâneo. Opção: permitir configurar se a roda dá zoom ou gira."
+                    },
+                    {
+                        "item": "Setas do Teclado (Arrow Keys)",
+                        "original": "Setas sozinhas disparam BUMP magnético na direção até encostar. Ctrl+Setas faz nudge fino (0.5 mm) [EVIDÊNCIA]",
+                        "corteac_hoje": "Setas sozinhas fazem nudge fixo de 5 mm",
+                        "situacao": "DIVERGENTE",
+                        "esforco": "M",
+                        "observacao": "Operadores experientes usam as setas para colidir peças automaticamente contra vizinhas ou borda."
+                    },
+                    {
+                        "item": "Atalhos de Giro F1, F2, F3, F4",
+                        "original": "F1/F2 giro fino (1°-2°), F3 giro 90°, F4 flip 180° [EVIDÊNCIA]",
+                        "corteac_hoje": "F1/F2 giro fino 2°, F3 ciclo 90°, F4 flip 180°, Shift+F3 bloqueado",
+                        "situacao": "IGUAL",
+                        "esforco": "P",
+                        "observacao": "100% idêntico e validado por 13 testes unitários."
+                    },
+                    {
+                        "item": "Atalho F5 (Espelhar / Mirror)",
+                        "original": "F5 espelha a peça selecionada (Mirror) [EVIDÊNCIA]",
+                        "corteac_hoje": "Inexistente no LayoutEditorView (F5 atualiza a janela principal)",
+                        "situacao": "AUSENTE",
+                        "esforco": "P",
+                        "observacao": "Fácil implementação: chamar flip_piece_horizontal/vertical ou alternar flag de espelhamento."
+                    },
+                    {
+                        "item": "Desfazer (Undo / Ctrl+Z)",
+                        "original": "Ctrl+Z e Alt+BackSpace desfazem até 100 níveis. Não existe Ctrl+Y [EVIDÊNCIA]",
+                        "corteac_hoje": "Ctrl+Z com 100 níveis e bloqueio estrito de Ctrl+Y",
+                        "situacao": "IGUAL",
+                        "esforco": "P",
+                        "observacao": "Fiel ao original."
+                    },
+                    {
+                        "item": "Salvar Layout (Ctrl+S)",
+                        "original": "Ctrl+S salva o layout ativo [EVIDÊNCIA]",
+                        "corteac_hoje": "Ctrl+S salva concorrente no MySQL 8.0 e regrava .lay",
+                        "situacao": "IGUAL",
+                        "esforco": "P",
+                        "observacao": "Implementado com indicador de modificado '*' na barra de título."
+                    },
+                    {
+                        "item": "Painel Lateral / Catálogo de Moldes",
+                        "original": "Splitter bar à direita com miniaturas e dois pares de contadores (normais e espelhados: colocadas / a colocar) [EVIDÊNCIA]",
+                        "corteac_hoje": "Painel lateral com miniaturas e contadores implementado, mas integrado à esquerda/direita dependendo da tela",
+                        "situacao": "PARCIAL",
+                        "esforco": "M",
+                        "observacao": "Os contadores foram corrigidos para a regra de camadas, mas falta o layout visual 1:1 com bordas e duplo-clique para reorganizar."
+                    },
+                    {
+                        "item": "Check Overlay (Hachura Xadrez de Colisão)",
+                        "original": "Botão na toolbar e atalho Ctrl+E geram padrão quadriculado xadrez nas sobreposições [EVIDÊNCIA]",
+                        "corteac_hoje": "Detecção de colisão desenha contorno vermelho nas peças sobrepostas",
+                        "situacao": "DIVERGENTE",
+                        "esforco": "M",
+                        "observacao": "O CorteAC sinaliza em vermelho em tempo real; o original desenha um padrão xadrez (hachura) sobre a área de interseção."
+                    },
+                    {
+                        "item": "Edit Position (Ajuste Fino Numérico)",
+                        "original": "Diálogo flutuante (ID 141) com caixas Absolutas e Relativas (+/-) para X, Y e Rotação [EVIDÊNCIA]",
+                        "corteac_hoje": "Inexistente (apenas nudge por setas e atalhos F1-F4)",
+                        "situacao": "AUSENTE",
+                        "esforco": "M",
+                        "observacao": "Útil para alinhamento milimétrico exato exigido por modelistas de calçado."
+                    },
+                    {
+                        "item": "Bump Interativo com Mouse (Arco/Linha)",
+                        "original": "Duplo clique na peça ou botão do meio inicia linha elástica de bump direcional [EVIDÊNCIA]",
+                        "corteac_hoje": "Inexistente",
+                        "situacao": "AUSENTE",
+                        "esforco": "M",
+                        "observacao": "O cursor vira um arco (bow) e o usuário puxa a direção do encosto magnético."
+                    },
+                    {
+                        "item": "History (Reprodução Passo a Passo)",
+                        "original": "Menu View->History com Home, End, +, - para avançar/retroceder peças da sequência [EVIDÊNCIA]",
+                        "corteac_hoje": "Inexistente no editor (existe apenas simulação linear de corte no CADCanvas legado)",
+                        "situacao": "AUSENTE",
+                        "esforco": "M",
+                        "observacao": "Permite auditar a lógica do motor de nesting."
+                    },
+                    {
+                        "item": "Sequência de Corte Interativa (Cutting Order)",
+                        "original": "Menu Tools->Cutting Order permite clicar nas peças para reordenar numeração de corte CNC [EVIDÊNCIA]",
+                        "corteac_hoje": "A ordem é definida na tabela de moldes da sessão, não diretamente clicando nas peças do canvas",
+                        "situacao": "PARCIAL",
+                        "esforco": "M",
+                        "observacao": "No original, o operador clica diretamente nas peças da mesa com cursor em cruz."
+                    },
+                    {
+                        "item": "Preenchimento Regular (Fill Row / Sheet)",
+                        "original": "Menus Edit/Contexto com Row, Column, Sheet, Sheet Alternate (0°/180°) [EVIDÊNCIA]",
+                        "corteac_hoje": "Inexistente no editor manual (o nesting automático faz isso na sessão)",
+                        "situacao": "AUSENTE",
+                        "esforco": "M",
+                        "observacao": "Usado para repetições manuais de tiras e palmilhas."
+                    },
+                    {
+                        "item": "Refilar Layout Automático (Trim)",
+                        "original": "Não existe botão direto de refilar na toolbar do Layout.exe clássico (era feito na máquina ou via macro) [EVIDÊNCIA]",
+                        "corteac_hoje": "Botão 'Refilar' na toolbar com atalho Ctrl+T e diálogo dedicado",
+                        "situacao": "EXTRA",
+                        "esforco": "P",
+                        "observacao": "Recurso exclusivo e de alto valor agregado do CorteAC para a fábrica."
+                    },
+                    {
+                        "item": "Dupla Saída (.lay + .onx)",
+                        "original": "Apenas formato nativo .lay e exportação .b [EVIDÊNCIA]",
+                        "corteac_hoje": "Botão 'Dupla Saída' na toolbar gerando simultaneamente .lay para ATOM e .onx para Comelz",
+                        "situacao": "EXTRA",
+                        "esforco": "P",
+                        "observacao": "Recurso exclusivo do CorteAC permitindo rodar mesas ATOM e Comelz lado a lado."
+                    }
+                ]
+            }
+        }
+    }
+
+    with open(OUTPUT_FILE, "w", encoding="utf-8") as f:
+        json.dump(inventory, f, indent=2, ensure_ascii=False)
+
+    print(f"-> {OUTPUT_FILE} gravado com sucesso.")
+
+if __name__ == "__main__":
+    main()

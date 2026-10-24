@@ -1,0 +1,284 @@
+# Dump completo de RT_STRING extraído do Layout.exe (37 bundles, 281 strings)
+# ID       Prompt Barra de Status / Tooltip
+================================================================================
+100     : OLE initialization failed.  Make sure that the OLE libraries are the correct version.
+128     : Layout Editor
+129     :  [TOOLTIP] Layout [TOOLTIP] Layout [TOOLTIP] Layout Files   (*.lay) [TOOLTIP] .lay [TOOLTIP] Layout.Document [TOOLTIP] Layout Document
+131     :  [TOOLTIP] Schedule [TOOLTIP] Schedule [TOOLTIP] Schedule Files  (*.sch) [TOOLTIP] .sch [TOOLTIP] Schedule.Document [TOOLTIP] Schedule Document
+132     : Piece(s) out of material. [TOOLTIP] Do you really want to save the layout?
+32771   : Zoom the view to display the complete layout [TOOLTIP] Display complete Layout
+32772   : Restore last zoom
+32774   : Fill Shapes [TOOLTIP] Fill Shapes
+32778   : Enable/Disable zooming [TOOLTIP] Zoom
+32787   : Send Layout to Cutting Table
+32788   : Send To Right Table
+32789   : Send To Left Table
+32790   : Show quality areas on hide [TOOLTIP] Show QAreas on hide
+32791   : Options...
+32794   : Show Shapes [TOOLTIP] Show Shapes
+32799   : Fill Quality Areas [TOOLTIP] Fill QAreas
+32803   : Merge current layout with another one
+32805   : Load a new material
+32806   : Load a Hide [TOOLTIP] Load Hide
+32807   : Set an alternate path to search for layout shapes [TOOLTIP] Set alt path
+32808   : Are You sure to delete %1 unit ?
+32809   : Start HideNest on current material and target
+32810   : Move Material
+32811   : Load a Sheet [TOOLTIP] Load Sheet
+32812   : Load a Roll [TOOLTIP] Load Roll
+32813   : Load a Shape [TOOLTIP] Load Shape
+32814   : Remove Shape from Target List
+32815   : Modify Target
+32816   : Target Information
+32817   : Edit Instance position [TOOLTIP] Edit position
+32818   : Remove Selection [TOOLTIP] Remove
+32819   : View Instance information [TOOLTIP] Instance Information
+32820   : Add a Shape Target [TOOLTIP] Add Shape
+32821   : Change Colours [TOOLTIP] Change Colours
+32822   : You cannot delete current unit %1
+32831   : Bump the Selection Down [TOOLTIP] Bump Down
+32832   : Bump the Selection Right [TOOLTIP] Bump Right
+32833   : Bump the Selection Left [TOOLTIP] Bump Left
+32834   : Save local - Create mirrored shapes [TOOLTIP] Save local with mirror
+32835   : Check Overlay [TOOLTIP] Check Overlay
+32836   : View group of shapes [TOOLTIP] View Shapes group
+32837   : Offset Material
+32838   : View sequence of nesting
+32839   : Restart Sequence of nesting [TOOLTIP] Restart sequence
+32840   : Go to end of sequence
+32841   : Next instance in sequence
+32842   : Previous instance in sequence
+32843   : Rotate Layout
+32844   : Show Rectangle
+32845   : Mirror Selected Instance(s) [TOOLTIP] Mirror
+32846   : Substitute with this shape
+32893   : View Layout information [TOOLTIP] Layout Information
+32897   : Create a quality area
+32899   : Delete a quality area
+32961   : Flip about Y axis
+32962   : Flip about X axis
+32963   : Check overlapping of selected Shapes [TOOLTIP] Check Overlay
+32967   : Change current Gap
+32968   : Edit selected Shape(s)
+32969   : Substitute selection with this shape [TOOLTIP] Substitute
+32972   : Remove all Instances
+32973   : Modify Instance Position
+32975   : Save Layout, Shapes and Hide to the same Directory [TOOLTIP] Save local
+32976   : Shape Not Found
+32977   : Cannot Found ShedNt program
+32978   : File "%1" does not exist or is already open [TOOLTIP] Current Dir: %2
+32979   : Cannot save layouts - Viewer only
+32980   : Fatal Error: Repetition counter less or equal to zero
+32981   : Cannot find one or more shapes [TOOLTIP] Set Alternate Path and try again.
+32982   : Nesting Failed
+32983   : Cannot load Sheet Schedule [TOOLTIP] Set Alternate Path and try again.
+32984   : Cannot save locally
+32985   : Cannot open the Clipboard
+32986   : Clipboard is empty, please try again
+32987   : Do You REALLY want to [TOOLTIP] REMOVE ALL THE SHAPES from the layout ?
+32989   : Proceed anyway?
+32990   : There isn't a Layout yet [TOOLTIP] I cannot accept a shape !
+32991   : There isn't a Layout yet [TOOLTIP] I cannot accept a hide !
+32992   : 3 minutes Timeout elapsed
+32993   : Cannot Send the Layout
+32994   : Layout not completed
+32995   : Cannot Add Shape
+32996   : Out of limits !
+32997   : You need a smart key to use this program [TOOLTIP] Please call Atom Customer Service
+32999   : xxx
+33903   : Remove cut pieces updating the catalogue, revert partially cut pieces to catalogue
+50002   : Set Preferences [TOOLTIP] Set Preferences
+50003   : Fill Sheet with User constraints [TOOLTIP] User Fill
+50004   : Fill a sheet with user constraints
+50006   : Duplicate and Rotate Selected Shapes [TOOLTIP] Duplicate & Rotate
+50007   : Fill a column of selected Shape(s)
+50008   : Toggle Condensed/Full View of schedule [TOOLTIP] CondensedFull View
+50009   : ReOpens current Document [TOOLTIP] Reopen
+50010   : Duplicate and Rotate Selected Shapes [TOOLTIP] Duplicate & Rotate
+51000   : Bump the Selection Up [TOOLTIP] Bump Up
+51111   : Open Next Document [TOOLTIP] Open Next
+52100   : Select all instances of the shapes
+52101   : Edit the selected Shape(s)
+52102   : Duplicate selected Shape(s)
+52103   : Fill a row of selected Shape(s)
+52104   : Fill Row with 0°/180° coupling
+52105   : Fill Sheet of Selected Shape(s)
+52106   : Fill Sheet 0°/180° coupling [TOOLTIP] Fill Sheet Alternate
+52109   : Set Rot. Center of selected Shapes
+52110   : NOT LOADED
+52111   : Duplicated
+52112   :   (of schedule: '
+52113   : Expected: 
+52114   :  - Found: 
+52115   :  - At line: 
+52116   : Added
+52117   : Material: Roll
+52118   : Material: Sheet
+52119   : Hide ->
+52120   : Material: Standard
+52121   : Dimensions: 
+52122   : Condensed View
+52123   : Material: Hide '
+52124   : Mirrored
+52125   : Normal
+52126   : Pasted
+52127   : Bumped
+52128   : TODO
+52129   : DONE
+52130   : NORMAL
+52131   : MIRRORED
+52132   : Sheet Schedule Info
+52133   : Yield: Unknown
+52134   : Roll Schedule Info
+52135   : Sheet
+52136   : Roll
+52137   : Hide
+52138   : Condensed schedule
+52139   : Full Schedule
+52140   : Screen dimensions are (
+52141   : Layout description -> '
+52142   : Material is Hide
+52143   : Material is Sheet
+52144   : Material is Roll
+52145   : Material is Undefined
+52146   : No Material
+52147   : Material Area: 
+52148   : Instance Area: Undefined because at least one shape was not loaded
+52149   : Instance Area: 
+52150   : Yield: 
+52151   : Current Gap: 
+52152   : Shape Target Num: 
+52153   :  - Instance Num: 
+52154   : Material: 
+52155   : Width: 
+52156   :  Bounding Rect: 
+52157   : Material Area Unknown
+52158   : Used Area: 
+52159   : Used Area Unknown
+52160   : Shapes: 
+52161   : Instances: 
+52162   : Area per piece: 
+52163   : Pieces per 
+52164   : Default Quality 
+52165   : Quality Area 
+52166   : Num. of Packets: 
+52167   : Num. of Layers: 
+52168   : Num. of Sheets: 
+52169   : Total Length: 
+52170   : Session Length: 
+52171   : Items Area: 
+52172   : Unused Area: 
+52173   : Model: 
+52174   : Thickness: 
+52175   : Material description: 
+52176   : Schedule description: 
+52177   : Num. of Layouts: 
+52178   : Repetitions: 
+52179   : Unit: 
+52180   : lll
+52181   : hjk
+52182   : ghj
+52183   : q
+52184   : f
+52185   : k
+52186   : h
+52187   : s
+52188   : g
+52189   : w
+52190   : qwe
+52191   : asd
+52192   : h
+57344   : Layout
+57345   : Ready
+57600   : Create a new document [TOOLTIP] New
+57601   : Open an existing document [TOOLTIP] Open
+57602   : Close the active document [TOOLTIP] Close
+57603   : Save the active document [TOOLTIP] Save
+57604   : Save the active document with a new name [TOOLTIP] Save As
+57605   : Change the printing options [TOOLTIP] Page Setup
+57606   : Change the printer and printing options [TOOLTIP] Print Setup
+57607   : Print the active document [TOOLTIP] Print
+57609   : Display full pages [TOOLTIP] Print Preview
+57610   : Update the container to show any changes [TOOLTIP] Update
+57611   : Save a copy of the active document with a new name [TOOLTIP] Save Copy
+57616   : Open this document
+57617   : Open this document
+57618   : Open this document
+57619   : Open this document
+57620   : Open this document
+57621   : Open this document
+57622   : Open this document
+57623   : Open this document
+57624   : Open this document
+57625   : Open this document
+57626   : Open this document
+57627   : Open this document
+57628   : Open this document
+57629   : Open this document
+57630   : Open this document
+57631   : Open this document
+57632   : Erase the selection [TOOLTIP] Erase
+57633   : Erase everything [TOOLTIP] Erase All
+57634   : Copy the selection to the Clipboard [TOOLTIP] Copy
+57635   : Cut the selection and put in on the Clipboard [TOOLTIP] Cut
+57636   : Find the specified text [TOOLTIP] Find
+57637   : Insert Clipboard contents [TOOLTIP] Paste
+57640   : Repeat the last action [TOOLTIP] Repeat
+57641   : Replace specific text with different text [TOOLTIP] Replace
+57642   : Select the entire document [TOOLTIP] Select All
+57643   : Undo the last action [TOOLTIP] Undo
+57644   : Redo the previously undone action [TOOLTIP] Redo
+57648   : Open another window for the active document [TOOLTIP] New Window
+57649   : Arrange icons at the bottom of the window [TOOLTIP] Arrange Icons
+57650   : Arrange windows so they overlap [TOOLTIP] Cascade Windows
+57651   : Arrange windows as non-overlapping tiles [TOOLTIP] Tile Windows
+57652   : Arrange windows as non-overlapping tiles [TOOLTIP] Tile Windows
+57653   : Split the active window into panes [TOOLTIP] Split
+57664   : Display program information, version number and copyright [TOOLTIP] About
+57665   : Quit the application; prompts to save documents [TOOLTIP] Exit
+57680   : Switch to the next window pane [TOOLTIP] Next Pane
+57681   : Switch back to the previous window pane [TOOLTIP] Previous Pane
+59136   : EXT
+59137   : CAP
+59138   : NUM
+59139   : SCRL
+59140   : OVR
+59141   : REC
+59142   : @@.@@%
+59143   : @@@@.@@
+59144   : @@@@.@@
+59145   : @@@@.@@
+59146   : @@@
+59147   : SHEET (88888.88X88888.88)
+59148   : Unit:mmAAAAAAAA
+59392   : Show or hide the toolbar [TOOLTIP] Toggle ToolBar
+59393   : Show or hide the status bar [TOOLTIP] Toggle StatusBar
+59411   : View Details on instances
+59412   : Corrupted file
+61184   : Change the window size
+61185   : Change the window position
+61186   : Reduce the window to an icon
+61187   : Enlarge the window to full size
+61188   : Switch to the next document window
+61189   : Switch to the previous document window
+61190   : Close the active window and prompts to save the documents
+61202   : Restore the window to normal size
+61203   : Activate Task List
+61215   : Activate this window
+61445   : Close print preview mode [TOOLTIP] Cancel Preview
+61450   : Sched  "%s" saved
+61451   : Manual
+61452   : Automatic
+61453   : Both
+61454   : Warning this class is already defined: do you want to overwrite values?
+61455   : Wrong class definition
+61456   : Global
+61458   : Do you really want to remopve class <%s>
+61459   : <Don't modify current>
+61460   : <None>
+61461   : Can't remove class <%s>
+61462   : Usage of software <%s> unauthorized [TOOLTIP] Contact ATOM
+61463   : It remains %d days %s [TOOLTIP] Dopo tale giorno dovrai effettuare nuovamente l'attivazione
+61464   : %s will be active for the next %d days
+61465   : Warining: it already exists a parameters set with this name
+61466   : Do you really want to remore parameter set <%s> ?
