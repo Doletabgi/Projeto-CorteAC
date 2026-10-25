@@ -123,26 +123,31 @@ class MainWindow(tk.Tk):
         assets_dir = get_assets_dir()
         self.icons = {}
         icon_files = {
-            "cut": "tlbCut.gif",
-            "copy": "tlbCopy.gif",
-            "paste": "tlbPaste.gif",
-            "details": "tlbDetails.gif",
+            "cut": "tlbCut.png",
+            "copy": "tlbCopy.png",
+            "paste": "tlbPaste.png",
+            "details": "tlbDetails.png",
             "btn_prod": "btn_prod.png",
             "btn_moldes": "btn_moldes.png",
             "btn_mat": "btn_mat.png",
-            "node_base": "iconJobNodeBase.gif",
-            "job_folder": "iconJobJobFolder.gif",
-            "job_order": "iconJobOrder.gif",
-            "job_session": "iconJobSession.gif",
-            "shp_base": "iconShpShpBase.gif",
-            "shp_article": "iconShpArticle.gif",
-            "shed": "iconShed.gif",
-            "mat_base": "iconMatBase.gif",
+            "node_base": "iconJobNodeBase.png",
+            "job_folder": "iconJobJobFolder.png",
+            "job_order": "iconJobOrder.png",
+            "job_session": "iconJobSession.png",
+            "shp_base": "iconShpShpBase.png",
+            "shp_article": "iconShpArticle.png",
+            "shed": "iconShed.png",
+            "mat_base": "iconMatBase.png",
             "app_icon": "app_icon.png",
             "layout_icon": "layout/layout_icon.png"
         }
         for k, v in icon_files.items():
             p = assets_dir / v
+            if not p.exists() and v.endswith(".png"):
+                # Fallback para .gif retrô caso o .png não exista
+                alt_p = assets_dir / (v[:-4] + ".gif")
+                if alt_p.exists():
+                    p = alt_p
             if p.exists():
                 try:
                     self.icons[k] = tk.PhotoImage(file=str(p))
@@ -364,12 +369,6 @@ class MainWindow(tk.Tk):
             tbar, text="⚡ Auto-Nest", bg=THEME["bg_surface"], fg=THEME["text_main"],
             relief="raised", bd=2, padx=8, font=("Segoe UI", 8, "bold"), command=self.on_auto_nest
         ).pack(side="left", padx=2)
-
-        self.btn_sim = tk.Button(
-            tbar, text="▶ Simular", bg=THEME["bg_surface"], fg="#800000",
-            relief="raised", bd=2, padx=8, font=("Segoe UI", 8, "bold"), command=self.on_toggle_sim
-        )
-        self.btn_sim.pack(side="left", padx=2)
 
         tk.Button(
             tbar, text="💾 Exportar G-Code", bg=THEME["bg_surface"], fg="#000080",
@@ -4614,13 +4613,15 @@ class MainWindow(tk.Tk):
             self.session_view.notebook.select(self.session_view.tab_lays)
         if self.canvas.sim_running:
             self.canvas.stop_simulation()
-            self.btn_sim.config(text="▶ Simular", bg=THEME["bg_surface"])
+            if getattr(self, "btn_sim", None):
+                self.btn_sim.config(text="▶ Simular", bg=THEME["bg_surface"])
             self.lbl_status_msg.config(text="Simulação de corte parada.")
         else:
             if not self.canvas.placed_pieces:
                 self.on_auto_nest()
             self.canvas.start_simulation()
-            self.btn_sim.config(text="⏹ Parar", bg=THEME["bg_hover"])
+            if getattr(self, "btn_sim", None):
+                self.btn_sim.config(text="⏹ Parar", bg=THEME["bg_hover"])
             self.lbl_status_msg.config(text="Simulando cabeçote de corte ATOM...")
 
     def update_all_metrics(self):

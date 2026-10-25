@@ -281,6 +281,15 @@ class LayoutEditorView(tk.Frame):
         self._f3_pressed = False
         self._f4_pressed = False
 
+        # Estado de Simulação CAM do Cabeçote de Corte
+        self.sim_running = False
+        self.sim_piece_idx = 0
+        self.sim_pt_idx = 0
+        self.sim_head_pos = (0.0, 0.0)
+        self._sim_job = None
+        self._sim_path = []
+        self._sim_path_idx = 0
+
         # Carrega ícones gráficos do Layout.exe
         self.icons = {}
         self.load_layout_icons()
@@ -461,6 +470,34 @@ class LayoutEditorView(tk.Frame):
                 self.lbl_stat_pos.config(text=self._last_status_pos_text)
         self.btn_trim.bind("<Enter>", _on_enter_trim)
         self.btn_trim.bind("<Leave>", _on_leave_trim)
+
+        # Grupo 8: Simulação de Corte CAM do Layout
+        self.btn_sim = tk.Button(
+            tb_row,
+            text="▶ Simular",
+            bg=THEME["bg_surface"],
+            activebackground=THEME["bg_hover"],
+            fg="#800000",
+            font=("Segoe UI", 8, "bold"),
+            relief="raised",
+            bd=1,
+            padx=6,
+            pady=1,
+            command=self.toggle_simulation,
+            cursor="hand2"
+        )
+        self.btn_sim.pack(side="left", padx=2)
+
+        tip_sim = "Simular Execução de Corte do Layout na Mesa CAM (Esc para parar)"
+        def _on_enter_sim(e):
+            if hasattr(self, "lbl_stat_pos"):
+                self._last_status_pos_text = self.lbl_stat_pos.cget("text")
+                self.lbl_stat_pos.config(text=tip_sim)
+        def _on_leave_sim(e):
+            if hasattr(self, "lbl_stat_pos") and hasattr(self, "_last_status_pos_text"):
+                self.lbl_stat_pos.config(text=self._last_status_pos_text)
+        self.btn_sim.bind("<Enter>", _on_enter_sim)
+        self.btn_sim.bind("<Leave>", _on_leave_sim)
 
         # -------------------------------------------------------------
         # 4. Área de Trabalho Principal (Canvas ocupa todo o espaço, sem sidebar)
@@ -757,7 +794,10 @@ class LayoutEditorView(tk.Frame):
             menu_obj.add_command(label="Camadas de Corte (Layers)...", command=self.edit_material_layers_dialog)
             menu_obj.add_separator()
             menu_obj.add_command(label="Refilar Chapa no Final das Peças (Gap 1mm)\tCtrl+T", command=self.trim_layout_dialog)
+            menu_obj.add_separator()
+            menu_obj.add_command(label="▶ Simular Corte CAM (Esc para parar)", command=self.toggle_simulation)
         elif menu_name == "Tools":
+            menu_obj.add_command(label="▶ Simular Corte CAM (Esc para parar)", command=self.toggle_simulation)
             menu_obj.add_command(label="Refilar Layout Automático (Gap 1mm)\tCtrl+T", command=self.trim_layout_dialog)
             menu_obj.add_command(label="Alterar Camadas de Corte (Layers)...", command=self.edit_material_layers_dialog)
             menu_obj.add_separator()
@@ -1713,6 +1753,17 @@ class LayoutEditorView(tk.Frame):
                 tags="trim_cut_badge_txt"
             )
 
+        # 6.6 Cabeçote CNC se Simulação estiver Ativa (Mira vermelha clássica)
+        if getattr(self, "sim_running", False):
+            if hasattr(self, "_sim_path") and self._sim_path and hasattr(self, "_sim_path_idx"):
+                trail_pts = []
+                for pt in self._sim_path[:self._sim_path_idx]:
+                    sx, sy = self.world_to_screen(pt[0], pt[1])
+                    trail_pts.extend([sx, sy])
+                if len(trail_pts) >= 4:
+                    self.canvas.create_line(trail_pts, fill="#dc2626", width=2, tags="sim_cut_trail")
+            self._draw_sim_head(self.sim_head_pos[0], self.sim_head_pos[1])
+
         # 7. Divisor Vertical e Barra Lateral de Moldes (com fundo opaco para isolar do zoom da mesa)
         div_x = self.sidebar_div_x
         if div_x < cw:
@@ -1774,6 +1825,8 @@ class LayoutEditorView(tk.Frame):
 
     def on_canvas_click(self, event):
         self.canvas.focus_set()
+        if getattr(self, "sim_running", False):
+            self.stop_simulation()
         # Um clique novo encerra qualquer atualizacao/redraw pendente do gesto anterior
         self._cancel_drag_job()
         self._pending_drag_xy = None
@@ -2170,7 +2223,10 @@ class LayoutEditorView(tk.Frame):
                 self.lbl_stat_y.config(text=f"Y: {primary_p['y']:.2f}")
 
     def cancel_drag(self, event=None):
-        """Cancela o arraste em andamento, a caixa elástica ou a rotação livre R-Drag via Escape."""
+        """Cancela o arraste em andamento, a caixa elástica, a simulação CAM ou a rotação livre R-Drag via Escape."""
+        if getattr(self, "sim_running", False):
+            self.stop_simulation()
+            return "break"
         if getattr(self, "is_rubberbanding", False):
             self.canvas.delete("rubberband_box")
             self.is_rubberbanding = False
@@ -3516,6 +3572,8 @@ class LayoutEditorView(tk.Frame):
 
     def clear_all_pieces(self):
         if messagebox.askyesno("Layout Editor", "Deseja remover todas as peças do layout atual?"):
+            if getattr(self, "sim_running", False):
+                self.stop_simulation()
             self.push_undo()
             self.placed_pieces = []
             self.selected_indices = []
@@ -4034,6 +4092,165 @@ class LayoutEditorView(tk.Frame):
         if hasattr(self, "lbl_stat_pos"):
             self.lbl_stat_pos.config(text=msg, fg="#0f766e")
 
+    # -------------------------------------------------------------
+    # Simulação de Corte CAM do Layout na Mesa
+    # -------------------------------------------------------------
+    def toggle_simulation(self):
+        """Alterna entre iniciar e parar a simulação do cabeçote de corte."""
+        if getattr(self, "sim_running", False):
+            self.stop_simulation()
+        else:
+            self.start_simulation()
+
+    def start_simulation(self):
+        """Inicia a simulação animada do cabeçote de corte CNC sobre as peças na chapa."""
+        if not self.placed_pieces:
+            if hasattr(self, "lbl_stat_pos"):
+                self.lbl_stat_pos.config(
+                    text="Nenhuma peça no layout para simular. Adicione peças à mesa ou execute o Nesting.",
+                    fg="#dc2626"
+                )
+            return
+
+        self.sim_running = True
+        self.sim_piece_idx = 0
+        self.sim_pt_idx = 0
+        self._sim_path = []
+        self._sim_path_idx = 0
+
+        self._sim_prepare_piece_path()
+        if self._sim_path:
+            self.sim_head_pos = self._sim_path[0]
+        else:
+            p0 = self.placed_pieces[0]
+            self.sim_head_pos = (float(p0.get("x", 0.0)), float(p0.get("y", 0.0)))
+
+        if hasattr(self, "btn_sim"):
+            self.btn_sim.config(text="⏹ Parar", relief="sunken", fg="#dc2626")
+
+        if hasattr(self, "lbl_stat_pos"):
+            p_name = self.placed_pieces[0].get("name", "Peça")
+            self.lbl_stat_pos.config(
+                text=f"▶ Simulando corte CAM: Peça 1/{len(self.placed_pieces)} ({p_name}) - Esc para parar",
+                fg="#dc2626"
+            )
+
+        self._sim_step()
+
+    def stop_simulation(self):
+        """Interrompe a simulação e remove o cabeçote CNC e a linha de corte da tela."""
+        self.sim_running = False
+        if getattr(self, "_sim_job", None) is not None:
+            try:
+                self.after_cancel(self._sim_job)
+            except Exception:
+                pass
+            self._sim_job = None
+
+        self.canvas.delete("sim_head")
+        self.canvas.delete("sim_cut_trail")
+
+        if hasattr(self, "btn_sim"):
+            self.btn_sim.config(text="▶ Simular", relief="raised", fg="#800000")
+
+        if hasattr(self, "lbl_stat_pos"):
+            self.lbl_stat_pos.config(
+                text="Simulação de corte CAM finalizada.",
+                fg=THEME["text_main"]
+            )
+
+    def _sim_prepare_piece_path(self):
+        """Calcula os pontos interpolados do contorno da peça atual para movimento suave da faca CNC."""
+        if self.sim_piece_idx >= len(self.placed_pieces):
+            self._sim_path = []
+            return
+
+        p = self.placed_pieces[self.sim_piece_idx]
+        contour = p.get("contour") or (p.get("shape", {}).get("contour") if isinstance(p.get("shape"), dict) else [])
+        if not contour:
+            self._sim_path = []
+            return
+
+        rot = float(p.get("rotation", p.get("angle", 0.0)))
+        px = float(p.get("x", 0.0))
+        py = float(p.get("y", 0.0))
+        poly = transform_contour(contour, px, py, rot)
+        if not poly:
+            self._sim_path = []
+            return
+
+        step_mm = 12.0  # mm por passo de interpolação
+        pts = []
+        n = len(poly)
+        for i in range(n):
+            p1 = poly[i]
+            p2 = poly[(i + 1) % n]
+            x1, y1 = float(p1["x"]), float(p1["y"])
+            x2, y2 = float(p2["x"]), float(p2["y"])
+            dist = math.hypot(x2 - x1, y2 - y1)
+            if dist <= 1e-3:
+                pts.append((x1, y1))
+                continue
+            steps = max(1, int(round(dist / step_mm)))
+            for s in range(steps):
+                t = s / float(steps)
+                pts.append((x1 + t * (x2 - x1), y1 + t * (y2 - y1)))
+
+        if poly:
+            pts.append((float(poly[0]["x"]), float(poly[0]["y"])))
+
+        self._sim_path = pts
+        self._sim_path_idx = 0
+
+    def _sim_step(self):
+        """Avança um passo na simulação de corte CAM."""
+        if not getattr(self, "sim_running", False) or not self.placed_pieces:
+            return
+
+        while self.sim_piece_idx < len(self.placed_pieces) and (not self._sim_path or self._sim_path_idx >= len(self._sim_path)):
+            self.sim_piece_idx += 1
+            self.canvas.delete("sim_cut_trail")
+            if self.sim_piece_idx < len(self.placed_pieces):
+                self._sim_prepare_piece_path()
+                if hasattr(self, "lbl_stat_pos"):
+                    p_name = self.placed_pieces[self.sim_piece_idx].get("name", "Peça")
+                    self.lbl_stat_pos.config(
+                        text=f"▶ Simulando corte CAM: Peça {self.sim_piece_idx + 1}/{len(self.placed_pieces)} ({p_name}) - Esc para parar",
+                        fg="#dc2626"
+                    )
+
+        if self.sim_piece_idx >= len(self.placed_pieces):
+            self.stop_simulation()
+            if hasattr(self, "lbl_stat_pos"):
+                self.lbl_stat_pos.config(
+                    text=f"✔ Simulação CAM concluída com sucesso: {len(self.placed_pieces)} peça(s) cortada(s).",
+                    fg="#0f766e"
+                )
+            return
+
+        cur_pt = self._sim_path[self._sim_path_idx]
+        prev_head = self.sim_head_pos
+        self.sim_head_pos = cur_pt
+
+        if self._sim_path_idx > 0:
+            sx1, sy1 = self.world_to_screen(prev_head[0], prev_head[1])
+            sx2, sy2 = self.world_to_screen(cur_pt[0], cur_pt[1])
+            self.canvas.create_line(sx1, sy1, sx2, sy2, fill="#dc2626", width=2, tags="sim_cut_trail")
+
+        self._draw_sim_head(cur_pt[0], cur_pt[1])
+        self._sim_path_idx += 1
+
+        self._sim_job = self.after(30, self._sim_step)
+
+    def _draw_sim_head(self, wx, wy):
+        """Renderiza o cabeçote CNC clássico (mira vermelha com retículo) na coordenada de tela."""
+        self.canvas.delete("sim_head")
+        sx, sy = self.world_to_screen(wx, wy)
+        self.canvas.create_oval(sx - 12, sy - 12, sx + 12, sy + 12, fill="#fca5a5", outline="#dc2626", width=1.5, tags="sim_head")
+        self.canvas.create_oval(sx - 5, sy - 5, sx + 5, sy + 5, fill="#dc2626", outline="#991b1b", tags="sim_head")
+        self.canvas.create_line(sx - 18, sy, sx + 18, sy, fill="#dc2626", width=2, tags="sim_head")
+        self.canvas.create_line(sx, sy - 18, sx, sy + 18, fill="#dc2626", width=2, tags="sim_head")
+
     def save_layout(self, event=None):
         """
         Salva o layout atomicamente no SQLite e regrava o arquivo .lay em disco
@@ -4483,6 +4700,8 @@ class LayoutEditorView(tk.Frame):
                 self.on_maximize_cb()
 
     def on_close_click(self):
+        if getattr(self, "sim_running", False):
+            self.stop_simulation()
         if getattr(self, "is_modified", False):
             ans = messagebox.askyesnocancel(
                 "Layout Editor",
@@ -4508,3 +4727,8 @@ class LayoutEditorView(tk.Frame):
                 pass
         self.pack_forget()
         self.place_forget()
+
+    def destroy(self):
+        if getattr(self, "sim_running", False):
+            self.stop_simulation()
+        super().destroy()

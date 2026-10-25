@@ -2027,6 +2027,49 @@ class TestLayoutEditorShortcuts(unittest.TestCase):
         fill1 = self.view.canvas.itemcget(poly1_id[0], "fill")
         self.assertNotEqual(fill1, "")
 
+    def test_simulation_workflow_in_layout_editor(self):
+        """Testa o fluxo completo da simulação de corte CAM no LayoutEditorView."""
+        # 1. Verifica presença do botão na barra de ferramentas
+        self.assertTrue(hasattr(self.view, "btn_sim"))
+        self.assertEqual(self.view.btn_sim.cget("text"), "▶ Simular")
+        self.assertFalse(self.view.sim_running)
+
+        # 2. Inicia simulação
+        self.view.toggle_simulation()
+        self.assertTrue(self.view.sim_running)
+        self.assertEqual(self.view.btn_sim.cget("text"), "⏹ Parar")
+
+        # Verifica se o cabeçote CNC foi desenhado no canvas
+        head_items = self.view.canvas.find_withtag("sim_head")
+        self.assertTrue(len(head_items) > 0)
+
+        # 3. Executa passos da simulação
+        self.view._sim_step()
+        self.assertTrue(len(self.view.canvas.find_withtag("sim_head")) > 0)
+
+        # 4. Para simulação via toggle
+        self.view.toggle_simulation()
+        self.assertFalse(self.view.sim_running)
+        self.assertEqual(self.view.btn_sim.cget("text"), "▶ Simular")
+        self.assertEqual(len(self.view.canvas.find_withtag("sim_head")), 0)
+        self.assertEqual(len(self.view.canvas.find_withtag("sim_cut_trail")), 0)
+
+    def test_simulation_cancel_via_escape(self):
+        """Pressionar Escape (cancel_drag) interrompe a simulação ativa."""
+        self.view.start_simulation()
+        self.assertTrue(self.view.sim_running)
+        res = self.view.cancel_drag()
+        self.assertEqual(res, "break")
+        self.assertFalse(self.view.sim_running)
+        self.assertEqual(self.view.btn_sim.cget("text"), "▶ Simular")
+
+    def test_simulation_empty_pieces(self):
+        """Tentar simular sem peças colocadas exibe aviso e não inicia."""
+        self.view.placed_pieces = []
+        self.view.start_simulation()
+        self.assertFalse(self.view.sim_running)
+        self.assertEqual(self.view.btn_sim.cget("text"), "▶ Simular")
+
 
 if __name__ == "__main__":
     unittest.main()
