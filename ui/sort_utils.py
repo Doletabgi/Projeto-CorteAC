@@ -90,3 +90,16 @@ def clean_session_display_name(name: Any) -> str:
             return cleaned
     return s
 
+
+def resto_sort_key(val: Any) -> int:
+    """
+    Chave de ordenação numérica para a coluna Resto.
+    Suporta inteiros negativos e positivos (ex: -1 < 0).
+    """
+    if val is None:
+        return 0
+    try:
+        return int(val)
+    except (ValueError, TypeError):
+        return 0
+

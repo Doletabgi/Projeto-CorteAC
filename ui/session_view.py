@@ -18,7 +18,8 @@ from ui.dieproc_dialog import DieProcDialog
 from ui.edit_shape_in_session_dialog import EditShapeInSessionDialog
 from cad.lay_parser import parse_lay, export_layout_from_pieces, validate_layout_placement
 from cad.dual_exporter import DualLayoutExporter
-from ui.sort_utils import natural_sort_key, size_sort_key, shape_area_sort_key, clean_session_display_name
+from cad.layers_rule import calc_resto
+from ui.sort_utils import natural_sort_key, size_sort_key, shape_area_sort_key, clean_session_display_name, resto_sort_key
 
 RECOMMENDED_COMBINATIONS = [
     {
@@ -103,6 +104,7 @@ class SessionView(tk.Frame):
         self.shapes_list = list(self.session_data.get("shapes", []))
         self.selected_shape = None
         self._active_cell_entry = None
+        self._inline_editor = None
         self.db = db or kwargs.get("database")
         self.on_open_dieproc_cb = on_open_dieproc
         self.active_dieproc_params = None
@@ -612,7 +614,7 @@ class SessionView(tk.Frame):
         self.tree_shapes.column("tamanho", width=55, anchor="center")
         self.tree_shapes.column("molde", width=145, anchor="w")
         self.tree_shapes.column("pares", width=55, anchor="center")
-        self.tree_shapes.column("resto", width=45, anchor="center")
+        self.tree_shapes.column("resto", width=45, anchor="e")
         self.tree_shapes.column("sequencia", width=65, anchor="center")
 
         sb_shp_y = ttk.Scrollbar(table_frame, orient="vertical", command=self.tree_shapes.yview)
@@ -1833,6 +1835,7 @@ class SessionView(tk.Frame):
         else:
             if hasattr(self, "cb_mat_code"):
                 self.cb_mat_code.set("(unspecified)")
+        self.refresh_shapes_resto_column()
 
     def on_mat_key_press(self, event):
         if event.char and (event.char.isdigit() or event.char in ".,"):
@@ -2269,6 +2272,50 @@ class SessionView(tk.Frame):
         if self.on_material_change_cb:
             self.on_material_change_cb(mat_dict)
 
+        self.refresh_shapes_resto_column()
+
+    def get_session_layers(self) -> int:
+        """Retorna o número de camadas de corte do material da sessão.
+        Lê da tabela de Materiais ou dos dados da sessão. Se indefinido ou <= 0, retorna 0."""
+        if hasattr(self, "tree_mat"):
+            items = self.tree_mat.get_children()
+            if items:
+                vals = self.tree_mat.item(items[0], "values")
+                if len(vals) >= 7:
+                    try:
+                        v = str(vals[6]).strip()
+                        if v:
+                            return max(0, int(v))
+                    except (ValueError, TypeError):
+                        pass
+        if hasattr(self, "session_data") and isinstance(self.session_data, dict):
+            mat = self.session_data.get("material")
+            if isinstance(mat, dict):
+                try:
+                    v = mat.get("layers")
+                    if v is not None and str(v).strip():
+                        return max(0, int(v))
+                except (ValueError, TypeError):
+                    pass
+        return 0
+
+    def refresh_shapes_resto_column(self):
+        """Recalcula e atualiza a coluna Resto de todas as linhas de moldes na grade."""
+        if not hasattr(self, "tree_shapes") or not hasattr(self, "shapes_list"):
+            return
+        layers = self.get_session_layers()
+        for idx, s in enumerate(self.shapes_list):
+            row_id = str(idx)
+            try:
+                p = int(s.get("pairs", 16))
+            except Exception:
+                p = 16
+            r_val = calc_resto(p, layers)
+            try:
+                self.tree_shapes.set(row_id, "resto", str(r_val))
+            except Exception:
+                pass
+
 
     def set_shapes_data(self, shapes, preserve_id=None):
         self.shapes_list = list(shapes or [])
@@ -2298,6 +2345,7 @@ class SessionView(tk.Frame):
         self.shapes_list.sort(key=lambda s: int(s.get("sequence", 999)))
 
         self.tree_shapes.delete(*self.tree_shapes.get_children())
+        layers = self.get_session_layers()
         for idx, s in enumerate(self.shapes_list, start=1):
             s_id = str(s.get("id", idx))
             percurso = str(s.get("folder") or "Externo")
@@ -2307,7 +2355,7 @@ class SessionView(tk.Frame):
             tamanho = f"{color_badge} {s_size}"
             molde_nome = str(s.get("name", f"Shape #{idx}"))
             pares = str(s.get("pairs", 16))
-            resto = str(s.get("resto") if s.get("resto") is not None else s.get("rest", 0))
+            resto = str(calc_resto(s.get("pairs", 16), layers))
             seq = str(s.get("sequence", idx))
             self.tree_shapes.insert(
                 "", "end", iid=str(idx - 1),
@@ -2415,6 +2463,10 @@ class SessionView(tk.Frame):
 
             try:
                 self.tree_shapes.set(row_id, col_key, str(val_int))
+                if is_pairs:
+                    layers = self.get_session_layers()
+                    r_val = calc_resto(val_int, layers)
+                    self.tree_shapes.set(row_id, "resto", str(r_val))
             except Exception:
                 pass
 
@@ -2483,6 +2535,70 @@ class SessionView(tk.Frame):
                     self.tree_shapes.focus(row_id)
             return "break"
 
+        def move_next_col(event=None):
+            if state["navigating"]:
+                return "break"
+            state["navigating"] = True
+            save_current_value()
+            close_editor()
+
+            children = list(self.tree_shapes.get_children())
+            if row_id in children:
+                pos = children.index(row_id)
+                if col == "#5":
+                    # Pula Resto (#6) e vai direto para Sequência (#7) na mesma linha
+                    self.tree_shapes.selection_set(row_id)
+                    self.tree_shapes.focus(row_id)
+                    self.after(30, lambda: self.spawn_tree_inline_editor(row_id, "#7"))
+                else:
+                    # De Sequência (#7), avança para Pares (#5) da próxima linha
+                    if pos + 1 < len(children):
+                        next_row_id = children[pos + 1]
+                        self.tree_shapes.selection_set(next_row_id)
+                        self.tree_shapes.focus(next_row_id)
+                        self.tree_shapes.see(next_row_id)
+                        try:
+                            self.draw_preview_shape(self.shapes_list[int(next_row_id)])
+                        except Exception:
+                            pass
+                        self.after(30, lambda: self.spawn_tree_inline_editor(next_row_id, "#5"))
+                    else:
+                        self.tree_shapes.selection_set(row_id)
+                        self.tree_shapes.focus(row_id)
+            return "break"
+
+        def move_prev_col(event=None):
+            if state["navigating"]:
+                return "break"
+            state["navigating"] = True
+            save_current_value()
+            close_editor()
+
+            children = list(self.tree_shapes.get_children())
+            if row_id in children:
+                pos = children.index(row_id)
+                if col == "#7":
+                    # Volta de Sequência (#7) direto para Pares (#5) na mesma linha (pula #6)
+                    self.tree_shapes.selection_set(row_id)
+                    self.tree_shapes.focus(row_id)
+                    self.after(30, lambda: self.spawn_tree_inline_editor(row_id, "#5"))
+                else:
+                    # De Pares (#5), volta para Sequência (#7) da linha anterior
+                    if pos - 1 >= 0:
+                        prev_row_id = children[pos - 1]
+                        self.tree_shapes.selection_set(prev_row_id)
+                        self.tree_shapes.focus(prev_row_id)
+                        self.tree_shapes.see(prev_row_id)
+                        try:
+                            self.draw_preview_shape(self.shapes_list[int(prev_row_id)])
+                        except Exception:
+                            pass
+                        self.after(30, lambda: self.spawn_tree_inline_editor(prev_row_id, "#7"))
+                    else:
+                        self.tree_shapes.selection_set(row_id)
+                        self.tree_shapes.focus(row_id)
+            return "break"
+
         def adjust_number(delta):
             val_str = entry.get().strip()
             cleaned = "".join(ch for ch in val_str if ch.isdigit())
@@ -2517,8 +2633,9 @@ class SessionView(tk.Frame):
         entry.bind("<Return>", move_down)
         entry.bind("<KP_Enter>", move_down)
         entry.bind("<Shift-Return>", move_up)
-        entry.bind("<Tab>", move_down)
-        entry.bind("<Shift-Tab>", move_up)
+        entry.bind("<Tab>", move_next_col)
+        entry.bind("<Shift-Tab>", move_prev_col)
+        entry.bind("<ISO_Left_Tab>", move_prev_col)
         entry.bind("<Escape>", cancel_edit)
         entry.bind("<FocusOut>", on_focus_out)
 
@@ -2787,7 +2904,8 @@ class SessionView(tk.Frame):
         elif col == "pares":
             self.shapes_list.sort(key=lambda s: int(s.get("pairs", 0)), reverse=desc)
         elif col == "resto":
-            self.shapes_list.sort(key=lambda s: int(s.get("rest", 0)), reverse=desc)
+            layers = self.get_session_layers()
+            self.shapes_list.sort(key=lambda s: resto_sort_key(calc_resto(s.get("pairs", 16), layers)), reverse=desc)
         elif col == "area":
             self.shapes_list.sort(key=lambda s: shape_area_sort_key(s), reverse=desc)
         elif col == "percurso":
