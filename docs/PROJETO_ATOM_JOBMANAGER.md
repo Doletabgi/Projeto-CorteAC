@@ -4,7 +4,7 @@
 > **Regra de ouro:** o que está marcado `[CONFIRMADO]` veio do relatório, do código ou do usuário. O que está `[NÃO CONFIRMADO]` é suposição e não deve virar "fato" sem validação. O que está `[PREENCHER]` o Antigravity deve completar lendo o código real.
 
 <!-- AUTO:header:start -->
-**Última sincronização com o código:** 2026-10-25 16:00 (HEAD ao gerar: `7d1d12e`; 57 arquivos Python, ~36527 linhas)
+**Última sincronização com o código:** 2026-10-25 16:00 (HEAD ao gerar: `2895d32`; 57 arquivos Python, ~36527 linhas)
 <!-- AUTO:header:end -->
 **Versão deste documento:** 1
 
@@ -1484,6 +1484,7 @@ Local: `/home/dola/Documentos/clone do job/antigo/arquivos pos instalacao/Common
 <!-- AUTO:gitlog:start -->
 | Commit | Data | Autor | Mensagem |
 |---|---|---|---|
+| `2895d32` | 2026-10-25 | Doletabgi | feat(ui): modernizacao dos icones e migracao da simulacao CAM para o layout editor |
 | `7d1d12e` | 2026-10-25 | Doletabgi | docs: sincronizar gitlog com o menu de contexto Fill |
 | `0ac6958` | 2026-10-25 | Doletabgi | feat(layout): implementar menu de contexto Fill (Row, Row Alternate, Column, Sheet, Sheet Alternate, User) e Dialog 159 |
 | `7557a65` | 2026-10-24 | Doletabgi | feat(print): remover logo ATOM e adicionar botao/dialogo para logotipo personalizado da empresa |
@@ -1498,7 +1499,6 @@ Local: `/home/dola/Documentos/clone do job/antigo/arquivos pos instalacao/Common
 | `02c9273` | 2026-10-24 | Doletabgi | fix(ci): remover testes locais com mysql/display para permitir build limpo do .exe no GitHub |
 | `1bf2dc2` | 2026-10-24 | Doletabgi | docs: sincronizar gitlog |
 | `b53cc00` | 2026-10-24 | Doletabgi | ci: esteira multi-plataforma de Release no GitHub para Windows (.exe) e Linux (tar.gz) |
-| `0c0a889` | 2026-10-24 | Doletabgi | docs: mover documentacao tecnica e relatorios para pasta docs e atualizar sync_project_doc |
 <!-- AUTO:gitlog:end -->
 
 ---
