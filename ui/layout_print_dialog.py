@@ -6,6 +6,7 @@ Reprodução idêntica ao modelo original ATOM FlashCut (media_1792071945871.jpg
 
 import sys
 import os
+import io
 import math
 import re
 from datetime import datetime
@@ -16,6 +17,177 @@ from PIL import Image, ImageDraw, ImageFont
 
 from config import THEME
 from cad.colors import get_color_for_size
+
+
+def get_company_logo_path(create_parent=False):
+    """
+    Retorna o caminho do arquivo de logotipo personalizado da empresa.
+    Prioriza diretório de assets da aplicação ou diretório base persistente.
+    """
+    if getattr(sys, "frozen", False):
+        base = Path(sys.executable).resolve().parent
+    else:
+        base = Path(__file__).resolve().parent.parent
+
+    assets_dir = base / "assets"
+    if create_parent and not assets_dir.exists():
+        try:
+            assets_dir.mkdir(parents=True, exist_ok=True)
+        except Exception:
+            pass
+
+    p_assets = assets_dir / "company_logo.png"
+    if p_assets.exists() or create_parent:
+        return p_assets
+
+    p_base = base / "company_logo.png"
+    if p_base.exists():
+        return p_base
+
+    return p_assets
+
+
+def open_company_logo_dialog(parent_window, on_update_callback=None):
+    """Abre diálogo para o usuário definir, visualizar ou remover a logo personalizada da empresa."""
+    dlg = tk.Toplevel(parent_window)
+    dlg.title("Logotipo Personalizado da Empresa")
+    dlg.geometry("480x360")
+    dlg.minsize(420, 320)
+    dlg.transient(parent_window)
+    dlg.grab_set()
+    dlg.configure(bg=THEME["bg_surface"], padx=16, pady=16)
+
+    # Cabeçalho
+    tk.Label(
+        dlg, text="🏢 Logotipo da Empresa para Relatórios",
+        font=("Segoe UI", 11, "bold"), bg=THEME["bg_surface"], fg=THEME["text_main"]
+    ).pack(anchor="w", pady=(0, 4))
+
+    tk.Label(
+        dlg,
+        text="Personalize o cabeçalho das impressões e relatórios A4 substituindo o logotipo.",
+        font=("Segoe UI", 8), bg=THEME["bg_surface"], fg="#555555"
+    ).pack(anchor="w", pady=(0, 12))
+
+    # Quadro de visualização da logo atual
+    preview_box = tk.LabelFrame(
+        dlg, text="Prévia Atual da Logo", font=("Segoe UI", 8, "bold"),
+        bg="#ffffff", relief="groove", bd=1, padx=10, pady=10
+    )
+    preview_box.pack(fill="both", expand=True, pady=(0, 12))
+
+    lbl_logo_preview = tk.Label(preview_box, bg="#ffffff")
+    lbl_logo_preview.pack(expand=True)
+
+    lbl_info = tk.Label(preview_box, text="", font=("Segoe UI", 8), bg="#ffffff", fg="#666666")
+    lbl_info.pack(side="bottom")
+
+    btn_remove = [None]
+
+    def refresh_dialog_preview():
+        logo_path = get_company_logo_path()
+        if logo_path.exists():
+            try:
+                raw = Image.open(str(logo_path)).convert("RGBA")
+                ow, oh = raw.size
+                ratio = min(260 / max(1, ow), 90 / max(1, oh))
+                pw, ph = max(1, int(ow * ratio)), max(1, int(oh * ratio))
+                res = raw.resize((pw, ph), Image.Resampling.LANCZOS)
+                buf = io.BytesIO()
+                res.save(buf, format="PNG")
+                photo = tk.PhotoImage(data=buf.getvalue())
+                lbl_logo_preview.config(image=photo, text="")
+                lbl_logo_preview.image = photo
+                lbl_info.config(text=f"Resolução original: {ow} × {oh} px")
+                if btn_remove[0]:
+                    btn_remove[0].config(state="normal")
+                return
+            except Exception:
+                pass
+        lbl_logo_preview.config(
+            image="",
+            text="[Nenhum logotipo configurado]\nO cabeçalho dos relatórios será emitido limpo.",
+            font=("Segoe UI", 9, "italic"),
+            fg="#888888"
+        )
+        lbl_info.config(text="")
+        if btn_remove[0]:
+            btn_remove[0].config(state="disabled")
+
+    def on_choose_logo():
+        fpath = filedialog.askopenfilename(
+            title="Selecionar Logotipo da Empresa",
+            parent=dlg,
+            filetypes=[
+                ("Imagens Suportadas", "*.png *.jpg *.jpeg *.bmp *.webp *.gif"),
+                ("Imagens PNG", "*.png"),
+                ("Imagens JPEG", "*.jpg *.jpeg"),
+                ("Todos os Arquivos", "*.*")
+            ]
+        )
+        if not fpath:
+            return
+        try:
+            im = Image.open(fpath).convert("RGBA")
+            target = get_company_logo_path(create_parent=True)
+            im.save(str(target), format="PNG")
+            refresh_dialog_preview()
+            if callable(on_update_callback):
+                on_update_callback()
+            messagebox.showinfo(
+                "Logotipo da Empresa",
+                "Logotipo atualizado com sucesso!\nEle será exibido em todas as impressões e relatórios.",
+                parent=dlg
+            )
+        except Exception as ex:
+            messagebox.showerror("Erro ao Carregar Imagem", f"Não foi possível carregar a imagem:\n{ex}", parent=dlg)
+
+    def on_remove_logo():
+        if messagebox.askyesno("Remover Logotipo", "Deseja remover o logotipo personalizado da empresa?", parent=dlg):
+            target = get_company_logo_path()
+            if target.exists():
+                try:
+                    target.unlink()
+                except Exception:
+                    pass
+            alt = Path(__file__).resolve().parent.parent / "company_logo.png"
+            if alt.exists():
+                try:
+                    alt.unlink()
+                except Exception:
+                    pass
+            refresh_dialog_preview()
+            if callable(on_update_callback):
+                on_update_callback()
+            messagebox.showinfo("Logotipo Removido", "O logotipo foi removido. Os relatórios serão emitidos limpos.", parent=dlg)
+
+    btn_bar = tk.Frame(dlg, bg=THEME["bg_surface"])
+    btn_bar.pack(fill="x")
+
+    tk.Button(
+        btn_bar, text="📂 Escolher Nova Logo...",
+        bg="#2563eb", fg="#ffffff", activebackground="#1d4ed8", activeforeground="#ffffff",
+        font=("Segoe UI", 9, "bold"), relief="raised", bd=1, padx=10, pady=4, cursor="hand2",
+        command=on_choose_logo
+    ).pack(side="left", padx=(0, 6))
+
+    btn_remove[0] = tk.Button(
+        btn_bar, text="🗑️ Remover Logo",
+        bg=THEME["bg_surface"], fg="#dc2626", font=("Segoe UI", 9),
+        relief="raised", bd=1, padx=8, pady=4, cursor="hand2",
+        command=on_remove_logo
+    )
+    btn_remove[0].pack(side="left", padx=2)
+
+    tk.Button(
+        btn_bar, text="✓ Concluir",
+        bg=THEME["bg_surface"], fg=THEME["text_main"],
+        font=("Segoe UI", 9), relief="raised", bd=1, padx=12, pady=4, cursor="hand2",
+        command=dlg.destroy
+    ).pack(side="right")
+
+    refresh_dialog_preview()
+    return dlg
 
 
 class LayoutPrintDialog(tk.Toplevel):
@@ -151,8 +323,8 @@ class LayoutPrintDialog(tk.Toplevel):
         self.page_w_base = 595
         self.page_h_base = 842
 
-        # Carrega logotipo ATOM
-        self.load_atom_logo()
+        # Carrega logotipo da empresa
+        self.load_company_logo()
 
         # Monta a barra de ferramentas superior e a área de rolagem da folha
         self.setup_ui()
@@ -160,14 +332,55 @@ class LayoutPrintDialog(tk.Toplevel):
         # Renderiza a página
         self.after(50, self.fit_to_page)
 
-    def load_atom_logo(self):
-        assets_dir = Path(__file__).resolve().parent.parent / "assets"
-        logo_path = assets_dir / "atom_logo_print.png"
+    def load_company_logo(self):
+        """Carrega a imagem de logotipo customizada da empresa se configurada."""
+        self.company_logo_raw = None
+        self.logo_img = None
+        self._logo_photo_cache = {}
+
+        logo_path = get_company_logo_path()
         if logo_path.exists():
             try:
-                self.logo_img = tk.PhotoImage(file=str(logo_path))
+                self.company_logo_raw = Image.open(str(logo_path)).convert("RGBA")
             except Exception:
-                self.logo_img = None
+                self.company_logo_raw = None
+
+    def load_atom_logo(self):
+        """Compatibilidade com código legado."""
+        self.load_company_logo()
+
+    def get_scaled_logo_photo(self, max_w, max_h):
+        """Redimensiona a logo da empresa proporcionalmente e retorna tk.PhotoImage via memória."""
+        if not getattr(self, "company_logo_raw", None):
+            return None
+        try:
+            ow, oh = self.company_logo_raw.size
+            if ow <= 0 or oh <= 0:
+                return None
+            ratio = min(max_w / ow, max_h / oh)
+            nw = max(1, int(ow * ratio))
+            nh = max(1, int(oh * ratio))
+
+            cache_key = (nw, nh)
+            if hasattr(self, "_logo_photo_cache") and self._logo_photo_cache.get("key") == cache_key:
+                return self._logo_photo_cache["photo"]
+
+            resized = self.company_logo_raw.resize((nw, nh), Image.Resampling.LANCZOS)
+            buf = io.BytesIO()
+            resized.save(buf, format="PNG")
+            photo = tk.PhotoImage(data=buf.getvalue())
+            self._logo_photo_cache = {"key": cache_key, "photo": photo}
+            return photo
+        except Exception:
+            return None
+
+    def open_logo_manager_dialog(self):
+        """Abre diálogo para o usuário definir, visualizar ou remover a logo personalizada da empresa."""
+        open_company_logo_dialog(self, on_update_callback=self._on_logo_updated)
+
+    def _on_logo_updated(self):
+        self.load_company_logo()
+        self.redraw()
 
     def init_sample_pieces(self):
         """Gera a disposição autêntica das 40 peças mostrada no print do usuário."""
@@ -225,6 +438,11 @@ class LayoutPrintDialog(tk.Toplevel):
         tk.Button(
             tb, text="🖼️ Salvar Imagem...", bg=THEME["bg_surface"], fg=THEME["text_main"],
             relief="raised", bd=2, font=("Segoe UI", 9), padx=6, command=self.save_as_png
+        ).pack(side="left", padx=2)
+
+        tk.Button(
+            tb, text="🏢 Logotipo...", bg=THEME["bg_surface"], fg=THEME["text_main"],
+            relief="raised", bd=2, font=("Segoe UI", 9, "bold"), padx=6, command=self.open_logo_manager_dialog
         ).pack(side="left", padx=2)
 
         ttk.Separator(tb, orient="vertical").pack(side="left", fill="y", padx=8, pady=2)
@@ -417,15 +635,13 @@ class LayoutPrintDialog(tk.Toplevel):
             anchor="nw", font=f_path, fill="#000000"
         )
 
-        # Logotipo ATOM no canto superior esquerdo
+        # Logotipo da Empresa no canto superior esquerdo (se configurado)
         logo_y = margin_top + int(12 * self.zoom)
-        if self.logo_img:
-            self.canvas.create_image(margin_left, logo_y, image=self.logo_img, anchor="nw")
-        else:
-            self.canvas.create_text(
-                margin_left, logo_y,
-                text="Ψ ATOM", anchor="nw", font=("Segoe UI", max(10, int(15 * self.zoom)), "bold"), fill="#000000"
-            )
+        max_logo_w = int(140 * self.zoom)
+        max_logo_h = int(36 * self.zoom)
+        logo_photo = self.get_scaled_logo_photo(max_logo_w, max_logo_h)
+        if logo_photo:
+            self.canvas.create_image(margin_left, logo_y, image=logo_photo, anchor="nw")
 
         # Título centralizado e sublinhado: <layout_name>.lay
         title_x = px + page_w // 2
@@ -676,17 +892,20 @@ class LayoutPrintDialog(tk.Toplevel):
         # Topo
         draw.text((m_left, m_top), self.unc_prefix + "\\", fill="black", font=f_small)
 
-        # Logo ATOM
-        logo_path = Path(__file__).resolve().parent.parent / "assets" / "atom_logo_print.png"
-        if logo_path.exists():
+        # Logotipo da Empresa (se configurado)
+        if getattr(self, "company_logo_raw", None):
             try:
-                logo_im = Image.open(logo_path).convert("RGBA")
-                lw = int(logo_im.width * scale * 0.75)
-                lh = int(logo_im.height * scale * 0.75)
-                logo_resized = logo_im.resize((lw, lh), Image.Resampling.LANCZOS)
-                im.paste(logo_resized, (m_left, m_top + int(12 * scale)), logo_resized)
+                max_w = int(140 * scale)
+                max_h = int(36 * scale)
+                ow, oh = self.company_logo_raw.size
+                if ow > 0 and oh > 0:
+                    ratio = min(max_w / ow, max_h / oh)
+                    lw = max(1, int(ow * ratio))
+                    lh = max(1, int(oh * ratio))
+                    logo_resized = self.company_logo_raw.resize((lw, lh), Image.Resampling.LANCZOS)
+                    im.paste(logo_resized, (m_left, m_top + int(12 * scale)), logo_resized)
             except Exception:
-                draw.text((m_left, m_top + int(12 * scale)), "ATOM", fill="black", font=f_title)
+                pass
 
         # Título
         title_bbox = draw.textbbox((0, 0), self.layout_name, font=f_title)

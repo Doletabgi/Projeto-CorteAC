@@ -737,6 +737,7 @@ class LayoutEditorView(tk.Frame):
             menu_obj.add_command(label="Refilar Layout Automático (Gap 1mm)\tCtrl+T", command=self.trim_layout_dialog)
             menu_obj.add_command(label="Alterar Camadas de Corte (Layers)...", command=self.edit_material_layers_dialog)
             menu_obj.add_separator()
+            menu_obj.add_command(label="🏢 Logotipo da Empresa...", command=self.configure_company_logo)
             menu_obj.add_command(label="Colours...", command=lambda: None)
             menu_obj.add_command(label="Check Overlay	Ctrl+E", command=self.check_overlay)
             menu_obj.add_command(label="Preferences...", command=lambda: None)
@@ -4049,6 +4050,11 @@ class LayoutEditorView(tk.Frame):
 
         dlg = LayoutPrintDialog(self, layout_data=layout_data)
         dlg.focus_set()
+
+    def configure_company_logo(self):
+        """Abre diálogo para configurar o logotipo personalizado da empresa."""
+        from ui.layout_print_dialog import open_company_logo_dialog
+        open_company_logo_dialog(self)
 
     def about_layout(self):
         info = (
