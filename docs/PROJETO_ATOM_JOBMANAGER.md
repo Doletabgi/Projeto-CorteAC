@@ -4,7 +4,7 @@
 > **Regra de ouro:** o que está marcado `[CONFIRMADO]` veio do relatório, do código ou do usuário. O que está `[NÃO CONFIRMADO]` é suposição e não deve virar "fato" sem validação. O que está `[PREENCHER]` o Antigravity deve completar lendo o código real.
 
 <!-- AUTO:header:start -->
-**Última sincronização com o código:** 2026-10-25 13:37 (HEAD ao gerar: `7557a65`; 56 arquivos Python, ~35815 linhas)
+**Última sincronização com o código:** 2026-10-25 13:37 (HEAD ao gerar: `0ac6958`; 56 arquivos Python, ~35815 linhas)
 <!-- AUTO:header:end -->
 **Versão deste documento:** 1
 
@@ -1479,6 +1479,7 @@ Local: `/home/dola/Documentos/clone do job/antigo/arquivos pos instalacao/Common
 <!-- AUTO:gitlog:start -->
 | Commit | Data | Autor | Mensagem |
 |---|---|---|---|
+| `0ac6958` | 2026-10-25 | Doletabgi | feat(layout): implementar menu de contexto Fill (Row, Row Alternate, Column, Sheet, Sheet Alternate, User) e Dialog 159 |
 | `7557a65` | 2026-10-24 | Doletabgi | feat(print): remover logo ATOM e adicionar botao/dialogo para logotipo personalizado da empresa |
 | `044d087` | 2026-10-24 | Doletabgi | docs: sincronizar gitlog final |
 | `f5bdf66` | 2026-10-24 | Doletabgi | docs: sincronizar gitlog com a remocao dos 4 icones e build linux |
@@ -1493,7 +1494,6 @@ Local: `/home/dola/Documentos/clone do job/antigo/arquivos pos instalacao/Common
 | `b53cc00` | 2026-10-24 | Doletabgi | ci: esteira multi-plataforma de Release no GitHub para Windows (.exe) e Linux (tar.gz) |
 | `0c0a889` | 2026-10-24 | Doletabgi | docs: mover documentacao tecnica e relatorios para pasta docs e atualizar sync_project_doc |
 | `f3d217a` | 2026-10-24 | Doletabgi | ci: adicionar workflow do GitHub Actions para compilar executavel Windows 10/11 e scripts de distribuicao |
-| `db856b0` | 2026-10-24 | Doletabgi | feat(layout-editor): selecao multipla por caixa elastica e rotacao livre 360 com botao direito (R-Drag) |
 <!-- AUTO:gitlog:end -->
 
 ---
