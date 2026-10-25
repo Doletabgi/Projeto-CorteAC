@@ -4,7 +4,7 @@
 > **Regra de ouro:** o que está marcado `[CONFIRMADO]` veio do relatório, do código ou do usuário. O que está `[NÃO CONFIRMADO]` é suposição e não deve virar "fato" sem validação. O que está `[PREENCHER]` o Antigravity deve completar lendo o código real.
 
 <!-- AUTO:header:start -->
-**Última sincronização com o código:** 2026-10-25 20:27 (HEAD ao gerar: `e02ecf4`; 59 arquivos Python, ~36939 linhas)
+**Última sincronização com o código:** 2026-10-25 20:34 (HEAD ao gerar: `b77736b`; 59 arquivos Python, ~36939 linhas)
 <!-- AUTO:header:end -->
 **Versão deste documento:** 1
 
@@ -18,6 +18,7 @@
 2. Nunca apagar entradas do Changelog (seção 10). Apenas acrescentar.
 3. Ao mudar um item de `[NÃO CONFIRMADO]` para `[CONFIRMADO]`, registrar quem confirmou e quando.
 4. O Claude só afirma sobre o código aquilo que está descrito aqui. Se algo não estiver aqui, o Claude pergunta em vez de presumir.
+5. **Publicação Automática de Releases e Sequência de Versões (`v2026.X`) (seção 12)**: toda nova melhoria, paridade ou correção deve ser publicada automaticamente via GitHub Actions gerando binários Windows e Linux atualizados, incrementando rigorosamente a sequência de versão em `config.py`, `.github/workflows/release.yml` e tags do Git.
 
 ---
 
@@ -1495,6 +1496,7 @@ Local: `/home/dola/Documentos/clone do job/antigo/arquivos pos instalacao/Common
 <!-- AUTO:gitlog:start -->
 | Commit | Data | Autor | Mensagem |
 |---|---|---|---|
+| `b77736b` | 2026-10-25 | Doletabgi | chore(release): atualizar versao para v2026.2 e detalhar notas de lancamento |
 | `e02ecf4` | 2026-10-25 | Doletabgi | feat(session_view): adicionar coluna Resto na grade de Moldes com recálculo dinâmico |
 | `c334209` | 2026-10-25 | Doletabgi | docs: sincronizar gitlog e cabecalho automaticos |
 | `4cc90c3` | 2026-10-25 | Doletabgi | docs: sincronizar gitlog final |
@@ -1509,7 +1511,6 @@ Local: `/home/dola/Documentos/clone do job/antigo/arquivos pos instalacao/Common
 | `abcc6bd` | 2026-10-24 | Doletabgi | feat(layout-editor): refilar placa completa (topo Y e comprimento X) com linhas de corte CAM duplas e sobra destacada |
 | `498eb77` | 2026-10-24 | Doletabgi | docs: sincronizar gitlog |
 | `b46df5c` | 2026-10-24 | Doletabgi | fix(db): definir sqlite como padrao sem db.ini e fallback automatico se mysql inacessivel |
-| `d425ed9` | 2026-10-24 | Doletabgi | docs: sincronizar gitlog |
 <!-- AUTO:gitlog:end -->
 
 ---
@@ -1522,6 +1523,7 @@ Local: `/home/dola/Documentos/clone do job/antigo/arquivos pos instalacao/Common
 | Dom, 25/10/2026 | 15:45 | Antigravity | Implementação da Simulação de Corte CAM dentro do Layout Editor (`LayoutEditorView`): (1) Adição do botão '▶ Simular' na barra de ferramentas do Layout Editor logo ao lado de '✂ Refilar', com alternância dinâmica para '⏹ Parar' durante a execução; (2) Adição da opção '▶ Simular Corte CAM' nos menus Nesting e Tools; (3) Motor de simulação CAM com interpolação suave de caminho por contorno de peça (~12 mm por passo, ~30 ms por tick) simulando a velocidade real de corte da faca CNC; (4) Renderização da mira/cabeçote CNC vermelha clássica com retículo cruzado (`tags="sim_head"`) e trilha de corte em tempo real (`tags="sim_cut_trail"`); (5) Integração completa com cancelamento via tecla Escape, clique na mesa CAD ou fechamento da janela; (6) 3 novos testes unitários adicionados em `tests/test_layout_editor_shortcuts.py` (59/59 passando); recompilação concluída com sucesso dos executáveis standalone Linux (`dist/CorteAC`, `dist/teste_dola`, `corteac_linux`, `teste_dola_linux`, `dist/CorteAC-Linux-x64.tar.gz`). | `ui/layout_editor_view.py`, `tests/test_layout_editor_shortcuts.py`, `docs/PROJETO_ATOM_JOBMANAGER.md`, `build_linux.sh`, `corteac_linux`, `teste_dola_linux`, `dist/CorteAC` |
 | Dom, 25/10/2026 | 15:55 | Antigravity | Remoção do botão '▶ Simular' da barra de ferramentas da tela principal (`MainWindow`): a simulação passa a operar no ambiente específico do Layout Editor (`LayoutEditorView`), despoluindo a barra de ferramentas principal (`Auto-Nest` -> `Exportar G-Code`); recompilação concluída dos binários Linux (`corteac_linux`, `teste_dola_linux`, `dist/CorteAC`). | `ui/main_window.py`, `docs/PROJETO_ATOM_JOBMANAGER.md`, `corteac_linux`, `dist/CorteAC` |
 | Dom, 25/10/2026 | 16:15 | Antigravity | Adição da coluna 'Resto' na grade de Moldes da SessionView (paridade com a sessão 619955 do Job Manager original): (1) Função pura isolada `cad/layers_rule.py:calc_resto` implementando a fórmula inferida `[INFERIDO]` $-( (2 \times pares \pmod{camadas}) // 2 )$; (2) Coluna 'Resto' na `tree_shapes` entre Pares e Sequência, alinhada à direita (`anchor="e"`), compacta e somente leitura; (3) Recálculo dinâmico em tempo de exibição ao editar Pares (inclusive digitação contínua) e ao alterar as camadas do material na aba Materiais; (4) Navegação por teclado via `<Tab>` / `<Shift-Tab>` ignorando a coluna Resto (pula direto entre Pares e Sequência); (5) Ordenação numérica por Resto suportando negativos (-1 < 0) via `resto_sort_key` em `ui/sort_utils.py`; 10 novos testes dedicados em `tests/test_shapes_resto.py` e 190 testes passando na suíte geral. | `cad/layers_rule.py`, `ui/session_view.py`, `ui/sort_utils.py`, `tests/test_shapes_resto.py`, `docs/PROJETO_ATOM_JOBMANAGER.md` |
+| Dom, 25/10/2026 | 20:30 | Antigravity | Definição da política obrigatória de Publicação Automática de Releases no GitHub com sequência previsível de versões (`v<ANO>.<SEQUENCIAL>[.<PATCH>]`): sincronização contínua entre `config.py:APP_VERSION`, `.github/workflows/release.yml` e tags Git; compilação paralela de binários portáteis Windows (`CorteAC.exe`, `.zip`) e Linux (`corteac_linux`, `.tar.gz`) com notas de release ricas e detalhadas; inclusão da Seção 12 no documento vivo com checklist operacional obrigatório para futuras entregas. | `docs/PROJETO_ATOM_JOBMANAGER.md`, `.github/workflows/release.yml`, `config.py` |
 
 ## 11. Prompt para o Antigravity: instalar a sincronização automática `[CONCLUÍDA]`
 
@@ -1546,3 +1548,108 @@ Não altere código-fonte do sistema. Faça somente:
 
 Entrega: confirmação de que o hook roda no commit, lista dos avisos do item 4 e o que foi ajustado no script.
 ```
+
+---
+
+## 12. Política de Versionamento e Publicação Automática de Releases no GitHub `[CONFIRMADO]`
+
+> **Regra de Ouro:** Todas as versões executáveis para produção (Windows 10/11 e Linux 64-bit) são distribuídas oficialmente através das **Releases do GitHub** em [https://github.com/Doletabgi/Projeto-CorteAC/releases](https://github.com/Doletabgi/Projeto-CorteAC/releases). O usuário e operadores no chão de fábrica realizam o download diretamente desta página. Portanto, **toda nova funcionalidade, ajuste ou marco industrial DEVE SEMPRE disparar a publicação/atualização automática da Release no GitHub**, mantendo os artefatos compilados e notas de versão 100% atualizados.
+
+---
+
+### 12.1. Sequência Previsível de Versões (`v<ANO>.<SEQUENCIAL>[.<PATCH>]`)
+
+O projeto adota uma nomenclatura de versionamento clara, cronológica e sequencial para facilitar o acompanhamento por operadores e desenvolvedores:
+
+$$\mathbf{v}\langle\text{ANO}\rangle.\langle\text{SEQUENCIAL}\rangle[.\langle\text{PATCH}\rangle]$$
+
+- **Ano (`2026`)**: Ano base do ciclo industrial do sistema.
+- **Sequencial (`1, 2, 3, ...`)**: Incrementado a cada nova entrega funcional ou ciclo de paridade com o sistema ATOM original:
+  - `v2026.1`: Lançamento base do editor CAD, seleção rubberband, banco de dados SQLite/MySQL e atalhos clássicos.
+  - `v2026.2`: Coluna Resto na grade de moldes da SessionView, Simulação de corte CAM no Layout Editor, Menu de Contexto Fill completo (Row, Column, Sheet, User - Dialog 159), Logotipo personalizado para impressão A4 e aceleração de arraste CAD ~125 Hz / R-Drag 360°.
+  - `v2026.3`: Próximas integrações de motores de nesting e relatórios industriais.
+- **Patch opcional (`.1, .2`)**: Reservado para hotfixes pontuais e correções críticas que não alteram o escopo funcional.
+
+> [!IMPORTANT]
+> **A sequência de versões nunca deve regredir nem pular números.**
+> O versionamento deve ser mantido rigorosamente sincronizado em três pontos obrigatórios a cada entrega:
+> 1. [`config.py`](file:///home/dola/Documentos/clone%20do%20job/jobmanager-win10-python/config.py): `APP_VERSION = "2026.X"` (exibido na UI em **Ajuda ➔ Sobre CorteAC**).
+> 2. [`.github/workflows/release.yml`](file:///home/dola/Documentos/clone%20do%20job/jobmanager-win10-python/.github/workflows/release.yml): `default: 'v2026.X'` e fallback da tag no step de determinação de versão.
+> 3. **Git Tag**: tag anotada correspondente criada no repositório (`git tag -a v2026.X -m "..."`).
+
+---
+
+### 12.2. Automação CI/CD via GitHub Actions (`release.yml`)
+
+O fluxo `.github/workflows/release.yml` é executado em nuvem de forma automatizada e transparente:
+
+```mermaid
+flowchart LR
+    A["Push Tag v2026.X / Push master"] --> B["GitHub Actions CI/CD"]
+    subgraph Compilacao ["Compilação Paralela Limpa"]
+        B --> W["Runner Windows-latest<br>PyInstaller --onefile CorteAC.exe<br>Empacotamento ZIP"]
+        B --> L["Runner Ubuntu-latest<br>PyInstaller --onefile corteac_linux<br>Empacotamento TAR.GZ"]
+    end
+    W --> R["softprops/action-gh-release@v2"]
+    L --> R
+    R --> Pub["GitHub Releases:<br>v2026.X (Executáveis + Release Notes)"]
+```
+
+#### Gatilhos de Disparo Automático:
+1. **Push de Tag (`tags: ['v*']`)**: Compila e cria ou atualiza a Release oficial correspondente à tag.
+2. **Push de Branch (`branches: [master, main]`)**: Mantém a Release padrão atualizada com os commits mais recentes.
+3. **Workflow Dispatch manual**: Permite acionamento manual informando a tag desejada pelo painel do GitHub Actions.
+
+#### Conteúdo Obrigatório do Release Body:
+Toda Release publicada deve conter:
+- Título padronizado: `CorteAC v2026.X (Windows & Linux)`.
+- Instruções de inicialização zero-configuração para Windows 10/11 (duplo clique em `CorteAC.exe`, sem necessidade de Python ou terminal).
+- Instruções de execução para Linux (`chmod +x ./corteac_linux`).
+- Seção estruturada de recursos: `### 🛠️ Recursos Incluídos Nesta Versão (v2026.X)`.
+- Explicação clara dos dados e persistência (`jobmanager.db` local e `db.ini` corporativo).
+
+---
+
+### 12.3. Checklist Operacional Obrigatório para Publicação de Versão
+
+Antes de concluir qualquer tarefa ou conjunto de commits, o agente/desenvolvedor deve executar rigorosamente este procedimento:
+
+1. **Validação de Testes**:
+   ```bash
+   PYTHONPATH=. pytest tests/
+   ```
+   *Garantir 100% de testes passando sem regressões.*
+
+2. **Incrementar Versão no Código**:
+   - Editar [`config.py`](file:///home/dola/Documentos/clone%20do%20job/jobmanager-win10-python/config.py) e definir a nova versão em `APP_VERSION = "2026.X"`.
+
+3. **Atualizar Workflow de Release**:
+   - Editar [`.github/workflows/release.yml`](file:///home/dola/Documentos/clone%20do%20job/jobmanager-win10-python/.github/workflows/release.yml) atualizando o `default` da tag e o corpo da release com os novos recursos detalhados.
+
+4. **Sincronizar Documentação Viva**:
+   - Registrar as novas entradas no Changelog (seção 10) e atualizar pendências na seção 9 deste documento.
+   - Executar o sincronizador:
+     ```bash
+     python3 tools/sync_project_doc.py
+     ```
+
+5. **Commit e Push dos Ramos Principais**:
+   ```bash
+   git add config.py .github/workflows/release.yml docs/PROJETO_ATOM_JOBMANAGER.md
+   git commit -m "chore(release): lancamento da versao v2026.X (...)"
+   git push origin master && git push origin master:main
+   ```
+
+6. **Criação e Envio da Tag de Release**:
+   ```bash
+   git tag -a v2026.X -m "CorteAC v2026.X - Resumo dos recursos"
+   git push origin v2026.X --force
+   ```
+
+7. **Acompanhamento e Validação do Build**:
+   - Verificar os logs do GitHub Actions até que os jobs `build-windows`, `build-linux` e `publish-release` concluam com status `success`.
+   - Confirmar a disponibilidade dos 4 artefatos atualizados em `https://github.com/Doletabgi/Projeto-CorteAC/releases/tag/v2026.X`:
+     * `CorteAC.exe`
+     * `CorteAC-Windows-x64.zip`
+     * `corteac_linux`
+     * `CorteAC-Linux-x64.tar.gz`
