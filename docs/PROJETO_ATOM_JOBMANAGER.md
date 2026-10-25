@@ -4,7 +4,7 @@
 > **Regra de ouro:** o que está marcado `[CONFIRMADO]` veio do relatório, do código ou do usuário. O que está `[NÃO CONFIRMADO]` é suposição e não deve virar "fato" sem validação. O que está `[PREENCHER]` o Antigravity deve completar lendo o código real.
 
 <!-- AUTO:header:start -->
-**Última sincronização com o código:** 2026-10-25 16:42 (HEAD ao gerar: `c334209`; 59 arquivos Python, ~36939 linhas)
+**Última sincronização com o código:** 2026-10-25 20:27 (HEAD ao gerar: `e02ecf4`; 59 arquivos Python, ~36939 linhas)
 <!-- AUTO:header:end -->
 **Versão deste documento:** 1
 
@@ -1495,6 +1495,7 @@ Local: `/home/dola/Documentos/clone do job/antigo/arquivos pos instalacao/Common
 <!-- AUTO:gitlog:start -->
 | Commit | Data | Autor | Mensagem |
 |---|---|---|---|
+| `e02ecf4` | 2026-10-25 | Doletabgi | feat(session_view): adicionar coluna Resto na grade de Moldes com recálculo dinâmico |
 | `c334209` | 2026-10-25 | Doletabgi | docs: sincronizar gitlog e cabecalho automaticos |
 | `4cc90c3` | 2026-10-25 | Doletabgi | docs: sincronizar gitlog final |
 | `2895d32` | 2026-10-25 | Doletabgi | feat(ui): modernizacao dos icones e migracao da simulacao CAM para o layout editor |
@@ -1509,7 +1510,6 @@ Local: `/home/dola/Documentos/clone do job/antigo/arquivos pos instalacao/Common
 | `498eb77` | 2026-10-24 | Doletabgi | docs: sincronizar gitlog |
 | `b46df5c` | 2026-10-24 | Doletabgi | fix(db): definir sqlite como padrao sem db.ini e fallback automatico se mysql inacessivel |
 | `d425ed9` | 2026-10-24 | Doletabgi | docs: sincronizar gitlog |
-| `02c9273` | 2026-10-24 | Doletabgi | fix(ci): remover testes locais com mysql/display para permitir build limpo do .exe no GitHub |
 <!-- AUTO:gitlog:end -->
 
 ---
