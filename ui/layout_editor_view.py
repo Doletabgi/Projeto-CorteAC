@@ -23,6 +23,16 @@ from ui.trim_layout_dialog import TrimLayoutDialog
 from cad.lay_parser import parse_lay, export_layout_from_pieces, validate_layout_placement
 from cad.dual_exporter import DualLayoutExporter
 from db.connection import VersionConflictError
+from cad.fill_engine import (
+    fill_row_pieces,
+    fill_row_alternate_pieces,
+    fill_column_pieces,
+    fill_sheet_pieces,
+    fill_sheet_alternate_pieces,
+    fill_user_pieces,
+)
+from ui.fill_user_dialog import FillUserDialog
+
 
 # -------------------------------------------------------------
 # Constantes Configuráveis de Operação CAM (Layout.exe / LayoutNT)
@@ -237,11 +247,15 @@ class LayoutEditorView(tk.Frame):
         self._drag_piece_origins = {}
         self._drag_anchor_idx = None
 
-        # Estado da rotação livre 360° com botão direito do mouse (R-Drag)
+        # Estado da rotação livre 360° com botão direito do mouse (R-Drag) e Menu 102
         self._rdrag_active = False
         self._rdrag_rotating = False
+        self._rdrag_moved = False
         self._rdrag_start_x = 0
         self._rdrag_start_y = 0
+        self._context_menu_opened = False
+        self._context_target_idx = None
+        self.gap_mm = float(kwargs.get("gap_mm", 1.0))
         self._rdrag_pre_pieces = None
         self._rdrag_selected_indices = []
         self._rdrag_is_ctrl = False
@@ -283,6 +297,7 @@ class LayoutEditorView(tk.Frame):
 
         # Constrói UI completa
         self.setup_ui()
+        self.setup_context_menu_102()
 
         # Inicializa com as peças dispostas de acordo com a captura de tela
         self.init_default_layout()
@@ -463,7 +478,6 @@ class LayoutEditorView(tk.Frame):
         # Rotação Livre 360° com Botão Direito do Mouse (R-Drag)
         self.canvas.bind("<ButtonPress-3>", self.on_rbutton_press)
         self.canvas.bind("<Control-ButtonPress-3>", self.on_rbutton_press)
-        self.canvas.bind("<Control-Button-3>", self.on_rbutton_press)
         self.canvas.bind("<B3-Motion>", self.on_rbutton_drag)
         self.canvas.bind("<Control-B3-Motion>", self.on_rbutton_drag)
         self.canvas.bind("<ButtonRelease-3>", self.on_rbutton_release)
@@ -715,6 +729,16 @@ class LayoutEditorView(tk.Frame):
             menu_obj.add_command(label="Copy\tCtrl+C", command=self.duplicate_selected)
             menu_obj.add_command(label="Paste\tCtrl+V", command=self.duplicate_selected)
             menu_obj.add_command(label="Delete\tDel", command=self.delete_selected)
+            menu_obj.add_separator()
+            # Submenu Fill (ID 52103, 52104, 50007, 52105, 52106, 50003)
+            edit_fill_sub = tk.Menu(menu_obj, tearoff=0)
+            edit_fill_sub.add_command(label="Row", command=lambda: self.fill_row())
+            edit_fill_sub.add_command(label="Row Alternate", command=lambda: self.fill_row_alternate())
+            edit_fill_sub.add_command(label="Column", command=lambda: self.fill_column())
+            edit_fill_sub.add_command(label="Sheet", state="disabled")  # TODO (Win32 ID 52105)
+            edit_fill_sub.add_command(label="Sheet Alternate", state="disabled")  # TODO (Win32 ID 52106)
+            edit_fill_sub.add_command(label="User...", state="disabled")  # TODO (Win32 ID 50003: Dialog 159)
+            menu_obj.add_cascade(label="Fill", menu=edit_fill_sub)
             menu_obj.add_separator()
             menu_obj.add_command(label="Fine Rotate Left (+2°)\tF1", command=self.on_f1_press)
             menu_obj.add_command(label="Fine Rotate Right (-2°)\tF2", command=self.on_f2_press)
@@ -2367,10 +2391,352 @@ class LayoutEditorView(tk.Frame):
             self.lbl_stat_left.config(text="Rotação cancelada via Escape.")
         return "break"
 
+    def setup_context_menu_102(self):
+        """
+        Constrói o Menu de Contexto 102 Win32 original (Layout.exe).
+        Ordem estrita conforme captura media_1792931613851.jpg e LAYOUT_EDITOR_RE.md.
+        """
+        self.context_menu_102 = tk.Menu(self, tearoff=0)
+
+        # Submenu Fill (ordem estrita Win32 ID 52103, 52104, 50007, 52105, 52106, 50003)
+        self.fill_submenu = tk.Menu(self.context_menu_102, tearoff=0)
+        self.fill_submenu.add_command(label="Row", command=lambda: self.fill_row())  # Win32 ID 52103
+        self.fill_submenu.add_command(label="Row Alternate", command=lambda: self.fill_row_alternate())  # Win32 ID 52104
+        self.fill_submenu.add_command(label="Column", command=lambda: self.fill_column())  # Win32 ID 50007
+        self.fill_submenu.add_command(label="Sheet", command=lambda: self.fill_sheet())  # Win32 ID 52105
+        self.fill_submenu.add_command(label="Sheet Alternate", command=lambda: self.fill_sheet_alternate())  # Win32 ID 52106
+        self.fill_submenu.add_command(label="User...", command=lambda: self.fill_user_dialog())  # Win32 ID 50003: Dialog 159
+
+        # Menu de Contexto simplificado: exibe apenas 'Fill' a pedido do operador
+        self.context_menu_102.add_cascade(label="Fill", menu=self.fill_submenu)
+
+    def get_target_piece_index(self, event=None):
+        """
+        Determina a peça-alvo para operações de menu e preenchimento (Fill).
+        Regra estrita: O menu e o Fill agem sobre a SELEÇÃO existente.
+        - Seleção simples: essa peça.
+        - Seleção múltipla: a peça primária (selected_index; se for None, a primeira de selected_indices em ordem estável).
+        # CONFIRMAR NO WINDOWS: no original com seleção múltipla, confirma se o Fill clona apenas a primária ou se aplica a todas.
+        - Sem seleção: retorna None.
+        """
+        sel_indices = self.get_selected_indices()
+        if sel_indices:
+            if self.selected_index is not None and self.selected_index in sel_indices:
+                return self.selected_index
+            return sorted(sel_indices)[0]
+        return None
+
+    def open_context_menu_102(self, event):
+        """
+        Abre o Menu de Contexto 102 Win32 na posição do cursor.
+        Se target_idx for None (clique no vazio sem peça-alvo):
+        desabilita itens dependentes de peça (Fill, Delete, Mirror).
+        """
+        self._context_menu_opened = True
+        target_idx = self.get_target_piece_index(event)
+        self._context_target_idx = target_idx
+
+        has_target = (target_idx is not None and 0 <= target_idx < len(self.placed_pieces))
+        state_piece_dep = "normal" if has_target else "disabled"
+
+        # Atualiza estado dos comandos dependentes de peça no Menu 102
+        try:
+            self.context_menu_102.entryconfig("Fill", state=state_piece_dep)
+            self.fill_submenu.entryconfig("Row", state=state_piece_dep)
+            self.fill_submenu.entryconfig("Row Alternate", state=state_piece_dep)
+            self.fill_submenu.entryconfig("Column", state=state_piece_dep)
+            self.fill_submenu.entryconfig("Sheet", state=state_piece_dep)
+            self.fill_submenu.entryconfig("Sheet Alternate", state=state_piece_dep)
+            self.fill_submenu.entryconfig("User...", state=state_piece_dep)
+        except Exception:
+            pass
+
+        x_root = getattr(event, "x_root", None)
+        if x_root is None:
+            try:
+                x_root = self.canvas.winfo_rootx() + getattr(event, "x", 0)
+            except Exception:
+                x_root = 0
+        y_root = getattr(event, "y_root", None)
+        if y_root is None:
+            try:
+                y_root = self.canvas.winfo_rooty() + getattr(event, "y", 0)
+            except Exception:
+                y_root = 0
+
+        try:
+            self.context_menu_102.tk_popup(int(x_root), int(y_root))
+        except Exception:
+            pass
+        finally:
+            try:
+                self.context_menu_102.grab_release()
+            except Exception:
+                pass
+
+    def fill_row(self, target_idx=None):
+        """
+        Executa Fill Row (Win32 ID 52103):
+        Clona a peça-alvo horizontalmente da sua posição até a margem direita útil da chapa.
+        # CONFIRMAR NO WINDOWS: preenche a partir da peça-alvo em direção à margem direita.
+        """
+        if target_idx is None:
+            target_idx = self.get_target_piece_index()
+        if target_idx is None or target_idx < 0 or target_idx >= len(self.placed_pieces):
+            if hasattr(self, "lbl_stat_pos"):
+                self.lbl_stat_pos.config(text="Fill Row: Nenhuma peça selecionada para preenchimento.")
+            return
+
+        target_piece = self.placed_pieces[target_idx]
+        margins = (self.margin_left, self.margin_right, self.margin_top, self.margin_bottom)
+        gap = getattr(self, "gap_mm", 1.0)
+
+        new_pieces = fill_row_pieces(
+            target_piece=target_piece,
+            placed_pieces=self.placed_pieces,
+            sheet_width=self.sheet_width,
+            sheet_height=self.sheet_height,
+            margins=margins,
+            gap_mm=gap
+        )
+
+        if not new_pieces:
+            if hasattr(self, "lbl_stat_pos"):
+                self.lbl_stat_pos.config(text="Fill Row: Nenhuma cópia coube na chapa respeitando margens e folga.")
+            return
+
+        # 1 único snapshot atômico no undo_stack
+        self.push_undo()
+        self.placed_pieces.extend(new_pieces)
+        # A seleção original permanece na peça-alvo (as cópias geradas não são selecionadas)
+        self.set_modified(True)
+        self.update_sidebar_targets()
+        self.redraw()
+        self.update_status()
+        if hasattr(self, "lbl_stat_pos"):
+            self.lbl_stat_pos.config(text=f"Fill Row: {len(new_pieces)} peça(s) adicionada(s) com sucesso.")
+
+    def fill_row_alternate(self, target_idx=None):
+        """
+        Executa Fill Row Alternate (Win32 ID 52104):
+        Clona a peça horizontalmente alternando rotações 0° / 180° para acoplamento bico-calcanhar.
+        # CONFIRMAR NO WINDOWS: preenche a partir da peça-alvo em direção à margem direita.
+        """
+        if target_idx is None:
+            target_idx = self.get_target_piece_index()
+        if target_idx is None or target_idx < 0 or target_idx >= len(self.placed_pieces):
+            if hasattr(self, "lbl_stat_pos"):
+                self.lbl_stat_pos.config(text="Fill Row Alternate: Nenhuma peça selecionada para preenchimento.")
+            return
+
+        target_piece = self.placed_pieces[target_idx]
+        margins = (self.margin_left, self.margin_right, self.margin_top, self.margin_bottom)
+        gap = getattr(self, "gap_mm", 1.0)
+
+        new_pieces = fill_row_alternate_pieces(
+            target_piece=target_piece,
+            placed_pieces=self.placed_pieces,
+            sheet_width=self.sheet_width,
+            sheet_height=self.sheet_height,
+            margins=margins,
+            gap_mm=gap
+        )
+
+        if not new_pieces:
+            if hasattr(self, "lbl_stat_pos"):
+                self.lbl_stat_pos.config(text="Fill Row Alternate: Nenhuma cópia coube na chapa respeitando margens e folga.")
+            return
+
+        self.push_undo()
+        self.placed_pieces.extend(new_pieces)
+        # A seleção original permanece na peça-alvo (as cópias geradas não são selecionadas)
+        self.set_modified(True)
+        self.update_sidebar_targets()
+        self.redraw()
+        self.update_status()
+        if hasattr(self, "lbl_stat_pos"):
+            self.lbl_stat_pos.config(text=f"Fill Row Alternate: {len(new_pieces)} peça(s) adicionada(s) com sucesso.")
+
+    def fill_column(self, target_idx=None):
+        """
+        Executa Fill Column (Win32 ID 50007):
+        Clona a peça verticalmente (+Y) até a margem superior útil da chapa.
+        # CONFIRMAR NO WINDOWS: preenche a partir da peça-alvo em direção à margem superior (+Y).
+        """
+        if target_idx is None:
+            target_idx = self.get_target_piece_index()
+        if target_idx is None or target_idx < 0 or target_idx >= len(self.placed_pieces):
+            if hasattr(self, "lbl_stat_pos"):
+                self.lbl_stat_pos.config(text="Fill Column: Nenhuma peça selecionada para preenchimento.")
+            return
+
+        target_piece = self.placed_pieces[target_idx]
+        margins = (self.margin_left, self.margin_right, self.margin_top, self.margin_bottom)
+        gap = getattr(self, "gap_mm", 1.0)
+
+        new_pieces = fill_column_pieces(
+            target_piece=target_piece,
+            placed_pieces=self.placed_pieces,
+            sheet_width=self.sheet_width,
+            sheet_height=self.sheet_height,
+            margins=margins,
+            gap_mm=gap
+        )
+
+        if not new_pieces:
+            if hasattr(self, "lbl_stat_pos"):
+                self.lbl_stat_pos.config(text="Fill Column: Nenhuma cópia coube na chapa respeitando margens e folga.")
+            return
+
+        self.push_undo()
+        self.placed_pieces.extend(new_pieces)
+        # A seleção original permanece na peça-alvo (as cópias geradas não são selecionadas)
+        self.set_modified(True)
+        self.update_sidebar_targets()
+        self.redraw()
+        self.update_status()
+        if hasattr(self, "lbl_stat_pos"):
+            self.lbl_stat_pos.config(text=f"Fill Column: {len(new_pieces)} peça(s) adicionada(s) com sucesso.")
+
+    def fill_sheet(self, target_idx=None):
+        """
+        Executa Fill Sheet (Win32 ID 52105):
+        Preenche toda a área restante da chapa em linhas sucessivas a partir da peça-alvo.
+        # CONFIRMAR NO WINDOWS: preenchimento em varredura por linhas a partir da base.
+        """
+        if target_idx is None:
+            target_idx = self.get_target_piece_index()
+        if target_idx is None or target_idx < 0 or target_idx >= len(self.placed_pieces):
+            if hasattr(self, "lbl_stat_pos"):
+                self.lbl_stat_pos.config(text="Fill Sheet: Nenhuma peça selecionada para preenchimento.")
+            return
+
+        target_piece = self.placed_pieces[target_idx]
+        margins = (self.margin_left, self.margin_right, self.margin_top, self.margin_bottom)
+        gap = getattr(self, "gap_mm", 1.0)
+
+        new_pieces = fill_sheet_pieces(
+            target_piece=target_piece,
+            placed_pieces=self.placed_pieces,
+            sheet_width=self.sheet_width,
+            sheet_height=self.sheet_height,
+            margins=margins,
+            gap_mm=gap,
+            max_pieces=1000
+        )
+
+        if not new_pieces:
+            if hasattr(self, "lbl_stat_pos"):
+                self.lbl_stat_pos.config(text="Fill Sheet: Nenhuma cópia coube na chapa respeitando margens e folga.")
+            return
+
+        self.push_undo()
+        self.placed_pieces.extend(new_pieces)
+        self.set_modified(True)
+        self.update_sidebar_targets()
+        self.redraw()
+        self.update_status()
+        if hasattr(self, "lbl_stat_pos"):
+            self.lbl_stat_pos.config(text=f"Fill Sheet: {len(new_pieces)} peça(s) adicionada(s) com sucesso.")
+
+    def fill_sheet_alternate(self, target_idx=None):
+        """
+        Executa Fill Sheet Alternate (Win32 ID 52106):
+        Preenche a chapa inteira alternando rotações 0° / 180° por linha para acoplamento bico-calcanhar.
+        # CONFIRMAR NO WINDOWS: acoplamento e fase inicial entre linhas.
+        """
+        if target_idx is None:
+            target_idx = self.get_target_piece_index()
+        if target_idx is None or target_idx < 0 or target_idx >= len(self.placed_pieces):
+            if hasattr(self, "lbl_stat_pos"):
+                self.lbl_stat_pos.config(text="Fill Sheet Alternate: Nenhuma peça selecionada para preenchimento.")
+            return
+
+        target_piece = self.placed_pieces[target_idx]
+        margins = (self.margin_left, self.margin_right, self.margin_top, self.margin_bottom)
+        gap = getattr(self, "gap_mm", 1.0)
+
+        new_pieces = fill_sheet_alternate_pieces(
+            target_piece=target_piece,
+            placed_pieces=self.placed_pieces,
+            sheet_width=self.sheet_width,
+            sheet_height=self.sheet_height,
+            margins=margins,
+            gap_mm=gap,
+            max_pieces=1000,
+            row_phase_shift=0
+        )
+
+        if not new_pieces:
+            if hasattr(self, "lbl_stat_pos"):
+                self.lbl_stat_pos.config(text="Fill Sheet Alternate: Nenhuma cópia coube na chapa respeitando margens e folga.")
+            return
+
+        self.push_undo()
+        self.placed_pieces.extend(new_pieces)
+        self.set_modified(True)
+        self.update_sidebar_targets()
+        self.redraw()
+        self.update_status()
+        if hasattr(self, "lbl_stat_pos"):
+            self.lbl_stat_pos.config(text=f"Fill Sheet Alternate: {len(new_pieces)} peça(s) adicionada(s) com sucesso.")
+
+    def fill_user_dialog(self, target_idx=None):
+        """
+        Abre o diálogo 'Set User constraints' (Dialog 159, Win32 ID 50003) e executa o preenchimento.
+        # CONFIRMAR NO WINDOWS: diálogo modal com retenção de valores em RAM.
+        """
+        if target_idx is None:
+            target_idx = self.get_target_piece_index()
+        if target_idx is None or target_idx < 0 or target_idx >= len(self.placed_pieces):
+            if hasattr(self, "lbl_stat_pos"):
+                self.lbl_stat_pos.config(text="Fill User: Nenhuma peça selecionada para preenchimento.")
+            return
+
+        target_piece = self.placed_pieces[target_idx]
+
+        dialog = FillUserDialog(self)
+        try:
+            self.wait_window(dialog)
+        except Exception:
+            pass
+        constraints = dialog.result
+        if not constraints:
+            return
+
+        margins = (self.margin_left, self.margin_right, self.margin_top, self.margin_bottom)
+        gap = getattr(self, "gap_mm", 1.0)
+
+        new_pieces = fill_user_pieces(
+            target_piece=target_piece,
+            placed_pieces=self.placed_pieces,
+            sheet_width=self.sheet_width,
+            sheet_height=self.sheet_height,
+            constraints=constraints,
+            margins=margins,
+            base_gap_mm=gap,
+            max_safety_limit=1000
+        )
+
+        if not new_pieces:
+            if hasattr(self, "lbl_stat_pos"):
+                self.lbl_stat_pos.config(text="Fill User: Nenhuma cópia coube com as restrições fornecidas.")
+            return
+
+        self.push_undo()
+        self.placed_pieces.extend(new_pieces)
+        self.set_modified(True)
+        self.update_sidebar_targets()
+        self.redraw()
+        self.update_status()
+        if hasattr(self, "lbl_stat_pos"):
+            self.lbl_stat_pos.config(text=f"Fill User: {len(new_pieces)} peça(s) adicionada(s) com sucesso.")
+
     def on_rbutton_press(self, event):
         """
-        Inicia a preparação para Rotação Livre 360° (OnRButtonDown 0x418550).
-        - Se nenhuma peça estiver selecionada, busca peça sob o cursor e seleciona.
+        Inicia a preparação para Rotação Livre 360° (OnRButtonDown 0x418550) ou Menu de Contexto 102.
+        - Registra ponto inicial do clique direito para diferenciar clique estático (< 2.65 px) de arrasto (> 2.65 px).
+        - O botão direito NÃO altera a seleção existente (selected_index e selected_indices inalterados).
         - Registra snapshot prévio e ponto inicial (x0, y0).
         """
         try:
@@ -2382,25 +2748,15 @@ class LayoutEditorView(tk.Frame):
         self._pending_drag_xy = None
         self._cancel_redraw_job()
 
-        # Se não houver peça selecionada, verifica se há uma peça sob o cursor
-        sel_indices = self.get_selected_indices()
-        if not sel_indices:
-            wx, wy = self.screen_to_world(event.x, event.y)
-            hit_idx = -1
-            for idx in reversed(range(len(self.placed_pieces))):
-                p = self.placed_pieces[idx]
-                poly = transform_contour(p.get("contour", []), p.get("x", 0.0), p.get("y", 0.0), p.get("rotation", 0.0))
-                if poly and point_in_polygon(wx, wy, poly):
-                    hit_idx = idx
-                    break
-            if hit_idx >= 0:
-                self.selected_index = hit_idx
-                self.selected_indices = {hit_idx}
-                sel_indices = [hit_idx]
-                self.redraw()
+        # Ponto inicial do clique direito
+        self._rdrag_start_x = event.x
+        self._rdrag_start_y = event.y
+        self._rdrag_moved = False
+        # O botão direito NÃO altera a seleção existente (selected_index e selected_indices inalterados)
+        sel_indices = set(self.get_selected_indices())
 
         if not sel_indices:
-            # Nenhuma peça selecionada e nenhuma sob o cursor
+            # Nenhuma peça selecionada
             if bool(getattr(event, "state", 0) & 0x0004):
                 self.zoom_out(event.x, event.y)
                 return "break"
@@ -2411,8 +2767,6 @@ class LayoutEditorView(tk.Frame):
         # Snapshot das peças antes de qualquer alteração
         self._rdrag_active = True
         self._rdrag_rotating = False
-        self._rdrag_start_x = event.x
-        self._rdrag_start_y = event.y
         self._rdrag_is_ctrl = bool(getattr(event, "state", 0) & 0x0004)
         self._rdrag_selected_indices = list(sel_indices)
         self._rdrag_pre_pieces = [dict(p) for p in self.placed_pieces]
@@ -2477,7 +2831,7 @@ class LayoutEditorView(tk.Frame):
     def on_rbutton_drag(self, event):
         """
         Executa a rotação angular contínua em tempo real (OnMouseMove 0x4269c4).
-        - Filtro de ruído / deadzone: dx^2 + dy^2 <= 7 (~2.65 px).
+        - Filtro de ruído / deadzone: dx^2 + dy^2 <= 36 (~6.0 px) para cliques estáveis.
         - Cálculo angular via atan2 sem acúmulo de erro incremental.
         - Desenha os 2 raios e o arco de ~42 px (tag: rdrag_guide).
         - Exibe o ângulo em tempo real na barra de status.
@@ -2485,13 +2839,14 @@ class LayoutEditorView(tk.Frame):
         if not getattr(self, "_rdrag_active", False):
             return
 
-        # Filtro de ruído / deadzone: enquanto (dx^2 + dy^2) <= 7, mantém clique estático
-        dx_click = event.x - self._rdrag_start_x
-        dy_click = event.y - self._rdrag_start_y
+        dx_click = event.x - getattr(self, "_rdrag_start_x", event.x)
+        dy_click = event.y - getattr(self, "_rdrag_start_y", event.y)
         dist_sq = dx_click * dx_click + dy_click * dy_click
+
         if not self._rdrag_rotating:
-            if dist_sq <= 7:
+            if dist_sq <= 36.0:  # ~6.0 px deadzone
                 return
+            self._rdrag_moved = True
             self._rdrag_rotating = True
 
         Cx_px, Cy_px = self._rdrag_pivot_screen
@@ -2620,26 +2975,41 @@ class LayoutEditorView(tk.Frame):
 
     def on_rbutton_release(self, event):
         """
-        Finaliza a rotação livre 360° (OnRButtonUp 0x421fd0).
-        - Remove guias visuais 'rdrag_guide'.
-        - Registra 1 único nível de Undo se houve rotação.
-        - Marca layout como modificado (*).
-        - Executa validação não-bloqueante na barra de status (sem pop-ups).
+        Finaliza a rotação livre 360° (OnRButtonUp 0x421fd0) ou abre o Menu de Contexto 102.
+        - Deslocamento < 2.65 px sem arrasto: abre o Menu de Contexto 102.
+        - Deslocamento >= 2.65 px: finaliza rotação livre e NÃO abre o menu.
         """
-        if not getattr(self, "_rdrag_active", False):
-            return
-
         try:
             self.canvas.delete("rdrag_guide")
         except Exception:
             pass
 
+        start_x = getattr(self, "_rdrag_start_x", event.x)
+        start_y = getattr(self, "_rdrag_start_y", event.y)
+        dx = event.x - start_x
+        dy = event.y - start_y
+        dist = math.hypot(dx, dy)
         was_rotating = getattr(self, "_rdrag_rotating", False)
+        was_drag = was_rotating or getattr(self, "_rdrag_moved", False) or (dist >= 6.0)
+
         self._rdrag_active = False
         self._rdrag_rotating = False
+        self._rdrag_moved = False
+
+        if not was_drag:
+            # Clique rápido (< 6.0 px sem rotação): abre o Menu de Contexto 102
+            # O botão direito NÃO altera a seleção existente (age sobre a seleção atual)
+            self._rdrag_pre_pieces = None
+            self._rdrag_selected_indices = []
+            if hasattr(self, "_rdrag_piece_init_centers"):
+                self._rdrag_piece_init_centers.clear()
+            if hasattr(self, "_rdrag_piece_base_centers"):
+                self._rdrag_piece_base_centers.clear()
+            self.open_context_menu_102(event)
+            return "break"
 
         if not was_rotating:
-            # Soltura dentro da deadzone sem giro: mantém clique estático
+            # Soltura com arrasto mas sem giro efetivo
             self._rdrag_pre_pieces = None
             self._rdrag_selected_indices = []
             if hasattr(self, "_rdrag_piece_init_centers"):

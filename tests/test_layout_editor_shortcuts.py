@@ -1708,7 +1708,7 @@ class TestLayoutEditorShortcuts(unittest.TestCase):
         self.assertAlmostEqual(self.view.placed_pieces[1]["x"], 250.0, places=1)
 
     def test_rdrag_auto_select_under_cursor_and_empty_space_ignore(self):
-        """Sem peça selecionada, botão direito sobre peça seleciona-a; em espaço vazio, ignora e não inicia rotação."""
+        """O botão direito não altera a seleção existente (nem em espaço vazio nem sobre peça)."""
         self.view.selected_index = -1
         self.view.selected_indices = set()
 
@@ -1718,7 +1718,7 @@ class TestLayoutEditorShortcuts(unittest.TestCase):
         self.assertFalse(self.view._rdrag_rotating)
         self.assertEqual(self.view.selected_index, -1)
 
-        # 2. Clique com botão direito sobre a peça 0
+        # 2. Clique com botão direito sobre a peça 0: a seleção permanece inalterada
         p0 = self.view.placed_pieces[0]
         poly0 = transform_contour(p0["contour"], p0["x"], p0["y"], p0["rotation"])
         b0 = polygon_bbox(poly0)
@@ -1727,11 +1727,12 @@ class TestLayoutEditorShortcuts(unittest.TestCase):
         sx, sy = self.view.world_to_screen(c_x, c_y)
 
         self.view.on_rbutton_press(DummyMouseEvent(x=sx, y=sy))
-        self.assertEqual(self.view.selected_index, 0)
-        self.assertTrue(self.view._rdrag_active)
+        self.assertEqual(self.view.selected_index, -1)
+        self.assertFalse(self.view._rdrag_active)
 
         self.view.on_rbutton_release(DummyMouseEvent(x=sx, y=sy))
         self.assertFalse(self.view._rdrag_active)
+        self.assertEqual(self.view.selected_index, -1)
 
     def test_rubberband_100_percent_contained_only(self):
         """Rubberband: seleciona APENAS peças cujo bounding box esteja 100% contido. Peças parcialmente cruzadas são ignoradas."""
