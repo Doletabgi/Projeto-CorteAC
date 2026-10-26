@@ -285,6 +285,7 @@ class MainWindow(tk.Tk):
         tools_menu.add_command(label="🧩 Layout Editor (Nesting)...", command=self.show_layout_editor)
         tools_menu.add_command(label="Shape Editor (Editor de Moldes)...", command=self.show_shape_editor)
         tools_menu.add_command(label="📋 Códigos materiais (Listagem)...", command=self.show_material_codes_window)
+        tools_menu.add_command(label="📥 Importar lista de materiais...", command=self.open_import_materials_dialog)
         tools_menu.add_command(label="📁 Criar Produção...", command=self.on_create_production)
         tools_menu.add_command(label="📁 Criar Subpasta de Produção...", command=self.on_create_job_subfolder_menu_action)
         tools_menu.add_command(label="📁 Criar Pasta de Moldes...", command=self.on_create_shape_folder)
@@ -464,6 +465,7 @@ class MainWindow(tk.Tk):
             font=("Segoe UI", 9)
         )
         self.materials_menu.add_command(label="Listagem de materiais...", command=self.show_material_codes_window)
+        self.materials_menu.add_command(label="📥 Importar lista de materiais...", command=self.open_import_materials_dialog)
         self.materials_menu.add_command(label="Criar material...", command=self.on_create_material)
 
         # Grid Inferior com moldura rebaixada
@@ -1398,6 +1400,12 @@ class MainWindow(tk.Tk):
             else:
                 self.activate_window(self.material_codes_view)
             self.lbl_status_msg.config(text="Códigos materiais aberto na área de trabalho.")
+
+    def open_import_materials_dialog(self):
+        """Abre a janela Códigos materiais e exibe o diálogo para importar lista de materiais."""
+        self.show_material_codes_window()
+        if hasattr(self, "material_codes_view") and hasattr(self.material_codes_view, "open_import_dialog"):
+            self.material_codes_view.open_import_dialog()
 
     def refresh_materials_everywhere(self):
         """Atualiza a lista de materiais em cache, na árvore, grid, sessões e layout editor."""
@@ -2427,6 +2435,7 @@ class MainWindow(tk.Tk):
         self.materials_menu.delete(0, "end")
         self.materials_menu.add_command(label="Criar material...", command=self.on_create_material)
         self.materials_menu.add_command(label="Listagem de materiais...", command=self.show_material_codes_window)
+        self.materials_menu.add_command(label="📥 Importar lista de materiais...", command=self.open_import_materials_dialog)
         self.materials_menu.add_separator()
         self.materials_menu.add_command(label="Atualizar Estoque", command=lambda: self.switch_tree_mode("materials"))
         self.show_popup_menu(self.materials_menu, event.x_root, event.y_root)

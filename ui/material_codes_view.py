@@ -133,6 +133,19 @@ class MaterialCodesView(tk.Frame):
         )
         btn_refresh.pack(side="left", padx=2)
 
+        btn_import = tk.Button(
+            toolbar,
+            text="📥 Importar Lista...",
+            bg=THEME["bg_surface"],
+            activebackground=THEME["bg_hover"],
+            relief="raised",
+            bd=1,
+            font=("Segoe UI", 8),
+            padx=6, pady=1,
+            command=self.open_import_dialog
+        )
+        btn_import.pack(side="left", padx=2)
+
         # Filtro de Busca Rápida
         tk.Label(toolbar, text="Filtrar:", bg=THEME["bg_surface"], fg=THEME["text_main"], font=("Segoe UI", 8)).pack(side="left", padx=(12, 4))
         self.ent_search = tk.Entry(toolbar, font=("Segoe UI", 8), relief="sunken", bd=1, width=16)
@@ -205,6 +218,7 @@ class MaterialCodesView(tk.Frame):
         self.ctx_menu.add_command(label="🗑 Excluir material", command=self.delete_selected_material)
         self.ctx_menu.add_separator()
         self.ctx_menu.add_command(label="↻ Atualizar lista", command=self.refresh_table)
+        self.ctx_menu.add_command(label="📥 Importar lista de materiais...", command=self.open_import_dialog)
 
     def refresh_table(self):
         """Recarrega todos os materiais do banco de dados SQLite."""
@@ -317,6 +331,17 @@ class MaterialCodesView(tk.Frame):
             self.refresh_table()
             if self.on_material_changed_cb:
                 self.on_material_changed_cb()
+
+    def open_import_dialog(self):
+        """Abre diálogo para importação em lote de materiais (CSV, TSV, TXT, JSON)."""
+        from ui.import_materials_dialog import ImportMaterialsDialog
+        ImportMaterialsDialog(self, self.db, on_success=self.on_import_completed)
+
+    def on_import_completed(self):
+        """Callback executado após importar materiais com sucesso."""
+        self.refresh_table()
+        if self.on_material_changed_cb:
+            self.on_material_changed_cb()
 
     def show_material_dialog(self, mode="create", material=None):
         """Modal autêntico para cadastro e edição rápida de materiais."""
