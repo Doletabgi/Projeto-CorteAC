@@ -33,7 +33,7 @@ EXPORTS_DIR.mkdir(exist_ok=True)
 
 # Application Metadata
 APP_NAME = "CorteAC"
-APP_VERSION = "2026.2"
+APP_VERSION = "2026.3"
 
 # UI Classic Windows XP Theme Palette (Amostrado exatamente dos prints do usuário)
 THEME = {

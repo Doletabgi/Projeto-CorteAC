@@ -7,9 +7,9 @@ on:
   workflow_dispatch:
     inputs:
       tag_name:
-        description: 'Tag de versão (ex: v2026.2)'
+        description: 'Tag de versão (ex: v2026.3)'
         required: false
-        default: 'v2026.2'
+        default: 'v2026.3'
 
 permissions:
   contents: write
@@ -173,29 +173,19 @@ jobs:
 
             ---
 
-            ### 🛠️ Recursos Incluídos Nesta Versão (v2026.2):
-            - **Grade de Moldes com Coluna "Resto" (Paridade com Job Manager original)**:
-              - Nova coluna **Resto** na grade de Moldes da Sessão de Corte (`SessionView`), posicionada entre **Pares** e **Sequência**.
-              - Alinhamento compacto à direita (`anchor="e"`, largura 45px), modo somente leitura com preservação de integridade.
-              - Recálculo dinâmico e reativo em tempo real com base nas camadas de corte do material ($-\lfloor(2 \times P \pmod L)/2\rfloor$): pares ímpares com 4 camadas geram `-1`, pares pares geram `0`.
-              - Atualização automática instantânea tanto na digitação de pares (inclusive fluxo contínuo de digitação com setas do teclado) quanto na alteração das camadas do material na aba Materiais.
-              - Navegação inteligente por teclado com `<Tab>` e `<Shift-Tab>` pulando a coluna Resto diretamente entre Pares e Sequência.
-              - Ordenação numérica interativa clicável no cabeçalho "Resto", com suporte nativo a valores negativos (`-1 < 0`).
-            - **Simulação de Corte CNC / CAM no Layout Editor**:
-              - Painel de simulação CAM integrado ao Layout Editor com botões de Play, Pausa, Stop, velocidade ajustável e mira CNC em tempo real.
-              - Rastreamento visual do percurso da lâmina e sequência de corte sobre a folha.
-            - **Menu de Contexto Fill e Paridade de Diálogo (Dialog 159)**:
-              - Menu de contexto de preenchimento completo: *Row*, *Row Alternate*, *Column*, *Sheet*, *Sheet Alternate*, *User*.
-              - Diálogo modal *"Set User constraints"* para controle paramétrico de repetição e restrições.
-            - **Identidade Visual e Relatórios Corporativos**:
-              - Suporte a Logotipo Personalizado da Empresa para impressão de fichas de corte em A4 e exportação para PDF.
-              - Barra de ferramentas clássica revitalizada com novos ícones em alta resolução.
-            - **Performance e CAD Fluido**:
-              - Arraste veloz de moldes a ~125 Hz com algoritmo de limitação de taxa de eventos para latência zero.
-              - Rotação livre contínua em 360° com botão direito do mouse (`R-Drag`) e exibição do pivô em tempo real.
-              - Seleção múltipla com caixa elástica (*rubberband*) e arrasto coletivo.
-            - **Arquitetura de Dados Híbrida**:
-              - Sistema de contingência SQLite local (`jobmanager.db`) e suporte a MySQL 8.0 corporativo em rede (`db.ini`).
+            ### 🛠️ Recursos Incluídos Nesta Versão (v2026.3):
+            - **Tradução Completa dos Menus para Português (Brasil)**:
+              - Barra de menus do Layout Editor traduzida integralmente: `Arquivo`, `Editar`, `Exibir`, `Encaixe`, `Ferramentas`, `Janela` e `Ajuda`.
+              - Todos os submenus (ex: `Preencher`), atalhos e diálogos com terminologia nativa em PT-BR.
+            - **Renomeação do Botão Nest para "Gerar"**:
+              - Botão principal de encaixe na aba Geral da Sessão renomeado para `Gerar`.
+              - Avisos e diálogos atualizados orientando o cálculo com o botão `Gerar`.
+            - **Remoção do Botão Cut da Tela de Sessão**:
+              - Interface simplificada e moderna com a remoção do botão redundante `Cut`.
+            - **Suíte de Testes Automatizados Expandida**:
+              - 60 testes unitários passando (100% de sucesso) cobrindo regras CAM, rotações invariantes, traduções e preenchimentos.
+            - **Regra de Cadência e Controle de Releases**:
+              - Implementação da política automatizada de lançamentos a cada 5 commits.
           files: |
             dist-release/**/*.exe
             dist-release/**/*.zip
