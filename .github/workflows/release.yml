@@ -136,7 +136,8 @@ jobs:
           elif [[ "${{ github.ref }}" == refs/tags/* ]]; then
             echo "tag=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
           else
-            echo "tag=v2026.2" >> $GITHUB_OUTPUT
+            VERSION=$(python3 -c "import config; print(config.APP_VERSION)")
+            echo "tag=v${VERSION}" >> $GITHUB_OUTPUT
           fi
 
       - name: Publicar ou Atualizar Release no GitHub

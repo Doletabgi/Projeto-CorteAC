@@ -4,7 +4,7 @@
 > **Regra de ouro:** o que está marcado `[CONFIRMADO]` veio do relatório, do código ou do usuário. O que está `[NÃO CONFIRMADO]` é suposição e não deve virar "fato" sem validação. O que está `[PREENCHER]` o Antigravity deve completar lendo o código real.
 
 <!-- AUTO:header:start -->
-**Última sincronização com o código:** 2026-10-25 20:34 (HEAD ao gerar: `b77736b`; 59 arquivos Python, ~36939 linhas)
+**Última sincronização com o código:** 2026-10-26 08:36 (HEAD ao gerar: `02008c7`; 60 arquivos Python, ~37032 linhas)
 <!-- AUTO:header:end -->
 **Versão deste documento:** 1
 
@@ -18,7 +18,7 @@
 2. Nunca apagar entradas do Changelog (seção 10). Apenas acrescentar.
 3. Ao mudar um item de `[NÃO CONFIRMADO]` para `[CONFIRMADO]`, registrar quem confirmou e quando.
 4. O Claude só afirma sobre o código aquilo que está descrito aqui. Se algo não estiver aqui, o Claude pergunta em vez de presumir.
-5. **Publicação Automática de Releases e Sequência de Versões (`v2026.X`) (seção 12)**: toda nova melhoria, paridade ou correção deve ser publicada automaticamente via GitHub Actions gerando binários Windows e Linux atualizados, incrementando rigorosamente a sequência de versão em `config.py`, `.github/workflows/release.yml` e tags do Git.
+5. **Publicação Automática de Releases a Cada 5 Commits (`v2026.X`) (seção 12)**: a cada 5 commits acumulados no repositório (medidos e monitorados via `tools/check_release_cadence.py`), uma nova release oficial deve ser publicada automaticamente via GitHub Actions gerando binários portáteis Windows (`CorteAC.exe`) e Linux (`corteac_linux`) atualizados, incrementando rigorosamente a sequência de versões em `config.py`, `.github/workflows/release.yml` e tags do Git.
 
 ---
 
@@ -122,6 +122,7 @@ tests/test_shape_sorting.py                    # Testes Unitários: Classificaç
 tests/test_shapes_resto.py                     # Testes unitários e de integração para a coluna 'Resto' na grade de Moldes da SessionView.
 tests/test_strategy_removal.py                 # Testes automatizados para validação da remoção da estratégia flashnestroll (bobinas contínuas):
 tools/bench_layout_drag.py                     # tools/bench_layout_drag.py
+tools/check_release_cadence.py                 # Verificador de Cadência de Release (Regra dos 5 Commits)
 tools/generate_modern_icons.py                 # tools/generate_modern_icons.py
 tools/migrate_sqlite_to_mysql.py               # tools/migrate_sqlite_to_mysql.py - Migra jobmanager.db (SQLite) para MySQL 8.0 Central.
 tools/re_dump/build_layout_inventory.py        # tools/re_dump/build_layout_inventory.py
@@ -283,6 +284,9 @@ ui/trim_layout_dialog.py                       # JobManager 2000 (Python Edition
 
 ### `tools/bench_layout_drag.py`
 - funções: `build_pieces`, `screen_of`, `main`
+
+### `tools/check_release_cadence.py`
+- funções: `run_git`, `get_current_app_version`, `get_next_version`, `check_cadence`
 
 ### `tools/generate_modern_icons.py`
 - funções: `create_supersampled`, `finish_icon`, `make_cut_icon`, `make_copy_icon`, `make_paste_icon`, `make_details_icon`, `make_layout_icon`, `make_shed_icon`, `make_mode_prod_icon`, `make_mode_moldes_icon`, `make_mode_mat_icon`, `make_tree_prod_node_icon`, `make_tree_folder_icon`, `make_tree_order_icon`, `make_tree_session_icon` (+3)
@@ -1496,6 +1500,7 @@ Local: `/home/dola/Documentos/clone do job/antigo/arquivos pos instalacao/Common
 <!-- AUTO:gitlog:start -->
 | Commit | Data | Autor | Mensagem |
 |---|---|---|---|
+| `02008c7` | 2026-10-25 | Doletabgi | docs: adicionar politica de release automatica e sequencia de versoes na secao 12 |
 | `b77736b` | 2026-10-25 | Doletabgi | chore(release): atualizar versao para v2026.2 e detalhar notas de lancamento |
 | `e02ecf4` | 2026-10-25 | Doletabgi | feat(session_view): adicionar coluna Resto na grade de Moldes com recálculo dinâmico |
 | `c334209` | 2026-10-25 | Doletabgi | docs: sincronizar gitlog e cabecalho automaticos |
@@ -1510,7 +1515,6 @@ Local: `/home/dola/Documentos/clone do job/antigo/arquivos pos instalacao/Common
 | `9069bc5` | 2026-10-24 | Doletabgi | docs: sincronizar gitlog |
 | `abcc6bd` | 2026-10-24 | Doletabgi | feat(layout-editor): refilar placa completa (topo Y e comprimento X) com linhas de corte CAM duplas e sobra destacada |
 | `498eb77` | 2026-10-24 | Doletabgi | docs: sincronizar gitlog |
-| `b46df5c` | 2026-10-24 | Doletabgi | fix(db): definir sqlite como padrao sem db.ini e fallback automatico se mysql inacessivel |
 <!-- AUTO:gitlog:end -->
 
 ---
@@ -1524,6 +1528,7 @@ Local: `/home/dola/Documentos/clone do job/antigo/arquivos pos instalacao/Common
 | Dom, 25/10/2026 | 15:55 | Antigravity | Remoção do botão '▶ Simular' da barra de ferramentas da tela principal (`MainWindow`): a simulação passa a operar no ambiente específico do Layout Editor (`LayoutEditorView`), despoluindo a barra de ferramentas principal (`Auto-Nest` -> `Exportar G-Code`); recompilação concluída dos binários Linux (`corteac_linux`, `teste_dola_linux`, `dist/CorteAC`). | `ui/main_window.py`, `docs/PROJETO_ATOM_JOBMANAGER.md`, `corteac_linux`, `dist/CorteAC` |
 | Dom, 25/10/2026 | 16:15 | Antigravity | Adição da coluna 'Resto' na grade de Moldes da SessionView (paridade com a sessão 619955 do Job Manager original): (1) Função pura isolada `cad/layers_rule.py:calc_resto` implementando a fórmula inferida `[INFERIDO]` $-( (2 \times pares \pmod{camadas}) // 2 )$; (2) Coluna 'Resto' na `tree_shapes` entre Pares e Sequência, alinhada à direita (`anchor="e"`), compacta e somente leitura; (3) Recálculo dinâmico em tempo de exibição ao editar Pares (inclusive digitação contínua) e ao alterar as camadas do material na aba Materiais; (4) Navegação por teclado via `<Tab>` / `<Shift-Tab>` ignorando a coluna Resto (pula direto entre Pares e Sequência); (5) Ordenação numérica por Resto suportando negativos (-1 < 0) via `resto_sort_key` em `ui/sort_utils.py`; 10 novos testes dedicados em `tests/test_shapes_resto.py` e 190 testes passando na suíte geral. | `cad/layers_rule.py`, `ui/session_view.py`, `ui/sort_utils.py`, `tests/test_shapes_resto.py`, `docs/PROJETO_ATOM_JOBMANAGER.md` |
 | Dom, 25/10/2026 | 20:30 | Antigravity | Definição da política obrigatória de Publicação Automática de Releases no GitHub com sequência previsível de versões (`v<ANO>.<SEQUENCIAL>[.<PATCH>]`): sincronização contínua entre `config.py:APP_VERSION`, `.github/workflows/release.yml` e tags Git; compilação paralela de binários portáteis Windows (`CorteAC.exe`, `.zip`) e Linux (`corteac_linux`, `.tar.gz`) com notas de release ricas e detalhadas; inclusão da Seção 12 no documento vivo com checklist operacional obrigatório para futuras entregas. | `docs/PROJETO_ATOM_JOBMANAGER.md`, `.github/workflows/release.yml`, `config.py` |
+| Seg, 26/10/2026 | 08:35 | Antigravity | Implementação da Regra de Cadência Estrita de 5 Commits para Publicação de Releases no GitHub: (1) Adição do tópico 12.2 no documento vivo estabelecendo que a cada bloco de 5 commits uma nova release (`v2026.X`) deve ser compilada e publicada; (2) Criação do utilitário `tools/check_release_cadence.py` com monitoramento automático do delta de commits desde a última tag; (3) Integração do verificador ao `.githooks/pre-commit` para feedback no terminal; (4) Resolução dinâmica de tag em `.github/workflows/release.yml` a partir de `config.py:APP_VERSION`. | `tools/check_release_cadence.py`, `.githooks/pre-commit`, `.github/workflows/release.yml`, `docs/PROJETO_ATOM_JOBMANAGER.md` |
 
 ## 11. Prompt para o Antigravity: instalar a sincronização automática `[CONCLUÍDA]`
 
@@ -1579,7 +1584,25 @@ $$\mathbf{v}\langle\text{ANO}\rangle.\langle\text{SEQUENCIAL}\rangle[.\langle\te
 
 ---
 
-### 12.2. Automação CI/CD via GitHub Actions (`release.yml`)
+### 12.2. Regra da Cadência de Lançamentos a Cada 5 Commits `[CONFIRMADO]`
+
+Para manter o chão de fábrica, operadores e testadores sempre abastecidos com executáveis atualizados (sem acumular grandes volumes de modificações sem homologação), o projeto estabelece a **Cadência Estrita de 5 Commits**:
+
+> **Regra dos 5 Commits:** A cada **5 commits** acumulados no repositório a partir da última tag de release (`git rev-list --count $(git describe --tags --abbrev=0)..HEAD >= 5`), **uma nova versão oficial deve ser fechada, versionada e publicada no GitHub**.
+
+#### Como funciona a contagem e monitoramento:
+1. O desenvolvedor / agente roda o verificador a qualquer momento:
+   ```bash
+   python3 tools/check_release_cadence.py
+   ```
+2. O script calcula a distância exata em commits desde a última tag anotada:
+   - **Menos de 5 commits**: exibe o progresso atual (ex: `2 de 5 commits acumulados`). O hook `.githooks/pre-commit` também lembra o desenvolvedor a cada commit.
+   - **5 commits acumulados**: emite o alerta de ciclo fechado, lista os 5 commits para compor o corpo do release e sugere o próximo número sequencial (ex: `v2026.3`).
+3. Ao atingir os 5 commits, o ciclo é fechado com o incremento de versão em `config.py`, atualização das notas em `.github/workflows/release.yml`, criação da tag e disparo do build no GitHub Actions.
+
+---
+
+### 12.3. Automação CI/CD via GitHub Actions (`release.yml`)
 
 O fluxo `.github/workflows/release.yml` é executado em nuvem de forma automatizada e transparente:
 
@@ -1610,7 +1633,7 @@ Toda Release publicada deve conter:
 
 ---
 
-### 12.3. Checklist Operacional Obrigatório para Publicação de Versão
+### 12.4. Checklist Operacional Obrigatório para Publicação de Versão
 
 Antes de concluir qualquer tarefa ou conjunto de commits, o agente/desenvolvedor deve executar rigorosamente este procedimento:
 
