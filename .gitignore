@@ -14,3 +14,6 @@ db.ini
 jobmanager.db.bak
 .~lock*
 docs/
+tools/
+scratch/
+.githooks/
