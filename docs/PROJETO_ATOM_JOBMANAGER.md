@@ -4,7 +4,7 @@
 > **Regra de ouro:** o que está marcado `[CONFIRMADO]` veio do relatório, do código ou do usuário. O que está `[NÃO CONFIRMADO]` é suposição e não deve virar "fato" sem validação. O que está `[PREENCHER]` o Antigravity deve completar lendo o código real.
 
 <!-- AUTO:header:start -->
-**Última sincronização com o código:** 2026-10-26 08:36 (HEAD ao gerar: `02008c7`; 60 arquivos Python, ~37032 linhas)
+**Última sincronização com o código:** 2026-10-26 08:37 (HEAD ao gerar: `02008c7`; 60 arquivos Python, ~37032 linhas)
 <!-- AUTO:header:end -->
 **Versão deste documento:** 1
 
