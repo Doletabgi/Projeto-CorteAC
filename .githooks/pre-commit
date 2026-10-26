@@ -1,5 +1,4 @@
 #!/usr/bin/env bash
-python3 tools/sync_project_doc.py
-git add docs/PROJETO_ATOM_JOBMANAGER.md PROJETO_ATOM_JOBMANAGER.md 2>/dev/null || true
+python3 tools/sync_project_doc.py 2>/dev/null || true
 python3 tools/check_release_cadence.py 2>/dev/null || true
 

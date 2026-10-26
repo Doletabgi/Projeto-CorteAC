@@ -13,3 +13,4 @@ db.ini
 *.bak
 jobmanager.db.bak
 .~lock*
+docs/
