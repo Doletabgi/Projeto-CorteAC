@@ -19,11 +19,7 @@ Recriação moderna em **Python** do sistema industrial **CorteAC** (evolução 
 3. **Motor de Aninhamento Automático (*Auto-Nest*)**:
    - Algoritmo de empacotamento inteligente de alta densidade que recria e aprimora a função do antigo *FreeNest.exe*.
 
-4. **Simulador de Corte e Estimador de Tempo ATOM**:
-   - Animação do cabeçote de corte CNC percorrendo os contornos em tempo real.
-   - Cálculo preciso de tempo de ciclo (*ATOM Cutting Time Estimator*) baseado na velocidade de 650 mm/s e punções.
-
-5. **Exportação CNC**:
+4. **Exportação CNC**:
    - Geração de arquivos **G-Code / ISO CNC** prontos para máquinas de corte industrial da ATOM (série FlashCut Flex).
    - Exportação de relatórios de produção em **XML** baseados no modelo original `Report.xsl`.
 
