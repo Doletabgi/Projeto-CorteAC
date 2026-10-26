@@ -369,7 +369,7 @@ class SessionView(tk.Frame):
         # Máquina de corte padrão fixa (ATOM FlashCut Flex 3020) mantida nos dados da sessão sem exibir opção no editor
         self.session_data["machine"] = self.session_data.get("machine") or "ATOM FlashCut Flex 3020"
 
-        # Linha de Botões de Ação estilo Windows XP idêntica ao print do usuário (aba geral-mais tres op.png)
+        # Linha de Botões de Ação estilo Windows XP
         btn_action_box = tk.Frame(gen_container, bg=THEME["bg_card"])
         btn_action_box.pack(fill="x", pady=(6, 10))
 
@@ -378,7 +378,7 @@ class SessionView(tk.Frame):
 
         self.btn_action_nest = tk.Button(
             row_btn1,
-            text="Nest",
+            text="Gerar",
             width=11,
             relief="raised",
             bd=2,
@@ -415,23 +415,8 @@ class SessionView(tk.Frame):
         )
         self.btn_action_rewind.pack(side="left", padx=4)
 
-        row_btn2 = tk.Frame(btn_action_box, bg=THEME["bg_card"])
-        row_btn2.pack(fill="x")
-
-        # Espaçador para alinhar o botão Cut centralizado abaixo de Em espera / Refazer
-        tk.Frame(row_btn2, bg=THEME["bg_card"], width=98).pack(side="left")
-        self.btn_action_cut = tk.Button(
-            row_btn2,
-            text="Cut",
-            width=12,
-            relief="raised",
-            bd=2,
-            bg=THEME["bg_surface"],
-            fg=THEME["text_main"],
-            font=("Segoe UI", 9, "bold"),
-            command=self.on_cut_button_click
-        )
-        self.btn_action_cut.pack(side="left", padx=4)
+        # Botão Cut removido conforme solicitação
+        self.btn_action_cut = None
 
         # Moldura clássica para dados da sessão (Nome e Status)
         info_frame = tk.LabelFrame(
@@ -948,7 +933,7 @@ class SessionView(tk.Frame):
         if not placed:
             messagebox.showwarning(
                 "Layout Editor",
-                "Não há layout calculado para esta sessão.\nExecute o cálculo de encaixe (Nest) primeiro.",
+                "Não há layout calculado para esta sessão.\nExecute o cálculo de encaixe (Gerar) primeiro.",
                 parent=self
             )
             return
@@ -962,7 +947,7 @@ class SessionView(tk.Frame):
         if not placed:
             messagebox.showwarning(
                 "Imprimir Layout",
-                "Não há layout calculado para esta sessão.\nExecute o cálculo de encaixe (Nest) primeiro.",
+                "Não há layout calculado para esta sessão.\nExecute o cálculo de encaixe (Gerar) primeiro.",
                 parent=self
             )
             return

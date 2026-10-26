@@ -1328,7 +1328,7 @@ class MainWindow(tk.Tk):
         if not force and (not active_sess or not placed):
             messagebox.showwarning(
                 "Layout Editor",
-                "Não há layout calculado para esta sessão.\nExecute o cálculo de encaixe (Nest) primeiro.",
+                "Não há layout calculado para esta sessão.\nExecute o cálculo de encaixe (Gerar) primeiro.",
                 parent=self
             )
             return

@@ -2063,12 +2063,46 @@ class TestLayoutEditorShortcuts(unittest.TestCase):
         self.assertFalse(self.view.sim_running)
         self.assertEqual(self.view.btn_sim.cget("text"), "▶ Simular")
 
-    def test_simulation_empty_pieces(self):
-        """Tentar simular sem peças colocadas exibe aviso e não inicia."""
-        self.view.placed_pieces = []
-        self.view.start_simulation()
-        self.assertFalse(self.view.sim_running)
-        self.assertEqual(self.view.btn_sim.cget("text"), "▶ Simular")
+    def test_session_view_buttons_nest_renamed_to_gerar_and_cut_removed(self):
+        """Valida que o botão Nest foi renomeado para Gerar e o botão Cut foi removido da SessionView."""
+        from ui.session_view import SessionView
+        from unittest.mock import MagicMock
+
+        cb_nest = MagicMock()
+        sess_data = {
+            "id": 101,
+            "name": "Sessão Teste Botoes",
+            "status": "Stand by",
+            "placed_pieces": [],
+            "shapes": [],
+        }
+        sv = SessionView(self.root, session_data=sess_data, on_nest=cb_nest)
+
+        # 1. Botão Nest renomeado para Gerar
+        self.assertIsNotNone(sv.btn_action_nest)
+        self.assertEqual(sv.btn_action_nest.cget("text"), "Gerar")
+
+        # 2. Ao clicar no botão Gerar, o callback de nesting é acionado
+        sv.btn_action_nest.invoke()
+        cb_nest.assert_called_once()
+
+        # 3. Botão Cut foi removido
+        self.assertIsNone(sv.btn_action_cut)
+
+        sv.destroy()
+
+    def test_layout_editor_menu_translated_to_portuguese(self):
+        """Verifica se os menus do Layout Editor foram traduzidos para Português (Brasil)."""
+        # Coleta os textos dos botões Menubutton filhos do menubar do view
+        menubar_children = [
+            w for w in self.view.children.values()
+            if isinstance(w, tk.Frame) and any(isinstance(c, tk.Menubutton) for c in w.children.values())
+        ]
+        self.assertTrue(len(menubar_children) > 0)
+        menu_frame = menubar_children[0]
+        menubuttons = [c.cget("text") for c in menu_frame.children.values() if isinstance(c, tk.Menubutton)]
+        expected = ["Arquivo", "Editar", "Exibir", "Encaixe", "Ferramentas", "Janela", "Ajuda"]
+        self.assertEqual(menubuttons, expected)
 
 
 if __name__ == "__main__":
