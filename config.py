@@ -31,9 +31,11 @@ if getattr(sys, "frozen", False):
 EXPORTS_DIR = BASE_DIR / "exports"
 EXPORTS_DIR.mkdir(exist_ok=True)
 
+from cad.semver import SemVer
+
 # Application Metadata
 APP_NAME = "CorteAC"
-APP_VERSION = "2026.3"
+APP_VERSION = "1.0.0"
 
 # UI Classic Windows XP Theme Palette (Amostrado exatamente dos prints do usuário)
 THEME = {

@@ -7,9 +7,9 @@ on:
   workflow_dispatch:
     inputs:
       tag_name:
-        description: 'Tag de versão (ex: v2026.3)'
+        description: 'Tag de versão SemVer (ex: v1.0.0)'
         required: false
-        default: 'v2026.3'
+        default: 'v1.0.0'
 
 permissions:
   contents: write
