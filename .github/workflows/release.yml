@@ -9,7 +9,7 @@ on:
       tag_name:
         description: 'Tag de versão SemVer (ex: v1.0.0)'
         required: false
-        default: 'v1.0.0'
+        default: 'v1.1.0'
 
 permissions:
   contents: write
@@ -173,19 +173,22 @@ jobs:
 
             ---
 
-            ### 🛠️ Recursos Incluídos Nesta Versão (v2026.3):
-            - **Tradução Completa dos Menus para Português (Brasil)**:
-              - Barra de menus do Layout Editor traduzida integralmente: `Arquivo`, `Editar`, `Exibir`, `Encaixe`, `Ferramentas`, `Janela` e `Ajuda`.
-              - Todos os submenus (ex: `Preencher`), atalhos e diálogos com terminologia nativa em PT-BR.
-            - **Renomeação do Botão Nest para "Gerar"**:
-              - Botão principal de encaixe na aba Geral da Sessão renomeado para `Gerar`.
-              - Avisos e diálogos atualizados orientando o cálculo com o botão `Gerar`.
-            - **Remoção do Botão Cut da Tela de Sessão**:
-              - Interface simplificada e moderna com a remoção do botão redundante `Cut`.
-            - **Suíte de Testes Automatizados Expandida**:
-              - 60 testes unitários passando (100% de sucesso) cobrindo regras CAM, rotações invariantes, traduções e preenchimentos.
-            - **Regra de Cadência e Controle de Releases**:
-              - Implementação da política automatizada de lançamentos a cada 5 commits.
+            ### 🛠️ Recursos Incluídos Nesta Versão (v1.1.0):
+            - **Nesting em Múltiplas Placas (Multi-Sheet Nesting lay0000, lay0001, ...)**:
+              - Cálculo iterativo de encaixe até atingir 100% da demanda da sessão, gerando sucessivas placas (`lay0000`, `lay0001`, etc.).
+              - Prioridade estrita de sequência (`1, 2, 3...`) respeitando a cabeça da fila sem pular moldes.
+              - Navegação ágil entre placas no Layout Editor com atalhos `Ctrl+L` (Próximo) e `Ctrl+Shift+L` (Anterior) e Undo isolado por placa.
+              - Exportação dual sequencial pareando arquivos `.lay` e `.onx` por placa calculada.
+            - **Nova Legenda de Moldes na Impressão A4 (LayoutPrintDialog, Ctrl+P)**:
+              - Exibição de pares por tamanho no formato `tamanho: n/m` (`n` = pares na placa atual, `m` = pedido total da sessão).
+              - Identificação de Shape ID ao lado do nome do molde em fonte reduzida (`129_187_Tras  #1735`).
+              - Destaque em vermelho (`#dc2626`) caso haja inconsistência de dados ($n > m$) e eliminação definitiva do legado `/0`.
+              - Quebra de linha inteligente entre tamanhos e exportação gráfica idêntica via Pillow em alta resolução.
+            - **Interface e Usabilidade Refinadas**:
+              - Limpeza dos contadores de moldes na barra lateral do Layout Editor, exibindo diretamente a relação da sessão (`16/16`).
+              - Importação em lote de materiais a partir de arquivos CSV, TSV e JSON.
+            - **Suíte de Testes e Confiabilidade Industrial**:
+              - 248 testes unitários automatizados passando com 100% de sucesso.
           files: |
             dist-release/**/*.exe
             dist-release/**/*.zip

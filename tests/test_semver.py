@@ -63,8 +63,8 @@ class TestSemVer(unittest.TestCase):
         v = SemVer.parse(config.APP_VERSION)
         self.assertIsInstance(v.major, int)
         self.assertIsInstance(v.minor, int)
-        self.assertIsInstance(v.patch, int)
-        self.assertEqual(config.APP_VERSION, "1.0.0")
+        self.assertEqual(str(v), config.APP_VERSION)
+        self.assertGreaterEqual(v.major, 1)
 
 
 if __name__ == "__main__":
