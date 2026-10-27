@@ -39,7 +39,10 @@ class TrimLayoutDialog(tk.Toplevel):
         self.title("Refilar Layout - Corte Automático")
         self.resizable(False, False)
         self.transient(parent)
-        self.grab_set()
+        try:
+            self.grab_set()
+        except Exception:
+            pass
 
         # Calcula a cota máxima Y ocupada pelas peças
         if max_piece_y_mm is not None:

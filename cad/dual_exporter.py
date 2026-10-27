@@ -114,3 +114,52 @@ class DualLayoutExporter:
             "total_pieces": len(placed_pieces),
             "base_name": p.stem
         }
+
+    @classmethod
+    def export_multi_sheet_dual(
+        cls,
+        layouts: List[Dict[str, Any]],
+        material: Dict[str, Any],
+        base_dir: Union[str, Path],
+        stem_prefix: str = "lay",
+        session_id: Optional[int] = 1,
+        options: Optional[Dict[str, Any]] = None
+    ) -> List[Dict[str, Any]]:
+        """
+        Exporta múltiplos layouts de corte (lay0000, lay0001, ...) para os formatos
+        ATOM (.lay) e Comelz (.onx) de forma sequencial, preservando a ordem de usinagem
+        CNC por placa (furações, piques, costuras internas e contorno por último).
+        """
+        target_dir = Path(base_dir)
+        target_dir.mkdir(parents=True, exist_ok=True)
+        results = []
+
+        for idx, ly in enumerate(layouts):
+            l_idx = int(ly.get("layout_index", idx))
+            l_name = ly.get("name") or f"{stem_prefix}{l_idx:04d}"
+            stem = l_name.replace(".lay", "").replace(".onx", "")
+
+            mat_copy = dict(material)
+            mat_copy["width_mm"] = float(ly.get("width_mm", material.get("width_mm", 1380.0)))
+            mat_copy["height_mm"] = float(ly.get("height_mm", material.get("height_mm", 1080.0)))
+            mat_copy["gap_mm"] = float(ly.get("gap_mm", material.get("gap_mm", 1.0)))
+
+            pieces = ly.get("pieces") or ly.get("placed_pieces") or []
+            base_path = target_dir / stem
+
+            res = cls.export_dual_layout(
+                placed_pieces=pieces,
+                material=mat_copy,
+                base_path=base_path,
+                session_id=session_id,
+                options=options
+            )
+            res["layout_index"] = l_idx
+            res["layout_name"] = stem
+            res["name"] = stem
+            results.append(res)
+
+        return results
+
+
+export_multi_sheet_dual = DualLayoutExporter.export_multi_sheet_dual

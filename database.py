@@ -4,6 +4,7 @@ Database Manager - Conexão Central MySQL 8.0 & Reserva SQLite
 """
 
 import json
+import math
 import time
 import random
 import getpass
@@ -334,6 +335,58 @@ class DatabaseManager:
                 )
                 """)
 
+                # Migração idempotente de colunas multi-placa e auditoria da tabela layouts (SQLite)
+                cursor.execute("PRAGMA table_info(layouts)")
+                l_cols = [c[1] for c in cursor.fetchall()]
+                if "name" not in l_cols:
+                    cursor.execute("ALTER TABLE layouts ADD COLUMN name TEXT NOT NULL DEFAULT 'l0000.lay'")
+                if "width_mm" not in l_cols:
+                    cursor.execute("ALTER TABLE layouts ADD COLUMN width_mm REAL DEFAULT 0.0")
+                if "height_mm" not in l_cols:
+                    cursor.execute("ALTER TABLE layouts ADD COLUMN height_mm REAL DEFAULT 0.0")
+                if "yield_pct" not in l_cols:
+                    cursor.execute("ALTER TABLE layouts ADD COLUMN yield_pct REAL DEFAULT 0.0")
+                if "version" not in l_cols:
+                    cursor.execute("ALTER TABLE layouts ADD COLUMN version INTEGER DEFAULT 1")
+                if "created_at" not in l_cols:
+                    cursor.execute("ALTER TABLE layouts ADD COLUMN created_at TIMESTAMP DEFAULT NULL")
+                if "updated_at" not in l_cols:
+                    cursor.execute("ALTER TABLE layouts ADD COLUMN updated_at TIMESTAMP DEFAULT NULL")
+                if "created_by" not in l_cols:
+                    cursor.execute("ALTER TABLE layouts ADD COLUMN created_by TEXT DEFAULT ''")
+                if "updated_by" not in l_cols:
+                    cursor.execute("ALTER TABLE layouts ADD COLUMN updated_by TEXT DEFAULT ''")
+                if "layout_index" not in l_cols:
+                    cursor.execute("ALTER TABLE layouts ADD COLUMN layout_index INTEGER DEFAULT 0")
+                if "placed_pieces_json" not in l_cols:
+                    cursor.execute("ALTER TABLE layouts ADD COLUMN placed_pieces_json TEXT DEFAULT '[]'")
+                if "status" not in l_cols:
+                    cursor.execute("ALTER TABLE layouts ADD COLUMN status TEXT DEFAULT 'closed'")
+                if "margin_left" not in l_cols:
+                    cursor.execute("ALTER TABLE layouts ADD COLUMN margin_left REAL DEFAULT 10.0")
+                if "margin_right" not in l_cols:
+                    cursor.execute("ALTER TABLE layouts ADD COLUMN margin_right REAL DEFAULT 10.0")
+                if "margin_top" not in l_cols:
+                    cursor.execute("ALTER TABLE layouts ADD COLUMN margin_top REAL DEFAULT 10.0")
+                if "margin_bottom" not in l_cols:
+                    cursor.execute("ALTER TABLE layouts ADD COLUMN margin_bottom REAL DEFAULT 10.0")
+
+                # Migração idempotente de colunas da tabela layout_pieces (SQLite)
+                cursor.execute("PRAGMA table_info(layout_pieces)")
+                lp_cols = [c[1] for c in cursor.fetchall()]
+                if "mold_id" not in lp_cols:
+                    cursor.execute("ALTER TABLE layout_pieces ADD COLUMN mold_id INTEGER")
+                if "mirrored" not in lp_cols:
+                    cursor.execute("ALTER TABLE layout_pieces ADD COLUMN mirrored INTEGER DEFAULT 0")
+                if "size" not in lp_cols:
+                    cursor.execute("ALTER TABLE layout_pieces ADD COLUMN size TEXT DEFAULT ''")
+                if "color" not in lp_cols:
+                    cursor.execute("ALTER TABLE layout_pieces ADD COLUMN color TEXT DEFAULT '#2563eb'")
+                if "tag" not in lp_cols:
+                    cursor.execute("ALTER TABLE layout_pieces ADD COLUMN tag TEXT DEFAULT 'Pasted'")
+                if "quality_zone" not in lp_cols:
+                    cursor.execute("ALTER TABLE layout_pieces ADD COLUMN quality_zone INTEGER DEFAULT 1")
+
             # Tabela de pastas de produção (job_folders) para MySQL e SQLite
             if conn.backend == "mysql":
                 cursor.execute("""
@@ -349,6 +402,20 @@ class DatabaseManager:
                 for m_col in ("margin_left", "margin_right", "margin_top", "margin_bottom"):
                     try:
                         cursor.execute(f"ALTER TABLE sessions ADD COLUMN {m_col} DOUBLE DEFAULT 10.0")
+                    except Exception:
+                        pass
+                # Migração idempotente de colunas multi-placa da tabela layouts (MySQL)
+                for col_def in (
+                    "layout_index INT DEFAULT 0",
+                    "placed_pieces_json LONGTEXT NULL",
+                    "margin_left DOUBLE DEFAULT 10.0",
+                    "margin_right DOUBLE DEFAULT 10.0",
+                    "margin_top DOUBLE DEFAULT 10.0",
+                    "margin_bottom DOUBLE DEFAULT 10.0",
+                    "status VARCHAR(50) DEFAULT 'closed'"
+                ):
+                    try:
+                        cursor.execute(f"ALTER TABLE layouts ADD COLUMN {col_def}")
                     except Exception:
                         pass
             else:
@@ -1078,6 +1145,7 @@ class DatabaseManager:
                 if isinstance(p.get("shape"), dict):
                     p["shape"]["color"] = p_col
                     p["shape"]["size"] = p_sz
+            d["layouts"] = self.get_session_layouts(session_id)
             return d
 
     def get_next_session_number(self) -> int:
@@ -1683,3 +1751,218 @@ class DatabaseManager:
             cursor.execute("DELETE FROM layouts WHERE id = ?", (layout_id,))
             conn.commit()
             return True
+
+    def get_session_layouts(self, session_id: int) -> list:
+        """
+        Retorna todos os layouts pertencentes a uma sessão, ordenados por layout_index ASC, id ASC.
+        Se a sessão for legada (sem registros na tabela layouts), sintetiza o layout_index = 0
+        a partir do placed_pieces_json da sessão sem perda de dados.
+        """
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            try:
+                cursor.execute(
+                    "SELECT * FROM layouts WHERE session_id = ? ORDER BY layout_index ASC, id ASC",
+                    (session_id,)
+                )
+                rows = cursor.fetchall()
+            except Exception:
+                rows = []
+
+            layouts = []
+            for r in rows:
+                d = dict(r)
+                # Peças: do placed_pieces_json ou de layout_pieces
+                pieces = []
+                pp_json = d.get("placed_pieces_json")
+                if pp_json:
+                    try:
+                        pieces = json.loads(pp_json)
+                    except Exception:
+                        pieces = []
+
+                # Se placed_pieces_json for vazio (ex: "[]"), busca na tabela relacional layout_pieces
+                if not pieces and d.get("id"):
+                    pieces = self.get_layout_pieces(d["id"])
+
+                # Se ainda estiver vazio e for o layout 0, tenta carregar as peças da própria sessão
+                l_idx = int(d.get("layout_index", 0) if d.get("layout_index") is not None else 0)
+                if not pieces and l_idx == 0:
+                    cursor.execute("SELECT placed_pieces_json FROM sessions WHERE id = ?", (session_id,))
+                    s_r = cursor.fetchone()
+                    if s_r:
+                        try:
+                            s_dict = dict(s_r)
+                            s_pieces = json.loads(s_dict.get("placed_pieces_json") or "[]")
+                            if s_pieces:
+                                pieces = s_pieces
+                        except Exception:
+                            pass
+
+                d["pieces"] = pieces
+                d["placed_pieces"] = pieces
+                d["layout_index"] = l_idx
+                num_items_val = len(pieces) if pieces else int(d.get("num_items") or 0)
+                d["num_items"] = num_items_val
+                d["yield_percent"] = float(d.get("yield_percent") or d.get("yield_pct") or 0.0)
+                d["yield_pct"] = d["yield_percent"]
+                d["width_mm"] = float(d.get("width_mm") or d.get("ris_w") or 1380.0)
+                d["height_mm"] = float(d.get("height_mm") or d.get("ris_l") or 1080.0)
+                d["margin_left"] = float(d.get("margin_left", 10.0) if d.get("margin_left") is not None else 10.0)
+                d["margin_right"] = float(d.get("margin_right", 10.0) if d.get("margin_right") is not None else 10.0)
+                d["margin_top"] = float(d.get("margin_top", 10.0) if d.get("margin_top") is not None else 10.0)
+                d["margin_bottom"] = float(d.get("margin_bottom", 10.0) if d.get("margin_bottom") is not None else 10.0)
+                d["status"] = d.get("status") or "closed"
+                layouts.append(d)
+
+            if not layouts:
+                # Fallback / Migração transparente para sessões antigas
+                cursor.execute("SELECT * FROM sessions WHERE id = ?", (session_id,))
+                s_row = cursor.fetchone()
+                if s_row:
+                    s_dict = dict(s_row)
+                    placed = json.loads(s_dict.get("placed_pieces_json") or "[]")
+                    if placed:
+                        layouts.append({
+                            "id": None,
+                            "session_id": session_id,
+                            "layout_index": 0,
+                            "name": "lay0000",
+                            "code": "lay0000",
+                            "pieces": placed,
+                            "placed_pieces": placed,
+                            "width_mm": float(s_dict.get("sheet_width", 1380.0)),
+                            "height_mm": float(s_dict.get("sheet_height", 1080.0)),
+                            "margin_left": float(s_dict.get("margin_left", 10.0)),
+                            "margin_right": float(s_dict.get("margin_right", 10.0)),
+                            "margin_top": float(s_dict.get("margin_top", 10.0)),
+                            "margin_bottom": float(s_dict.get("margin_bottom", 10.0)),
+                            "yield_percent": float(s_dict.get("yield_percent", 0.0)),
+                            "yield_pct": float(s_dict.get("yield_percent", 0.0)),
+                            "status": "closed"
+                        })
+
+            return layouts
+
+    def save_session_layouts(self, session_id: int, layouts: list, operator_info: str = "Operator") -> bool:
+        """
+        Salva todos os layouts de uma sessão de forma atômica no banco de dados (layouts e layout_pieces).
+        Atualiza também a tabela sessions com o layout 0 (para retrocompatibilidade).
+        """
+        if not session_id or not layouts:
+            return False
+
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            now_sql = "NOW()" if conn.backend == "mysql" else "CURRENT_TIMESTAMP"
+
+            # 1. Remove layouts anteriores da sessão
+            cursor.execute("DELETE FROM layout_pieces WHERE layout_id IN (SELECT id FROM layouts WHERE session_id = ?)", (session_id,))
+            cursor.execute("DELETE FROM layouts WHERE session_id = ?", (session_id,))
+
+            # 2. Mapeia moldes existentes no banco para linkar FK mold_id / shape_id
+            cursor.execute("SELECT id, name FROM shapes")
+            shape_lookup = {row["name"].lower(): row["id"] for row in cursor.fetchall()}
+
+            for idx, ly in enumerate(layouts):
+                l_idx = int(ly.get("layout_index", idx))
+                l_name = ly.get("name") or f"lay{l_idx:04d}"
+                l_code = ly.get("code") or l_name
+                w = float(ly.get("width_mm", 1380.0))
+                h = float(ly.get("height_mm", 1080.0))
+                area_m2 = (w * h) / 1_000_000.0
+                yield_pct = float(ly.get("yield_percent", ly.get("yield_pct", 0.0)))
+                pieces = ly.get("pieces") or ly.get("placed_pieces") or []
+                m_l = float(ly.get("margin_left", 10.0))
+                m_r = float(ly.get("margin_right", 10.0))
+                m_t = float(ly.get("margin_top", 10.0))
+                m_b = float(ly.get("margin_bottom", 10.0))
+                gap = float(ly.get("gap_mm", 1.0))
+                status = str(ly.get("status", "closed"))
+
+                items_cnt = len(pieces) if pieces else int(ly.get("num_items") or 0)
+                dies_cnt = len(set(p.get("name") for p in pieces)) if pieces else int(ly.get("num_dies") or 0)
+
+                # Insere o layout na tabela layouts
+                sql_ins = f"""
+                INSERT INTO layouts (
+                    session_id, layout_index, name, code, width_mm, height_mm, ris_w, ris_l,
+                    gap_mm, area_mm2, yield_percent, yield_pct, num_items, num_dies,
+                    margin_left, margin_right, margin_top, margin_bottom, status,
+                    placed_pieces_json, version, created_at, updated_at, created_by, updated_by
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, {now_sql}, {now_sql}, ?, ?)
+                """
+                cursor.execute(sql_ins, (
+                    session_id, l_idx, l_name, l_code, w, h, w, h,
+                    gap, area_m2 * 1_000_000.0, yield_pct, yield_pct, items_cnt, dies_cnt,
+                    m_l, m_r, m_t, m_b, status,
+                    json.dumps(pieces), operator_info, operator_info
+                ))
+                layout_id = cursor.lastrowid
+
+                # Insere as peças em layout_pieces
+                pieces_data = []
+                for p_idx, it in enumerate(pieces):
+                    s_nm = str(it.get("name", "")).lower()
+                    shp_id = shape_lookup.get(s_nm) or it.get("target_id")
+                    rot_deg = float(it.get("rotation", 0.0))
+                    pieces_data.append((
+                        layout_id,
+                        shp_id,
+                        shp_id,
+                        it.get("id", p_idx + 1),
+                        it.get("target_id", 1),
+                        it.get("id", p_idx + 1),
+                        it.get("name", "Molde"),
+                        str(it.get("size", "")),
+                        float(it.get("x", 0.0)),
+                        float(it.get("y", 0.0)),
+                        rot_deg,
+                        math.radians(rot_deg),
+                        1 if it.get("is_mirrored") else 0,
+                        1 if it.get("is_mirrored") else 0,
+                        str(it.get("color", "#2563eb")),
+                        "Pasted",
+                        int(it.get("quality_zone", 1))
+                    ))
+
+                if pieces_data:
+                    cursor.executemany("""
+                    INSERT INTO layout_pieces (
+                        layout_id, mold_id, shape_id, item_index, target_index, instance_id,
+                        piece_name, size, x, y, rotation_deg, rotation_rad,
+                        mirrored, is_mirrored, color, tag, quality_zone
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """, pieces_data)
+
+            # Atualiza a sessão pai com o layout 0 para retrocompatibilidade
+            first_lay = layouts[0]
+            first_pieces = first_lay.get("pieces") or first_lay.get("placed_pieces") or []
+            avg_yield = sum(float(l.get("yield_percent", 0.0)) for l in layouts) / max(1, len(layouts))
+
+            cursor.execute("""
+            UPDATE sessions
+            SET placed_pieces_json = ?, yield_percent = ?, status = 'Nested'
+            WHERE id = ?
+            """, (json.dumps(first_pieces), avg_yield, session_id))
+
+            conn.commit()
+            return True
+
+    def delete_session_layouts(self, session_id: int) -> bool:
+        """Remove todos os layouts e peças associadas de uma sessão no banco de dados.
+        Atualiza também a sessão com placed_pieces_json vazio e status Stand by."""
+        if not session_id:
+            return False
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("DELETE FROM layout_pieces WHERE layout_id IN (SELECT id FROM layouts WHERE session_id = ?)", (session_id,))
+            cursor.execute("DELETE FROM layouts WHERE session_id = ?", (session_id,))
+            cursor.execute("""
+            UPDATE sessions
+            SET placed_pieces_json = '[]', yield_percent = 0.0, cutting_time_sec = 0.0, status = 'Stand by'
+            WHERE id = ?
+            """, (session_id,))
+            conn.commit()
+            return True
+

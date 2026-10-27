@@ -151,6 +151,7 @@ CREATE TABLE IF NOT EXISTS layouts (
     created_by VARCHAR(100) NULL,
     updated_by VARCHAR(100) NULL,
     -- Colunas de compatibilidade e suporte ao formato .lay
+    layout_index INT NOT NULL DEFAULT 0,
     code VARCHAR(100) NOT NULL DEFAULT 'l0000.lay',
     path VARCHAR(500) DEFAULT '',
     `desc` VARCHAR(255) DEFAULT '',
@@ -163,9 +164,15 @@ CREATE TABLE IF NOT EXISTS layouts (
     yield_percent DOUBLE DEFAULT 0.0,
     num_items INT DEFAULT 0,
     num_dies INT DEFAULT 0,
+    margin_left DOUBLE DEFAULT 10.0,
+    margin_right DOUBLE DEFAULT 10.0,
+    margin_top DOUBLE DEFAULT 10.0,
+    margin_bottom DOUBLE DEFAULT 10.0,
+    placed_pieces_json LONGTEXT NULL,
     FOREIGN KEY (session_id) REFERENCES sessions(id) ON DELETE CASCADE,
     INDEX idx_layouts_session_status (session_id, created_at, status),
-    INDEX idx_layouts_version (id, version)
+    INDEX idx_layouts_version (id, version),
+    INDEX idx_layouts_session_index (session_id, layout_index)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- 10. Peças Posicionadas do Layout (layout_pieces)

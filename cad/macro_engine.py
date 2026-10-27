@@ -219,7 +219,7 @@ class MacroConfig:
     def __init__(self):
         self.commands: List[str] = []
         self.ai_auto_tune: bool = False
-        self.sort_fields: List[Tuple[str, bool]] = [("area", True)]  # (campo, reverse)
+        self.sort_fields: List[Tuple[str, bool]] = [("sequence", False)]  # (campo, reverse)
         self.cluster_angles: List[float] = [0.0, 180.0]
         self.sweep_from: float = -3.0
         self.sweep_to: float = 3.0
@@ -468,19 +468,22 @@ class OmniNestMacroEngine:
                     return 999.0
             return 0.0
 
-        sorted_shapes = list(available_shapes)
-        for field_name, rev in reversed(config.sort_fields):
-            sorted_shapes.sort(key=lambda s, fn=field_name: _get_sort_val(s, fn), reverse=rev)
+        # Neutraliza qualquer ordenação interna por área/tamanho em favor da sequência estrita (# CONFIRMAR NO WINDOWS)
+        from cad.nesting_engine import sort_shapes_by_sequence
+        sorted_shapes, _ = sort_shapes_by_sequence(available_shapes)
 
         # 3. Monta a Fila de Peças a Cortar considerando pares e camadas
         shape_queue = []
         for s in sorted_shapes:
-            l_val = layers or s.get("layers") or (dieproc_params.get("layers") if isinstance(dieproc_params, dict) else None) or 2
-            try:
-                l_val = max(1, int(l_val))
-            except (ValueError, TypeError):
-                l_val = 2
-            qty = math.ceil((int(s.get("pairs", 24)) * 2) / l_val)
+            if "target_pieces" in s:
+                qty = max(0, int(s["target_pieces"]))
+            else:
+                l_val = layers or s.get("layers") or (dieproc_params.get("layers") if isinstance(dieproc_params, dict) else None) or 2
+                try:
+                    l_val = max(1, int(l_val))
+                except (ValueError, TypeError):
+                    l_val = 2
+                qty = math.ceil((int(s.get("pairs", 24)) * 2) / l_val)
             for _ in range(qty):
                 shape_queue.append(s)
 
@@ -908,6 +911,15 @@ class OmniNestMacroEngine:
         next_id = max(p["id"] for p in placed) + 1
 
         for shape in shape_queue:
+            # Trava inviolável de prioridade estrita: nunca fura fila com moldes de sequência futura
+            if placed:
+                from cad.nesting_engine import parse_sequence_num
+                placed_seqs = [parse_sequence_num(p.get("shape", {}).get("sequence")) for p in placed]
+                valid_seqs = [s for s in placed_seqs if s is not None]
+                s_seq = parse_sequence_num(shape.get("sequence"))
+                if s_seq is not None and valid_seqs and s_seq > max(valid_seqs):
+                    continue
+
             c = shape.get("contour", [])
             if not c:
                 continue

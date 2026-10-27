@@ -14,6 +14,52 @@ from cad.colors import get_color_for_size
 from cad.macro_engine import nest_ia_teste_engine, DEFAULT_IA_TESTE_MACRO
 from config import ATOM_MACHINE
 
+def parse_sequence_num(val):
+    """
+    Interpreta o valor da coluna Sequência como um inteiro >= 0.
+    Retorna int se válido, ou None se ausente, vazio ou inválido.
+    """
+    if val is None:
+        return None
+    s = str(val).strip()
+    if not s:
+        return None
+    try:
+        num = float(s)
+        if math.isnan(num) or math.isinf(num):
+            return None
+        return int(num)
+    except (ValueError, TypeError):
+        return None
+
+
+def sort_shapes_by_sequence(shapes):
+    """
+    Ordena os moldes respeitando estritamente a coluna 'Sequência':
+    - Menor número primeiro (1, 2, 3...)
+    - Empates mantêm a ordem estável original da grade/lista
+    - Valores vazios, ausentes ou inválidos vão para o final em ordem estável
+    Retorna: (sorted_shapes, missing_seq_shape_names)
+    """
+    if not shapes:
+        return [], []
+
+    missing_names = []
+    indexed = []
+    for idx, s in enumerate(shapes):
+        seq = parse_sequence_num(s.get("sequence"))
+        if seq is None:
+            name = str(s.get("name") or s.get("id") or f"Molde #{idx+1}")
+            missing_names.append(name)
+            key = (1, 999999999, idx)
+        else:
+            key = (0, seq, idx)
+        indexed.append((key, s))
+
+    indexed.sort(key=lambda item: item[0])
+    sorted_shapes = [item[1] for item in indexed]
+    return sorted_shapes, missing_names
+
 _PAIRED_OFFSET_CACHE = {}
 
 def get_paired_offset_cached(shape, gap=1.0):
@@ -129,7 +175,7 @@ def calculate_atom_cutting_time(placed_pieces, machine=ATOM_MACHINE):
         rot = float(p.get("rotation", p.get("angle", 0.0)))
         poly = transform_contour(contour, float(p.get("x", 0.0)), float(p.get("y", 0.0)), rot)
         total_cut_length_mm += polygon_perimeter(poly)
-        holes = p.get("holes") or (p.get("shape", {}).get("holes") if isinstance(p.get("shape"), dict) else [])
+        holes = p.get("holes") or (p.get("shape", {}).get("holes") if isinstance(p.get("shape"), dict) else []) or []
         total_holes_count += len(holes)
 
     cut_time_sec = total_cut_length_mm / machine["blade_speed_mm_s"]
@@ -229,7 +275,7 @@ def dieproc_nest_pieces(available_shapes, bed_width_mm, bed_height_mm, target_co
     usable_height = max(10.0, bed_height_mm - m_bottom - m_top)
 
     # Ordena os moldes pela sequência de geração configurada
-    sorted_shapes = sorted(available_shapes, key=lambda s: int(s.get("sequence", 999)))
+    sorted_shapes, _ = sort_shapes_by_sequence(available_shapes)
 
     # Fila de peças a cortar respeitando pares e camadas (1 par = 2 peças físicas).
     # Se o corte for realizado com múltiplas camadas (layers), cada corte na mesa gera 'layers' peças físicas.
@@ -237,12 +283,15 @@ def dieproc_nest_pieces(available_shapes, bed_width_mm, bed_height_mm, target_co
     # Ex: para 2 camadas, ceil((20 * 2) / 2) = 20 peças de cada número no layout.
     shape_queue = []
     for s in sorted_shapes:
-        s_layers = layers or s.get("layers") or (params.get("layers") if isinstance(params, dict) else None) or 2
-        try:
-            s_layers = max(1, int(s_layers))
-        except (ValueError, TypeError):
-            s_layers = 2
-        qty = math.ceil((int(s.get("pairs", 24)) * 2) / s_layers)
+        if "target_pieces" in s:
+            qty = max(0, int(s["target_pieces"]))
+        else:
+            s_layers = layers or s.get("layers") or (params.get("layers") if isinstance(params, dict) else None) or 2
+            try:
+                s_layers = max(1, int(s_layers))
+            except (ValueError, TypeError):
+                s_layers = 2
+            qty = math.ceil((int(s.get("pairs", 24)) * 2) / s_layers)
         for _ in range(qty):
             shape_queue.append(s)
 
@@ -490,15 +539,18 @@ def nest_synthetic_engine(available_shapes, bed_width_mm, bed_height_mm, target_
     if not available_shapes:
         return placed
 
-    sorted_shapes = sorted(available_shapes, key=lambda s: int(s.get("sequence", 999)))
+    sorted_shapes, _ = sort_shapes_by_sequence(available_shapes)
     shape_queue = []
     for s_item in sorted_shapes:
-        s_layers = layers or s_item.get("layers") or 2
-        try:
-            s_layers = max(1, int(s_layers))
-        except (ValueError, TypeError):
-            s_layers = 2
-        qty = math.ceil((int(s_item.get("pairs", 24)) * 2) / s_layers)
+        if "target_pieces" in s_item:
+            qty = max(0, int(s_item["target_pieces"]))
+        else:
+            s_layers = layers or s_item.get("layers") or 2
+            try:
+                s_layers = max(1, int(s_layers))
+            except (ValueError, TypeError):
+                s_layers = 2
+            qty = math.ceil((int(s_item.get("pairs", 24)) * 2) / s_layers)
         for _ in range(qty):
             shape_queue.append(s_item)
     if not shape_queue:
@@ -635,15 +687,18 @@ def nest_tape_engine(available_shapes, bed_width_mm, bed_height_mm, target_count
     if not available_shapes:
         return placed
 
-    sorted_shapes = sorted(available_shapes, key=lambda s: int(s.get("sequence", 999)))
+    sorted_shapes, _ = sort_shapes_by_sequence(available_shapes)
     shape_queue = []
     for s in sorted_shapes:
-        s_layers = layers or s.get("layers") or 2
-        try:
-            s_layers = max(1, int(s_layers))
-        except (ValueError, TypeError):
-            s_layers = 2
-        qty = math.ceil((int(s.get("pairs", 24)) * 2) / s_layers)
+        if "target_pieces" in s:
+            qty = max(0, int(s["target_pieces"]))
+        else:
+            s_layers = layers or s.get("layers") or 2
+            try:
+                s_layers = max(1, int(s_layers))
+            except (ValueError, TypeError):
+                s_layers = 2
+            qty = math.ceil((int(s.get("pairs", 24)) * 2) / s_layers)
         for _ in range(qty):
             shape_queue.append(s)
     if not shape_queue:
@@ -784,17 +839,20 @@ def auto_nest_pieces(available_shapes, bed_width_mm, bed_height_mm, target_count
         )
 
     # Ordena os moldes pela sequência de geração configurada
-    sorted_shapes = sorted(available_shapes, key=lambda s: int(s.get("sequence", 999)))
+    sorted_shapes, _ = sort_shapes_by_sequence(available_shapes)
 
     # Fila de peças a cortar respeitando as quantidades de pares e camadas
     shape_queue = []
     for s in sorted_shapes:
-        s_layers = layers or s.get("layers") or (dieproc_params.get("layers") if isinstance(dieproc_params, dict) else None) or 2
-        try:
-            s_layers = max(1, int(s_layers))
-        except (ValueError, TypeError):
-            s_layers = 2
-        qty = math.ceil((int(s.get("pairs", 24)) * 2) / s_layers)
+        if "target_pieces" in s:
+            qty = max(0, int(s["target_pieces"]))
+        else:
+            s_layers = layers or s.get("layers") or (dieproc_params.get("layers") if isinstance(dieproc_params, dict) else None) or 2
+            try:
+                s_layers = max(1, int(s_layers))
+            except (ValueError, TypeError):
+                s_layers = 2
+            qty = math.ceil((int(s.get("pairs", 24)) * 2) / s_layers)
         for _ in range(qty):
             shape_queue.append(s)
 
@@ -908,4 +966,327 @@ def auto_nest_pieces(available_shapes, bed_width_mm, bed_height_mm, target_count
         margins=margins,
         layers=layers
     )
+
+
+def piece_matches_shape(piece: dict, shape: dict) -> bool:
+    """
+    Verifica se uma peça colocada corresponde ao molde especificado,
+    respeitando a trava de compatibilidade de tamanho e a eliminação de colisão de ID.
+    """
+    p_shape = piece.get("shape") if isinstance(piece.get("shape"), dict) else {}
+    if p_shape:
+        if p_shape.get("id") is not None and shape.get("id") is not None:
+            if str(p_shape.get("id")) == str(shape.get("id")):
+                return True
+        p_seq = parse_sequence_num(p_shape.get("sequence"))
+        s_seq = parse_sequence_num(shape.get("sequence"))
+        if p_seq is not None and s_seq is not None and p_seq != s_seq:
+            return False
+
+    s_id = str(shape.get("id", "")).strip()
+    s_sz = str(shape.get("size", "")).strip()
+    s_nm = str(shape.get("name", "")).strip()
+
+    p_tid = str(piece.get("target_id", "")).strip()
+    p_sz = str(piece.get("size", "")).strip()
+    p_nm = str(piece.get("name", "")).strip()
+
+    # Trava estrita de compatibilidade de tamanho
+    if p_sz and s_sz and p_sz != s_sz:
+        return False
+
+    if p_tid and s_id and p_tid == s_id:
+        return True
+    if p_nm and s_nm and p_nm == s_nm:
+        return True
+    if p_sz and s_sz and p_sz == s_sz and (not p_nm or not s_nm or p_nm == s_nm):
+        return True
+
+    return False
+
+
+def nest_multi_sheet(
+    available_shapes: list,
+    bed_width_mm: float,
+    bed_height_mm: float,
+    strategy: str = "flashnestsheet",
+    params: str = "stdNOTFill",
+    gap_mm: float = 1.0,
+    dieproc_params: dict = None,
+    db=None,
+    margins: dict = None,
+    layers: int = 2,
+    max_sheets: int = 200
+) -> dict:
+    """
+    Orquestrador de Nesting em Múltiplas Placas (lay0000, lay0001, ...) até encaixar
+    toda a quantidade pedida na sessão (comportamento clássico Layout.exe / JobManager).
+
+    Regras:
+    - Demanda inicial calculada via N_lay = ceil((P * 2) / L) aplicada à demanda total da sessão.
+    - Loop por placas: nestar na placa k com o que falta; subtrair da demanda; abrir placa k+1.
+    - Proteções: parada imediata se peça for maior que a placa útil ou se nenhuma peça couber, sem laço infinito.
+    - Limite de segurança de max_sheets (padrão 200) com aviso.
+    - Ordem de prioridade: coluna 'sequence' (# CONFIRMAR NO WINDOWS: ordem pela coluna Sequência).
+    """
+    if not available_shapes:
+        return {
+            "success": True,
+            "layouts": [],
+            "total_pieces": 0,
+            "total_pairs_cut": 0,
+            "total_pairs_demanded": 0,
+            "yields": [],
+            "unplaced_shapes": [],
+            "warning": None,
+            "num_sheets": 0
+        }
+
+    l_val = max(1, int(layers or 2))
+    m_dict = dict(margins) if margins else {"left": 10.0, "right": 10.0, "top": 10.0, "bottom": 10.0}
+    m_left = float(m_dict.get("left", 10.0))
+    m_right = float(m_dict.get("right", 10.0))
+    m_top = float(m_dict.get("top", 10.0))
+    m_bottom = float(m_dict.get("bottom", 10.0))
+
+    usable_w = bed_width_mm - m_left - m_right
+    usable_h = bed_height_mm - m_bottom - m_top
+
+    # Proteção prévia: verifica se algum molde é fisicamente maior que a placa útil
+    for s in available_shapes:
+        c = s.get("contour", [])
+        if c and len(c) >= 3:
+            min_x, min_y, max_x, max_y = polygon_bbox(c)
+            bw = max_x - min_x
+            bh = max_y - min_y
+            fits_direct = (bw <= usable_w and bh <= usable_h)
+            fits_rotated = (bh <= usable_w and bw <= usable_h)
+            if not (fits_direct or fits_rotated):
+                shp_name = str(s.get("name") or s.get("id") or "Molde")
+                return {
+                    "success": False,
+                    "layouts": [],
+                    "total_pieces": 0,
+                    "total_pairs_cut": 0,
+                    "total_pairs_demanded": sum(int(x.get("pairs", 0)) for x in available_shapes),
+                    "yields": [],
+                    "unplaced_shapes": [shp_name],
+                    "warning": f"Molde '{shp_name}' ({bw:.1f}x{bh:.1f} mm) excede a área útil da placa ({usable_w:.1f}x{usable_h:.1f} mm).",
+                    "num_sheets": 0
+                }
+
+    # Ordem de prioridade entre moldes
+    # CONFIRMAR NO WINDOWS: ordem pela coluna Sequência (sequence) dos moldes
+    sorted_shapes, missing_seq_names = sort_shapes_by_sequence(available_shapes)
+    missing_seq_warn = f"Moldes sem sequência definida colocados no final: {', '.join(missing_seq_names)}" if missing_seq_names else None
+
+    # Demanda total em peças calculada no nível da sessão: N_lay = ceil((P * 2) / L)
+    demands = []
+    total_pairs_demanded = 0
+    total_pieces_demanded = 0
+    for s in sorted_shapes:
+        req_p = int(s.get("pairs", 0))
+        total_pairs_demanded += req_p
+        s_layers = s.get("layers") or l_val
+        try:
+            s_layers = max(1, int(s_layers))
+        except (ValueError, TypeError):
+            s_layers = l_val
+        req_pieces = math.ceil((req_p * 2) / s_layers)
+        total_pieces_demanded += req_pieces
+        demands.append({
+            "shape": s,
+            "total_pieces": req_pieces,
+            "remaining_pieces": req_pieces,
+            "placed_pieces": 0
+        })
+
+    if total_pieces_demanded == 0:
+        return {
+            "success": True,
+            "layouts": [],
+            "total_pieces": 0,
+            "total_pairs_cut": 0,
+            "total_pairs_demanded": 0,
+            "yields": [],
+            "unplaced_shapes": [],
+            "warning": missing_seq_warn,
+            "missing_sequence_warning": missing_seq_warn,
+            "shape_spans": [],
+            "spans_summary": "",
+            "num_sheets": 0
+        }
+
+    layouts = []
+    sheet_idx = 0
+    warning_msg = None
+
+    while any(d["remaining_pieces"] > 0 for d in demands):
+        if sheet_idx >= max_sheets:
+            warning_msg = f"Limite de segurança de {max_sheets} placas atingido."
+            break
+
+        # Monta lista de formas com demanda restante para esta rodada na ordem estrita de sequência
+        round_shapes = []
+        for d in demands:
+            if d["remaining_pieces"] > 0:
+                s_copy = dict(d["shape"])
+                s_copy["target_pieces"] = d["remaining_pieces"]
+                s_copy["pairs"] = math.ceil((d["remaining_pieces"] * l_val) / 2)
+                round_shapes.append(s_copy)
+
+        target_count_round = sum(d["remaining_pieces"] for d in demands)
+
+        placed_round = auto_nest_pieces(
+            available_shapes=round_shapes,
+            bed_width_mm=bed_width_mm,
+            bed_height_mm=bed_height_mm,
+            target_count=target_count_round,
+            strategy=strategy,
+            params=params,
+            gap_mm=gap_mm,
+            dieproc_params=dieproc_params,
+            db=db,
+            margins=m_dict,
+            layers=l_val
+        )
+
+        # Proteção contra laço infinito: se a rodada não encaixou nada
+        if not placed_round:
+            unplaced = [d["shape"].get("name", "Molde") for d in demands if d["remaining_pieces"] > 0]
+            warning_msg = f"Não foi possível encaixar peças restantes na placa {sheet_idx}: {unplaced}"
+            break
+
+        # Prioridade Estrita [DECISÃO] (# CONFIRMAR NO WINDOWS):
+        # Percorre as demandas na ordem estrita da sequência.
+        # Um molde k só pode entrar se todos os moldes anteriores já tiverem sua demanda esgotada.
+        # Se um molde k não esgotar sua demanda nesta placa, a placa fecha imediatamente e
+        # nenhum molde posterior entra nesta placa.
+        valid_placed_round = []
+        can_place_next = True
+
+        for d in demands:
+            if d["remaining_pieces"] <= 0:
+                continue
+
+            if not can_place_next:
+                break
+
+            shp_pieces = [p for p in placed_round if piece_matches_shape(p, d["shape"])]
+            take_cnt = min(len(shp_pieces), d["remaining_pieces"])
+
+            if take_cnt > 0:
+                valid_placed_round.extend(shp_pieces[:take_cnt])
+                d["remaining_pieces"] -= take_cnt
+                d["placed_pieces"] += take_cnt
+
+            # Se este molde AINDA tem peças restantes a cortar, a fila estrita trava:
+            # nenhum molde com sequência maior pode entrar nesta placa!
+            if d["remaining_pieces"] > 0:
+                can_place_next = False
+
+        if not valid_placed_round:
+            unplaced = [d["shape"].get("name", "Molde") for d in demands if d["remaining_pieces"] > 0]
+            warning_msg = f"Peças posicionadas não correspondem à demanda restante na placa {sheet_idx}: {unplaced}"
+            break
+
+        # Normaliza e renumera peças colocadas nesta placa
+        plate_pieces = []
+        for p_idx, p in enumerate(valid_placed_round):
+            p_clean = dict(p)
+            p_clean["id"] = p_idx + 1
+            plate_pieces.append(p_clean)
+
+        # Rendimento e tempo da placa individual
+        plate_area_m2 = max(1e-4, (bed_width_mm * bed_height_mm) / 1_000_000.0)
+        eff_pct, used_m2 = calculate_yield(plate_pieces, plate_area_m2)
+        est_time, _ = calculate_atom_cutting_time(plate_pieces)
+
+        layout_name = f"lay{sheet_idx:04d}"
+        layout_entry = {
+            "layout_index": sheet_idx,
+            "name": layout_name,
+            "code": layout_name,
+            "pieces": plate_pieces,
+            "placed_pieces": plate_pieces,
+            "width_mm": bed_width_mm,
+            "height_mm": bed_height_mm,
+            "margin_left": m_left,
+            "margin_right": m_right,
+            "margin_top": m_top,
+            "margin_bottom": m_bottom,
+            "gap_mm": gap_mm,
+            "yield_percent": eff_pct,
+            "yield_pct": eff_pct,
+            "num_items": len(plate_pieces),
+            "num_dies": len(set(p.get("name") for p in plate_pieces)),
+            "used_area_m2": used_m2,
+            "cutting_time_sec": est_time,
+            "status": "closed"
+        }
+        layouts.append(layout_entry)
+        sheet_idx += 1
+
+    # Mapeamento do intervalo de placas ocupado por cada molde (shape spans)
+    shape_spans = []
+    for d in demands:
+        shp = d["shape"]
+        name = shp.get("name") or shp.get("id") or "Molde"
+        seq = parse_sequence_num(shp.get("sequence"))
+        seq_label = f"seq {seq}" if seq is not None else "sem seq"
+
+        sheet_indices = [
+            i for i, ly in enumerate(layouts)
+            if any(piece_matches_shape(p, shp) for p in ly.get("pieces", []))
+        ]
+        if sheet_indices:
+            start_lay = f"lay{sheet_indices[0]:04d}"
+            end_lay = f"lay{sheet_indices[-1]:04d}"
+            if start_lay == end_lay:
+                span_str = f"Molde {name} ({seq_label}): {start_lay}"
+            else:
+                span_str = f"Molde {name} ({seq_label}): {start_lay} → {end_lay}"
+            shape_spans.append({
+                "name": name,
+                "sequence": seq,
+                "start_layout": start_lay,
+                "end_layout": end_lay,
+                "span_text": span_str,
+                "sheets": sheet_indices
+            })
+        else:
+            shape_spans.append({
+                "name": name,
+                "sequence": seq,
+                "start_layout": None,
+                "end_layout": None,
+                "span_text": f"Molde {name} ({seq_label}): Não encaixado",
+                "sheets": []
+            })
+
+    total_placed = sum(len(ly["pieces"]) for ly in layouts)
+    total_pairs_cut = (total_placed * l_val) // 2
+    yields = [ly["yield_percent"] for ly in layouts]
+    unplaced_names = [d["shape"].get("name", "Molde") for d in demands if d["remaining_pieces"] > 0]
+    success = (len(unplaced_names) == 0 and len(layouts) > 0)
+
+    final_warning = warning_msg
+    if missing_seq_warn:
+        final_warning = f"{warning_msg} ({missing_seq_warn})" if warning_msg else missing_seq_warn
+
+    return {
+        "success": success,
+        "layouts": layouts,
+        "total_pieces": total_placed,
+        "total_pairs_cut": total_pairs_cut,
+        "total_pairs_demanded": total_pairs_demanded,
+        "yields": yields,
+        "unplaced_shapes": unplaced_names,
+        "warning": final_warning,
+        "missing_sequence_warning": missing_seq_warn,
+        "shape_spans": shape_spans,
+        "spans_summary": "\n".join(s["span_text"] for s in shape_spans),
+        "num_sheets": len(layouts)
+    }
+
 
