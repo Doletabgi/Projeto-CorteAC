@@ -18,11 +18,12 @@ from pathlib import Path
 import copy
 from config import THEME, APP_NAME, APP_VERSION, ATOM_MACHINE, EXPORTS_DIR
 from database import DatabaseManager
-from cad.nesting_engine import auto_nest_pieces, calculate_yield, calculate_atom_cutting_time
+from cad.nesting_engine import auto_nest_pieces, calculate_yield, calculate_atom_cutting_time, nest_multi_sheet, piece_matches_shape, sort_shapes_by_sequence
 from cad.colors import get_color_for_size
 from cad.exporter import export_gcode, export_xml_report
 from cad.die_parser import parse_die_file, save_die_file
 from cad.geometry import polygon_area
+from cad.layers_rule import calc_resto
 from ui.cad_canvas import CADCanvas
 from ui.order_view import OrderView
 from ui.session_view import SessionView
@@ -733,6 +734,12 @@ class MainWindow(tk.Tk):
         else:
             self.activate_window(view)
 
+        if not sess_dict.get("layouts") and self.db and sess_dict.get("id"):
+            try:
+                sess_dict["layouts"] = self.db.get_session_layouts(sess_dict["id"])
+            except Exception:
+                pass
+
         view.load_session(sess_dict)
         self.session_view = view
         self.current_session = sess_dict
@@ -1320,14 +1327,33 @@ class MainWindow(tk.Tk):
         shp_name = target_shape.get("name", "Molde") if target_shape else ""
         self.lbl_status_msg.config(text=f"Shape Editor: [{shp_name}] aberto na área de trabalho.")
 
-    def show_layout_editor(self, layout_name=None, force=False):
+    def show_layout_editor(self, layout_name=None, force=False, session_data=None):
         # Sincroniza moldes e peças da sessão ativa caso existam
-        active_sess = self.current_session
-        if not active_sess and getattr(self, "sessions", None):
-            active_sess = self.sessions[0]
+        if session_data and isinstance(session_data, dict):
+            active_sess = session_data
+            self.current_session = session_data
+        else:
+            active_sess = self.current_session
+            if not active_sess and getattr(self, "sessions", None):
+                active_sess = self.sessions[0]
+
+        sess_layouts = active_sess.get("layouts") if isinstance(active_sess, dict) else None
+        if not sess_layouts and getattr(self, "db", None) and isinstance(active_sess, dict) and active_sess.get("id"):
+            try:
+                sess_layouts = self.db.get_session_layouts(active_sess["id"])
+                if sess_layouts:
+                    active_sess["layouts"] = sess_layouts
+            except Exception:
+                pass
 
         placed = active_sess.get("placed_pieces") if isinstance(active_sess, dict) else None
-        if not force and (not active_sess or not placed):
+        if not placed and sess_layouts:
+            placed = sess_layouts[0].get("pieces") or sess_layouts[0].get("placed_pieces")
+            if placed:
+                active_sess["placed_pieces"] = placed
+
+        has_content = bool(placed or sess_layouts)
+        if not force and (not active_sess or not has_content):
             messagebox.showwarning(
                 "Layout Editor",
                 "Não há layout calculado para esta sessão.\nExecute o cálculo de encaixe (Gerar) primeiro.",
@@ -1361,7 +1387,19 @@ class MainWindow(tk.Tk):
             if hasattr(self.layout_editor_view, "set_session_shapes"):
                 self.layout_editor_view.set_session_shapes(sess_shapes)
 
-            if active_sess.get("placed_pieces"):
+            target_idx = 0
+            if layout_name is not None and sess_layouts:
+                for idx, ly in enumerate(sess_layouts):
+                    ly_name = ly.get("name")
+                    ly_code = ly.get("code")
+                    ly_idx = ly.get("layout_index")
+                    if str(layout_name) in (str(ly_name), str(ly_code), f"lay{idx:04d}", str(idx), f"lay_{idx}", str(ly_idx)):
+                        target_idx = idx
+                        break
+
+            if sess_layouts and hasattr(self.layout_editor_view, "set_session_layouts"):
+                self.layout_editor_view.set_session_layouts(sess_layouts, initial_index=target_idx)
+            elif active_sess.get("placed_pieces"):
                 le_pieces = []
                 for p in active_sess["placed_pieces"]:
                     shp = p.get("shape", {}) if isinstance(p.get("shape"), dict) else {}
@@ -4493,11 +4531,11 @@ class MainWindow(tk.Tk):
 
         def _worker():
             try:
-                pieces = auto_nest_pieces(
-                    sess_shapes,
-                    mat_w,
-                    mat_h,
-                    target_count=target_count,
+                sorted_sess_shapes, _ = sort_shapes_by_sequence(sess_shapes)
+                result = nest_multi_sheet(
+                    available_shapes=sorted_sess_shapes,
+                    bed_width_mm=mat_w,
+                    bed_height_mm=mat_h,
                     strategy=strategy,
                     params=params,
                     gap_mm=gap,
@@ -4506,7 +4544,7 @@ class MainWindow(tk.Tk):
                     margins=margins,
                     layers=mat_layers
                 )
-                nest_q.put(("SUCCESS", pieces))
+                nest_q.put(("SUCCESS", result))
             except Exception as e:
                 nest_q.put(("ERROR", str(e)))
 
@@ -4525,34 +4563,50 @@ class MainWindow(tk.Tk):
         self.config(cursor="")
 
         if status == "SUCCESS":
-            pieces = data
+            nest_result = data
+            layouts = nest_result.get("layouts", [])
+            if not layouts:
+                warn = nest_result.get("warning") or "Nenhuma peça coube nas dimensões especificadas."
+                messagebox.showwarning("Aviso no Auto-Nest", warn, parent=self)
+                self.lbl_status_msg.config(text=f"Auto-Nest: {warn}")
+                return
+
+            first_layout = layouts[0]
+            pieces = first_layout.get("pieces", [])
             self.canvas.set_pieces(pieces)
+
+            # Armazena e salva layouts múltiplos da sessão
+            if self.current_session:
+                self.current_session["placed_pieces"] = pieces
+                self.current_session["layouts"] = layouts
+                for s in self.sessions:
+                    if s.get("id") == self.current_session["id"]:
+                        s["placed_pieces"] = pieces
+                        s["layouts"] = layouts
+                        break
+                try:
+                    self.db.save_session_layouts(self.current_session["id"], layouts)
+                except Exception as e:
+                    print(f"[AVISO] Falha ao persistir layouts da sessão: {e}")
+
             if hasattr(self, "layout_editor_view") and self.layout_editor_view:
-                if hasattr(self.layout_editor_view, "set_pieces"):
+                if hasattr(self.layout_editor_view, "set_session_layouts"):
+                    self.layout_editor_view.set_session_layouts(layouts, initial_index=0)
+                elif hasattr(self.layout_editor_view, "set_pieces"):
                     self.layout_editor_view.set_pieces(pieces)
+
             self.save_current_session_state()
 
-            # Atualiza o saldo restante de pares (resto / rest) nos moldes da sessão
+            # Atualiza o saldo restante de pares (resto / rest) nos moldes da sessão considerando TODAS as placas
             if hasattr(self, "current_shapes") and self.current_shapes:
-                for s in self.current_shapes:
-                    s_id = str(s.get("id", "")).strip()
-                    s_sz = str(s.get("size", "")).strip()
-                    s_nm = str(s.get("name", "")).strip()
-                    cnt_placed = 0
-                    for p in pieces:
-                        p_tid = str(p.get("target_id", "")).strip()
-                        p_sz = str(p.get("size", "")).strip()
-                        p_nm = str(p.get("name", "")).strip()
-                        if p_sz and s_sz and p_sz != s_sz:
-                            continue
-                        if p_tid and s_id and p_tid == s_id:
-                            cnt_placed += 1
-                        elif p_nm and s_nm and p_nm == s_nm:
-                            cnt_placed += 1
-                        elif p_sz and s_sz and p_sz == s_sz and (not p_nm or not s_nm or p_nm == s_nm):
-                            cnt_placed += 1
+                all_placed = []
+                for ly in layouts:
+                    all_placed.extend(ly.get("pieces", []))
 
-                    pairs_cut = (cnt_placed * max(1, layers)) // 2
+                for s in self.current_shapes:
+                    cnt_placed = sum(1 for p in all_placed if piece_matches_shape(p, s))
+                    s_layers = max(1, int(s.get("layers") or layers))
+                    pairs_cut = (cnt_placed * s_layers) // 2
                     req_p = int(s.get("pairs", 0))
                     rem = max(0, req_p - pairs_cut)
                     s["rest"] = rem
@@ -4594,9 +4648,34 @@ class MainWindow(tk.Tk):
                     self.session_view.load_session(self.current_session)
             if self.session_view:
                 self.session_view.notebook.select(self.session_view.tab_lays)
-            self.lbl_status_msg.config(
-                text=f"Auto-Nest concluído com estratégia '{strategy}' ({params}) na máquina {machine}. ({len(pieces)} peças encaixadas)"
-            )
+
+            # Mensagem de status customizada para 1 placa vs N placas
+            n_sheets = len(layouts)
+            tot_pairs = nest_result.get("total_pairs_cut", 0)
+            yields_str = ", ".join(f"{y:.0f}%" for y in nest_result.get("yields", []))
+            spans_list = nest_result.get("shape_spans", [])
+            spans_compact = "; ".join(s["span_text"] for s in spans_list if s.get("start_layout"))
+
+            if n_sheets > 1:
+                msg_status = f"{tot_pairs} pares encaixados em {n_sheets} placas ({yields_str}) na máquina {machine}."
+            else:
+                msg_status = f"Auto-Nest concluído com estratégia '{strategy}' ({params}) na máquina {machine}. ({len(pieces)} peças encaixadas)"
+
+            if spans_compact:
+                msg_status += f" [{spans_compact}]"
+
+            missing_seq_warn = nest_result.get("missing_sequence_warning")
+            if missing_seq_warn:
+                msg_status += f" Aviso: {missing_seq_warn}"
+
+            warning = nest_result.get("warning")
+            if warning and warning != missing_seq_warn:
+                msg_status += f" Atenção: {warning}"
+                messagebox.showwarning("Aviso no Auto-Nest", warning, parent=self)
+            elif missing_seq_warn and not warning:
+                messagebox.showwarning("Aviso de Sequência", missing_seq_warn, parent=self)
+
+            self.lbl_status_msg.config(text=msg_status)
         else:
             messagebox.showerror("Erro no Auto-Nest", f"Falha no cálculo de nesting:\n{data}", parent=self)
             self.lbl_status_msg.config(text="Erro ao calcular nesting automático.")
@@ -4604,14 +4683,62 @@ class MainWindow(tk.Tk):
 
     def on_clear_bed(self):
         self.canvas.clear_bed()
-        self.save_current_session_state()
         if self.current_session:
+            sess_id = self.current_session.get("id")
+            self.current_session["placed_pieces"] = []
+            self.current_session["layouts"] = []
+            self.current_session["yield_percent"] = 0.0
+            self.current_session["cutting_time_sec"] = 0.0
+            self.current_session["used_area_m2"] = 0.0
             self.current_session["status"] = "Stand by"
-            self.db.update_session(self.current_session["id"], status="Stand by")
+
+            # Sincroniza lista sessions em memória
+            for s in getattr(self, "sessions", []):
+                if s.get("id") == sess_id:
+                    s["placed_pieces"] = []
+                    s["layouts"] = []
+                    s["yield_percent"] = 0.0
+                    s["cutting_time_sec"] = 0.0
+                    s["used_area_m2"] = 0.0
+                    s["status"] = "Stand by"
+                    break
+
+            # Restaura saldo original de pares (rest / resto) nos moldes
+            layers = int(self.current_session.get("layers", 1))
+            if hasattr(self, "current_shapes") and self.current_shapes:
+                for shp in self.current_shapes:
+                    req_p = int(shp.get("pairs", 0))
+                    shp["rest"] = req_p
+                    shp["resto"] = calc_resto(req_p, layers)
+                if self.db and sess_id:
+                    self.db.update_session_shapes(sess_id, self.current_shapes)
+
+            if self.current_session.get("shapes"):
+                for shp in self.current_session["shapes"]:
+                    req_p = int(shp.get("pairs", 0))
+                    shp["rest"] = req_p
+                    shp["resto"] = calc_resto(req_p, layers)
+
+            # Deleta todos os layouts e peças do banco de dados para esta sessão
+            if self.db and sess_id:
+                self.db.delete_session_layouts(sess_id)
+
+            if hasattr(self, "layout_editor_view") and self.layout_editor_view:
+                if hasattr(self.layout_editor_view, "set_session_layouts"):
+                    self.layout_editor_view.set_session_layouts([], initial_index=0)
+                if hasattr(self.layout_editor_view, "set_pieces"):
+                    self.layout_editor_view.set_pieces([])
+
             if self.current_mode == "jobs":
                 self.switch_tree_mode("jobs")
+
             if self.session_view:
                 self.session_view.load_session(self.current_session)
+
+            for sv in getattr(self, "open_sessions", {}).values():
+                if sv != self.session_view and getattr(sv, "session_data", None) and sv.session_data.get("id") == sess_id:
+                    sv.load_session(self.current_session)
+
         if self.session_view:
             self.session_view.notebook.select(self.session_view.tab_lays)
         self.lbl_status_msg.config(text="Layouts reinicializados (Rewind executado). Mesa limpa.")

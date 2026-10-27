@@ -169,7 +169,13 @@ TARGET_SPECS = [
 
 class LayoutEditorView(tk.Frame):
     def __init__(self, parent, on_close=None, on_minimize=None, on_maximize=None, layout_name="[I0000]", on_save=None, db=None, load_sample=False, **kwargs):
-        super().__init__(parent, bg=THEME["bg_surface"], relief="ridge", bd=2, **kwargs)
+        frame_kwargs = {k: v for k, v in kwargs.items() if k not in {
+            "layout_filepath", "layout_id", "layout_version", "session_id", "material",
+            "material_id", "material_name", "material_layers", "layers", "margin_left",
+            "margin_right", "margin_top", "margin_bottom", "is_subwindow", "layouts",
+            "current_layout_index", "target_shapes"
+        }}
+        super().__init__(parent, bg=THEME["bg_surface"], relief="ridge", bd=2, **frame_kwargs)
         self.on_close_cb = on_close
         self.on_minimize_cb = on_minimize
         self.on_maximize_cb = on_maximize
@@ -205,6 +211,12 @@ class LayoutEditorView(tk.Frame):
         self.selected_index = -1
         self.show_grid = True
         self.show_outline = True
+
+        # Gerenciamento de múltiplos layouts por sessão (lay0000, lay0001, ...)
+        raw_layouts = kwargs.get("layouts", [])
+        self.layouts = [dict(l) for l in raw_layouts] if raw_layouts else []
+        self.current_layout_index = int(kwargs.get("layout_index", 0))
+        self.layout_undo_stacks = {}
 
         # Geometria estática da mesa CAD no Canvas (calculada no redraw)
         self.plate_scale = 1.0
@@ -590,6 +602,17 @@ class LayoutEditorView(tk.Frame):
             w.bind("<Control-Key-t>", _on_ctrl_t)
             w.bind("<Control-Key-T>", _on_ctrl_t)
 
+        # Navegação entre placas: Open Next (Ctrl+L) e Open Previous (Ctrl+Shift+L)
+        for w in (self, self.canvas):
+            w.bind("<Control-l>", self._on_ctrl_l)
+            w.bind("<Control-L>", self._on_ctrl_l)
+            w.bind("<Control-Key-l>", self._on_ctrl_l)
+            w.bind("<Control-Key-L>", self._on_ctrl_l)
+            w.bind("<Control-Shift-l>", self._on_ctrl_shift_l)
+            w.bind("<Control-Shift-L>", self._on_ctrl_shift_l)
+            w.bind("<Control-Shift-Key-l>", self._on_ctrl_shift_l)
+            w.bind("<Control-Shift-Key-L>", self._on_ctrl_shift_l)
+
         # Atalhos CAM F1 / F2 / F3 / F4 e Proibição Shift+F3
         for w in (self, self.canvas):
             w.bind("<F1>", self.on_f1_press)
@@ -749,6 +772,8 @@ class LayoutEditorView(tk.Frame):
         if menu_name in ("Arquivo", "File"):
             menu_obj.add_command(label="Novo\tCtrl+N", command=self.clear_all_pieces)
             menu_obj.add_command(label="Abrir...\tCtrl+O", command=self.open_layout_dialog)
+            menu_obj.add_command(label="Open Next\tCtrl+L", command=self.open_next_layout)
+            menu_obj.add_command(label="Open Previous\tCtrl+Shift+L", command=self.open_previous_layout)
             menu_obj.add_command(label="Salvar\tCtrl+S", command=self.save_layout)
             menu_obj.add_command(label="Salvar Como...", command=self.export_layout_dialog)
             menu_obj.add_separator()
@@ -953,6 +978,29 @@ class LayoutEditorView(tk.Frame):
                     placed_cnt += 1
                     continue
 
+            # Contagem total da sessão somando as outras placas da sessão
+            total_session_pieces = placed_cnt
+            if getattr(self, "layouts", None) and len(self.layouts) > 1:
+                for l_idx, ly in enumerate(self.layouts):
+                    if l_idx == getattr(self, "current_layout_index", 0):
+                        continue
+                    ly_pieces = ly.get("pieces") or ly.get("placed_pieces") or []
+                    for p in ly_pieces:
+                        p_tid = str(p.get("target_id", "")).strip()
+                        p_sz = str(p.get("size", "")).strip()
+                        p_nm = str(p.get("name", "")).strip()
+                        if p_sz and t_sz and p_sz != t_sz:
+                            continue
+                        if p_tid and t_id and p_tid == t_id:
+                            total_session_pieces += 1
+                            continue
+                        if p_nm and t_nm and p_nm == t_nm:
+                            total_session_pieces += 1
+                            continue
+                        if p_sz and t_sz and p_sz == t_sz and (not p_nm or not t_nm or p_nm == t_nm):
+                            total_session_pieces += 1
+                            continue
+
             req_cnt = int(target.get("pairs", target.get("required", 0)))
             
             # Resolução das camadas de corte do material para converter peças em pares
@@ -969,6 +1017,9 @@ class LayoutEditorView(tk.Frame):
             # Quantidade de pares produzidos na mesa e saldo restante
             placed_pairs = (placed_cnt * layers) // 2
             resto_cnt = max(0, req_cnt - placed_pairs)
+            total_pieces_demanded = math.ceil((req_cnt * 2) / layers) if req_cnt > 0 else 0
+            has_deficit = (total_session_pieces < total_pieces_demanded) if total_pieces_demanded > 0 else False
+            stat_color = "#dc2626" if has_deficit else "#000000"
 
             # Destaque de seleção do molde ativo
             is_active = (i == self.active_target_index)
@@ -1023,15 +1074,16 @@ class LayoutEditorView(tk.Frame):
                 tags=("sidebar_element", f"sidebar_target_{i}", "sidebar_ui")
             )
 
-            # 4. Linha 2: Contadores de Produção (peças_mesa/req_pares resto_pares/req_pares)
-            # Exemplo: Com 4 camadas e 20 pares: 10 peças no layout -> exibe 10/20 0/20
-            #          Com 2 camadas e 20 pares: 20 peças no layout -> exibe 20/20 0/20
-            stat_disp = f"{placed_cnt}/{req_cnt} {resto_cnt}/{req_cnt}"
+            # 4. Linha 2: Contadores de Produção
+            if getattr(self, "layouts", None) and len(self.layouts) > 1:
+                stat_disp = f"{total_session_pieces}/{total_pieces_demanded}"
+            else:
+                stat_disp = f"{placed_cnt}/{req_cnt} {resto_cnt}/{req_cnt}"
 
             self.canvas.create_text(
                 col_cx, item_y + 52,
                 text=stat_disp,
-                fill="#000000",
+                fill=stat_color,
                 font=("Segoe UI", 7),
                 tags=("sidebar_element", f"sidebar_target_{i}", "sidebar_ui")
             )
@@ -1253,12 +1305,188 @@ class LayoutEditorView(tk.Frame):
         self.margin_bottom = float(bottom)
         self.redraw()
 
+    def _resolve_piece_contour(self, p: dict) -> list:
+        """Resolve o contorno geométrico de uma peça caso não esteja embutido diretamente."""
+        if not p or not isinstance(p, dict):
+            return list(CONTOUR_CON)
+        c = p.get("contour")
+        if c and isinstance(c, (list, tuple)) and len(c) >= 3:
+            return list(c)
+        shp = p.get("shape")
+        if isinstance(shp, dict):
+            sc = shp.get("contour")
+            if sc and isinstance(sc, (list, tuple)) and len(sc) >= 3:
+                return list(sc)
+            if shp.get("contour_json"):
+                try:
+                    sc = json.loads(shp["contour_json"])
+                    if sc and len(sc) >= 3:
+                        return sc
+                except Exception:
+                    pass
+
+        t_id = str(p.get("target_id") or p.get("shape_id") or p.get("mold_id") or "").strip()
+        p_name = str(p.get("name") or p.get("piece_name") or "").strip().lower()
+        p_size = str(p.get("size") or "").strip().lower()
+
+        candidates = []
+        if hasattr(self, "sidebar_targets") and self.sidebar_targets:
+            candidates.extend(self.sidebar_targets)
+        if hasattr(self, "session_shapes") and self.session_shapes:
+            candidates.extend(self.session_shapes)
+
+        if t_id:
+            for s in candidates:
+                s_id = str(s.get("id") or s.get("shape_id") or "").strip()
+                if s_id and s_id == t_id:
+                    sc = s.get("contour")
+                    if sc and len(sc) >= 3:
+                        return list(sc)
+        if p_name:
+            for s in candidates:
+                s_name = str(s.get("name", "")).strip().lower()
+                s_size = str(s.get("size", "")).strip().lower()
+                if s_name == p_name and (not p_size or s_size == p_size):
+                    sc = s.get("contour")
+                    if sc and len(sc) >= 3:
+                        return list(sc)
+
+        return list(CONTOUR_CON)
+
     def set_pieces(self, pieces):
         """Define a lista de peças colocadas no layout e atualiza a interface."""
         self.placed_pieces = list(pieces) if pieces else []
+        for p in self.placed_pieces:
+            if not p.get("contour"):
+                p["contour"] = self._resolve_piece_contour(p)
         self.selected_index = -1
+        if getattr(self, "layouts", None) and 0 <= getattr(self, "current_layout_index", 0) < len(self.layouts):
+            self.layouts[self.current_layout_index]["pieces"] = copy.deepcopy(self.placed_pieces)
+            self.layouts[self.current_layout_index]["placed_pieces"] = copy.deepcopy(self.placed_pieces)
+        self.update_title_and_status()
         self.update_sidebar_targets()
         self.redraw()
+        self.update_status()
+
+    def set_session_layouts(self, layouts: list, initial_index: int = 0):
+        """Define a lista de múltiplos layouts da sessão e carrega a placa inicial."""
+        if not layouts:
+            self.layouts = []
+            self.layout_undo_stacks = {}
+            self.placed_pieces = []
+            self.current_layout_index = 0
+            if hasattr(self, "canvas") and hasattr(self.canvas, "clear_bed"):
+                self.canvas.clear_bed()
+            elif hasattr(self, "canvas") and hasattr(self.canvas, "delete"):
+                self.canvas.delete("all")
+            if hasattr(self, "_redraw"):
+                self._redraw()
+            return
+        self.layouts = [dict(l) for l in layouts]
+        self.layout_undo_stacks = {}
+        idx = max(0, min(initial_index, len(self.layouts) - 1))
+        self.switch_to_layout(idx, save_current=False)
+
+    def switch_to_layout(self, index: int, save_current: bool = True) -> bool:
+        """
+        Alterna entre placas da sessão (lay0000, lay0001, ...).
+        Isola o undo_stack por placa e atualiza o indicador de status/título.
+        """
+        if not getattr(self, "layouts", None) or index < 0 or index >= len(self.layouts):
+            return False
+
+        if save_current and 0 <= getattr(self, "current_layout_index", 0) < len(self.layouts):
+            cur_idx = self.current_layout_index
+            self.layouts[cur_idx]["pieces"] = copy.deepcopy(self.placed_pieces)
+            self.layouts[cur_idx]["placed_pieces"] = copy.deepcopy(self.placed_pieces)
+            self.layouts[cur_idx]["width_mm"] = self.sheet_width
+            self.layouts[cur_idx]["height_mm"] = self.sheet_height
+            self.layout_undo_stacks[cur_idx] = list(self.undo_stack)
+            if self.is_modified:
+                try:
+                    self.save_layout()
+                except Exception:
+                    pass
+
+        self.current_layout_index = index
+        ly = self.layouts[index]
+        self.placed_pieces = copy.deepcopy(ly.get("pieces") or ly.get("placed_pieces") or [])
+        for p in self.placed_pieces:
+            if not p.get("contour"):
+                p["contour"] = self._resolve_piece_contour(p)
+        self.sheet_width = float(ly.get("width_mm", self.sheet_width))
+        self.sheet_height = float(ly.get("height_mm", self.sheet_height))
+        self.margin_left = float(ly.get("margin_left", self.margin_left))
+        self.margin_right = float(ly.get("margin_right", self.margin_right))
+        self.margin_top = float(ly.get("margin_top", self.margin_top))
+        self.margin_bottom = float(ly.get("margin_bottom", self.margin_bottom))
+        self.layout_name = ly.get("name") or f"lay{index:04d}"
+
+        # Isola o histórico de desfazer para a placa atual
+        self.undo_stack = list(self.layout_undo_stacks.get(index, []))
+        self._saved_undo_index = len(self.undo_stack)
+        self.set_modified(False)
+
+        self.selected_indices = []
+        self.selected_index = -1
+
+        self.update_title_and_status()
+        self.update_sidebar_targets()
+        self.redraw()
+        return True
+
+    def _on_ctrl_l(self, event=None):
+        """Handler do evento Ctrl+L."""
+        w = getattr(event, "widget", None) or self.focus_get()
+        if w and isinstance(w, (tk.Entry, ttk.Entry, tk.Text)):
+            return None
+        return self.open_next_layout(event)
+
+    def _on_ctrl_shift_l(self, event=None):
+        """Handler do evento Ctrl+Shift+L."""
+        w = getattr(event, "widget", None) or self.focus_get()
+        if w and isinstance(w, (tk.Entry, ttk.Entry, tk.Text)):
+            return None
+        return self.open_previous_layout(event)
+
+    def open_next_layout(self, event=None):
+        """Abre o próximo layout da sessão (File > Open Next / Ctrl+L)."""
+        w = getattr(event, "widget", None) or self.focus_get()
+        if w and isinstance(w, (tk.Entry, ttk.Entry, tk.Text)):
+            return None
+        if not getattr(self, "layouts", None) or len(self.layouts) <= 1:
+            if hasattr(self, "lbl_stat_pos"):
+                self.lbl_stat_pos.config(text="Sessão possui apenas 1 layout.")
+            return "break"
+        next_idx = (self.current_layout_index + 1) % len(self.layouts)
+        self.switch_to_layout(next_idx, save_current=True)
+        return "break"
+
+    def open_previous_layout(self, event=None):
+        """Abre o layout anterior da sessão (File > Open Previous / Ctrl+Shift+L)."""
+        w = getattr(event, "widget", None) or self.focus_get()
+        if w and isinstance(w, (tk.Entry, ttk.Entry, tk.Text)):
+            return None
+        if not getattr(self, "layouts", None) or len(self.layouts) <= 1:
+            if hasattr(self, "lbl_stat_pos"):
+                self.lbl_stat_pos.config(text="Sessão possui apenas 1 layout.")
+            return "break"
+        prev_idx = (self.current_layout_index - 1) % len(self.layouts)
+        self.switch_to_layout(prev_idx, save_current=True)
+        return "break"
+
+    def update_title_and_status(self):
+        """Atualiza a barra de título e a barra de status com o indicador de layout ativo."""
+        tot_lays = max(1, len(self.layouts)) if getattr(self, "layouts", None) else 1
+        cur_idx = getattr(self, "current_layout_index", 0)
+        cur_lay_num = cur_idx + 1
+        name_str = getattr(self, "layout_name", f"lay{cur_idx:04d}")
+        indicator = f"Layout {cur_lay_num}/{tot_lays} ({name_str})"
+
+        if hasattr(self, "lbl_title") and self.lbl_title:
+            self.lbl_title.config(text=f"Layout Editor - {indicator}")
+        if hasattr(self, "lbl_stat_doc") and self.lbl_stat_doc:
+            self.lbl_stat_doc.config(text=indicator)
         self.update_status()
 
     # -------------------------------------------------------------
@@ -1559,7 +1787,12 @@ class LayoutEditorView(tk.Frame):
         num_pieces = len(self.placed_pieces)
         cached_geoms = []
         for p in self.placed_pieces:
-            poly = transform_contour(p["contour"], p["x"], p["y"], p["rotation"])
+            cntr = p.get("contour") or (p.get("shape", {}).get("contour") if isinstance(p.get("shape"), dict) else None)
+            if not cntr:
+                cached_geoms.append(([], (0, 0, 0, 0)))
+                continue
+            rot = float(p.get("rotation", p.get("rot", 0.0)))
+            poly = transform_contour(cntr, float(p.get("x", 0.0)), float(p.get("y", 0.0)), rot)
             bbox = polygon_bbox(poly)
             cached_geoms.append((poly, bbox))
 
@@ -1590,6 +1823,8 @@ class LayoutEditorView(tk.Frame):
             is_sel = (idx == self.selected_index) or (hasattr(self, "selected_indices") and idx in self.selected_indices)
             is_col = (idx in colliding_indices)
             poly, _ = cached_geoms[idx]
+            if not poly:
+                continue
 
             screen_pts = []
             for pt in poly:
@@ -4262,6 +4497,21 @@ class LayoutEditorView(tk.Frame):
         saved_file = False
         error_msg = None
 
+        # Sincroniza a placa atual em self.layouts
+        if getattr(self, "layouts", None) and 0 <= getattr(self, "current_layout_index", 0) < len(self.layouts):
+            cur_idx = self.current_layout_index
+            self.layouts[cur_idx]["pieces"] = copy.deepcopy(self.placed_pieces)
+            self.layouts[cur_idx]["placed_pieces"] = copy.deepcopy(self.placed_pieces)
+            self.layouts[cur_idx]["width_mm"] = self.sheet_width
+            self.layouts[cur_idx]["height_mm"] = self.sheet_height
+            self.layouts[cur_idx]["name"] = self.layout_name
+            if self.db and getattr(self, "session_id", None) and len(self.layouts) > 1:
+                try:
+                    self.db.save_session_layouts(self.session_id, self.layouts)
+                    saved_db = True
+                except Exception as e:
+                    print(f"Erro ao persistir sessão multi-placa no banco: {e}")
+
         if hasattr(self, "on_save_cb") and self.on_save_cb:
             try:
                 res = self.on_save_cb(self.placed_pieces, self.sheet_width, self.sheet_height, self.layout_name)
@@ -4633,6 +4883,9 @@ class LayoutEditorView(tk.Frame):
             "material_layers": mat_layers,
             "material": mat,
             "material_name": getattr(self, "material_cod_r", None) if not mat else None,
+            "session_shapes": getattr(self, "session_shapes", []),
+            "layouts": getattr(self, "layouts", []),
+            "current_layout_index": getattr(self, "current_layout_index", 0),
         }
 
         dlg = LayoutPrintDialog(self, layout_data=layout_data)

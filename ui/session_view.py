@@ -5,6 +5,7 @@ Telas frmSessionGeneral, frmSessionShapes, frmSessionMats, frmSessionLays, frmSe
 """
 
 import math
+import json
 from typing import Dict, Any, Optional, List
 import tkinter as tk
 from tkinter import ttk, messagebox, simpledialog, colorchooser, filedialog
@@ -837,7 +838,7 @@ class SessionView(tk.Frame):
             font=("Segoe UI", 9), command=self.on_layout_row_double_click
         )
         self.btn_open_editor.pack(side="left", padx=2)
-        has_pieces = bool(self.session_data.get("placed_pieces")) if isinstance(self.session_data, dict) else False
+        has_pieces = bool(self.session_data.get("placed_pieces") or self.session_data.get("layouts")) if isinstance(self.session_data, dict) else False
         self.btn_open_editor.config(state="normal" if has_pieces else "disabled")
 
         self.btn_print_layout = tk.Button(
@@ -870,11 +871,23 @@ class SessionView(tk.Frame):
 
         # A tabela de Layout inicia em branco e só exibe linhas após a execução do encaixe (Nesting)
         self.tree_lays.bind("<Double-1>", self.on_layout_row_double_click)
+        self.tree_lays.bind("<Return>", self.on_layout_row_double_click)
+        self.tree_lays.bind("<<TreeviewSelect>>", self.on_layout_selected)
+        self.tree_lays.bind("<ButtonRelease-1>", self.on_layout_selected)
 
         # Lado Direito: Visualizador de Layout com pré-visualização proporcional em pé (Portrait)
         preview_box_lay = tk.Frame(lays_container, bg="#ece9d8", width=300, relief="sunken", bd=2)
         preview_box_lay.pack(side="right", fill="both", padx=(0, 2), pady=2)
         preview_box_lay.pack_propagate(False)
+
+        self.btn_preview_open_editor = tk.Button(
+            preview_box_lay,
+            text="🔍 Abrir Placa Selecionada no Editor",
+            relief="raised", bd=1, bg=THEME["bg_surface"], fg=THEME["text_main"],
+            font=("Segoe UI", 8, "bold"), command=self.on_layout_row_double_click
+        )
+        self.btn_preview_open_editor.pack(side="bottom", fill="x", padx=4, pady=(0, 4))
+        self.btn_preview_open_editor.config(state="normal" if has_pieces else "disabled")
 
         self.mini_layout_canvas = tk.Canvas(preview_box_lay, bg="#ece9d8", highlightthickness=0, cursor="hand2")
         self.mini_layout_canvas.pack(fill="both", expand=True, padx=4, pady=4)
@@ -928,23 +941,78 @@ class SessionView(tk.Frame):
         elif self.on_close_cb:
             self.on_close_cb()
 
+    def on_layout_selected(self, event=None):
+        """Atualiza o indicador de seleção ▶ na tabela de layouts e redesenha o mini-preview."""
+        if not hasattr(self, "tree_lays"):
+            return
+        sel = self.tree_lays.selection()
+        if not sel:
+            return
+        selected_iid = sel[0]
+        for item in self.tree_lays.get_children():
+            cur_vals = list(self.tree_lays.item(item, "values"))
+            if cur_vals:
+                cur_vals[0] = "▶" if item == selected_iid else ""
+                self.tree_lays.item(item, values=cur_vals)
+        self.draw_mini_layout_preview()
+
     def on_layout_row_double_click(self, event=None):
         placed = self.session_data.get("placed_pieces", []) if isinstance(self.session_data, dict) else []
-        if not placed:
+        layouts = self.session_data.get("layouts", []) if isinstance(self.session_data, dict) else []
+        if not placed and not layouts:
             messagebox.showwarning(
                 "Layout Editor",
                 "Não há layout calculado para esta sessão.\nExecute o cálculo de encaixe (Gerar) primeiro.",
                 parent=self
             )
             return
+
+        target_name = None
+        if hasattr(self, "tree_lays"):
+            sel = self.tree_lays.selection()
+            if sel:
+                item_iid = sel[0]
+                if item_iid.startswith("lay_"):
+                    try:
+                        idx = int(item_iid.replace("lay_", ""))
+                        if layouts and 0 <= idx < len(layouts):
+                            target_name = layouts[idx].get("name") or f"lay{idx:04d}"
+                        else:
+                            target_name = f"lay{idx:04d}"
+                    except ValueError:
+                        pass
+
         if self.on_open_layout_editor_cb:
-            name = self.session_data.get("layout_name") or "[I0000]"
+            name = target_name or (layouts[0].get("name") if layouts else None) or self.session_data.get("layout_name") or "lay0000"
             self.on_open_layout_editor_cb(name)
 
     def print_current_layout(self):
         """Abre a visualização de impressão A4 do layout da sessão ativa com o material configurado."""
         placed = self.session_data.get("placed_pieces", []) if isinstance(self.session_data, dict) else []
-        if not placed:
+        layouts = self.session_data.get("layouts", []) if isinstance(self.session_data, dict) else []
+
+        target_pieces = placed
+        target_layout = None
+        target_layout_idx = 0
+        if hasattr(self, "tree_lays"):
+            sel = self.tree_lays.selection()
+            if sel and layouts:
+                item_iid = sel[0]
+                if item_iid.startswith("lay_"):
+                    try:
+                        idx = int(item_iid.replace("lay_", ""))
+                        if 0 <= idx < len(layouts):
+                            target_layout = layouts[idx]
+                            target_layout_idx = idx
+                            target_pieces = target_layout.get("pieces") or target_layout.get("placed_pieces") or target_pieces
+                    except ValueError:
+                        pass
+        if not target_pieces and layouts:
+            target_layout = layouts[0]
+            target_layout_idx = 0
+            target_pieces = target_layout.get("pieces") or target_layout.get("placed_pieces") or []
+
+        if not target_pieces:
             messagebox.showwarning(
                 "Imprimir Layout",
                 "Não há layout calculado para esta sessão.\nExecute o cálculo de encaixe (Gerar) primeiro.",
@@ -955,12 +1023,12 @@ class SessionView(tk.Frame):
         from ui.layout_print_dialog import LayoutPrintDialog
 
         mat = (self.session_data.get("material") or {}) if isinstance(self.session_data, dict) else {}
-        sheet_w = float(mat.get("width_mm", 1380.0))
-        sheet_h = float(mat.get("height_mm", 1080.0))
+        sheet_w = float(target_layout.get("width_mm") if target_layout else mat.get("width_mm", 1380.0))
+        sheet_h = float(target_layout.get("height_mm") if target_layout else mat.get("height_mm", 1080.0))
         mat_w_m = round(sheet_w / 1000.0, 2)
         mat_h_m = round(sheet_h / 1000.0, 2)
         mat_area = round((sheet_w * sheet_h) / 1_000_000.0, 2)
-        eff = float(self.session_data.get("yield_percent", 78.4))
+        eff = float(target_layout.get("yield_percent", self.session_data.get("yield_percent", 78.4)) if target_layout else self.session_data.get("yield_percent", 78.4))
         used_area = round(mat_area * (eff / 100.0), 2)
 
         # Lê dados de material diretamente da aba Materiais (tree_mat) se disponíveis
@@ -979,22 +1047,32 @@ class SessionView(tk.Frame):
                     except (ValueError, TypeError):
                         pass
 
+        session_shapes_val = getattr(self, "shapes_list", []) or (self.session_data.get("shapes", []) if isinstance(self.session_data, dict) else [])
+        layout_name_val = (
+            (target_layout.get("name") if target_layout else None)
+            or self.session_data.get("layout_name")
+            or f"{self.session_data.get('id', 10001)}.lay"
+        )
+
         layout_data = {
-            "layout_name": self.session_data.get("layout_name") or f"{self.session_data.get('id', 10001)}.lay",
+            "layout_name": layout_name_val,
             "sheet_w_mm": sheet_w,
             "sheet_h_mm": sheet_h,
             "dimensions_str": f"{sheet_h / 10.0:.2f} X {sheet_w / 10.0:.2f} cm ({mat_h_m:.2f} X {mat_w_m:.2f} M)",
             "mat_area_str": f"{mat_area:.2f} sq.M.",
             "used_area_str": f"{used_area:.2f} sq.M.",
             "yield_pct": eff,
-            "shapes_count": len(self.session_data.get("shapes", [])) or min(len(placed), 15),
-            "instances_count": len(placed),
+            "shapes_count": len(session_shapes_val) or min(len(target_pieces), 15),
+            "instances_count": len(target_pieces),
             "gap_str": f"{float(mat.get('gap', 1.0)):.2f} mm" if (mat and 'gap' in mat) else "1.00 mm",
-            "placed_pieces": placed,
+            "placed_pieces": target_pieces,
             "material_code": code_val,
             "material_desc": desc_val,
             "material_layers": layers_val,
             "material": mat,
+            "session_shapes": session_shapes_val,
+            "layouts": layouts,
+            "current_layout_index": target_layout_idx,
         }
         dlg = LayoutPrintDialog(self, layout_data=layout_data)
         dlg.focus_set()
@@ -1161,22 +1239,161 @@ class SessionView(tk.Frame):
         except Exception as e:
             messagebox.showerror("Erro ao Exportar Layout", f"Falha ao exportar layout:\n{e}", parent=self)
 
-    def clear_current_layout(self):
-        """Limpa as peças posicionadas do layout da sessão."""
-        if not self.session_data.get("placed_pieces"):
+    def clear_current_layout(self, ask_confirm=True):
+        """Limpa as peças posicionadas e todos os layouts da sessão."""
+        if not self.has_calculated_layout():
             return
-        if not messagebox.askyesno("Limpar Layout", "Deseja realmente limpar as peças posicionadas deste layout?", parent=self):
+        if ask_confirm and not messagebox.askyesno("Limpar Layout", "Deseja realmente limpar as peças posicionadas deste layout?", parent=self):
             return
+        sess_id = self.session_data.get("id") if isinstance(self.session_data, dict) else None
         self.session_data["placed_pieces"] = []
+        self.session_data["layouts"] = []
         self.session_data["yield_percent"] = 0.0
-        self.session_data["status"] = "Open"
-        if self.db and self.session_data.get("id"):
-            self.db.update_session(self.session_data["id"], placed_pieces=[], yield_pct=0.0, status="Open")
+        self.session_data["cutting_time_sec"] = 0.0
+        self.session_data["used_area_m2"] = 0.0
+        self.session_data["status"] = "Stand by"
+
+        layers = int(self.session_data.get("layers", 1)) if self.session_data else 1
+        if self.session_data.get("shapes"):
+            for s in self.session_data["shapes"]:
+                req_p = int(s.get("pairs", 0))
+                s["rest"] = req_p
+                s["resto"] = calc_resto(req_p, layers)
+
+        if self.db and sess_id:
+            self.db.delete_session_layouts(sess_id)
+            if self.session_data.get("shapes"):
+                self.db.update_session_shapes(sess_id, self.session_data["shapes"])
+
+        if self.canvas_ref and hasattr(self.canvas_ref, "clear_bed"):
+            self.canvas_ref.clear_bed()
+
+        top = self.winfo_toplevel()
+        if hasattr(top, "current_session") and top.current_session and top.current_session.get("id") == sess_id:
+            top.current_session["placed_pieces"] = []
+            top.current_session["layouts"] = []
+            top.current_session["yield_percent"] = 0.0
+            top.current_session["cutting_time_sec"] = 0.0
+            top.current_session["used_area_m2"] = 0.0
+            top.current_session["status"] = "Stand by"
+            if hasattr(top, "canvas") and hasattr(top.canvas, "clear_bed"):
+                top.canvas.clear_bed()
+        if hasattr(top, "sessions"):
+            for s in top.sessions:
+                if s.get("id") == sess_id:
+                    s["placed_pieces"] = []
+                    s["layouts"] = []
+                    s["yield_percent"] = 0.0
+                    s["cutting_time_sec"] = 0.0
+                    s["used_area_m2"] = 0.0
+                    s["status"] = "Stand by"
+                    if self.session_data.get("shapes"):
+                        s["shapes"] = self.session_data["shapes"]
+                    break
+        if hasattr(top, "layout_editor_view") and top.layout_editor_view:
+            if hasattr(top.layout_editor_view, "set_session_layouts"):
+                top.layout_editor_view.set_session_layouts([], initial_index=0)
+            if hasattr(top.layout_editor_view, "set_pieces"):
+                top.layout_editor_view.set_pieces([])
+
         self.load_session(self.session_data)
 
     def show_lays_context_menu(self, event):
         if hasattr(self, "lay_menu"):
             self.lay_menu.tk_popup(event.x_root, event.y_root)
+
+    def _resolve_piece_contour(self, piece: dict) -> list:
+        """Resolve o contorno geométrico de uma peça caso não esteja embutido diretamente."""
+        if not piece or not isinstance(piece, dict):
+            return []
+
+        # 1. Contorno direto na peça
+        c = piece.get("contour")
+        if c and isinstance(c, (list, tuple)) and len(c) >= 3:
+            return list(c)
+
+        # 2. Contorno no objeto shape embutido
+        shp = piece.get("shape")
+        if isinstance(shp, dict):
+            c = shp.get("contour")
+            if c and isinstance(c, (list, tuple)) and len(c) >= 3:
+                return list(c)
+            if shp.get("contour_json"):
+                try:
+                    c = json.loads(shp["contour_json"])
+                    if c and len(c) >= 3:
+                        return c
+                except Exception:
+                    pass
+
+        # 3. Busca nas listas de moldes da sessão e catálogo
+        target_id = str(piece.get("target_id") or piece.get("shape_id") or piece.get("mold_id") or "").strip()
+        piece_name = str(piece.get("name") or piece.get("piece_name") or "").strip().lower()
+        piece_size = str(piece.get("size") or "").strip().lower()
+
+        candidates = []
+        if hasattr(self, "shapes_list") and self.shapes_list:
+            candidates.extend(self.shapes_list)
+        if isinstance(self.session_data, dict) and self.session_data.get("shapes"):
+            candidates.extend(self.session_data["shapes"])
+        if hasattr(self, "all_shapes_catalog") and self.all_shapes_catalog:
+            candidates.extend(self.all_shapes_catalog)
+
+        # 3a. Busca exata por ID
+        if target_id:
+            for s in candidates:
+                s_id = str(s.get("id") or s.get("shape_id") or "").strip()
+                if s_id and s_id == target_id:
+                    sc = s.get("contour")
+                    if sc and len(sc) >= 3:
+                        return list(sc)
+                    if s.get("contour_json"):
+                        try:
+                            sc = json.loads(s["contour_json"])
+                            if sc and len(sc) >= 3:
+                                return sc
+                        except Exception:
+                            pass
+
+        # 3b. Busca por Nome + Tamanho
+        if piece_name:
+            for s in candidates:
+                s_name = str(s.get("name", "")).strip().lower()
+                s_size = str(s.get("size", "")).strip().lower()
+                if s_name == piece_name and (not piece_size or s_size == piece_size):
+                    sc = s.get("contour")
+                    if sc and len(sc) >= 3:
+                        return list(sc)
+                    if s.get("contour_json"):
+                        try:
+                            sc = json.loads(s["contour_json"])
+                            if sc and len(sc) >= 3:
+                                return sc
+                        except Exception:
+                            pass
+
+        # 3c. Busca no banco de dados se disponível
+        if getattr(self, "db", None) and target_id and target_id.isdigit():
+            try:
+                db_shp = self.db.get_shape_by_id(int(target_id))
+                if db_shp:
+                    sc = db_shp.get("contour")
+                    if sc and len(sc) >= 3:
+                        return list(sc)
+                    if db_shp.get("contour_json"):
+                        sc = json.loads(db_shp["contour_json"])
+                        if sc and len(sc) >= 3:
+                            return sc
+            except Exception:
+                pass
+
+        # 4. Fallback padrão retangular para garantir visibilidade
+        return [
+            {"x": 0.0, "y": 0.0},
+            {"x": 75.0, "y": 0.0},
+            {"x": 75.0, "y": 45.0},
+            {"x": 0.0, "y": 45.0}
+        ]
 
     def draw_mini_layout_preview(self):
         if not hasattr(self, "mini_layout_canvas"):
@@ -1191,16 +1408,59 @@ class SessionView(tk.Frame):
         if ch < 50:
             ch = 380
 
+        # Obtém layouts da sessão (se houver)
+        sess_layouts = self.session_data.get("layouts", []) if isinstance(self.session_data, dict) else []
+        if not sess_layouts and isinstance(self.session_data, dict) and self.session_data.get("placed_pieces"):
+            sess_layouts = [{
+                "layout_index": 0,
+                "name": self.session_data.get("layout_name") or "lay0000",
+                "pieces": self.session_data.get("placed_pieces", []),
+                "width_mm": float(self.session_data.get("sheet_width", 1380.0)),
+                "height_mm": float(self.session_data.get("sheet_height", 1080.0)),
+                "yield_percent": self.session_data.get("yield_percent", 0.0),
+                "cutting_time_sec": self.session_data.get("cutting_time_sec", 0.0),
+                "used_area_m2": self.session_data.get("used_area_m2", 0.0)
+            }]
+
+        # Identifica a placa selecionada na tabela tree_lays
+        selected_idx = 0
+        target_layout = None
+        if hasattr(self, "tree_lays"):
+            sel = self.tree_lays.selection()
+            if sel:
+                item_iid = sel[0]
+                if item_iid.startswith("lay_"):
+                    try:
+                        selected_idx = int(item_iid.replace("lay_", ""))
+                    except ValueError:
+                        selected_idx = 0
+
+        if sess_layouts:
+            if 0 <= selected_idx < len(sess_layouts):
+                target_layout = sess_layouts[selected_idx]
+            else:
+                target_layout = sess_layouts[0]
+                selected_idx = 0
+
         sheet_w = 1350.0
         sheet_h = 2553.38
-        mat = self.session_data.get("material")
-        if mat:
-            sheet_w = float(mat.get("width_mm", 1350.0))
-            sheet_h = float(mat.get("height_mm", 2553.38))
-        if "sheet_width" in self.session_data:
-            sheet_w = float(self.session_data["sheet_width"])
-        if "sheet_height" in self.session_data:
-            sheet_h = float(self.session_data["sheet_height"])
+        if target_layout:
+            sheet_w = float(target_layout.get("width_mm") or target_layout.get("ris_w") or sheet_w)
+            sheet_h = float(target_layout.get("height_mm") or target_layout.get("ris_l") or sheet_h)
+            placed_pieces = target_layout.get("pieces") or target_layout.get("placed_pieces") or []
+            ly_name = target_layout.get("name") or f"lay{selected_idx:04d}"
+        else:
+            mat = self.session_data.get("material") if isinstance(self.session_data, dict) else None
+            if mat:
+                sheet_w = float(mat.get("width_mm", 1350.0))
+                sheet_h = float(mat.get("height_mm", 2553.38))
+            if isinstance(self.session_data, dict):
+                if "sheet_width" in self.session_data:
+                    sheet_w = float(self.session_data["sheet_width"])
+                if "sheet_height" in self.session_data:
+                    sheet_h = float(self.session_data["sheet_height"])
+            placed_pieces = self.session_data.get("placed_pieces", []) if isinstance(self.session_data, dict) else []
+            ly_name = self.session_data.get("layout_name") or "lay0000" if isinstance(self.session_data, dict) else "lay0000"
 
         pad = 10
         top_lbl_h = 16
@@ -1215,7 +1475,6 @@ class SessionView(tk.Frame):
         y1 = (ch - plate_h - top_lbl_h) / 2.0 + top_lbl_h
         y2 = y1 + plate_h
 
-        placed_pieces = self.session_data.get("placed_pieces", [])
         if not placed_pieces:
             cv.config(cursor="")
             # Sessão em branco / sem encaixe: exibe a chapa vazia limpa sem peças falsas
@@ -1247,27 +1506,28 @@ class SessionView(tk.Frame):
             cv.create_line(x1, sy, x2, sy, fill="#8c8c8c", width=1)
             gy += 300.0
 
-        # Rótulo com dimensões no topo da chapa (estilo Placa (298.00 X 138.00 cm))
+        # Rótulo com dimensões no topo da chapa (estilo Placa (298.00 X 138.00 cm) ou Placa 0 - lay0000 (...))
         h_cm = sheet_h / 10.0
         w_cm = sheet_w / 10.0
+        header_text = f"Placa {selected_idx} - {ly_name} ({h_cm:.2f} X {w_cm:.2f} cm)" if len(sess_layouts) > 1 else f"Placa ({h_cm:.2f} X {w_cm:.2f} cm)"
         cv.create_text(
             cw / 2,
             max(8, y1 - 8),
-            text=f"Placa ({h_cm:.2f} X {w_cm:.2f} cm)",
+            text=header_text,
             fill="#000000",
             font=("Segoe UI", 8, "bold")
         )
 
         # Desenha as peças reais posicionadas exatamente com a orientação e cores do Layout Editor
         for idx, p in enumerate(placed_pieces):
-            contour = p.get("contour") or (p.get("shape", {}).get("contour") if isinstance(p.get("shape"), dict) else [])
+            contour = self._resolve_piece_contour(p)
             if not contour:
                 continue
-            cx = p.get("x", 0.0)
-            cy = p.get("y", 0.0)
-            rot = float(p.get("rotation", p.get("angle", 0.0)))
-            size_str = str(p.get("size") or (p.get("shape", {}).get("size") if isinstance(p.get("shape"), dict) else "") or p.get("name") or "41")
-            col = get_color_for_size(size_str, idx)
+            cx = float(p.get("x", 0.0))
+            cy = float(p.get("y", 0.0))
+            rot = float(p.get("rotation", p.get("angle", p.get("rotation_deg", 0.0))))
+            size_str = str(p.get("size") or (p.get("shape", {}).get("size") if isinstance(p.get("shape"), dict) else "") or p.get("piece_name") or p.get("name") or "41")
+            col = p.get("color") or get_color_for_size(size_str, idx)
 
             poly = transform_contour(contour, cx, cy, rot)
             scr = []
@@ -1279,7 +1539,7 @@ class SessionView(tk.Frame):
                 cv.create_polygon(scr, fill=col, outline="#000000", width=1)
 
         # Linha de Corte de Refile (CAM) se configurada
-        trim_cut = self.session_data.get("trim_cut_line")
+        trim_cut = self.session_data.get("trim_cut_line") if isinstance(self.session_data, dict) else None
         if trim_cut and trim_cut.get("enabled", True):
             cut_y = float(trim_cut.get("y", sheet_h))
             sy_cut = y2 - cut_y * sc
@@ -1574,6 +1834,8 @@ class SessionView(tk.Frame):
     def on_rewind_button_click(self):
         if self.on_rewind_cb:
             self.on_rewind_cb()
+        else:
+            self.clear_current_layout(ask_confirm=False)
 
     def on_cut_button_click(self):
         if self.on_cut_cb:
@@ -1665,26 +1927,72 @@ class SessionView(tk.Frame):
         # Atualiza a tabela da aba Layouts (em branco caso não haja encaixe)
         if hasattr(self, "tree_lays"):
             self.tree_lays.delete(*self.tree_lays.get_children())
-            placed_pieces = session_data.get("placed_pieces", [])
-            if placed_pieces:
-                eff = session_data.get('yield_percent', 0.0)
+            sess_layouts = session_data.get("layouts", [])
+            if not sess_layouts and session_data.get("id") and hasattr(self, "db") and self.db:
+                try:
+                    res = self.db.get_session_layouts(session_data["id"])
+                    if isinstance(res, list) and res:
+                        sess_layouts = res
+                        session_data["layouts"] = sess_layouts
+                except Exception:
+                    pass
+
+            if not sess_layouts and session_data.get("placed_pieces"):
+                sess_layouts = [{
+                    "layout_index": 0,
+                    "name": session_data.get("layout_name") or "lay0000",
+                    "pieces": session_data.get("placed_pieces", []),
+                    "yield_percent": session_data.get("yield_percent", 0.0),
+                    "cutting_time_sec": session_data.get("cutting_time_sec", 0.0),
+                    "used_area_m2": session_data.get("used_area_m2", 0.0)
+                }]
+                session_data["layouts"] = sess_layouts
+
+            for ly_idx, ly in enumerate(sess_layouts):
+                ly_pieces = ly.get("pieces") or ly.get("placed_pieces") or []
+                if not ly_pieces and ly_idx == 0 and session_data.get("placed_pieces"):
+                    ly_pieces = session_data.get("placed_pieces") or []
+                    ly["pieces"] = ly_pieces
+                    ly["placed_pieces"] = ly_pieces
+
+                eff = float(ly.get("yield_percent", ly.get("yield_pct", 0.0)))
                 eff_str = f"{eff:.2f}%".replace('.', ',')
-                pieces_cnt = str(len(placed_pieces))
-                time_s = session_data.get("cutting_time_sec", 0.0)
+
+                cnt = len(ly_pieces)
+                if cnt == 0 and ly.get("num_items"):
+                    try:
+                        cnt = int(ly.get("num_items") or 0)
+                    except (ValueError, TypeError):
+                        cnt = 0
+                pieces_cnt = str(cnt)
+
+                time_s = float(ly.get("cutting_time_sec", 0.0))
                 time_str = f"{int(time_s // 60):02d}:{int(time_s % 60):02d}"
-                area_m2 = session_data.get("used_area_m2", 0.0)
-                if not area_m2 and placed_pieces:
-                    tot_mm2 = sum(polygon_area(p.get("contour", [])) for p in placed_pieces)
+                area_m2 = ly.get("used_area_m2", 0.0)
+                if not area_m2 and ly_pieces:
+                    tot_mm2 = sum(polygon_area(self._resolve_piece_contour(p)) for p in ly_pieces)
                     area_m2 = tot_mm2 / 1000000.0
                 area_str = f"{area_m2:.2f}".replace('.', ',') if area_m2 else "0,08"
-                self.tree_lays.insert("", "end", iid="lay_0", values=("▶", "0", eff_str, "1", "0", time_str, pieces_cnt, area_str))
-                self.tree_lays.selection_set("lay_0")
+                indicator = "▶" if ly_idx == 0 else ""
+                row_iid = f"lay_{ly_idx}"
+                self.tree_lays.insert("", "end", iid=row_iid, values=(indicator, str(ly_idx), eff_str, "1", "0", time_str, pieces_cnt, area_str))
 
-        has_pieces = bool(session_data.get("placed_pieces")) if isinstance(session_data, dict) else False
+            if isinstance(sess_layouts, list) and sess_layouts:
+                if self.tree_lays.exists("lay_0"):
+                    try:
+                        self.tree_lays.selection_set("lay_0")
+                    except Exception:
+                        pass
+                if not session_data.get("placed_pieces"):
+                    session_data["placed_pieces"] = sess_layouts[0].get("pieces") or sess_layouts[0].get("placed_pieces") or []
+
+        has_pieces = bool(session_data.get("placed_pieces") or session_data.get("layouts")) if isinstance(session_data, dict) else False
         if hasattr(self, "btn_open_editor"):
             self.btn_open_editor.config(state="normal" if has_pieces else "disabled")
         if hasattr(self, "btn_print_layout"):
             self.btn_print_layout.config(state="normal" if has_pieces else "disabled")
+        if hasattr(self, "btn_preview_open_editor"):
+            self.btn_preview_open_editor.config(state="normal" if has_pieces else "disabled")
 
         # Atualiza a tabela da aba Materiais
         if hasattr(self, "tree_mat"):
@@ -1724,7 +2032,7 @@ class SessionView(tk.Frame):
         """Verifica se a sessão possui um layout de corte calculado com peças posicionadas."""
         if not self.session_data or not isinstance(self.session_data, dict):
             return False
-        return bool(self.session_data.get("placed_pieces"))
+        return bool(self.session_data.get("placed_pieces") or self.session_data.get("layouts"))
 
     def remove_session_material(self, event=None):
         """Remove o material da sessão caso o layout NÃO esteja calculado.
@@ -3202,5 +3510,24 @@ Layouts:
 - Material Yield (Aproveitamento Útil): {yield_pct:.1f}%
 - Estimated ATOM Cycle Time: {int(est_sec // 60)}m {int(est_sec % 60):02d}s
 """
+        shapes = getattr(self, "shapes_list", None) or (self.session_data.get("shapes", []) if hasattr(self, "session_data") and self.session_data else [])
+        layouts = (self.session_data.get("layouts", []) if hasattr(self, "session_data") and self.session_data else [])
+        if layouts and shapes:
+            from cad.nesting_engine import piece_matches_shape, sort_shapes_by_sequence, parse_sequence_num
+            text += "\nSequência de Encaixe por Placa:\n"
+            sorted_s, _ = sort_shapes_by_sequence(shapes)
+            for s in sorted_s:
+                name = s.get("name") or s.get("id") or "Molde"
+                seq = parse_sequence_num(s.get("sequence"))
+                seq_label = f"seq {seq}" if seq is not None else "sem seq"
+                sheets = [f"lay{i:04d}" for i, ly in enumerate(layouts) if any(piece_matches_shape(p, s) for p in ly.get("pieces", []))]
+                if sheets:
+                    start_lay = sheets[0]
+                    end_lay = sheets[-1]
+                    span_str = start_lay if start_lay == end_lay else f"{start_lay} → {end_lay}"
+                    text += f"- Molde {name} ({seq_label}): {span_str}\n"
+                else:
+                    text += f"- Molde {name} ({seq_label}): Não encaixado\n"
+
         self.txt_summary.delete("1.0", "end")
         self.txt_summary.insert("1.0", text)

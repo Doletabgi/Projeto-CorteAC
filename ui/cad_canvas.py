@@ -3,6 +3,7 @@ JobManager 2000 (Python Edition)
 Interactive CAD Canvas Widget (Tkinter Dark Theme)
 """
 
+import json
 import tkinter as tk
 from cad.geometry import transform_contour, point_in_polygon, rotate_point, polygon_bbox, polygons_collide
 from cad.colors import get_color_for_size
@@ -161,6 +162,29 @@ class CADCanvas(tk.Canvas):
         if self.on_change:
             self.on_change()
 
+    def _resolve_piece_contour(self, piece: dict) -> list:
+        """Resolve o contorno da peça ou retorna retângulo seguro caso ausente."""
+        c = piece.get("contour")
+        if c and len(c) >= 3:
+            return list(c)
+        if isinstance(piece.get("shape"), dict):
+            sc = piece["shape"].get("contour")
+            if sc and len(sc) >= 3:
+                return list(sc)
+            if piece["shape"].get("contour_json"):
+                try:
+                    sc = json.loads(piece["shape"]["contour_json"])
+                    if sc and len(sc) >= 3:
+                        return sc
+                except Exception:
+                    pass
+        return [
+            {"x": 0.0, "y": 0.0},
+            {"x": 80.0, "y": 0.0},
+            {"x": 80.0, "y": 50.0},
+            {"x": 0.0, "y": 50.0}
+        ]
+
     # =========================================================================
     # Eventos de Seleção e Arrastar
     # =========================================================================
@@ -171,7 +195,7 @@ class CADCanvas(tk.Canvas):
         hit_idx = -1
         for i in range(len(self.placed_pieces) - 1, -1, -1):
             p = self.placed_pieces[i]
-            contour = p.get("contour") or (p.get("shape", {}).get("contour") if isinstance(p.get("shape"), dict) else [])
+            contour = self._resolve_piece_contour(p)
             rot = float(p.get("rotation", p.get("angle", 0.0)))
             poly = transform_contour(contour, p["x"], p["y"], rot)
             if point_in_polygon(wx, wy, poly):
@@ -193,14 +217,14 @@ class CADCanvas(tk.Canvas):
 
             # Desenha ghost outline na posição original
             self.delete("drag_ghost")
-            contour = p.get("contour") or (p.get("shape", {}).get("contour") if isinstance(p.get("shape"), dict) else [])
+            contour = self._resolve_piece_contour(p)
             rot = float(p.get("rotation", p.get("angle", 0.0)))
             orig_poly = transform_contour(contour, p["x"], p["y"], rot)
             ghost_coords = []
             for pt in orig_poly:
                 sx, sy = self.world_to_screen(pt["x"], pt["y"])
                 ghost_coords.extend([sx, sy])
-            if ghost_coords:
+            if len(ghost_coords) >= 6:
                 self.create_polygon(
                     ghost_coords,
                     fill="",
@@ -236,7 +260,7 @@ class CADCanvas(tk.Canvas):
             p["y"] = round(wy - self.drag_start_world[1])
 
             # Checagem em tempo real de colisão
-            contour = p.get("contour") or (p.get("shape", {}).get("contour") if isinstance(p.get("shape"), dict) else [])
+            contour = self._resolve_piece_contour(p)
             rot = float(p.get("rotation", p.get("angle", 0.0)))
             curr_poly = transform_contour(contour, p["x"], p["y"], rot)
             curr_bbox = polygon_bbox(curr_poly)
@@ -254,7 +278,7 @@ class CADCanvas(tk.Canvas):
             for j, other in enumerate(self.placed_pieces):
                 if j == self.dragged_index:
                     continue
-                o_contour = other.get("contour") or (other.get("shape", {}).get("contour") if isinstance(other.get("shape"), dict) else [])
+                o_contour = self._resolve_piece_contour(other)
                 o_rot = float(other.get("rotation", other.get("angle", 0.0)))
                 o_poly = transform_contour(o_contour, other["x"], other["y"], o_rot)
                 o_bbox = polygon_bbox(o_poly)
@@ -444,7 +468,7 @@ class CADCanvas(tk.Canvas):
         num_pieces = len(self.placed_pieces)
         cached_geoms = []
         for p in self.placed_pieces:
-            contour = p.get("contour") or (p.get("shape", {}).get("contour") if isinstance(p.get("shape"), dict) else [])
+            contour = self._resolve_piece_contour(p)
             rot = float(p.get("rotation", p.get("angle", 0.0)))
             px = float(p.get("x", 0.0))
             py = float(p.get("y", 0.0))
@@ -487,13 +511,14 @@ class CADCanvas(tk.Canvas):
                 outline_col = piece_col
                 line_width = 2.0
 
-            self.create_polygon(
-                screen_coords,
-                fill=fill_col,
-                outline=outline_col,
-                width=line_width,
-                tags=(f"piece_{idx}", f"piece_poly_{idx}", "piece_item")
-            )
+            if len(screen_coords) >= 6:
+                self.create_polygon(
+                    screen_coords,
+                    fill=fill_col,
+                    outline=outline_col,
+                    width=line_width,
+                    tags=(f"piece_{idx}", f"piece_poly_{idx}", "piece_item")
+                )
 
             # Furações (Punches) em verde/vermelho nítido
             holes = p.get("holes") or (p.get("shape", {}).get("holes") if isinstance(p.get("shape"), dict) else []) or []

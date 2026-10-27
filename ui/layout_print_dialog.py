@@ -13,6 +13,7 @@ from datetime import datetime
 from pathlib import Path
 import tkinter as tk
 from tkinter import ttk, messagebox, filedialog
+import tkinter.font as tkfont
 from PIL import Image, ImageDraw, ImageFont
 
 from config import THEME
@@ -190,6 +191,64 @@ def open_company_logo_dialog(parent_window, on_update_callback=None):
     return dlg
 
 
+def format_size(size_val) -> str:
+    """
+    Formata o tamanho para exibição industrial na legenda:
+    - Tamanho inteiro sem decimais (ex: 28)
+    - Meio número com uma casa decimal (ex: 35.5)
+    - Suporta floats, inteiros e strings (ex: '28.00', '35.50', '33_5a', '28a')
+    """
+    if size_val is None:
+        return ""
+    s = str(size_val).strip()
+    if not s or s.lower() in ("none", "null", ""):
+        return ""
+    s_norm = s.replace("_", ".")
+    m = re.search(r"(\d+(?:\.\d+)?)", s_norm)
+    if m:
+        try:
+            val = float(m.group(1))
+            if val.is_integer():
+                return str(int(val))
+            if (val * 2).is_integer():
+                return f"{val:.1f}"
+            return f"{val:.2f}".rstrip("0").rstrip(".")
+        except (ValueError, TypeError):
+            pass
+    return s
+
+
+def extract_molde_base_name(raw_name: str, raw_size: str = "") -> str:
+    """
+    Extrai o nome base canônico do molde, removendo caminhos, extensões .die
+    e sufixos de numeração (ex: '129_187_Tras_28a' -> '129_187_Tras').
+    """
+    if not raw_name:
+        return "Molde"
+    name = str(raw_name).strip()
+    for ext in (".die", ".Die", ".DIE", ".shp", ".SHP", ".d", ".D"):
+        if name.endswith(ext):
+            name = name[:-len(ext)]
+    if raw_size:
+        clean_sz = str(raw_size).strip()
+        fmt_sz = format_size(clean_sz)
+        variations = {clean_sz, fmt_sz, clean_sz.replace(".", "_"), clean_sz.replace("_", ".")}
+        for v in sorted(variations, key=len, reverse=True):
+            if not v:
+                continue
+            pat = rf"[\s_\-]+{re.escape(v)}[a-zA-Z]?$"
+            subbed = re.sub(pat, "", name, flags=re.IGNORECASE)
+            if subbed != name and subbed.strip():
+                name = subbed
+                break
+    m = re.search(r"^(.*?)(?:[\s_\-]+(\d+(?:[_\.]\d+)?[a-zA-Z]?))$", name)
+    if m and m.group(1) and not m.group(1).endswith("_"):
+        candidate_num = re.findall(r"\d+", m.group(2))
+        if candidate_num and 15 <= int(candidate_num[0]) <= 55:
+            name = m.group(1)
+    return name.strip() or str(raw_name).strip()
+
+
 class LayoutPrintDialog(tk.Toplevel):
     """
     Janela modal de Visualização de Impressão (Print Preview) do Layout Editor.
@@ -319,9 +378,25 @@ class LayoutPrintDialog(tk.Toplevel):
             self.instances_count = 40
             self.init_sample_pieces()
 
-        # Dimensões da folha A4 em pontos de tela (base 100%): 595 x 842 pt
-        self.page_w_base = 595
-        self.page_h_base = 842
+        # Metadados de sessão e moldes para legenda
+        self.session_shapes = self.layout_data.get("session_shapes") or self.layout_data.get("shapes") or []
+        self.layouts = self.layout_data.get("layouts", [])
+        self.current_layout_index = self.layout_data.get("current_layout_index", 0)
+        self.material_layers = int(mat_layers) if mat_layers is not None else 2
+
+        # Orientação da folha (retrato ou paisagem)
+        self.orientation = self.layout_data.get("orientation", "portrait")
+        if self.orientation == "landscape":
+            self.page_w_base = 842
+            self.page_h_base = 595
+        else:
+            self.page_w_base = 595
+            self.page_h_base = 842
+
+        # Legenda calculada
+        self.legend_data = self.layout_data.get("legend_data")
+        if self.legend_data is None:
+            self.legend_data = self.build_legend_data()
 
         # Carrega logotipo da empresa
         self.load_company_logo()
@@ -329,7 +404,8 @@ class LayoutPrintDialog(tk.Toplevel):
         # Monta a barra de ferramentas superior e a área de rolagem da folha
         self.setup_ui()
 
-        # Renderiza a página
+        # Renderiza a página inicialmente
+        self.redraw()
         self.after(50, self.fit_to_page)
 
     def load_company_logo(self):
@@ -417,8 +493,167 @@ class LayoutPrintDialog(tk.Toplevel):
                     "x": cx,
                     "y": cy,
                     "color": color,
-                    "rotation": 0.0
+                    "rotation": 0.0,
+                    "name": "Velcro",
+                    "size": "36"
                 })
+
+    def build_legend_data(self):
+        """
+        Constrói a lista estruturada da legenda por molde:
+        [
+            {
+                "molde_name": str,
+                "shape_id": int/str or None,
+                "sizes": [
+                    {"size": str, "n": int, "m": int, "is_error": bool},
+                    ...
+                ]
+            }, ...
+        ]
+        """
+        if self.layout_data.get("legend_data"):
+            return self.layout_data.get("legend_data")
+
+        session_shapes = self.session_shapes or []
+        placed_pieces = self.placed_pieces or []
+        layouts = self.layouts or []
+        layers = max(1, getattr(self, "material_layers", 2) or 2)
+        is_multi_plate = (len(layouts) > 1)
+
+        # 1. Mapeamento de demanda da sessão e ShapeId a partir de session_shapes
+        session_m = {}         # (molde_name, fmt_size) -> int
+        molde_shape_ids = {}   # molde_name -> shape_id
+        moldes_order = []      # [molde_name, ...]
+        sizes_by_molde = {}    # molde_name -> set(fmt_size)
+
+        for shp in session_shapes:
+            if not isinstance(shp, dict):
+                continue
+            s_name = shp.get("name") or "Molde"
+            s_size_raw = shp.get("size") or ""
+            m_name = extract_molde_base_name(s_name, s_size_raw)
+            fmt_sz = format_size(s_size_raw)
+            s_id = shp.get("shape_id") if shp.get("shape_id") is not None else shp.get("id")
+            m_pairs = int(shp.get("pairs") or shp.get("required_qty", 0) or shp.get("required", 0) or 0)
+
+            if m_name not in moldes_order:
+                moldes_order.append(m_name)
+            if m_name not in molde_shape_ids and s_id is not None and str(s_id).strip():
+                molde_shape_ids[m_name] = str(s_id).strip()
+            if m_name not in sizes_by_molde:
+                sizes_by_molde[m_name] = set()
+            if fmt_sz:
+                sizes_by_molde[m_name].add(fmt_sz)
+                session_m[(m_name, fmt_sz)] = m_pairs
+
+        # 2. Contagem de peças/pares na placa atual (placed_pieces)
+        placed_counts = {}   # (molde_name, fmt_size) -> piece count
+        explicit_pairs = {}  # (molde_name, fmt_size) -> explicit pair count if provided
+
+        for p in placed_pieces:
+            if not isinstance(p, dict):
+                continue
+            p_name = p.get("name") or p.get("shape_name") or (p.get("shape", {}).get("name") if isinstance(p.get("shape"), dict) else "") or "Molde"
+            p_size_raw = p.get("size") or (p.get("shape", {}).get("size") if isinstance(p.get("shape"), dict) else "")
+            m_name = extract_molde_base_name(p_name, p_size_raw)
+            fmt_sz = format_size(p_size_raw)
+            if not fmt_sz and "size" in p:
+                fmt_sz = format_size(p["size"])
+            if not fmt_sz:
+                fmt_sz = "41"
+
+            if m_name not in moldes_order:
+                moldes_order.append(m_name)
+            if m_name not in sizes_by_molde:
+                sizes_by_molde[m_name] = set()
+            sizes_by_molde[m_name].add(fmt_sz)
+
+            p_sid = p.get("shape_id") or p.get("target_id") or (p.get("shape", {}).get("id") if isinstance(p.get("shape"), dict) else None)
+            if m_name not in molde_shape_ids and p_sid is not None and str(p_sid).strip():
+                molde_shape_ids[m_name] = str(p_sid).strip()
+
+            k = (m_name, fmt_sz)
+            if "pairs" in p and p["pairs"] is not None:
+                explicit_pairs[k] = explicit_pairs.get(k, 0) + int(p["pairs"])
+            else:
+                placed_counts[k] = placed_counts.get(k, 0) + 1
+
+        # 3. Em multi-placa, calcula somatório total entre placas se session_m não estiver presente
+        multi_plate_totals = {}
+        if is_multi_plate and not session_m:
+            for ly in layouts:
+                ly_pcs = ly.get("pieces") or ly.get("placed_pieces") or []
+                for p in ly_pcs:
+                    if not isinstance(p, dict):
+                        continue
+                    p_name = p.get("name") or p.get("shape_name") or (p.get("shape", {}).get("name") if isinstance(p.get("shape"), dict) else "") or "Molde"
+                    p_size_raw = p.get("size") or (p.get("shape", {}).get("size") if isinstance(p.get("shape"), dict) else "")
+                    m_name = extract_molde_base_name(p_name, p_size_raw)
+                    fmt_sz = format_size(p_size_raw) or "41"
+                    k = (m_name, fmt_sz)
+                    if "pairs" in p and p["pairs"] is not None:
+                        multi_plate_totals[k] = multi_plate_totals.get(k, 0) + int(p["pairs"])
+                    else:
+                        multi_plate_totals[k] = multi_plate_totals.get(k, 0) + 1
+
+            for k in list(multi_plate_totals.keys()):
+                if k not in explicit_pairs:
+                    multi_plate_totals[k] = (multi_plate_totals[k] * layers) // 2
+
+        # 4. Monta lista consolidada de moldes e tamanhos
+        legend_result = []
+
+        def _size_key(sz_str):
+            m = re.search(r"(\d+(?:\.\d+)?)", str(sz_str))
+            return float(m.group(1)) if m else 0.0
+
+        for m_name in moldes_order:
+            all_szs = sorted(list(sizes_by_molde.get(m_name, [])), key=_size_key)
+            size_list = []
+
+            for sz in all_szs:
+                k = (m_name, sz)
+                if k in explicit_pairs:
+                    n = explicit_pairs[k]
+                elif k in placed_counts:
+                    n = (placed_counts[k] * layers) // 2
+                else:
+                    n = 0
+
+                if k in session_m and session_m[k] > 0:
+                    m = session_m[k]
+                elif is_multi_plate and k in multi_plate_totals and multi_plate_totals[k] > 0:
+                    m = multi_plate_totals[k]
+                else:
+                    m = n
+
+                # Não lista tamanhos com 0 peças na placa atual se não foram solicitados
+                if n == 0 and (k not in session_m or session_m[k] == 0):
+                    continue
+
+                # Se n == 0 nesta placa em multi-placa e há outras peças deste molde aqui:
+                if n == 0 and is_multi_plate:
+                    has_other_placed = any(placed_counts.get((m_name, other_sz), 0) > 0 or explicit_pairs.get((m_name, other_sz), 0) > 0 for other_sz in all_szs)
+                    if has_other_placed:
+                        continue
+
+                is_error = (n > m)
+                size_list.append({
+                    "size": sz,
+                    "n": n,
+                    "m": m,
+                    "is_error": is_error
+                })
+
+            if size_list:
+                legend_result.append({
+                    "molde_name": m_name,
+                    "shape_id": molde_shape_ids.get(m_name),
+                    "sizes": size_list
+                })
+
+        return legend_result
 
     def setup_ui(self):
         # 1. Barra de Ferramentas Superior
@@ -707,12 +942,158 @@ class LayoutPrintDialog(tk.Toplevel):
         )
 
         # =====================================================================
-        # 3. Gráfico do Encaixe / Chapa de Corte (Proporcional à Folha A4)
+        # 2.5. Tabela de Legenda por Molde (com ShapeId e contagem n/m)
         # =====================================================================
         meta_end_y = meta_y + int(18 * self.zoom)
         footer_y = py + page_h - int(24 * self.zoom)
 
-        avail_top = meta_end_y + int(15 * self.zoom)
+        legend_rows = getattr(self, "legend_data", None)
+        if legend_rows is None:
+            self.legend_data = self.build_legend_data()
+            legend_rows = self.legend_data
+
+        f_legend_name = ("Courier", f_size_md, "bold")
+        f_size_sub = max(5, int(f_size_md * 0.72))
+        f_legend_sub = ("Courier", f_size_sub)
+        f_footnote = ("Courier", max(5, int(f_size_sub * 0.92)))
+        line_step = max(10, int(13 * self.zoom))
+
+        table_end_y = meta_end_y
+        if legend_rows:
+            table_y = meta_end_y + int(6 * self.zoom)
+
+            # Fonte Tkinter para medição precisa de texto
+            try:
+                tk_sub_font = tkfont.Font(family="Courier", size=f_size_sub)
+                tk_name_font = tkfont.Font(family="Courier", size=f_size_md, weight="bold")
+            except Exception:
+                tk_sub_font = None
+                tk_name_font = None
+
+            def _measure_sub(txt):
+                if tk_sub_font:
+                    try:
+                        return tk_sub_font.measure(txt)
+                    except Exception:
+                        pass
+                return int(len(txt) * max(3.5, f_size_sub * 0.62))
+
+            def _measure_name(txt):
+                if tk_name_font:
+                    try:
+                        return tk_name_font.measure(txt)
+                    except Exception:
+                        pass
+                return int(len(txt) * max(4.0, f_size_md * 0.62))
+
+            max_left_w = 0
+            for row in legend_rows:
+                m_name = row.get("molde_name", "")
+                s_id = row.get("shape_id")
+                w_est = _measure_name(m_name)
+                if s_id is not None and str(s_id).strip():
+                    w_est += _measure_sub(f"  #{str(s_id).strip()}")
+                if w_est > max_left_w:
+                    max_left_w = w_est
+
+            left_col_w = max(int(140 * self.zoom), min(int(240 * self.zoom), max_left_w + int(12 * self.zoom)))
+            col2_x = margin_left + left_col_w
+            avail_right_w = max(50, margin_right - col2_x)
+
+            for row in legend_rows:
+                m_name = row.get("molde_name", "")
+                s_id = row.get("shape_id")
+                row_start_y = table_y
+
+                # Coluna Esquerda: Nome do Molde
+                self.canvas.create_text(
+                    margin_left, row_start_y,
+                    text=m_name, anchor="nw",
+                    font=f_legend_name, fill="#000000",
+                    tags="print_legend_name"
+                )
+
+                # ShapeId ao lado em fonte menor e cinza escuro
+                if s_id is not None and str(s_id).strip():
+                    name_w = _measure_name(m_name)
+                    self.canvas.create_text(
+                        margin_left + name_w + int(4 * self.zoom), row_start_y + int(1.5 * self.zoom),
+                        text=f"  #{str(s_id).strip()}", anchor="nw",
+                        font=f_legend_sub, fill="#555555",
+                        tags="print_legend_shape_id"
+                    )
+
+                # Coluna Direita: Lista por tamanho no formato tamanho: n/m
+                size_items = row.get("sizes", [])
+                tokens = []
+                for s_item in size_items:
+                    sz_str = str(s_item["size"])
+                    n_val = s_item["n"]
+                    m_val = s_item["m"]
+                    tokens.append((f"{sz_str}: {n_val}/{m_val}", bool(s_item.get("is_error", n_val > m_val))))
+
+                # Quebra de linha entre tamanhos (nunca no meio de um token)
+                lines_of_tokens = []
+                cur_line = []
+                cur_w = 0
+                sep_w = _measure_sub(", ")
+
+                for tok_txt, is_err in tokens:
+                    tok_w = _measure_sub(tok_txt)
+                    extra = sep_w if cur_line else 0
+                    if cur_line and (cur_w + extra + tok_w > avail_right_w):
+                        lines_of_tokens.append(cur_line)
+                        cur_line = [(tok_txt, is_err)]
+                        cur_w = tok_w
+                    else:
+                        cur_line.append((tok_txt, is_err))
+                        cur_w += extra + tok_w
+
+                if cur_line:
+                    lines_of_tokens.append(cur_line)
+
+                # Renderiza linhas da coluna direita
+                cur_y = row_start_y
+                for tok_line in lines_of_tokens:
+                    cur_x = col2_x
+                    for t_idx, (tok_txt, is_err) in enumerate(tok_line):
+                        if t_idx > 0:
+                            self.canvas.create_text(
+                                cur_x, cur_y + int(1.5 * self.zoom),
+                                text=", ", anchor="nw",
+                                font=f_legend_sub, fill="#444444",
+                                tags="print_legend_size"
+                            )
+                            cur_x += sep_w
+
+                        tok_fill = "#dc2626" if is_err else "#333333"
+                        self.canvas.create_text(
+                            cur_x, cur_y + int(1.5 * self.zoom),
+                            text=tok_txt, anchor="nw",
+                            font=f_legend_sub, fill=tok_fill,
+                            tags="print_legend_size"
+                        )
+                        cur_x += _measure_sub(tok_txt)
+
+                    cur_y += line_step
+
+                row_h = max(line_step, len(lines_of_tokens) * line_step)
+                table_y += row_h + int(2 * self.zoom)
+
+            # Rodapé explicativo da legenda
+            self.canvas.create_text(
+                margin_left, table_y,
+                text="n/m = pares nesta placa / pedido total",
+                anchor="nw", font=f_footnote, fill="#666666",
+                tags="print_legend_footnote"
+            )
+            table_y += int(11 * self.zoom)
+            table_end_y = table_y
+
+        # =====================================================================
+        # 3. Gráfico do Encaixe / Chapa de Corte (Proporcional à Folha A4)
+        # =====================================================================
+        avail_top = table_end_y + int(10 * self.zoom)
         avail_bottom = footer_y - int(12 * self.zoom)
         avail_w = max(50.0, float(margin_right - margin_left))
         avail_h = max(50.0, float(avail_bottom - avail_top))
@@ -864,9 +1245,13 @@ class LayoutPrintDialog(tk.Toplevel):
     # =========================================================================
     def render_pillow_page(self, dpi=150):
         """Gera uma imagem de alta resolução da página A4 completa usando PIL."""
-        # A4 em polegadas: 8.27 x 11.69 polegadas
-        pw = int(8.27 * dpi)
-        ph = int(11.69 * dpi)
+        # A4 em polegadas: 8.27 x 11.69 polegadas (retrato ou paisagem)
+        if getattr(self, "orientation", "portrait") == "landscape":
+            pw = int(11.69 * dpi)
+            ph = int(8.27 * dpi)
+        else:
+            pw = int(8.27 * dpi)
+            ph = int(11.69 * dpi)
         scale = dpi / 72.0
 
         im = Image.new("RGB", (pw, ph), "white")
@@ -878,12 +1263,16 @@ class LayoutPrintDialog(tk.Toplevel):
             f_title = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSansMono-Bold.ttf", int(14 * scale))
             f_small = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSansMono.ttf", int(7.5 * scale))
             f_ruler = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSansMono.ttf", max(6, int(6.0 * scale)))
+            f_legend_sub = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSansMono.ttf", max(6, int(6.8 * scale)))
+            f_footnote = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSansMono.ttf", max(5, int(6.2 * scale)))
         except Exception:
             f_mono = ImageFont.load_default()
             f_mono_bold = f_mono
             f_title = f_mono
             f_small = f_mono
             f_ruler = f_mono
+            f_legend_sub = f_mono
+            f_footnote = f_mono
 
         m_left = int(36 * scale)
         m_right = pw - int(36 * scale)
@@ -940,11 +1329,111 @@ class LayoutPrintDialog(tk.Toplevel):
         draw.text((m_left + col_w, meta_y), f"Instances: {self.instances_count}", fill="black", font=f_mono)
         draw.text((m_left + col_w * 2, meta_y), f"Gap: {self.gap_str}", fill="black", font=f_mono)
 
-        # Gráfico do Encaixe Proporcional à Folha A4
+        # =====================================================================
+        # 2.5. Tabela de Legenda por Molde no Pillow (com ShapeId e n/m)
+        # =====================================================================
         meta_end_y = meta_y + int(18 * scale)
         footer_y = ph - int(36 * scale)
 
-        avail_top = meta_end_y + int(15 * scale)
+        legend_rows = getattr(self, "legend_data", None)
+        if legend_rows is None:
+            self.legend_data = self.build_legend_data()
+            legend_rows = self.legend_data
+
+        table_end_y = meta_end_y
+        line_step = max(11, int(13 * scale))
+
+        if legend_rows:
+            table_y = meta_end_y + int(6 * scale)
+
+            def _measure_pillow(txt, font):
+                bb = draw.textbbox((0, 0), txt, font=font)
+                return bb[2] - bb[0]
+
+            max_left_w = 0
+            for row in legend_rows:
+                m_name = row.get("molde_name", "")
+                s_id = row.get("shape_id")
+                w_est = _measure_pillow(m_name, f_mono_bold)
+                if s_id is not None and str(s_id).strip():
+                    w_est += _measure_pillow(f"  #{str(s_id).strip()}", f_legend_sub)
+                if w_est > max_left_w:
+                    max_left_w = w_est
+
+            left_col_w = max(int(140 * scale), min(int(240 * scale), max_left_w + int(12 * scale)))
+            col2_x = m_left + left_col_w
+            avail_right_w = max(50, m_right - col2_x)
+
+            sep_w = _measure_pillow(", ", f_legend_sub)
+
+            for row in legend_rows:
+                m_name = row.get("molde_name", "")
+                s_id = row.get("shape_id")
+                row_start_y = table_y
+
+                # Coluna Esquerda: Nome do Molde
+                draw.text((m_left, row_start_y), m_name, fill="black", font=f_mono_bold)
+
+                # ShapeId ao lado em fonte menor e cinza escuro
+                if s_id is not None and str(s_id).strip():
+                    name_w = _measure_pillow(m_name, f_mono_bold)
+                    draw.text(
+                        (m_left + name_w + int(4 * scale), row_start_y + int(1.5 * scale)),
+                        f"  #{str(s_id).strip()}", fill="#555555", font=f_legend_sub
+                    )
+
+                # Coluna Direita: Lista por tamanho
+                size_items = row.get("sizes", [])
+                tokens = []
+                for s_item in size_items:
+                    sz_str = str(s_item["size"])
+                    n_val = s_item["n"]
+                    m_val = s_item["m"]
+                    tokens.append((f"{sz_str}: {n_val}/{m_val}", bool(s_item.get("is_error", n_val > m_val))))
+
+                lines_of_tokens = []
+                cur_line = []
+                cur_w = 0
+
+                for tok_txt, is_err in tokens:
+                    tok_w = _measure_pillow(tok_txt, f_legend_sub)
+                    extra = sep_w if cur_line else 0
+                    if cur_line and (cur_w + extra + tok_w > avail_right_w):
+                        lines_of_tokens.append(cur_line)
+                        cur_line = [(tok_txt, is_err)]
+                        cur_w = tok_w
+                    else:
+                        cur_line.append((tok_txt, is_err))
+                        cur_w += extra + tok_w
+
+                if cur_line:
+                    lines_of_tokens.append(cur_line)
+
+                cur_y = row_start_y
+                for tok_line in lines_of_tokens:
+                    cur_x = col2_x
+                    for t_idx, (tok_txt, is_err) in enumerate(tok_line):
+                        if t_idx > 0:
+                            draw.text((cur_x, cur_y + int(1.5 * scale)), ", ", fill="#444444", font=f_legend_sub)
+                            cur_x += sep_w
+
+                        tok_fill = "#dc2626" if is_err else "#333333"
+                        draw.text((cur_x, cur_y + int(1.5 * scale)), tok_txt, fill=tok_fill, font=f_legend_sub)
+                        cur_x += _measure_pillow(tok_txt, f_legend_sub)
+
+                    cur_y += line_step
+
+                row_h = max(line_step, len(lines_of_tokens) * line_step)
+                table_y += row_h + int(2 * scale)
+
+            draw.text((m_left, table_y), "n/m = pares nesta placa / pedido total", fill="#666666", font=f_footnote)
+            table_y += int(11 * scale)
+            table_end_y = table_y
+
+        # =====================================================================
+        # 3. Gráfico do Encaixe Proporcional à Folha A4
+        # =====================================================================
+        avail_top = table_end_y + int(10 * scale)
         avail_bottom = footer_y - int(12 * scale)
         avail_w = max(50.0, float(m_right - m_left))
         avail_h = max(50.0, float(avail_bottom - avail_top))
