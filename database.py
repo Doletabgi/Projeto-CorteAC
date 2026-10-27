@@ -1138,17 +1138,27 @@ class DatabaseManager:
             if session_id is None or session_id <= 0:
                 session_id = self.get_next_session_number()
 
-            # 2. Resiliência de chave estrangeira: order_id (opcional, sem recriação forçada de pedidos)
+            # 2. Resiliência de chave estrangeira: order_id (opcional, com fallback para pedido existente)
             valid_order_id = order_id
             if valid_order_id is not None:
                 cursor.execute("SELECT id FROM orders WHERE id = ?", (valid_order_id,))
                 if not cursor.fetchone():
-                    cursor.execute("SELECT id FROM orders ORDER BY id ASC LIMIT 1")
-                    row_ord = cursor.fetchone()
-                    if row_ord:
-                        valid_order_id = row_ord[0] if isinstance(row_ord, (tuple, list)) else row_ord["id"]
-                    else:
-                        valid_order_id = None
+                    valid_order_id = None
+
+            if valid_order_id is None:
+                cursor.execute("SELECT id FROM orders ORDER BY id ASC LIMIT 1")
+                row_ord = cursor.fetchone()
+                if row_ord:
+                    valid_order_id = row_ord[0] if isinstance(row_ord, (tuple, list)) else row_ord["id"]
+                else:
+                    cursor.execute("SELECT COALESCE(MAX(id), 0) + 1 FROM orders")
+                    row_max = cursor.fetchone()
+                    next_oid = (row_max[0] if row_max else 0) or 1
+                    cursor.execute(
+                        "INSERT INTO orders (id, code, name, customer, status) VALUES (?, ?, ?, ?, ?)",
+                        (next_oid, f"ORD-{next_oid:03d}", "Pedido Padrão", "Calçados Elite S/A", "Aberto")
+                    )
+                    valid_order_id = next_oid
 
 
             # 3. Resiliência de chave estrangeira: material_id

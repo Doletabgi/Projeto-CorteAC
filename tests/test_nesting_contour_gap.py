@@ -174,7 +174,7 @@ class TestNestingContourGap(unittest.TestCase):
         self.assertEqual(reloaded["margin_bottom"], 28.0)
 
     def test_session_view_margin_radio_buttons(self):
-        """Valida os botões de seleção de margem (10, 15, 20, 30 mm) na SessionView."""
+        """Valida os botões de seleção de margem (10 e 15 mm) na SessionView e a remoção de 20 e 30 mm."""
         import tkinter as tk
         from ui.session_view import SessionView
 
@@ -184,6 +184,12 @@ class TestNestingContourGap(unittest.TestCase):
             sess_id = self.db.create_session(name="Test Radio Session")
             sess_data = self.db.get_session(sess_id)
             view = SessionView(root, session_data=sess_data, db=self.db)
+
+            # Verifica que apenas 10.0 e 15.0 estão disponíveis e 20.0 e 30.0 foram removidos
+            self.assertIn("10.0", view.rb_margins)
+            self.assertIn("15.0", view.rb_margins)
+            self.assertNotIn("20.0", view.rb_margins)
+            self.assertNotIn("30.0", view.rb_margins)
 
             # Padrão é 10.0 mm
             self.assertEqual(view.margin_choice_var.get(), "10.0")
@@ -202,16 +208,9 @@ class TestNestingContourGap(unittest.TestCase):
             self.assertEqual(margins["top"], 15.0)
             self.assertEqual(margins["bottom"], 15.0)
 
-            # Simula seleção de 30 mm
-            view.margin_choice_var.set("30.0")
-            view._on_margin_radio_selected()
-            margins = view.get_margins()
-            self.assertEqual(margins["left"], 30.0)
-            self.assertEqual(margins["bottom"], 30.0)
-
             # Teste de set_margins sincronizando a variável do radio button
-            view.set_margins(left=20.0, right=20.0, top=20.0, bottom=20.0)
-            self.assertEqual(view.margin_choice_var.get(), "20.0")
+            view.set_margins(left=10.0, right=10.0, top=10.0, bottom=10.0)
+            self.assertEqual(view.margin_choice_var.get(), "10.0")
         finally:
             root.destroy()
 

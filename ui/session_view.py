@@ -323,7 +323,7 @@ class SessionView(tk.Frame):
         )
         self.btn_gap_plus.pack(side="left")
 
-        # 5. Margem de Segurança da Placa (mm) (Botões de seleção rápida 10, 15, 20, 30 mm)
+        # 5. Margem de Segurança da Placa (mm) (Botões de seleção rápida 10, 15 mm)
         box_margins = tk.LabelFrame(
             col_right,
             text="Margem de Segurança da Placa (mm):",
@@ -338,7 +338,7 @@ class SessionView(tk.Frame):
 
         self.margin_choice_var = tk.StringVar(value="10.0")
         init_m = float(self.session_data.get("margin_left", 10.0))
-        for opt_val in ["10.0", "15.0", "20.0", "30.0"]:
+        for opt_val in ["10.0", "15.0"]:
             if abs(float(opt_val) - init_m) < 0.05:
                 self.margin_choice_var.set(opt_val)
                 break
@@ -349,7 +349,7 @@ class SessionView(tk.Frame):
         row_radios.pack(anchor="w", fill="x", pady=2)
 
         self.rb_margins = {}
-        for val_str, label_text in [("10.0", "10 mm"), ("15.0", "15 mm"), ("20.0", "20 mm"), ("30.0", "30 mm")]:
+        for val_str, label_text in [("10.0", "10 mm"), ("15.0", "15 mm")]:
             rb = tk.Radiobutton(
                 row_radios,
                 text=label_text,
@@ -1513,7 +1513,7 @@ class SessionView(tk.Frame):
         # Sincroniza a variável do radio button com o valor de referência
         ref_val = float(self.session_data.get("margin_left", 10.0))
         matched = False
-        for opt_val in ["10.0", "15.0", "20.0", "30.0"]:
+        for opt_val in ["10.0", "15.0"]:
             if abs(float(opt_val) - ref_val) < 0.05:
                 if hasattr(self, "margin_choice_var"):
                     self.margin_choice_var.set(opt_val)
