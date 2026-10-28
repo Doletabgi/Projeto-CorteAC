@@ -48,13 +48,119 @@ def reorder_contour_midpoint_longest_edge(contour):
     reordered.append(mid_pt)
     return reordered
 
-def optimize_piece_cutting_order_tsp(placed_pieces):
+def two_opt_pass(route, dist_matrix, max_iter=40):
     """
-    Aplica Strip-TSP + 2-Opt para ordenar as peças a serem cortadas na mesa,
+    Executa uma passagem ou conjunto de iterações do 2-Opt com avaliação delta O(1).
+    Retorna (route, total_delta).
+    """
+    total_delta = 0.0
+    improved = True
+    iterations = 0
+    n_pieces = len(route)
+
+    while improved and iterations < max_iter:
+        improved = False
+        iterations += 1
+        for i in range(n_pieces - 1):
+            u = route[i]
+            v = route[i + 1]
+            d_uv = dist_matrix[u][v]
+            for j in range(i + 2, n_pieces):
+                w = route[j]
+                if j == n_pieces - 1:
+                    delta = dist_matrix[u][w] - d_uv
+                else:
+                    z = route[j + 1]
+                    delta = dist_matrix[u][w] + dist_matrix[v][z] - d_uv - dist_matrix[w][z]
+
+                if delta < -0.5:
+                    route[i + 1 : j + 1] = route[i + 1 : j + 1][::-1]
+                    total_delta += delta
+                    improved = True
+                    break
+            if improved:
+                break
+
+    return route, total_delta
+
+
+def or_opt(route, dist_matrix, origin_idx, max_segment=3, max_passes=50):
+    """
+    Otimização local Or-opt para TSP de rota aberta.
+
+    Move segmentos de tamanho 1 a max_segment para outras posições,
+    recalculando apenas as arestas afetadas (delta O(1) por tentativa).
+    Retorna (nova_rota, ganho_total).
+    """
+    if len(route) <= 2:
+        return route, 0.0
+
+    total_gain = 0.0
+    N = len(route)
+    passes = 0
+    improved = True
+
+    while improved and passes < max_passes:
+        improved = False
+        passes += 1
+        for length in range(max_segment, 0, -1):
+            for i in range(N - length + 1):
+                segment = route[i : i + length]
+                u = origin_idx if i == 0 else route[i - 1]
+                v = segment[0]
+                w = segment[-1]
+                x = route[i + length] if i + length < N else None
+
+                d_remove = -dist_matrix[u][v]
+                if x is not None:
+                    d_remove += dist_matrix[u][x] - dist_matrix[w][x]
+
+                # Tenta inserção em posições anteriores a i
+                for j in range(0, i):
+                    p = origin_idx if j == 0 else route[j - 1]
+                    q = route[j]
+                    delta = d_remove + dist_matrix[p][v] + dist_matrix[w][q] - dist_matrix[p][q]
+                    if delta < -0.5:
+                        route = route[:j] + segment + route[j:i] + route[i + length:]
+                        total_gain += delta
+                        improved = True
+                        break
+                if improved:
+                    break
+
+                # Tenta inserção em posições posteriores a i + length
+                for j in range(i + length, N):
+                    p = route[j]
+                    q = route[j + 1] if j + 1 < N else None
+                    if q is not None:
+                        d_insert = dist_matrix[p][v] + dist_matrix[w][q] - dist_matrix[p][q]
+                    else:
+                        d_insert = dist_matrix[p][v]
+                    delta = d_remove + d_insert
+                    if delta < -0.5:
+                        route = route[:i] + route[i + length : j + 1] + segment + route[j + 1 :]
+                        total_gain += delta
+                        improved = True
+                        break
+                if improved:
+                    break
+            if improved:
+                break
+
+    return route, total_gain
+
+
+def optimize_piece_cutting_order_tsp(placed_pieces, algorithm="2opt+oropt", max_iter=40):
+    """
+    Aplica Strip-TSP + 2-Opt + Or-opt para ordenar as peças a serem cortadas na mesa,
     minimizando o percurso em vazio (G00 rapid traverse) do cabeçote CNC.
+    Otimizado para complexidade O(N^2) via matriz de distâncias pré-computada
+    e avaliação delta O(1) no 2-Opt e Or-opt.
     """
     if len(placed_pieces) <= 2:
         return list(placed_pieces)
+
+    n_pieces = len(placed_pieces)
 
     # Determina o ponto inicial de cada peça
     piece_entries = []
@@ -69,51 +175,58 @@ def optimize_piece_cutting_order_tsp(placed_pieces):
             entry = (reordered[0]["x"], reordered[0]["y"])
         piece_entries.append(entry)
 
-    # 1. Heurística Nearest Neighbor a partir da origem (0, 0)
-    unvisited = list(range(len(placed_pieces)))
+    # 1. Pré-computação da matriz de distâncias D (N+1 x N+1, onde índice n_pieces = origem (0, 0))
+    # Complexidade O(N^2) executada uma única vez
+    origin_idx = n_pieces
+    dist_matrix = [[0.0] * (n_pieces + 1) for _ in range(n_pieces + 1)]
+    for i in range(n_pieces):
+        ex, ey = piece_entries[i]
+        d_orig = math.hypot(ex, ey)
+        dist_matrix[i][origin_idx] = d_orig
+        dist_matrix[origin_idx][i] = d_orig
+        for j in range(i + 1, n_pieces):
+            jx, jy = piece_entries[j]
+            d = math.hypot(ex - jx, ey - jy)
+            dist_matrix[i][j] = d
+            dist_matrix[j][i] = d
+
+    # 2. Heurística Nearest Neighbor a partir da origem (0, 0)
+    unvisited = list(range(n_pieces))
     route = []
-    curr_pos = (0.0, 0.0)
+    curr = origin_idx
 
     while unvisited:
         nearest_idx = -1
-        min_dist_sq = float("inf")
+        min_dist = float("inf")
         for idx in unvisited:
-            ex, ey = piece_entries[idx]
-            d_sq = (ex - curr_pos[0]) ** 2 + (ey - curr_pos[1]) ** 2
-            if d_sq < min_dist_sq:
-                min_dist_sq = d_sq
+            d = dist_matrix[curr][idx]
+            if d < min_dist:
+                min_dist = d
                 nearest_idx = idx
         route.append(nearest_idx)
-        curr_pos = piece_entries[nearest_idx]
+        curr = nearest_idx
         unvisited.remove(nearest_idx)
 
-    # 2. Otimização Local 2-Opt
-    def route_dist(r):
-        d = 0.0
-        c = (0.0, 0.0)
-        for i in r:
-            pt = piece_entries[i]
-            d += math.hypot(pt[0] - c[0], pt[1] - c[1])
-            c = pt
-        return d
+    # 3. Otimização Local
+    algo_clean = str(algorithm).lower()
+    eff_max_iter = 200 if algo_clean == "2opt+oropt+iter200" else max_iter
 
-    improved = True
-    iterations = 0
-    max_iter = 40
-    while improved and iterations < max_iter:
-        improved = False
-        iterations += 1
-        for i in range(len(route) - 1):
-            for j in range(i + 2, len(route)):
-                new_route = route[:i+1] + route[i+1:j+1][::-1] + route[j+1:]
-                if route_dist(new_route) < route_dist(route) - 0.5:
-                    route = new_route
-                    improved = True
-                    break
-            if improved:
+    # Fase inicial de 2-Opt
+    route, _ = two_opt_pass(route, dist_matrix, max_iter=eff_max_iter)
+
+    if algo_clean in ("2opt+oropt", "2opt+oropt+iter200", "oropt", "or-opt"):
+        # Pipeline 2-Opt -> Or-opt -> 2-Opt
+        or_passes = 3 if n_pieces <= 200 else 1
+        for _ in range(2):
+            route, delta_or = or_opt(route, dist_matrix, origin_idx, max_segment=3, max_passes=or_passes)
+            if delta_or >= -0.5:
+                break
+            route, delta_2opt = two_opt_pass(route, dist_matrix, max_iter=eff_max_iter)
+            if delta_2opt >= -0.5:
                 break
 
     return [placed_pieces[idx] for idx in route]
+
 
 def _canonical_edge(p1, p2, tol=0.2):
     """Retorna uma chave canônica normalizada para uma aresta reta."""

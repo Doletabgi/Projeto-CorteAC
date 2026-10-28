@@ -784,13 +784,44 @@ def nest_tape_engine(available_shapes, bed_width_mm, bed_height_mm, target_count
 
 def auto_nest_pieces(available_shapes, bed_width_mm, bed_height_mm, target_count=16, strategy="flashnestsheet", params="stdNOTFill", gap_mm=1.0, dieproc_params=None, db=None, margins=None, layers=None):
     """
-    Algoritmo de aninhamento automático 2D com suporte a múltiplas estratégias:
-    - IA-teste: Motor híbrido por macros declarativas com IA local embarcada e UCB1 Bandit.
-    - sint: Motor de corte contínuo para chapas sintéticas (geminação 0°/180° e colmeia).
-    - tape_a: Motor linear para fitas estreitas, tiras, debruns e correias (passo linear compacto).
-    - flashnestsheet: Nesting contínuo em chapas sintéticas (DieProc dp98 com Row interlock e Coupling).
-    - flashnestleather: Nesting em couro / peles irregulares (busca multi-angular).
-    - freenest: Heurística livre para máxima compactação geométrica.
+    Ponto de entrada público do aninhamento de chapa.
+    Delega ao backend configurado (CORTEAC_BACKEND="python" por padrão).
+    """
+    import os
+    if os.getenv("CORTEAC_BACKEND", "python").strip().lower() != "nfp":
+        return _auto_nest_pieces_core(
+            available_shapes=available_shapes,
+            bed_width_mm=bed_width_mm,
+            bed_height_mm=bed_height_mm,
+            target_count=target_count,
+            strategy=strategy,
+            params=params,
+            gap_mm=gap_mm,
+            dieproc_params=dieproc_params,
+            db=db,
+            margins=margins,
+            layers=layers,
+        )
+
+    from cad.nesting_backend import get_nesting_backend
+    backend = get_nesting_backend("nfp")
+    return backend.nest_sheet(
+        available_shapes=available_shapes,
+        bed_width_mm=bed_width_mm,
+        bed_height_mm=bed_height_mm,
+        target_count=target_count,
+        strategy=strategy,
+        params=params,
+        gap_mm=gap_mm,
+        dieproc_params=dieproc_params,
+        db=db,
+        margins=margins,
+        layers=layers,
+    )
+
+def _auto_nest_pieces_core(available_shapes, bed_width_mm, bed_height_mm, target_count=16, strategy="flashnestsheet", params="stdNOTFill", gap_mm=1.0, dieproc_params=None, db=None, margins=None, layers=None):
+    """
+    Algoritmo de aninhamento automático 2D de referência (código legado padrão).
     """
     placed = []
     if not available_shapes:

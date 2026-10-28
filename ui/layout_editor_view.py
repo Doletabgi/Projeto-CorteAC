@@ -16,7 +16,7 @@ from tkinter import ttk, messagebox, colorchooser, filedialog, simpledialog
 from pathlib import Path
 
 from config import THEME
-from cad.geometry import transform_contour, point_in_polygon, rotate_point, polygon_bbox, polygons_collide, polygon_area, SpatialGrid
+from cad.geometry import transform_contour, point_in_polygon, rotate_point, polygon_bbox, polygons_collide, polygon_area, SpatialGrid, bbox_overlap
 from cad.colors import get_color_for_size, get_contrast_text_color
 from ui.layout_print_dialog import LayoutPrintDialog
 from ui.trim_layout_dialog import TrimLayoutDialog
@@ -53,6 +53,8 @@ SELECTED_OUTLINE_ONLY = True    # Fiel à Secção E.2: apenas o contorno da pe�
 DRAG_MIN_INTERVAL_S = 0.008      # ~125 atualizacoes de peca por segundo
 STATUS_MIN_INTERVAL_S = 0.033    # ~30 atualizacoes por segundo na barra de status
 PAN_REDRAW_INTERVAL_MS = 8       # ~125 redraws por segundo ao arrastar a mesa
+
+_PIECE_TAGS = tuple((f"piece_{i}", f"piece_poly_{i}", "piece_item") for i in range(2000))
 
 
 def rotate_piece_in_place(p, delta_deg):
@@ -245,6 +247,14 @@ class LayoutEditorView(tk.Frame):
         self._saved_undo_index = 0
         self.undo_stack = []
         self._pre_drag_pieces = None
+
+        # Caches de geometria de alta performance e detecção de colisão (Fase 3 & 4)
+        self._piece_geom_cache = {}
+        self._piece_rot_cache = {}
+        self._pair_collision_cache = {}
+        self._piece_cache_stats = {"hits": 0, "misses": 0}
+        self._last_collision_sig = None
+        self._cached_colliding_indices = set()
 
         # Estado de seleção e manipulação de peças (Seleção Múltipla & Rubberband)
         self.selected_indices = []
@@ -944,6 +954,14 @@ class LayoutEditorView(tk.Frame):
 
         y_start, item_h, col_width, num_cols = self._get_sidebar_grid_layout()
 
+        # Pré-processa tuplas de peças uma única vez (evita dict lookups e strip repetidos)
+        placed_info = [
+            (str(p.get("target_id", "")).strip(),
+             str(p.get("size", "")).strip(),
+             str(p.get("name", "")).strip())
+            for p in self.placed_pieces
+        ]
+
         for i, target in enumerate(self.sidebar_targets):
             col_idx = i % num_cols
             row_idx = i // num_cols
@@ -959,11 +977,7 @@ class LayoutEditorView(tk.Frame):
             t_sz = str(target.get("size", "")).strip()
             t_nm = str(target.get("name", "")).strip()
 
-            for p in self.placed_pieces:
-                p_tid = str(p.get("target_id", "")).strip()
-                p_sz = str(p.get("size", "")).strip()
-                p_nm = str(p.get("name", "")).strip()
-
+            for p_tid, p_sz, p_nm in placed_info:
                 # Se ambos têm tamanho definido e são diferentes, não pode ser o mesmo molde
                 if p_sz and t_sz and p_sz != t_sz:
                     continue
@@ -1593,6 +1607,94 @@ class LayoutEditorView(tk.Frame):
         self.update_status()
 
     # -------------------------------------------------------------
+    # Cache de Geometria Transformada por Peça (Fase 3 - Tarefa 2)
+    # -------------------------------------------------------------
+    def _get_piece_geom(self, p: dict, _cid=None, _px=None, _py=None, _rot=None, _mirr=None):
+        """
+        Retorna (poly_transformado, bbox) com cache O(1) por peça.
+        Chave canônica: (id(cntr), round(x, 2), round(y, 2), round(rot, 2), mirrored).
+        """
+        if _cid is not None:
+            cid = _cid
+            px = _px
+            py = _py
+            rot = _rot
+            mirrored = _mirr
+            cntr = p.get("contour")
+        else:
+            cntr = p.get("contour") or (p.get("shape", {}).get("contour") if isinstance(p.get("shape"), dict) else None)
+            if not cntr:
+                return ([], (0.0, 0.0, 0.0, 0.0))
+            cid = id(cntr)
+            px = round(float(p.get("x", 0.0)), 2)
+            py = round(float(p.get("y", 0.0)), 2)
+            rot = round(float(p.get("rotation", p.get("rot", 0.0))), 2)
+            mirrored = bool(p.get("mirrored", False))
+
+        cache = getattr(self, "_piece_geom_cache", None)
+        if cache is None:
+            cache = {}
+            self._piece_geom_cache = cache
+            self._piece_cache_stats = {"hits": 0, "misses": 0}
+            self._piece_rot_cache = {}
+
+        key = (cid, px, py, rot, mirrored)
+        cached = cache.get(key)
+        if cached is not None:
+            self._piece_cache_stats["hits"] += 1
+            return cached
+
+        self._piece_cache_stats["misses"] += 1
+        if not mirrored:
+            rot_cache = getattr(self, "_piece_rot_cache", None)
+            if rot_cache is None:
+                rot_cache = {}
+                self._piece_rot_cache = rot_cache
+            rot_key = (id(cntr), round(rot, 2))
+            base_rot = rot_cache.get(rot_key)
+            if base_rot is None:
+                base_poly = transform_contour(cntr, 0.0, 0.0, rot)
+                base_bbox = polygon_bbox(base_poly)
+                base_pts = [(pt["x"], pt["y"]) for pt in base_poly]
+                base_rot = (base_poly, base_bbox, base_pts)
+                if len(rot_cache) >= 500:
+                    rot_cache.clear()
+                rot_cache[rot_key] = base_rot
+            base_poly, (b0, b1, b2, b3), base_pts = base_rot
+            poly = [{"x": ox + px, "y": oy + py} for ox, oy in base_pts]
+            bbox = (b0 + px, b1 + py, b2 + px, b3 + py)
+        else:
+            poly = transform_contour(cntr, px, py, rot)
+            bbox = polygon_bbox(poly)
+
+        res = (poly, bbox)
+        if len(cache) >= 5000:
+            cache.clear()
+        cache[key] = res
+        return res
+
+    def clear_piece_cache(self):
+        """Limpa o cache de geometria transformada e colisões."""
+        self._piece_geom_cache = {}
+        self._piece_rot_cache = {}
+        self._pair_collision_cache = {}
+        self._piece_cache_stats = {"hits": 0, "misses": 0}
+        self._last_collision_sig = None
+        self._cached_colliding_indices = set()
+
+    def get_piece_cache_stats(self) -> dict:
+        """Retorna métricas de hit rate do cache de peças."""
+        stats = getattr(self, "_piece_cache_stats", {"hits": 0, "misses": 0})
+        total = stats["hits"] + stats["misses"]
+        rate = (stats["hits"] / total * 100.0) if total > 0 else 0.0
+        return {
+            "hits": stats["hits"],
+            "misses": stats["misses"],
+            "hit_rate_pct": round(rate, 2),
+            "size": len(getattr(self, "_piece_geom_cache", {})),
+        }
+
+    # -------------------------------------------------------------
     # Renderização da Mesa CAD Estática e Coordenadas
     # -------------------------------------------------------------
     def world_to_screen(self, wx, wy):
@@ -1608,7 +1710,6 @@ class LayoutEditorView(tk.Frame):
         return wx, wy
 
     def redraw(self):
-        self.canvas.delete("all")
         cw = self.canvas.winfo_width()
         ch = self.canvas.winfo_height()
 
@@ -1674,101 +1775,118 @@ class LayoutEditorView(tk.Frame):
         self.plate_w = plate_w
         self.plate_h = plate_h
 
-        # 2. Chapa de Corte Cinza (#9b9b9b) com borda preta nítida
-        self.canvas.create_rectangle(
-            x1, y1, x2, y2,
-            fill="#9b9b9b",
-            outline="#000000",
-            width=1.5,
-            tags="sheet_bed"
+        # Cache de fundo/grade: se geometria, escala, pan e grade forem idênticos, preserva fundo
+        bg_sig = (
+            round(x1, 1), round(y1, 1), round(x2, 1), round(y2, 1),
+            round(scale, 4), bool(self.show_grid),
+            round(self.sheet_width, 1), round(self.sheet_height, 1),
+            cw, ch, div_x
         )
+        bg_changed = (getattr(self, "_last_bg_sig", None) != bg_sig)
 
-        # 2.1 Margem de Segurança da Placa (Retângulo tracejado sutil delimitando a área útil de corte)
-        m_left = getattr(self, "margin_left", 10.0)
-        m_right = getattr(self, "margin_right", 10.0)
-        m_top = getattr(self, "margin_top", 10.0)
-        m_bottom = getattr(self, "margin_bottom", 10.0)
-        mx1 = x1 + m_left * scale
-        mx2 = x2 - m_right * scale
-        my1 = y1 + m_top * scale
-        my2 = y2 - m_bottom * scale
-        if mx2 > mx1 and my2 > my1:
+        if bg_changed:
+            self._last_bg_sig = bg_sig
+            self.canvas.delete("all")
+
+            # 2. Chapa de Corte Cinza (#9b9b9b) com borda preta nítida
             self.canvas.create_rectangle(
-                mx1, my1, mx2, my2,
-                fill="",
-                outline="#475569",
-                dash=(4, 3),
-                width=1.0,
-                tags="sheet_margins"
+                x1, y1, x2, y2,
+                fill="#9b9b9b",
+                outline="#000000",
+                width=1.5,
+                tags=("sheet_bed", "bg_element")
             )
 
-        # Rótulo com dimensões no topo da chapa (estilo Placa (298.00 X 138.00 cm))
-        cx = (x1 + x2) / 2.0
-        h_cm = self.sheet_height / 10.0
-        w_cm = self.sheet_width / 10.0
-        if not (getattr(self, "trim_cut_line", None) and self.trim_cut_line.get("enabled", True)):
-            self.canvas.create_text(
-                cx,
-                max(10.0, y1 - 10.0),
-                text=f"Placa ({h_cm:.2f} X {w_cm:.2f} cm)",
-                fill="#000000",
-                font=("Segoe UI", 8, "bold"),
-                tags="sheet_label"
-            )
+            # 2.1 Margem de Segurança da Placa (Retângulo tracejado sutil delimitando a área útil de corte)
+            m_left = getattr(self, "margin_left", 10.0)
+            m_right = getattr(self, "margin_right", 10.0)
+            m_top = getattr(self, "margin_top", 10.0)
+            m_bottom = getattr(self, "margin_bottom", 10.0)
+            mx1 = x1 + m_left * scale
+            mx2 = x2 - m_right * scale
+            my1 = y1 + m_top * scale
+            my2 = y2 - m_bottom * scale
+            if mx2 > mx1 and my2 > my1:
+                self.canvas.create_rectangle(
+                    mx1, my1, mx2, my2,
+                    fill="",
+                    outline="#475569",
+                    dash=(4, 3),
+                    width=1.0,
+                    tags=("sheet_margins", "bg_element")
+                )
 
-        # 3. Grade Milimétrica Sutil e Marcações de 10 em 10 cm (com números e traços)
-        if self.show_grid:
-            grid_step = 100.0  # 100 mm = 10 cm
+            # Rótulo com dimensões no topo da chapa (estilo Placa (298.00 X 138.00 cm))
+            cx = (x1 + x2) / 2.0
+            h_cm = self.sheet_height / 10.0
+            w_cm = self.sheet_width / 10.0
+            if not (getattr(self, "trim_cut_line", None) and self.trim_cut_line.get("enabled", True)):
+                self.canvas.create_text(
+                    cx,
+                    max(10.0, y1 - 10.0),
+                    text=f"Placa ({h_cm:.2f} X {w_cm:.2f} cm)",
+                    fill="#000000",
+                    font=("Segoe UI", 8, "bold"),
+                    tags=("sheet_label", "bg_element")
+                )
 
-            cur_wx = 0.0
-            while cur_wx <= self.sheet_width + 0.1:
-                gx = x1 + cur_wx * scale
-                # Linha de grade vertical interna
-                if 0.5 < cur_wx < self.sheet_width - 0.5:
-                    self.canvas.create_line(gx, y1, gx, y2, fill="#8c8c8c", width=1, tags="grid_line")
+            # 3. Grade Milimétrica Sutil e Marcações de 10 em 10 cm (com números e traços)
+            if self.show_grid:
+                grid_step = 100.0  # 100 mm = 10 cm
 
-                # Marcações (ticks) nas bordas superior e inferior
-                self.canvas.create_line(gx, y2 - 3, gx, y2 + 3, fill="#000000", width=1, tags="grid_tick")
-                self.canvas.create_line(gx, y1 - 3, gx, y1 + 3, fill="#000000", width=1, tags="grid_tick")
+                cur_wx = 0.0
+                while cur_wx <= self.sheet_width + 0.1:
+                    gx = x1 + cur_wx * scale
+                    if 0.5 < cur_wx < self.sheet_width - 0.5:
+                        self.canvas.create_line(gx, y1, gx, y2, fill="#8c8c8c", width=1, tags=("grid_line", "bg_element"))
+                    self.canvas.create_line(gx, y2 - 3, gx, y2 + 3, fill="#000000", width=1, tags=("grid_tick", "bg_element"))
+                    self.canvas.create_line(gx, y1 - 3, gx, y1 + 3, fill="#000000", width=1, tags=("grid_tick", "bg_element"))
+                    cm_x = int(round(cur_wx / 10.0))
+                    if cm_x > 0 and cur_wx < self.sheet_width - 0.5:
+                        self.canvas.create_text(
+                            gx, y2 + 8,
+                            text=str(cm_x),
+                            fill="#000000",
+                            font=("Segoe UI", 7),
+                            anchor="n",
+                            tags=("grid_label", "bg_element")
+                        )
+                    cur_wx += grid_step
 
-                # Numeração de 10 em 10 cm na borda inferior
-                cm_x = int(round(cur_wx / 10.0))
-                if cm_x > 0 and cur_wx < self.sheet_width - 0.5:
-                    self.canvas.create_text(
-                        gx, y2 + 8,
-                        text=str(cm_x),
-                        fill="#000000",
-                        font=("Segoe UI", 7),
-                        anchor="n",
-                        tags="grid_label"
-                    )
+                cur_wy = 0.0
+                while cur_wy <= self.sheet_height + 0.1:
+                    gy = y2 - cur_wy * scale
+                    if 0.5 < cur_wy < self.sheet_height - 0.5:
+                        self.canvas.create_line(x1, gy, x2, gy, fill="#8c8c8c", width=1, tags=("grid_line", "bg_element"))
+                    self.canvas.create_line(x1 - 3, gy, x1 + 3, gy, fill="#000000", width=1, tags=("grid_tick", "bg_element"))
+                    self.canvas.create_line(x2 - 3, gy, x2 + 3, gy, fill="#000000", width=1, tags=("grid_tick", "bg_element"))
+                    cm_y = int(round(cur_wy / 10.0))
+                    if cm_y > 0 and cur_wy < self.sheet_height - 0.5:
+                        self.canvas.create_text(
+                            x2 + 5, gy,
+                            text=str(cm_y),
+                            fill="#000000",
+                            font=("Segoe UI", 8),
+                            anchor="w",
+                            tags=("grid_label", "bg_element")
+                        )
+                    cur_wy += grid_step
 
-                cur_wx += grid_step
-
-            cur_wy = 0.0
-            while cur_wy <= self.sheet_height + 0.1:
-                gy = y2 - cur_wy * scale
-                # Linha de grade horizontal interna
-                if 0.5 < cur_wy < self.sheet_height - 0.5:
-                    self.canvas.create_line(x1, gy, x2, gy, fill="#8c8c8c", width=1, tags="grid_line")
-
-                # Marcações (ticks) nas bordas esquerda e direita
-                self.canvas.create_line(x1 - 3, gy, x1 + 3, gy, fill="#000000", width=1, tags="grid_tick")
-                self.canvas.create_line(x2 - 3, gy, x2 + 3, gy, fill="#000000", width=1, tags="grid_tick")
-
-                # Numeração de 10 em 10 cm na borda direita (conforme imagem do usuário: 10, 20, 30...)
-                cm_y = int(round(cur_wy / 10.0))
-                if cm_y > 0 and cur_wy < self.sheet_height - 0.5:
-                    self.canvas.create_text(
-                        x2 + 5, gy,
-                        text=str(cm_y),
-                        fill="#000000",
-                        font=("Segoe UI", 8),
-                        anchor="w",
-                        tags="grid_label"
-                    )
-
-                cur_wy += grid_step
+            # Divisor Vertical e Barra Lateral
+            if div_x < cw:
+                is_dragging = getattr(self, "is_dragging_divider", False)
+                div_left_col = "#2563eb" if is_dragging else "#a0a0a0"
+                div_right_col = "#60a5fa" if is_dragging else "#ffffff"
+                self.canvas.create_rectangle(div_x, 0, cw, ch, fill="#ffffff", outline="", tags=("sidebar_bg", "sidebar_ui", "bg_element"))
+                self.canvas.create_line(div_x, 0, div_x, ch, fill=div_left_col, width=1, tags=("divider_line", "sidebar_ui", "bg_element"))
+                self.canvas.create_line(div_x + 1, 0, div_x + 1, ch, fill=div_right_col, width=1, tags=("divider_line", "sidebar_ui", "bg_element"))
+                self.canvas.create_line(div_x, 0, div_x, ch, fill="", width=11, tags=("divider_hitbox", "sidebar_ui", "bg_element"))
+                self.draw_sidebar(div_x, ch, cw)
+        else:
+            self.canvas.delete("piece_item")
+            self.canvas.delete("zoom_badge")
+            self.canvas.delete("trim_item")
+            self.canvas.delete("sim_item")
 
         # Indicador visual de Zoom ativo no topo da tela
         if getattr(self, "zoom_factor", 1.0) != 1.0:
@@ -1782,71 +1900,128 @@ class LayoutEditorView(tk.Frame):
                 tags="zoom_badge"
             )
 
-        # 5. Sistema de Detecção de Colisão Ativo entre Peças
-        colliding_indices = set()
+        # 5. Sistema de Detecção de Colisão Ativo entre Peças (com Cache e Sweep & Prune)
         num_pieces = len(self.placed_pieces)
         cached_geoms = []
+        piece_meta = []
+        get_geom = self._get_piece_geom
         for p in self.placed_pieces:
             cntr = p.get("contour") or (p.get("shape", {}).get("contour") if isinstance(p.get("shape"), dict) else None)
             if not cntr:
-                cached_geoms.append(([], (0, 0, 0, 0)))
+                cached_geoms.append(([], (0.0, 0.0, 0.0, 0.0)))
                 continue
-            rot = float(p.get("rotation", p.get("rot", 0.0)))
-            poly = transform_contour(cntr, float(p.get("x", 0.0)), float(p.get("y", 0.0)), rot)
-            bbox = polygon_bbox(poly)
-            cached_geoms.append((poly, bbox))
+            cid = id(cntr)
+            px = round(float(p.get("x", 0.0)), 2)
+            py = round(float(p.get("y", 0.0)), 2)
+            rot = round(float(p.get("rotation", p.get("rot", 0.0))), 2)
+            mirr = bool(p.get("mirrored", False))
+            piece_meta.append((cid, px, py, rot, cntr, mirr))
+            cached_geoms.append(get_geom(p, _cid=cid, _px=px, _py=py, _rot=rot, _mirr=mirr))
 
-        if num_pieces > 60:
-            # Acima de 60 peças o par a par vira O(n²); a grade espacial reduz para
-            # apenas vizinhos de célula (mesmo resultado, menos comparações de bbox).
-            collision_grid = SpatialGrid(cell_size=200.0)
-            for idx, (poly, bbox) in enumerate(cached_geoms):
-                collision_grid.insert(idx, poly, bbox)
-            for i, (poly_i, bbox_i) in enumerate(cached_geoms):
-                for j, poly_j, bbox_j in collision_grid.query_items(bbox_i, gap=0.0):
-                    if j <= i:
-                        continue
-                    if polygons_collide(poly_i, poly_j, gap=0.0, bbox_a=bbox_i, bbox_b=bbox_j):
-                        colliding_indices.add(i)
-                        colliding_indices.add(j)
+        piece_geom_sig = tuple((m[0], m[1], m[2], m[3]) for m in piece_meta)
+
+        if getattr(self, "_last_collision_sig", None) == piece_geom_sig:
+            colliding_indices = getattr(self, "_cached_colliding_indices", set())
         else:
-            for i in range(num_pieces):
-                poly_i, bbox_i = cached_geoms[i]
-                for j in range(i + 1, num_pieces):
-                    poly_j, bbox_j = cached_geoms[j]
-                    if polygons_collide(poly_i, poly_j, gap=0.0, bbox_a=bbox_i, bbox_b=bbox_j):
-                        colliding_indices.add(i)
-                        colliding_indices.add(j)
+            self._last_collision_sig = piece_geom_sig
+            colliding_indices = set()
+            pair_cache = getattr(self, "_pair_collision_cache", None)
+            if pair_cache is None:
+                pair_cache = {}
+                self._pair_collision_cache = pair_cache
+            elif len(pair_cache) >= 5000:
+                pair_cache.clear()
 
-        # 6. Peças Aninhadas com Cores Sólidas e Destaque de Colisão
+            if num_pieces > 30:
+                bboxes = [g[1] for g in cached_geoms]
+                polys = [g[0] for g in cached_geoms]
+                order = sorted(range(num_pieces), key=lambda idx: bboxes[idx][1])
+                for k, i in enumerate(order):
+                    b_i = bboxes[i]
+                    if not b_i:
+                        continue
+                    max_y_i = b_i[3]
+                    poly_i = polys[i]
+                    cid_i, xi, yi, rot_i, _, _ = piece_meta[i]
+                    for m in range(k + 1, num_pieces):
+                        j = order[m]
+                        b_j = bboxes[j]
+                        if b_j[1] > max_y_i:
+                            break
+                        if b_i[0] > b_j[2] or b_i[2] < b_j[0]:
+                            continue
+                        cid_j, xj, yj, rot_j, _, _ = piece_meta[j]
+                        pair_key = (
+                            cid_i,
+                            cid_j,
+                            rot_i,
+                            rot_j,
+                            round(xj - xi, 2),
+                            round(yj - yi, 2)
+                        )
+                        col = pair_cache.get(pair_key)
+                        if col is None:
+                            col = polygons_collide(poly_i, polys[j], gap=0.0, bbox_a=b_i, bbox_b=b_j)
+                            pair_cache[pair_key] = col
+                        if col:
+                            colliding_indices.add(i)
+                            colliding_indices.add(j)
+            else:
+                for i in range(num_pieces):
+                    poly_i, bbox_i = cached_geoms[i]
+                    if not poly_i:
+                        continue
+                    for j in range(i + 1, num_pieces):
+                        poly_j, bbox_j = cached_geoms[j]
+                        if not poly_j:
+                            continue
+                        if not bbox_overlap(bbox_i, bbox_j, 0.0):
+                            continue
+                        if polygons_collide(poly_i, poly_j, gap=0.0, bbox_a=bbox_i, bbox_b=bbox_j):
+                            colliding_indices.add(i)
+                            colliding_indices.add(j)
+            self._cached_colliding_indices = colliding_indices
+
+        # 6. Nível de Detalhe (LOD) e Peças Aninhadas (Fase 3 - Tarefa 3)
+        # Full: zoom >= 0.5 OU num_pieces < 200 -> contorno completo preenchido + rótulo
+        # Simplified: zoom >= 0.15 E num_pieces >= 200 -> contorno completo, sem preenchimento (só borda)
+        # LOD: zoom < 0.15 E num_pieces >= 200 -> bounding box colorida + número
+        eff_zoom = scale
+        if eff_zoom >= 0.5 or num_pieces < 200:
+            lod_level = "full"
+        elif eff_zoom >= 0.15:
+            lod_level = "simplified"
+        else:
+            lod_level = "lod"
+
+        sel_idx = self.selected_index
+        sel_set = set(self.selected_indices) if hasattr(self, "selected_indices") and self.selected_indices else set()
+
+        scaled_offset_cache = {}
         for idx, p in enumerate(self.placed_pieces):
-            is_sel = (idx == self.selected_index) or (hasattr(self, "selected_indices") and idx in self.selected_indices)
+            is_sel = (idx == sel_idx) or (idx in sel_set)
             is_col = (idx in colliding_indices)
-            poly, _ = cached_geoms[idx]
+            poly, bbox = cached_geoms[idx]
             if not poly:
                 continue
 
-            screen_pts = []
-            for pt in poly:
-                sx = x1 + pt["x"] * scale
-                sy = y2 - pt["y"] * scale
-                screen_pts.extend([sx, sy])
+            base_col = p.get("color")
+            if not base_col:
+                size_str = str(p.get("size") or (p.get("shape", {}).get("size") if isinstance(p.get("shape"), dict) else "") or "")
+                if not size_str and p.get("target_id"):
+                    ts = next((t for t in TARGET_SPECS if t["id"] == p["target_id"]), None)
+                    if ts:
+                        size_str = str(ts.get("size", ""))
+                if not size_str:
+                    size_str = str(p.get("name") or "")
 
-            # Resolve o tamanho / número da peça
-            size_str = str(p.get("size") or (p.get("shape", {}).get("size") if isinstance(p.get("shape"), dict) else "") or "")
-            if not size_str and p.get("target_id"):
-                ts = next((t for t in TARGET_SPECS if t["id"] == p["target_id"]), None)
-                if ts:
-                    size_str = str(ts.get("size", ""))
-            if not size_str:
-                size_str = str(p.get("name") or "")
-
-            # Determina cor exclusiva por número (sem repetições entre numerações)
-            base_col = get_color_for_size(size_str, idx)
-            p["color"] = base_col
+                base_col = get_color_for_size(size_str, idx)
+                p["color"] = base_col
+            else:
+                size_str = ""
 
             if is_col:
-                outline_col = "#dc2626"  # Alerta vermelho de colisão
+                outline_col = "#dc2626"
                 line_w = 3.0
             elif is_sel:
                 outline_col = "#ff0000"
@@ -1855,44 +2030,99 @@ class LayoutEditorView(tk.Frame):
                 outline_col = "#1e293b"
                 line_w = 1.2
 
-            fill_col = "" if (SELECTED_OUTLINE_ONLY and is_sel) else base_col
+            p_tags = _PIECE_TAGS[idx] if idx < len(_PIECE_TAGS) else (f"piece_{idx}", f"piece_poly_{idx}", "piece_item")
 
-            self.canvas.create_polygon(
-                screen_pts,
-                fill=fill_col,
-                outline=outline_col,
-                width=line_w,
-                tags=(f"piece_{idx}", f"piece_poly_{idx}", "piece_item")
-            )
-
-            # Rótulo nítido com o NÚMERO (Tamanho) apenas em visualizações de poucas peças
-            if len(self.placed_pieces) <= 40 and len(screen_pts) >= 6:
-                avg_sx = sum(screen_pts[0::2]) / (len(screen_pts) // 2)
-                avg_sy = sum(screen_pts[1::2]) / (len(screen_pts) // 2)
-                txt_col = get_contrast_text_color(fill_col)
+            if lod_level == "lod":
+                bx0, by0, bx1, by1 = bbox
+                sbx0 = x1 + bx0 * scale
+                sby0 = y2 - by1 * scale
+                sbx1 = x1 + bx1 * scale
+                sby1 = y2 - by0 * scale
+                self.canvas.create_rectangle(
+                    sbx0, sby0, sbx1, sby1,
+                    fill=base_col,
+                    outline=outline_col,
+                    width=line_w,
+                    tags=p_tags
+                )
+                avg_sx = (sbx0 + sbx1) / 2.0
+                avg_sy = (sby0 + sby1) / 2.0
+                txt_col = get_contrast_text_color(base_col)
+                if not size_str:
+                    size_str = str(p.get("size") or (p.get("shape", {}).get("size") if isinstance(p.get("shape"), dict) else "") or "")
                 display_label = f"Nº {size_str}" if size_str else f"#{idx + 1}"
                 self.canvas.create_text(
                     avg_sx, avg_sy,
                     text=display_label,
                     fill=txt_col,
-                    font=("Segoe UI", 8, "bold"),
+                    font=("Segoe UI", 7, "bold"),
                     tags=(f"piece_{idx}", f"piece_txt_{idx}", "piece_item")
                 )
+                if is_sel:
+                    self.canvas.create_rectangle(
+                        sbx0 - 3, sby0 - 3, sbx1 + 3, sby1 + 3,
+                        outline="#ef4444" if is_col else "#ffffff",
+                        dash=(3, 3),
+                        width=1.5,
+                        tags=(f"piece_{idx}", f"piece_box_{idx}", "piece_item")
+                    )
+            else:
+                cid, px, py, rot, _, mirrored = piece_meta[idx]
+                if not mirrored:
+                    rot_key = (cid, rot)
+                    sc_offsets = scaled_offset_cache.get(rot_key)
+                    if sc_offsets is None:
+                        rot_cache = getattr(self, "_piece_rot_cache", {})
+                        base_entry = rot_cache.get(rot_key)
+                        if base_entry is not None and len(base_entry) >= 3:
+                            base_pts = base_entry[2]
+                        else:
+                            base_pts = [(pt["x"] - px, pt["y"] - py) for pt in poly]
+                        sc_offsets = [(ox * scale, -oy * scale) for ox, oy in base_pts]
+                        scaled_offset_cache[rot_key] = sc_offsets
+                    csx = x1 + px * scale
+                    csy = y2 - py * scale
+                    screen_pts = [c for dx_s, dy_s in sc_offsets for c in (csx + dx_s, csy + dy_s)]
+                else:
+                    screen_pts = [c for pt in poly for c in (x1 + pt["x"] * scale, y2 - pt["y"] * scale)]
 
-            if is_sel and len(screen_pts) >= 4:
-                min_sx = min(screen_pts[0::2])
-                max_sx = max(screen_pts[0::2])
-                min_sy = min(screen_pts[1::2])
-                max_sy = max(screen_pts[1::2])
-                self.canvas.create_rectangle(
-                    min_sx - 3, min_sy - 3, max_sx + 3, max_sy + 3,
-                    outline="#ef4444" if is_col else "#ffffff",
-                    dash=(3, 3),
-                    width=1.5,
-                    tags=(f"piece_{idx}", f"piece_box_{idx}", "piece_item")
+                fill_col = "" if (SELECTED_OUTLINE_ONLY and is_sel) or (lod_level == "simplified" and not is_sel) else base_col
+
+                self.canvas.create_polygon(
+                    screen_pts,
+                    fill=fill_col,
+                    outline=outline_col,
+                    width=line_w,
+                    tags=p_tags
                 )
 
-        # 6.5. Linhas de Corte de Refile Automático CAM (Topo Y e Comprimento X)
+                if num_pieces <= 40 and len(screen_pts) >= 6:
+                    avg_sx = sum(screen_pts[0::2]) / (len(screen_pts) // 2)
+                    avg_sy = sum(screen_pts[1::2]) / (len(screen_pts) // 2)
+                    txt_col = get_contrast_text_color(fill_col or base_col)
+                    display_label = f"Nº {size_str}" if size_str else f"#{idx + 1}"
+                    self.canvas.create_text(
+                        avg_sx, avg_sy,
+                        text=display_label,
+                        fill=txt_col,
+                        font=("Segoe UI", 8, "bold"),
+                        tags=(f"piece_{idx}", f"piece_txt_{idx}", "piece_item")
+                    )
+
+                if is_sel and len(screen_pts) >= 4:
+                    min_sx = min(screen_pts[0::2])
+                    max_sx = max(screen_pts[0::2])
+                    min_sy = min(screen_pts[1::2])
+                    max_sy = max(screen_pts[1::2])
+                    self.canvas.create_rectangle(
+                        min_sx - 3, min_sy - 3, max_sx + 3, max_sy + 3,
+                        outline="#ef4444" if is_col else "#ffffff",
+                        dash=(3, 3),
+                        width=1.5,
+                        tags=(f"piece_{idx}", f"piece_box_{idx}", "piece_item")
+                    )
+
+        # 6.5. Linhas de Corte de Refile Automático CAM
         if getattr(self, "trim_cut_line", None) and self.trim_cut_line.get("enabled", True):
             cut_y = float(self.trim_cut_line.get("y", self.sheet_height))
             cut_x = float(self.trim_cut_line.get("x", self.sheet_width))
@@ -1903,7 +2133,6 @@ class LayoutEditorView(tk.Frame):
             orig_x2 = x1 + orig_w * scale
             orig_y1 = y2 - orig_h * scale
 
-            # Desenha área descartada da chapa original se foi refilada na lateral X
             if orig_w > cut_x + 0.5:
                 self.canvas.create_rectangle(
                     sx_cut, y1, orig_x2, y2,
@@ -1911,7 +2140,7 @@ class LayoutEditorView(tk.Frame):
                     outline="#dc2626",
                     dash=(4, 3),
                     width=1.0,
-                    tags="trim_cut_scrap_x"
+                    tags=("trim_cut_scrap_x", "trim_item")
                 )
                 sobra_w_cm = (orig_w - cut_x) / 10.0
                 scx = (sx_cut + orig_x2) / 2.0
@@ -1923,50 +2152,45 @@ class LayoutEditorView(tk.Frame):
                         fill="#991b1b",
                         font=("Segoe UI", 8, "italic"),
                         justify="center",
-                        tags="trim_cut_scrap_lbl"
+                        tags=("trim_cut_scrap_lbl", "trim_item")
                     )
 
-            # 1. Linha transversal vermelha de corte CAM no topo das peças (Refile Y)
             line_right = max(x2 + 6, orig_x2 + 6) if orig_w > cut_x + 0.5 else x2 + 6
             self.canvas.create_line(
                 x1 - 6, sy_cut, line_right, sy_cut,
                 fill="#dc2626",
                 width=2.5,
-                tags="trim_cut_line"
+                tags=("trim_cut_line", "trim_item")
             )
-            # Ícone de tesoura na esquerda
             self.canvas.create_text(
                 x1 - 16, sy_cut,
                 text="✂",
                 fill="#dc2626",
                 font=("Segoe UI", 12, "bold"),
-                tags="trim_cut_icon_left"
+                tags=("trim_cut_icon_left", "trim_item")
             )
 
-            # 2. Linha vertical vermelha de corte CAM no final das peças (Refile X / Comprimento total)
             self.canvas.create_line(
                 sx_cut, y1 - 6, sx_cut, y2 + 6,
                 fill="#dc2626",
                 width=2.5,
-                tags="trim_cut_line_v"
+                tags=("trim_cut_line_v", "trim_item")
             )
-            # Ícones de tesoura no corte vertical (topo e base)
             self.canvas.create_text(
                 sx_cut, y1 - 16,
                 text="✂",
                 fill="#dc2626",
                 font=("Segoe UI", 12, "bold"),
-                tags="trim_cut_icon_v_top"
+                tags=("trim_cut_icon_v_top", "trim_item")
             )
             self.canvas.create_text(
                 sx_cut, y2 + 16,
                 text="✂",
                 fill="#dc2626",
                 font=("Segoe UI", 12, "bold"),
-                tags="trim_cut_icon_v_bot"
+                tags=("trim_cut_icon_v_bot", "trim_item")
             )
 
-            # 3. Badge CAM unificado e posicionado ACIMA da chapa
             h_cm = self.sheet_height / 10.0
             h_m = self.sheet_height / 1000.0
             w_cm = self.sheet_width / 10.0
@@ -1978,17 +2202,17 @@ class LayoutEditorView(tk.Frame):
                 fill="#fef2f2",
                 outline="#dc2626",
                 width=1.5,
-                tags="trim_cut_badge_bg"
+                tags=("trim_cut_badge_bg", "trim_item")
             )
             self.canvas.create_text(
                 bx, by,
                 text=badge_text,
                 fill="#991b1b",
                 font=("Segoe UI", 8, "bold"),
-                tags="trim_cut_badge_txt"
+                tags=("trim_cut_badge_txt", "trim_item")
             )
 
-        # 6.6 Cabeçote CNC se Simulação estiver Ativa (Mira vermelha clássica)
+        # 6.6 Cabeçote CNC se Simulação estiver Ativa
         if getattr(self, "sim_running", False):
             if hasattr(self, "_sim_path") and self._sim_path and hasattr(self, "_sim_path_idx"):
                 trail_pts = []
@@ -1996,20 +2220,12 @@ class LayoutEditorView(tk.Frame):
                     sx, sy = self.world_to_screen(pt[0], pt[1])
                     trail_pts.extend([sx, sy])
                 if len(trail_pts) >= 4:
-                    self.canvas.create_line(trail_pts, fill="#dc2626", width=2, tags="sim_cut_trail")
+                    self.canvas.create_line(trail_pts, fill="#dc2626", width=2, tags=("sim_cut_trail", "sim_item"))
             self._draw_sim_head(self.sim_head_pos[0], self.sim_head_pos[1])
 
-        # 7. Divisor Vertical e Barra Lateral de Moldes (com fundo opaco para isolar do zoom da mesa)
-        div_x = self.sidebar_div_x
-        if div_x < cw:
-            is_dragging = getattr(self, "is_dragging_divider", False)
-            div_left_col = "#2563eb" if is_dragging else "#a0a0a0"
-            div_right_col = "#60a5fa" if is_dragging else "#ffffff"
-            self.canvas.create_rectangle(div_x, 0, cw, ch, fill="#ffffff", outline="", tags=("sidebar_bg", "sidebar_ui"))
-            self.canvas.create_line(div_x, 0, div_x, ch, fill=div_left_col, width=1, tags=("divider_line", "sidebar_ui"))
-            self.canvas.create_line(div_x + 1, 0, div_x + 1, ch, fill=div_right_col, width=1, tags=("divider_line", "sidebar_ui"))
-            self.canvas.create_line(div_x, 0, div_x, ch, fill="", width=11, tags=("divider_hitbox", "sidebar_ui"))
-            self.draw_sidebar(div_x, ch, cw)
+        # Se fundo não mudou, garante que a sidebar fique acima das peças
+        if not bg_changed and div_x < cw:
+            self.canvas.tag_raise("sidebar_ui")
 
         if colliding_indices and hasattr(self, "lbl_stat_left"):
             self.lbl_stat_left.config(text=f"⚠️ ALERTA: Colisão detectada em {len(colliding_indices)} peça(s)! Sobreposição proibida.")
@@ -2348,8 +2564,11 @@ class LayoutEditorView(tk.Frame):
             orig_px, orig_py = self._drag_piece_origins[didx]
             prop_x = orig_px + delta_x
             prop_y = orig_py + delta_y
-            poly_prop = transform_contour(dp["contour"], prop_x, prop_y, dp["rotation"])
-            bx0, by0, bx1, by1 = polygon_bbox(poly_prop)
+            poly_prop, (bx0, by0, bx1, by1) = self._get_piece_geom(
+                dp, _cid=id(dp["contour"]), _px=prop_x, _py=prop_y,
+                _rot=dp.get("rotation", dp.get("rot", 0.0)),
+                _mirr=bool(dp.get("mirrored", False))
+            )
             piece_polys[didx] = poly_prop
             piece_bboxes[didx] = (bx0, by0, bx1, by1)
             group_xmin = min(group_xmin, bx0)
@@ -2380,8 +2599,11 @@ class LayoutEditorView(tk.Frame):
                 orig_px, orig_py = self._drag_piece_origins[didx]
                 prop_x = orig_px + delta_x
                 prop_y = orig_py + delta_y
-                poly_prop = transform_contour(dp["contour"], prop_x, prop_y, dp["rotation"])
-                bx0, by0, bx1, by1 = polygon_bbox(poly_prop)
+                poly_prop, (bx0, by0, bx1, by1) = self._get_piece_geom(
+                    dp, _cid=id(dp["contour"]), _px=prop_x, _py=prop_y,
+                    _rot=dp.get("rotation", dp.get("rot", 0.0)),
+                    _mirr=bool(dp.get("mirrored", False))
+                )
                 piece_polys[didx] = poly_prop
                 piece_bboxes[didx] = (bx0, by0, bx1, by1)
 
@@ -2511,8 +2733,7 @@ class LayoutEditorView(tk.Frame):
 
                 contained = []
                 for idx, p in enumerate(self.placed_pieces):
-                    poly = transform_contour(p["contour"], p["x"], p["y"], p["rotation"])
-                    p_xmin, p_ymin, p_xmax, p_ymax = polygon_bbox(poly)
+                    poly, (p_xmin, p_ymin, p_xmax, p_ymax) = self._get_piece_geom(p)
                     if (box_xmin <= p_xmin and p_xmax <= box_xmax and
                         box_ymin <= p_ymin and p_ymax <= box_ymax):
                         contained.append(idx)
@@ -2589,8 +2810,7 @@ class LayoutEditorView(tk.Frame):
             dragged_geoms = {}
             for didx in self._drag_indices:
                 p_curr = self.placed_pieces[didx]
-                poly_curr = transform_contour(p_curr["contour"], p_curr["x"], p_curr["y"], p_curr["rotation"])
-                bbox_curr = polygon_bbox(poly_curr)
+                poly_curr, bbox_curr = self._get_piece_geom(p_curr)
                 dragged_geoms[didx] = (poly_curr, bbox_curr)
                 if (bbox_curr[0] < -0.01 or bbox_curr[1] < -0.01 or
                     bbox_curr[2] > self.sheet_width + 0.01 or bbox_curr[3] > self.sheet_height + 0.01):
@@ -2603,8 +2823,9 @@ class LayoutEditorView(tk.Frame):
                     for j, other in enumerate(self.placed_pieces):
                         if j in drag_set:
                             continue
-                        other_poly = transform_contour(other["contour"], other["x"], other["y"], other["rotation"])
-                        other_bbox = polygon_bbox(other_poly)
+                        other_poly, other_bbox = self._get_piece_geom(other)
+                        if not bbox_overlap(bbox_curr, other_bbox, 0.0):
+                            continue
                         if polygons_collide(poly_curr, other_poly, gap=0.0, bbox_a=bbox_curr, bbox_b=other_bbox):
                             has_collision = True
                             break
@@ -3372,8 +3593,7 @@ class LayoutEditorView(tk.Frame):
         x1 = self.plate_x1
         y2 = self.plate_y2
 
-        poly = transform_contour(p["contour"], p["x"], p["y"], p["rotation"])
-        bbox = polygon_bbox(poly)
+        poly, bbox = self._get_piece_geom(p)
 
         # Checa colisão com limites da chapa ou com qualquer outra peça
         is_col = (
@@ -3384,8 +3604,9 @@ class LayoutEditorView(tk.Frame):
         for j, other in enumerate(self.placed_pieces):
             if j == piece_idx:
                 continue
-            other_poly = transform_contour(other["contour"], other["x"], other["y"], other["rotation"])
-            other_bbox = polygon_bbox(other_poly)
+            other_poly, other_bbox = self._get_piece_geom(other)
+            if not bbox_overlap(bbox, other_bbox, 0.0):
+                continue
             if polygons_collide(poly, other_poly, gap=0.0, bbox_a=bbox, bbox_b=other_bbox):
                 is_col = True
                 colliding_with.append(j)

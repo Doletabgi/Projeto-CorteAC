@@ -9,7 +9,7 @@ on:
       tag_name:
         description: 'Tag de versão SemVer (ex: v1.0.0)'
         required: false
-        default: 'v1.1.0'
+        default: 'v1.2.0'
 
 permissions:
   contents: write
@@ -173,22 +173,22 @@ jobs:
 
             ---
 
-            ### 🛠️ Recursos Incluídos Nesta Versão (v1.1.0):
-            - **Nesting em Múltiplas Placas (Multi-Sheet Nesting lay0000, lay0001, ...)**:
-              - Cálculo iterativo de encaixe até atingir 100% da demanda da sessão, gerando sucessivas placas (`lay0000`, `lay0001`, etc.).
-              - Prioridade estrita de sequência (`1, 2, 3...`) respeitando a cabeça da fila sem pular moldes.
-              - Navegação ágil entre placas no Layout Editor com atalhos `Ctrl+L` (Próximo) e `Ctrl+Shift+L` (Anterior) e Undo isolado por placa.
-              - Exportação dual sequencial pareando arquivos `.lay` e `.onx` por placa calculada.
-            - **Nova Legenda de Moldes na Impressão A4 (LayoutPrintDialog, Ctrl+P)**:
-              - Exibição de pares por tamanho no formato `tamanho: n/m` (`n` = pares na placa atual, `m` = pedido total da sessão).
-              - Identificação de Shape ID ao lado do nome do molde em fonte reduzida (`129_187_Tras  #1735`).
-              - Destaque em vermelho (`#dc2626`) caso haja inconsistência de dados ($n > m$) e eliminação definitiva do legado `/0`.
-              - Quebra de linha inteligente entre tamanhos e exportação gráfica idêntica via Pillow em alta resolução.
-            - **Interface e Usabilidade Refinadas**:
-              - Limpeza dos contadores de moldes na barra lateral do Layout Editor, exibindo diretamente a relação da sessão (`16/16`).
-              - Importação em lote de materiais a partir de arquivos CSV, TSV e JSON.
-            - **Suíte de Testes e Confiabilidade Industrial**:
-              - 248 testes unitários automatizados passando com 100% de sucesso.
+            ### 🛠️ Recursos Incluídos Nesta Versão (v1.2.0):
+            - **Novo Motor de Nesting Analítico No-Fit Polygon (`NfpBackend`)**:
+              - Performance industrial **4,11× mais rápida** (19,5 ms vs 80,3 ms por chapa).
+              - Decomposição convexa e somas de Minkowski em Python puro, eliminando a busca binária de colisões.
+              - Zero colisões em chapas cheias (validado rigorosamente até 500 peças).
+              - Alta resiliência com fallback transparente e rollback instantâneo via `CORTEAC_BACKEND=python`.
+            - **Otimização de Trajetória CAM CNC (Strip-TSP com 2-Opt + Or-opt)**:
+              - **Redução de até 11,62% no percurso em vazio (G00)** do cabeçote CNC.
+              - Execução acelerada em **12× a 46×** (95 ms para 200 peças e 670 ms para 500 peças).
+              - Preservação estrita de vácuo, plunge de faca no ponto médio e common-line cutting.
+            - **Renderização e Interação Aceleradas no Layout Editor**:
+              - Tempo de redesenho (`redraw`) reduzido para **7,60 ms** com 300 peças via 1D Sweep & Prune e tabelas estáticas de tags.
+              - Arraste fluido a **0,22 ms/evento** (~4.500 eventos/s) com cache geométrico de contorno (hit rate de **99,83%**).
+              - 100% de fidelidade estética clássica Win32 MDI (**0 px de regressão visual**).
+            - **Confiabilidade e Qualidade de Código**:
+              - **277 testes automatizados verdes** (+29 novos testes cobrindo NFP, Or-opt e integridade geométrica).
           files: |
             dist-release/**/*.exe
             dist-release/**/*.zip

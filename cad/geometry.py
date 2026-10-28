@@ -15,15 +15,91 @@ def rotate_point(x, y, angle_deg):
         x * sin_a + y * cos_a
     )
 
+_TRANSFORM_CACHE: dict = {}
+_ROT_CACHE: dict = {}
+_CONTOUR_HASH_CACHE: dict = {}
+_CACHE_STATS = {"hits": 0, "misses": 0}
+
+def clear_transform_cache():
+    """Limpa o cache de transformações geométricas de contornos."""
+    global _TRANSFORM_CACHE, _ROT_CACHE, _CONTOUR_HASH_CACHE, _CACHE_STATS
+    _TRANSFORM_CACHE.clear()
+    _ROT_CACHE.clear()
+    _CONTOUR_HASH_CACHE.clear()
+    _CACHE_STATS["hits"] = 0
+    _CACHE_STATS["misses"] = 0
+
+def get_transform_cache_stats() -> dict:
+    """Retorna estatísticas de uso do cache de contornos."""
+    total = _CACHE_STATS["hits"] + _CACHE_STATS["misses"]
+    rate = (_CACHE_STATS["hits"] / total * 100.0) if total > 0 else 0.0
+    return {
+        "hits": _CACHE_STATS["hits"],
+        "misses": _CACHE_STATS["misses"],
+        "size": len(_TRANSFORM_CACHE) + len(_ROT_CACHE),
+        "hit_rate_pct": round(rate, 2),
+    }
+
+def _get_contour_hash(contour) -> int:
+    """Calcula ou recupera o hash imutável de um contorno em O(1) via id() ou tupla."""
+    cid = id(contour)
+    h = _CONTOUR_HASH_CACHE.get(cid)
+    if h is None:
+        h = hash(tuple((int(p["x"] * 1000), int(p["y"] * 1000)) for p in contour))
+        if len(_CONTOUR_HASH_CACHE) >= 2000:
+            _CONTOUR_HASH_CACHE.clear()
+        _CONTOUR_HASH_CACHE[cid] = h
+    return h
+
 def transform_contour(contour, offset_x, offset_y, angle_deg):
     """Aplica rotação e translação a uma lista de pontos dict(x, y)."""
-    transformed = []
-    for pt in contour:
-        rx, ry = rotate_point(pt["x"], pt["y"], angle_deg)
-        transformed.append({
-            "x": rx + offset_x,
-            "y": ry + offset_y
-        })
+    if not contour:
+        return []
+
+    h_c = _get_contour_hash(contour)
+    int_angle = int(angle_deg * 100)
+    int_off_x = int(offset_x * 1000)
+    int_off_y = int(offset_y * 1000)
+
+    cache_key = (h_c, int_angle, int_off_x, int_off_y)
+    cached = _TRANSFORM_CACHE.get(cache_key)
+    if cached is not None:
+        _CACHE_STATS["hits"] += 1
+        return [dict(p) for p in cached]
+
+    # Nível 2: Cache de contornos pré-rotacionados na origem
+    rot_key = (h_c, int_angle)
+    base_rotated = _ROT_CACHE.get(rot_key)
+    if base_rotated is not None:
+        _CACHE_STATS["hits"] += 1
+    else:
+        _CACHE_STATS["misses"] += 1
+        rad = math.radians(angle_deg)
+        cos_a = math.cos(rad)
+        sin_a = math.sin(rad)
+        base_rotated = []
+        for pt in contour:
+            px = pt["x"]
+            py = pt["y"]
+            base_rotated.append({
+                "x": px * cos_a - py * sin_a,
+                "y": px * sin_a + py * cos_a,
+            })
+        if len(_ROT_CACHE) >= 2000:
+            _ROT_CACHE.clear()
+        _ROT_CACHE[rot_key] = base_rotated
+
+    off_x = float(offset_x)
+    off_y = float(offset_y)
+    transformed = [
+        {"x": pt["x"] + off_x, "y": pt["y"] + off_y}
+        for pt in base_rotated
+    ]
+
+    if len(_TRANSFORM_CACHE) >= 10000:
+        _TRANSFORM_CACHE.clear()
+
+    _TRANSFORM_CACHE[cache_key] = [dict(p) for p in transformed]
     return transformed
 
 def polygon_area(poly):

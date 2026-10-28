@@ -2104,6 +2104,94 @@ class TestLayoutEditorShortcuts(unittest.TestCase):
         expected = ["Arquivo", "Editar", "Exibir", "Encaixe", "Ferramentas", "Janela", "Ajuda"]
         self.assertEqual(menubuttons, expected)
 
+    def test_piece_geometry_cache_hits_and_misses(self):
+        """Valida que _get_piece_geom armazena em cache e contabiliza hits/misses corretamente."""
+        self.view.clear_piece_cache()
+        piece = {"contour": CONTOUR_CON, "x": 100.0, "y": 200.0, "rotation": 0.0}
+
+        # Primeiro acesso: miss
+        poly1, bbox1 = self.view._get_piece_geom(piece)
+        stats1 = self.view.get_piece_cache_stats()
+        self.assertEqual(stats1["misses"], 1)
+        self.assertEqual(stats1["hits"], 0)
+
+        # Segundo acesso idêntico: hit
+        poly2, bbox2 = self.view._get_piece_geom(piece)
+        stats2 = self.view.get_piece_cache_stats()
+        self.assertEqual(stats2["misses"], 1)
+        self.assertEqual(stats2["hits"], 1)
+        self.assertEqual(stats2["hit_rate_pct"], 50.0)
+        self.assertEqual(poly1, poly2)
+        self.assertEqual(bbox1, bbox2)
+
+        # Limpeza do cache
+        self.view.clear_piece_cache()
+        stats3 = self.view.get_piece_cache_stats()
+        self.assertEqual(stats3["hits"], 0)
+        self.assertEqual(stats3["misses"], 0)
+        self.assertEqual(stats3["size"], 0)
+
+    def test_lod_level_selection_and_piece_preservation(self):
+        """Valida a transição entre Full, Simplified e LOD, garantindo 0 peças perdidas em todos os níveis."""
+        # Cria 220 peças para acionar regras de LOD
+        contour = CONTOUR_CON
+        test_pieces = [
+            {"name": f"P_{i}", "contour": contour, "x": 10.0 + (i % 10) * 120.0, "y": 10.0 + (i // 10) * 120.0, "rotation": 0.0}
+            for i in range(220)
+        ]
+        self.view.placed_pieces = test_pieces
+        self.view.selected_index = -1
+        self.view.selected_indices = []
+
+        # 1. Nível Full (zoom_factor alto -> effective_scale >= 0.5)
+        self.view.zoom_factor = 5.0
+        self.view.redraw()
+        polys_full = self.view.canvas.find_withtag("piece_item")
+        self.assertTrue(len(polys_full) >= 220)
+        poly0 = self.view.canvas.find_withtag("piece_poly_0")
+        self.assertTrue(len(poly0) > 0)
+        self.assertEqual(self.view.canvas.type(poly0[0]), "polygon")
+        self.assertNotEqual(self.view.canvas.itemcget(poly0[0], "fill"), "")
+
+        # 2. Nível Simplified (zoom médio -> 0.15 <= effective_scale < 0.5)
+        self.view.zoom_factor = 2.0
+        self.view.redraw()
+        polys_simp = self.view.canvas.find_withtag("piece_item")
+        self.assertTrue(len(polys_simp) >= 220)
+        poly0_simp = self.view.canvas.find_withtag("piece_poly_0")
+        self.assertTrue(len(poly0_simp) > 0)
+        self.assertEqual(self.view.canvas.type(poly0_simp[0]), "polygon")
+        self.assertEqual(self.view.canvas.itemcget(poly0_simp[0], "fill"), "")
+
+        # 3. Nível LOD (zoom baixo -> effective_scale < 0.15)
+        self.view.zoom_factor = 0.2
+        self.view.redraw()
+        polys_lod = self.view.canvas.find_withtag("piece_item")
+        self.assertTrue(len(polys_lod) >= 220)
+        rect0 = self.view.canvas.find_withtag("piece_poly_0")
+        self.assertTrue(len(rect0) > 0)
+        self.assertEqual(self.view.canvas.type(rect0[0]), "rectangle")
+
+        # Em TODOS os 3 níveis, todas as 220 peças foram renderizadas (zero desaparecidas)
+        for i in range(220):
+            item_tag = self.view.canvas.find_withtag(f"piece_{i}")
+            self.assertTrue(len(item_tag) > 0, f"Peça {i} desapareceu no nível LOD!")
+
+    def test_incremental_redraw_background_caching(self):
+        """Valida que redraw() consecutivo preserva o background e reutiliza itens de fundo."""
+        self.view.placed_pieces = [
+            {"contour": CONTOUR_CON, "x": 50.0, "y": 50.0, "rotation": 0.0}
+        ]
+        self.view.redraw()
+        bg_items_1 = set(self.view.canvas.find_withtag("bg_element"))
+        self.assertTrue(len(bg_items_1) > 0)
+
+        # Segundo redraw com mesma viewport/geometria
+        self.view.redraw()
+        bg_items_2 = set(self.view.canvas.find_withtag("bg_element"))
+        # Os IDs dos itens de fundo devem ser idênticos (não foram deletados e recriados)
+        self.assertEqual(bg_items_1, bg_items_2)
+
 
 if __name__ == "__main__":
     unittest.main()

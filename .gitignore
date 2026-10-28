@@ -11,9 +11,15 @@ corteac_linux
 *.spec
 db.ini
 *.bak
-jobmanager.db.bak
+*.bak.*
+jobmanager.db.bak*
 .~lock*
-docs/
+*.prof
+profile_*.txt
+*.json
+docs/*
+!docs/PROJETO_ATOM_JOBMANAGER.md
+!docs/FASE4_RELATORIO_PRODUCAO.md
 tools/
 scratch/
 .githooks/
