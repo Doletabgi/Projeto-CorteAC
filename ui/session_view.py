@@ -11,6 +11,7 @@ import tkinter as tk
 from tkinter import ttk, messagebox, simpledialog, colorchooser, filedialog
 from pathlib import Path
 from config import THEME
+from ui.units import format_m, format_dim_mm, format_dim_m
 from ui.cad_canvas import CADCanvas
 from cad.geometry import rotate_point, transform_contour, polygon_area
 from cad.colors import get_color_for_size, get_color_emoji, get_contrast_text_color
@@ -1093,7 +1094,7 @@ class SessionView(tk.Frame):
             "layout_name": layout_name_val,
             "sheet_w_mm": sheet_w,
             "sheet_h_mm": sheet_h,
-            "dimensions_str": f"{sheet_h / 10.0:.2f} X {sheet_w / 10.0:.2f} cm ({mat_h_m:.2f} X {mat_w_m:.2f} M)",
+            "dimensions_str": format_dim_mm(sheet_w, sheet_h),
             "mat_area_str": f"{mat_area:.2f} sq.M.",
             "used_area_str": f"{used_area:.2f} sq.M.",
             "yield_pct": eff,
@@ -1542,9 +1543,8 @@ class SessionView(tk.Frame):
             gy += 300.0
 
         # Rótulo com dimensões no topo da chapa (estilo Placa (298.00 X 138.00 cm) ou Placa 0 - lay0000 (...))
-        h_cm = sheet_h / 10.0
-        w_cm = sheet_w / 10.0
-        header_text = f"Placa {selected_idx} - {ly_name} ({h_cm:.2f} X {w_cm:.2f} cm)" if len(sess_layouts) > 1 else f"Placa ({h_cm:.2f} X {w_cm:.2f} cm)"
+        dim_txt = format_dim_mm(sheet_w, sheet_h)
+        header_text = f"Placa {selected_idx} - {ly_name} ({dim_txt})" if len(sess_layouts) > 1 else f"Placa {dim_txt}"
         cv.create_text(
             cw / 2,
             max(8, y1 - 8),
@@ -1582,7 +1582,7 @@ class SessionView(tk.Frame):
             cv.create_text(
                 (x1 + x2) / 2.0,
                 max(y1 + 8, sy_cut - 7),
-                text=f"✂ Refile: {cut_y / 10.0:.1f} cm",
+                text=f"✂ Refile: {format_m(cut_y)} m",
                 fill="#dc2626",
                 font=("Segoe UI", 7, "bold")
             )
@@ -2011,11 +2011,18 @@ class SessionView(tk.Frame):
                 pass
 
     def update_progress_text(self, current: int, total: int):
-        """Atualiza o texto da barra de progresso para: Calculando chapa {current} de {total}..."""
+        """Atualiza a barra: 'Calculando chapa X de Y...' (ou só X quando Y é desconhecido)."""
         if getattr(self, "_cancel_nest", False):
             return
         display_current = current + 1 if current == 0 else current
-        text = f"Calculando chapa {display_current} de {total}..."
+        try:
+            total_ok = int(total) > 0
+        except (TypeError, ValueError):
+            total_ok = False
+        if total_ok:
+            text = f"Calculando chapa {display_current} de {int(total)}..."
+        else:
+            text = f"Calculando chapa {display_current}..."
         if hasattr(self, "lbl_progress") and self.lbl_progress.winfo_exists():
             self.lbl_progress.config(text=text)
         if hasattr(self, "frame_progress") and self.frame_progress.winfo_exists():
@@ -3888,7 +3895,7 @@ Layouts:
 
 Material / Layout:
 - Código do Material: {mat_code}
-- Dimensões do Layout: {l_cm:.2f} X {w_cm:.2f} cm [{w_m:.2f}m x {l_m:.2f}m]
+- Dimensões do Layout: {format_dim_m(w_m, l_m)}
 - Camadas de corte (Layers): {layers}
 - Gap entre peças: {gap} mm
 - Área total da placa: {area:.4f} m²

@@ -17,6 +17,7 @@ import tkinter.font as tkfont
 from PIL import Image, ImageDraw, ImageFont
 
 from config import THEME
+from ui.units import format_m, format_dim_mm
 from cad.colors import get_color_for_size
 
 
@@ -1221,7 +1222,7 @@ class LayoutPrintDialog(tk.Toplevel):
             )
             self.canvas.create_text(
                 bed_x + bed_w / 2, max(bed_y + 8, cut_sy - 8),
-                text=f"✂ CORTE DE REFILE: {cut_y / 10.0:.1f} cm",
+                text=f"✂ CORTE DE REFILE: {format_m(cut_y)} m",
                 font=f_ruler,
                 fill="#dc2626",
                 tags="print_trim_text"
@@ -1530,7 +1531,7 @@ class LayoutPrintDialog(tk.Toplevel):
             cut_y = float(trim_cut.get("y", self.sheet_h_mm))
             cut_sy = bed_y + (self.sheet_h_mm - cut_y) * scale_bed
             draw.line([(bed_x - int(4 * scale), cut_sy), (bed_x + bed_w + int(4 * scale), cut_sy)], fill="#dc2626", width=max(2, int(2 * scale)))
-            draw.text((bed_x + bed_w / 2 - int(50 * scale), max(bed_y + 4, cut_sy - int(12 * scale))), f"CORTE DE REFILE: {cut_y / 10.0:.1f} cm", fill="#dc2626", font=f_ruler)
+            draw.text((bed_x + bed_w / 2 - int(50 * scale), max(bed_y + 4, cut_sy - int(12 * scale))), f"CORTE DE REFILE: {format_m(cut_y)} m", fill="#dc2626", font=f_ruler)
 
         # Rodapé
         footer_y = ph - int(36 * scale)

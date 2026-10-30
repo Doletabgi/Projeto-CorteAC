@@ -71,12 +71,16 @@ class TestMultiSheetProgress(unittest.TestCase):
         self.assertTrue(res["success"])
         self.assertGreater(len(calls), 1, "Deve gerar múltiplas placas e chamar o callback")
         self.assertEqual(len(calls), res["num_sheets"])
-        # Primeira chamada inicia no índice 0
-        self.assertEqual(calls[0], (0, 50))
-        # Chamadas consecutivas incrementam sheet_idx
+        # Primeira chamada inicia no índice 0 e ainda não há estimativa de total (0 = desconhecido)
+        self.assertEqual(calls[0], (0, 0))
+        # Chamadas consecutivas incrementam sheet_idx e passam a informar uma estimativa
+        # de placas (densidade observada), nunca o limite de segurança max_sheets.
         for idx, call in enumerate(calls):
             self.assertEqual(call[0], idx)
-            self.assertEqual(call[1], 50)
+            if idx > 0:
+                self.assertGreater(call[1], 0)
+                self.assertLessEqual(call[1], res["num_sheets"] + 1)
+            self.assertNotEqual(call[1], 50, "O total não deve ser o limite de segurança max_sheets")
 
     def test_nest_multi_sheet_progress_callback_exception_handling(self):
         """Valida que exceção levantada dentro do callback não interrompe o nesting."""

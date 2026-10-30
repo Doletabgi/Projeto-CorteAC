@@ -37,6 +37,43 @@ from cad.nfp import (
 
 logger = logging.getLogger(__name__)
 
+# Cache do custo de decomposição convexa por contorno (nº de partes convexas).
+_CONVEX_PART_CACHE: Dict[tuple, int] = {}
+
+
+def count_convex_parts(shapes: list) -> int:
+    """
+    Maior número de partes convexas entre os contornos recebidos.
+
+    É o fator que explode o custo do NFP: o motor compõe o produto cartesiano das
+    decomposições dos dois polígonos (147 partes contra 164 = 24.108 polígonos por
+    par de peças). Contornos reais de calçado têm 130-190 vértices côncavos.
+    """
+    from cad.nfp import decompose_convex
+
+    worst = 0
+    for s in shapes or []:
+        contour = s.get("contour") if isinstance(s, dict) else None
+        if not contour or len(contour) < 3:
+            continue
+        # Chave pelo conteúdo (não por id(), que pode ser reutilizado após GC)
+        try:
+            key = tuple((round(float(p["x"]), 1), round(float(p["y"]), 1)) for p in contour)
+        except (KeyError, TypeError, ValueError):
+            continue
+        parts = _CONVEX_PART_CACHE.get(key)
+        if parts is None:
+            try:
+                parts = len(decompose_convex(contour))
+            except Exception:
+                parts = 0
+            if len(_CONVEX_PART_CACHE) > 512:
+                _CONVEX_PART_CACHE.clear()
+            _CONVEX_PART_CACHE[key] = parts
+        if parts > worst:
+            worst = parts
+    return worst
+
 
 class NestingBackend(Protocol):
     """Protocolo formal para motores de nesting 2D intercambiáveis."""
@@ -183,6 +220,38 @@ class NfpBackend:
         if not available_shapes:
             return []
 
+        # Contornos reais (côncavos, 130+ vértices) explodem a decomposição convexa:
+        # ~147 partes por molde => produto cartesiano de ~24 mil polígonos NFP por par,
+        # o que consome ~200 ms por peça. Nesses casos o motor SAT clássico (busca
+        # binária + SpatialGrid) é uma ordem de grandeza mais rápido e empaca mais
+        # peças, então delegamos para ele em vez de travar a máquina.
+        max_parts = count_convex_parts(available_shapes)
+        try:
+            max_parts_allowed = int(os.getenv("CORTEAC_NFP_MAX_PARTS", "12"))
+        except (TypeError, ValueError):
+            max_parts_allowed = 12
+        if max_parts > max_parts_allowed:
+            logger.info(
+                "NfpBackend: contorno com %d partes convexas (> %d). Usando motor SAT.",
+                max_parts,
+                max_parts_allowed,
+            )
+            from cad.nesting_engine import _auto_nest_pieces_core
+
+            return _auto_nest_pieces_core(
+                available_shapes=available_shapes,
+                bed_width_mm=bed_width_mm,
+                bed_height_mm=bed_height_mm,
+                target_count=target_count,
+                strategy=strategy,
+                params=params,
+                gap_mm=gap_mm,
+                dieproc_params=dieproc_params,
+                db=db,
+                margins=margins,
+                layers=layers,
+            )
+
         # Suporte a entrada simplificada (lista de contornos puros) para testes de conformidade
         if available_shapes and isinstance(available_shapes[0], (list, tuple)):
             norm_shapes = []
@@ -201,7 +270,11 @@ class NfpBackend:
 
         # Resolução dos parâmetros de dieproc dp98 idêntica ao motor legado
         dp_config = dict(dieproc_params) if dieproc_params else {}
-        if not dp_config:
+        # Chaves de controle do orquestrador NÃO são parâmetros de preset DieProc:
+        # se só elas estiverem presentes, o preset deve ser mapeado normalmente.
+        control_keys = ("cancel_check", "sheet_timeout_sec", "max_tries_per_piece", "deterministic")
+        controls = {k: dp_config[k] for k in control_keys if k in dp_config}
+        if not any(k not in control_keys for k in dp_config):
             if params == "ALTERNADO":
                 dp_config = {
                     "coupling": "0/0 0/180",
@@ -265,6 +338,7 @@ class NfpBackend:
                     "range1_to": 1.0,
                     "range1_step": 1.0,
                 }
+            dp_config.update(controls)
 
         if gap_mm is not None:
             dp_config["gap1"] = float(gap_mm)

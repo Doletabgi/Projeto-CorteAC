@@ -16,6 +16,7 @@ from tkinter import ttk, messagebox, colorchooser, filedialog, simpledialog
 from pathlib import Path
 
 from config import THEME
+from ui.units import format_m, format_dim_mm, format_dim_m
 from cad.geometry import transform_contour, point_in_polygon, rotate_point, polygon_bbox, polygons_collide, polygon_area, SpatialGrid, bbox_overlap
 from cad.colors import get_color_for_size, get_contrast_text_color
 from ui.layout_print_dialog import LayoutPrintDialog
@@ -1238,9 +1239,7 @@ class LayoutEditorView(tk.Frame):
 
     def update_sheet_status(self):
         if hasattr(self, "lbl_stat_sheet"):
-            h_cm = self.sheet_height / 10.0
-            w_cm = self.sheet_width / 10.0
-            self.lbl_stat_sheet.config(text=f"Placa ({h_cm:.2f} X {w_cm:.2f} cm)")
+            self.lbl_stat_sheet.config(text=f"Placa {format_dim_mm(self.sheet_width, self.sheet_height)}")
 
     def set_sheet_size(self, width_mm, height_mm):
         self._custom_sheet_size = (float(width_mm), float(height_mm))
@@ -1816,15 +1815,13 @@ class LayoutEditorView(tk.Frame):
                     tags=("sheet_margins", "bg_element")
                 )
 
-            # Rótulo com dimensões no topo da chapa (estilo Placa (298.00 X 138.00 cm))
+            # Rótulo com dimensões no topo da chapa em metros (ex: Placa 1,38 x 2,99 m)
             cx = (x1 + x2) / 2.0
-            h_cm = self.sheet_height / 10.0
-            w_cm = self.sheet_width / 10.0
             if not (getattr(self, "trim_cut_line", None) and self.trim_cut_line.get("enabled", True)):
                 self.canvas.create_text(
                     cx,
                     max(10.0, y1 - 10.0),
-                    text=f"Placa ({h_cm:.2f} X {w_cm:.2f} cm)",
+                    text=f"Placa {format_dim_mm(self.sheet_width, self.sheet_height)}",
                     fill="#000000",
                     font=("Segoe UI", 8, "bold"),
                     tags=("sheet_label", "bg_element")
@@ -2191,10 +2188,8 @@ class LayoutEditorView(tk.Frame):
                 tags=("trim_cut_icon_v_bot", "trim_item")
             )
 
-            h_cm = self.sheet_height / 10.0
-            h_m = self.sheet_height / 1000.0
-            w_cm = self.sheet_width / 10.0
-            badge_text = f"✂ CORTE DE REFIL TOTAL: {h_cm:.2f} cm ({h_m:.2f} m)  |  Placa ({h_cm:.2f} X {w_cm:.2f} cm)"
+            badge_text = (f"✂ CORTE DE REFIL TOTAL: {format_m(self.sheet_height)} m  |  "
+                          f"Placa {format_dim_mm(self.sheet_width, self.sheet_height)}")
             bx = (x1 + sx_cut) / 2.0
             by = max(11.0, sy_cut - 14.0)
             self.canvas.create_rectangle(

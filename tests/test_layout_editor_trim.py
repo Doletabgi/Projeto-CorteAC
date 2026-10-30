@@ -132,10 +132,8 @@ class TestLayoutEditorTrim(unittest.TestCase):
         self.assertTrue(self.view.trim_cut_line["enabled"])
         self.assertTrue(self.view.is_modified)
 
-        # Verifica etiqueta da chapa atualizada
-        h_cm = self.view.sheet_height / 10.0
-        w_cm = self.view.sheet_width / 10.0
-        self.assertEqual(self.view.lbl_stat_sheet.cget("text"), f"Placa ({h_cm:.2f} X {w_cm:.2f} cm)")
+        # Verifica etiqueta da chapa atualizada (medidas em metros, padrão do operador)
+        self.assertEqual(self.view.lbl_stat_sheet.cget("text"), "Placa 1,38 x 2,08 m")
 
         # Desfaz a alteração com Ctrl+Z (undo_action)
         self.view.undo_action()
@@ -143,7 +141,7 @@ class TestLayoutEditorTrim(unittest.TestCase):
         # Verifica se restaurou a altura original de 2980 mm e removeu a linha de corte
         self.assertEqual(self.view.sheet_height, 2980.0)
         self.assertIsNone(self.view.trim_cut_line)
-        self.assertEqual(self.view.lbl_stat_sheet.cget("text"), "Placa (298.00 X 138.00 cm)")
+        self.assertEqual(self.view.lbl_stat_sheet.cget("text"), "Placa 1,38 x 2,98 m")
 
     def test_toolbar_button_and_menu_entries(self):
         """Valida que o botão ✂ Refilar e atalhos de menu existem no LayoutEditor."""

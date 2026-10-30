@@ -635,14 +635,14 @@ class TestLayoutEditorShortcuts(unittest.TestCase):
         """O rótulo exibe 'Placa' com medidas em cm (sem 'Sheet' nem 'Leather')."""
         self.root.geometry("1024x515")
         self.view.update()
-        # 1. Configura dimensões idênticas à captura do usuário (1380 x 2980 mm -> 298.00 X 138.00 cm)
+        # 1. Configura dimensões idênticas à captura do usuário (1380 x 2980 mm -> 1,38 x 2,99 m)
         self.view.set_sheet_size(1380.0, 2980.0)
         self.view.update()
         self.view.redraw()
 
         # Verifica rótulo na barra de status
         stat_text = self.view.lbl_stat_sheet.cget("text")
-        self.assertEqual(stat_text, "Placa (298.00 X 138.00 cm)")
+        self.assertEqual(stat_text, "Placa 1,38 x 2,98 m")
         self.assertNotIn("Sheet", stat_text)
         self.assertNotIn("Leather", stat_text)
 
@@ -650,7 +650,7 @@ class TestLayoutEditorShortcuts(unittest.TestCase):
         label_items = self.view.canvas.find_withtag("sheet_label")
         self.assertTrue(len(label_items) > 0)
         canvas_text = self.view.canvas.itemcget(label_items[0], "text")
-        self.assertEqual(canvas_text, "Placa (298.00 X 138.00 cm)")
+        self.assertEqual(canvas_text, "Placa 1,38 x 2,98 m")
         self.assertNotIn("Sheet", canvas_text)
         self.assertNotIn("Leather", canvas_text)
 

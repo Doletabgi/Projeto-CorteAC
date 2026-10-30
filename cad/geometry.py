@@ -168,6 +168,29 @@ def segments_intersect(p1x, p1y, p2x, p2y, p3x, p3y, p4x, p4y):
         (_ccw(p1x, p1y, p2x, p2y, p3x, p3y) != _ccw(p1x, p1y, p2x, p2y, p4x, p4y))
     )
 
+
+def _collinear_overlap(s1, s2, eps=1e-6):
+    """
+    Detecta segmentos colineares que se sobrepõem (peças exatamente coincidentes
+    ou alinhadas na mesma reta). O teste de cruzamento estrito (segments_intersect)
+    não enxerga esse caso, que é justamente sobreposição real.
+    """
+    x1, y1, x2, y2 = s1[0], s1[1], s1[2], s1[3]
+    x3, y3, x4, y4 = s2[0], s2[1], s2[2], s2[3]
+    dx = x2 - x1
+    dy = y2 - y1
+    if abs(dx * (y3 - y1) - dy * (x3 - x1)) > eps:
+        return False
+    if abs(dx * (y4 - y1) - dy * (x4 - x1)) > eps:
+        return False
+    if abs(dx) >= abs(dy):
+        a1, a2 = (x1, x2) if x1 <= x2 else (x2, x1)
+        b1, b2 = (x3, x4) if x3 <= x4 else (x4, x3)
+    else:
+        a1, a2 = (y1, y2) if y1 <= y2 else (y2, y1)
+        b1, b2 = (y3, y4) if y3 <= y4 else (y4, y3)
+    return a2 >= b1 and b2 >= a1
+
 def point_segment_distance_sq(px, py, x1, y1, x2, y2):
     """Distância ao quadrado de um ponto a um segmento de reta."""
     dx = x2 - x1
@@ -188,7 +211,31 @@ def simplify_contour_for_collision(poly, max_pts=64):
     step = n / float(max_pts)
     return [poly[int(i * step)] for i in range(max_pts)]
 
-def polygons_collide(poly_a, poly_b, gap=0.0, bbox_a=None, bbox_b=None):
+def prepare_segments(poly):
+    """
+    Pré-computa os segmentos de um polígono (com AABB de cada aresta).
+
+    Usado em laços quentes de colisão: um mesmo polígono é testado dezenas de vezes
+    contra candidatos diferentes, e reconstruir a lista a cada teste dominava o tempo
+    em contornos reais de 130-190 vértices.
+    """
+    n = len(poly)
+    if n < 2:
+        return []
+    segs = []
+    for i in range(n):
+        p1 = poly[i]
+        p2 = poly[i + 1] if i + 1 < n else poly[0]
+        x1 = p1['x']; y1 = p1['y']; x2 = p2['x']; y2 = p2['y']
+        s_min_x = x1 if x1 < x2 else x2
+        s_max_x = x1 if x1 > x2 else x2
+        s_min_y = y1 if y1 < y2 else y2
+        s_max_y = y1 if y1 > y2 else y2
+        segs.append((x1, y1, x2, y2, s_min_x, s_max_x, s_min_y, s_max_y))
+    return segs
+
+
+def polygons_collide(poly_a, poly_b, gap=0.0, bbox_a=None, bbox_b=None, segs_a=None, segs_b=None):
     """
     Sistema robusto de detecção de colisão entre dois contornos de moldes (polígonos).
     Garante que JAMAIS duas peças fiquem sobrepostas ou violem a folga (gap) de corte.
@@ -218,28 +265,39 @@ def polygons_collide(poly_a, poly_b, gap=0.0, bbox_a=None, bbox_b=None):
     len_a = len(poly_a)
     len_b = len(poly_b)
 
-    # Coleta apenas os segmentos reais que tocam a janela de sobreposição
-    segs_a = []
-    for i in range(len_a):
-        p1 = poly_a[i]
-        p2 = poly_a[(i + 1) % len_a]
-        s_min_x = min(p1['x'], p2['x'])
-        s_max_x = max(p1['x'], p2['x'])
-        s_min_y = min(p1['y'], p2['y'])
-        s_max_y = max(p1['y'], p2['y'])
-        if s_max_x >= ov_min_x and s_min_x <= ov_max_x and s_max_y >= ov_min_y and s_min_y <= ov_max_y:
-            segs_a.append((p1['x'], p1['y'], p2['x'], p2['y'], s_min_x, s_max_x, s_min_y, s_max_y))
+    # Coleta apenas os segmentos reais que tocam a janela de sobreposição.
+    # min/max inline (sem chamadas a builtins) — este laço roda para cada par testado.
+    if segs_a is not None:
+        segs_a = [s for s in segs_a
+                  if s[5] >= ov_min_x and s[4] <= ov_max_x and s[7] >= ov_min_y and s[6] <= ov_max_y]
+    else:
+        segs_a = []
+        for i in range(len_a):
+            p1 = poly_a[i]
+            p2 = poly_a[(i + 1) % len_a] if i + 1 < len_a else poly_a[0]
+            x1 = p1['x']; y1 = p1['y']; x2 = p2['x']; y2 = p2['y']
+            s_min_x = x1 if x1 < x2 else x2
+            s_max_x = x1 if x1 > x2 else x2
+            s_min_y = y1 if y1 < y2 else y2
+            s_max_y = y1 if y1 > y2 else y2
+            if s_max_x >= ov_min_x and s_min_x <= ov_max_x and s_max_y >= ov_min_y and s_min_y <= ov_max_y:
+                segs_a.append((x1, y1, x2, y2, s_min_x, s_max_x, s_min_y, s_max_y))
 
-    segs_b = []
-    for j in range(len_b):
-        p1 = poly_b[j]
-        p2 = poly_b[(j + 1) % len_b]
-        s_min_x = min(p1['x'], p2['x'])
-        s_max_x = max(p1['x'], p2['x'])
-        s_min_y = min(p1['y'], p2['y'])
-        s_max_y = max(p1['y'], p2['y'])
-        if s_max_x >= ov_min_x and s_min_x <= ov_max_x and s_max_y >= ov_min_y and s_min_y <= ov_max_y:
-            segs_b.append((p1['x'], p1['y'], p2['x'], p2['y'], s_min_x, s_max_x, s_min_y, s_max_y))
+    if segs_b is not None:
+        segs_b = [s for s in segs_b
+                  if s[5] >= ov_min_x and s[4] <= ov_max_x and s[7] >= ov_min_y and s[6] <= ov_max_y]
+    else:
+        segs_b = []
+        for j in range(len_b):
+            p1 = poly_b[j]
+            p2 = poly_b[(j + 1) % len_b] if j + 1 < len_b else poly_b[0]
+            x1 = p1['x']; y1 = p1['y']; x2 = p2['x']; y2 = p2['y']
+            s_min_x = x1 if x1 < x2 else x2
+            s_max_x = x1 if x1 > x2 else x2
+            s_min_y = y1 if y1 < y2 else y2
+            s_max_y = y1 if y1 > y2 else y2
+            if s_max_x >= ov_min_x and s_min_x <= ov_max_x and s_max_y >= ov_min_y and s_min_y <= ov_max_y:
+                segs_b.append((x1, y1, x2, y2, s_min_x, s_max_x, s_min_y, s_max_y))
 
     # 1. Cruzamento direto de arestas na janela de sobreposição
     for s1 in segs_a:
@@ -250,20 +308,21 @@ def polygons_collide(poly_a, poly_b, gap=0.0, bbox_a=None, bbox_b=None):
                 continue
             if segments_intersect(s1[0], s1[1], s1[2], s1[3], s2[0], s2[1], s2[2], s2[3]):
                 return True
+            if _collinear_overlap(s1, s2):
+                return True
 
-    # 2. Contenção de vértices reais na janela de sobreposição
-    pts_a = [pt for pt in poly_a if ov_min_x <= pt['x'] <= ov_max_x and ov_min_y <= pt['y'] <= ov_max_y]
-    for pt in pts_a:
-        if point_in_polygon(pt['x'], pt['y'], poly_b):
-            return True
-
-    pts_b = [pt for pt in poly_b if ov_min_x <= pt['x'] <= ov_max_x and ov_min_y <= pt['y'] <= ov_max_y]
-    for pt in pts_b:
-        if point_in_polygon(pt['x'], pt['y'], poly_a):
-            return True
+    # 2. Contenção de vértice real.
+    # Sem cruzamento de arestas na janela, ou um polígono contém o outro, ou estão
+    # separados — então basta testar UM vértice de cada lado (exato e ~10x mais barato).
+    if point_in_polygon(poly_a[0]['x'], poly_a[0]['y'], poly_b):
+        return True
+    if point_in_polygon(poly_b[0]['x'], poly_b[0]['y'], poly_a):
+        return True
 
     # 3. Teste exato de folga mínima milimétrica (gap)
     if gap > 0:
+        pts_a = [pt for pt in poly_a if ov_min_x <= pt['x'] <= ov_max_x and ov_min_y <= pt['y'] <= ov_max_y]
+        pts_b = [pt for pt in poly_b if ov_min_x <= pt['x'] <= ov_max_x and ov_min_y <= pt['y'] <= ov_max_y]
         gap_sq = gap * gap
         for pt in pts_a:
             px, py = pt['x'], pt['y']
@@ -377,7 +436,7 @@ class SpatialGrid:
                                 candidates.append((it[0], it[1], it[2]))
         return candidates
 
-def find_contact_coordinate_binary(poly_candidate_fn, candidate_colliders, gap, start_val, min_val, axis='y', iterations=12):
+def find_contact_coordinate_binary(poly_candidate_fn, candidate_colliders, gap, start_val, min_val, axis="y", iterations=10):
     """
     Busca Binária de Contato (Bumping Rápido com Resolução Submilimétrica Exata).
     Dado um intervalo [min_val, start_val], onde `start_val` é garantidamente livre de colisão
@@ -389,12 +448,19 @@ def find_contact_coordinate_binary(poly_candidate_fn, candidate_colliders, gap, 
     if not candidate_colliders:
         return min_val
 
+    def _collides(poly_cand) -> bool:
+        bbox_cand = polygon_bbox(poly_cand)
+        for col in candidate_colliders:
+            c_poly = col[0]
+            c_bbox = col[1]
+            c_segs = col[2] if len(col) > 2 else None
+            if polygons_collide(poly_cand, c_poly, gap=gap, bbox_a=bbox_cand,
+                                bbox_b=c_bbox, segs_b=c_segs):
+                return True
+        return False
+
     # Testa se na posição mínima já não colide
-    poly_min = poly_candidate_fn(min_val)
-    bbox_min = polygon_bbox(poly_min)
-    col_min = any(polygons_collide(poly_min, c_poly, gap=gap, bbox_a=bbox_min, bbox_b=c_bbox)
-                  for c_poly, c_bbox in candidate_colliders)
-    if not col_min:
+    if not _collides(poly_candidate_fn(min_val)):
         return min_val
 
     # Se colide na posição mínima, busca entre low (colidindo) e high (livre)
@@ -403,23 +469,14 @@ def find_contact_coordinate_binary(poly_candidate_fn, candidate_colliders, gap, 
 
     for _ in range(iterations):
         mid = (low + high) / 2.0
-        poly_mid = poly_candidate_fn(mid)
-        bbox_mid = polygon_bbox(poly_mid)
-        has_col = any(polygons_collide(poly_mid, c_poly, gap=gap, bbox_a=bbox_mid, bbox_b=c_bbox)
-                      for c_poly, c_bbox in candidate_colliders)
-        if has_col:
+        if _collides(poly_candidate_fn(mid)):
             low = mid   # Ainda colide, precisa ficar acima
         else:
             high = mid  # Livre de colisão, pode tentar descer mais
 
     # Garante margem de segurança discreta para zero colisão com precisão milimétrica
     res_coord = high + 0.05
-    poly_res = poly_candidate_fn(res_coord)
-    bbox_res = polygon_bbox(poly_res)
-    while any(polygons_collide(poly_res, c_poly, gap=gap, bbox_a=bbox_res, bbox_b=c_bbox)
-              for c_poly, c_bbox in candidate_colliders):
+    while _collides(poly_candidate_fn(res_coord)):
         res_coord += 0.05
-        poly_res = poly_candidate_fn(res_coord)
-        bbox_res = polygon_bbox(poly_res)
 
     return res_coord

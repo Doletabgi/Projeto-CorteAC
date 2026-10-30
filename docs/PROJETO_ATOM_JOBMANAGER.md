@@ -4,7 +4,7 @@
 > **Regra de ouro:** o que está marcado `[CONFIRMADO]` veio do relatório, do código ou do usuário. O que está `[NÃO CONFIRMADO]` é suposição e não deve virar "fato" sem validação. O que está `[PREENCHER]` a IA deve completar lendo o código real.
 
 <!-- AUTO:header:start -->
-**Última sincronização com o código:** 2026-10-30 16:00 (HEAD ao gerar: `d03f25d`; 106 arquivos Python, ~53129 linhas)
+**Última sincronização com o código:** 2026-10-30 16:53 (HEAD ao gerar: `cdea200`; 108 arquivos Python, ~53662 linhas)
 <!-- AUTO:header:end -->
 **Versão deste documento:** 1
 
@@ -172,6 +172,7 @@ tools/bench_ia_teste_optimized.py                    # tools/bench_ia_teste_opti
 tools/bench_layout_drag.py                           # tools/bench_layout_drag.py
 tools/bench_multi_sheet.py                           # tools/bench_multi_sheet.py
 tools/bench_nest.py                                  # tools/bench_nest.py
+tools/bench_real_shapes.py                           # tools/bench_real_shapes.py - Benchmark de motores de nesting com CONTORNOS REAIS.
 tools/bench_tsp.py                                   # tools/bench_tsp.py
 tools/capture_catalog_screenshots.py                 # tools/capture_catalog_screenshots.py
 tools/capture_editor_screenshots.py                  # Ferramenta para captura e comparação de screenshots do ShapeEditorView
@@ -213,6 +214,7 @@ ui/shape_catalog_view.py                             # JobManager 2000 (Python E
 ui/shape_editor_view.py                              # JobManager 2000 (Python Edition)
 ui/sort_utils.py                                     # JobManager 2000 (Python Edition)
 ui/trim_layout_dialog.py                             # JobManager 2000 (Python Edition)
+ui/units.py                                          # ui/units.py - Formatação e leitura de medidas em METROS para o operador.
 ```
 <!-- AUTO:tree:end -->
 
@@ -251,8 +253,8 @@ ui/trim_layout_dialog.py                             # JobManager 2000 (Python E
 - funções: `rotate_piece_in_place_math`, `_parse_margins`, `fill_row_pieces`, `fill_row_alternate_pieces`, `fill_column_pieces`, `find_piece_vertical_contact_y`, `find_row_vertical_contact_y`, `fill_sheet_pieces`, `fill_sheet_alternate_pieces`, `fill_user_pieces`
 
 ### `cad/geometry.py`
-- `class SpatialGrid` (linha 291, 5 métodos): Indexação Espacial 2D (Spatial Grid Hashing).
-- funções: `rotate_point`, `clear_transform_cache`, `get_transform_cache_stats`, `_get_contour_hash`, `transform_contour`, `polygon_area`, `polygon_perimeter`, `polygon_bbox`, `bbox_overlap`, `point_in_polygon`, `_ccw`, `segments_intersect`, `point_segment_distance_sq`, `simplify_contour_for_collision`, `polygons_collide` (+1)
+- `class SpatialGrid` (linha 350, 5 métodos): Indexação Espacial 2D (Spatial Grid Hashing).
+- funções: `rotate_point`, `clear_transform_cache`, `get_transform_cache_stats`, `_get_contour_hash`, `transform_contour`, `polygon_area`, `polygon_perimeter`, `polygon_bbox`, `bbox_overlap`, `point_in_polygon`, `_ccw`, `segments_intersect`, `_collinear_overlap`, `point_segment_distance_sq`, `simplify_contour_for_collision` (+3)
 
 ### `cad/lay_parser.py`
 - `class TargetDie` (linha 53, 1 métodos): Representa uma matriz alvo (TG) declarada no layout.
@@ -275,16 +277,16 @@ ui/trim_layout_dialog.py                             # JobManager 2000 (Python E
 - funções: `_decode_bytes`, `_parse_float`, `_parse_int`, `_normalize_dimension`, `_match_header_key`, `detect_delimiter`, `parse_material_file`, `_parse_json_materials`, `_parse_csv_materials`, `_build_material_record`, `_build_response_payload`, `generate_csv_template`
 
 ### `cad/nesting_backend.py`
-- `class NestingBackend` (linha 41, 1 métodos): Protocolo formal para motores de nesting 2D intercambiáveis.
-- `class PythonBackend` (linha 60, 1 métodos): Backend legado padrão: executa o motor clássico em cad/nesting_engine.py.
-- `class NfpBackend` (linha 94, 2 métodos): Backend analítico de alta performance baseado em No-Fit Polygon (NFP).
-- funções: `get_nesting_backend`
+- `class NestingBackend` (linha 78, 1 métodos): Protocolo formal para motores de nesting 2D intercambiáveis.
+- `class PythonBackend` (linha 97, 1 métodos): Backend legado padrão: executa o motor clássico em cad/nesting_engine.py.
+- `class NfpBackend` (linha 131, 2 métodos): Backend analítico de alta performance baseado em No-Fit Polygon (NFP).
+- funções: `count_convex_parts`, `get_nesting_backend`
 
 ### `cad/nesting_engine.py`
 - funções: `parse_sequence_num`, `sort_shapes_by_sequence`, `get_paired_offset_cached`, `try_hole_filling_placement`, `check_collision_against_placed`, `calculate_yield`, `calculate_atom_cutting_time`, `parse_coupling_angles`, `dieproc_nest_pieces`, `nest_synthetic_engine`, `nest_tape_engine`, `auto_nest_pieces`, `_auto_nest_pieces_core`, `piece_matches_shape`, `nest_multi_sheet`
 
 ### `cad/nfp.py`
-- funções: `_normalize_points`, `polygon_signed_area`, `_point_in_triangle`, `_is_strictly_convex`, `decompose_convex`, `minkowski_sum_convex`, `clear_nfp_cache`, `compute_nfp`, `contact_placement_x`, `contact_placement_y`, `find_lowest_point_in_nfp`, `contact_placement`
+- funções: `_translation_invariant_key`, `is_complex_polygon`, `_contact_fallback`, `_normalize_points`, `polygon_signed_area`, `_point_in_triangle`, `_is_strictly_convex`, `decompose_convex`, `minkowski_sum_convex`, `clear_nfp_cache`, `compute_nfp`, `contact_placement_x`, `contact_placement_y`, `find_lowest_point_in_nfp`, `contact_placement`
 
 ### `cad/onx_exporter.py`
 - funções: `_format_num`, `build_onx_xml`, `export_onx_from_pieces`, `save_onx_file`, `parse_onx`
@@ -449,6 +451,9 @@ ui/trim_layout_dialog.py                             # JobManager 2000 (Python E
 ### `tools/bench_nest.py`
 - funções: `load_benchmark_shapes`, `run_benchmark`, `main`
 
+### `tools/bench_real_shapes.py`
+- funções: `load_session_shapes`, `count_collisions`, `run_strategy`, `main`
+
 ### `tools/bench_tsp.py`
 - funções: `generate_tsp_pieces`, `calculate_tour_distance`, `run_tsp_benchmark`, `main`
 
@@ -526,11 +531,11 @@ ui/trim_layout_dialog.py                             # JobManager 2000 (Python E
 - `class ImportMaterialsDialog` (linha 18, 7 métodos): Diálogo autêntico Windows XP para importação de lista de materiais.
 
 ### `ui/layout_editor_view.py`
-- `class LayoutEditorView` (linha 172, 129 métodos)
+- `class LayoutEditorView` (linha 173, 129 métodos)
 - funções: `rotate_piece_in_place`
 
 ### `ui/layout_print_dialog.py`
-- `class LayoutPrintDialog` (linha 252, 22 métodos): Janela modal de Visualização de Impressão (Print Preview) do Layout Editor.
+- `class LayoutPrintDialog` (linha 253, 22 métodos): Janela modal de Visualização de Impressão (Print Preview) do Layout Editor.
 - funções: `get_company_logo_path`, `open_company_logo_dialog`, `format_size`, `extract_molde_base_name`
 
 ### `ui/macro_panel.py`
@@ -556,7 +561,7 @@ ui/trim_layout_dialog.py                             # JobManager 2000 (Python E
 - `class NestingParamsDialog` (linha 10, 2 métodos)
 
 ### `ui/session_view.py`
-- `class SessionView` (linha 79, 104 métodos)
+- `class SessionView` (linha 80, 104 métodos)
 
 ### `ui/shape_catalog_view.py`
 - `class ShapeCatalogView` (linha 38, 44 métodos): Visão MDI em Matriz Grid (Peças × Tamanhos) para exibição e gerenciamento
@@ -570,6 +575,9 @@ ui/trim_layout_dialog.py                             # JobManager 2000 (Python E
 
 ### `ui/trim_layout_dialog.py`
 - `class TrimLayoutDialog` (linha 16, 15 métodos)
+
+### `ui/units.py`
+- funções: `format_m`, `format_dim_mm`, `format_dim_m`, `parse_m`, `parse_m_to_mm`
 <!-- AUTO:symbols:end -->
 
 ### 3.1 Módulos conhecidos pelo relatório
@@ -1310,100 +1318,100 @@ A ordem de corte do `.lay` para a mesa **não pode** ser aleatória:
 
 | Atalho | Estado no código | Onde |
 |---|---|---|
-| F1 | encontrado | `ui/layout_editor_view.py:628`, `ui/layout_editor_view.py:629` |
-| F2 | encontrado | `ui/layout_editor_view.py:632`, `ui/layout_editor_view.py:633`, `ui/session_view.py:656` |
-| F3 | encontrado | `ui/layout_editor_view.py:636`, `ui/layout_editor_view.py:637` |
-| F4 | encontrado | `ui/layout_editor_view.py:644`, `ui/layout_editor_view.py:645` |
-| Ctrl+Z | encontrado | `ui/layout_editor_view.py:574`, `ui/layout_editor_view.py:575`, `ui/layout_editor_view.py:576` |
-| Ctrl+S | encontrado | `ui/layout_editor_view.py:398`, `ui/layout_editor_view.py:399`, `ui/layout_editor_view.py:586` |
-| Shift+F3 | bloqueado (correto) | `ui/layout_editor_view.py:641`, `ui/layout_editor_view.py:642` |
-| Ctrl+Y | bloqueado (correto) | `ui/layout_editor_view.py:580`, `ui/layout_editor_view.py:581`, `ui/layout_editor_view.py:582` |
+| F1 | encontrado | `ui/layout_editor_view.py:629`, `ui/layout_editor_view.py:630` |
+| F2 | encontrado | `ui/layout_editor_view.py:633`, `ui/layout_editor_view.py:634`, `ui/session_view.py:657` |
+| F3 | encontrado | `ui/layout_editor_view.py:637`, `ui/layout_editor_view.py:638` |
+| F4 | encontrado | `ui/layout_editor_view.py:645`, `ui/layout_editor_view.py:646` |
+| Ctrl+Z | encontrado | `ui/layout_editor_view.py:575`, `ui/layout_editor_view.py:576`, `ui/layout_editor_view.py:577` |
+| Ctrl+S | encontrado | `ui/layout_editor_view.py:399`, `ui/layout_editor_view.py:400`, `ui/layout_editor_view.py:587` |
+| Shift+F3 | bloqueado (correto) | `ui/layout_editor_view.py:642`, `ui/layout_editor_view.py:643` |
+| Ctrl+Y | bloqueado (correto) | `ui/layout_editor_view.py:581`, `ui/layout_editor_view.py:582`, `ui/layout_editor_view.py:583` |
 
 **Todos os atalhos detectados no código:**
 
 | Atalho | Local | Linha |
 |---|---|---|
-| Alt+Down | `ui/session_view.py:3282` | `entry.bind("<Alt-Down>", lambda e: adjust_number(-1))` |
-| Alt+Up | `ui/session_view.py:3281` | `entry.bind("<Alt-Up>", lambda e: adjust_number(+1))` |
+| Alt+Down | `ui/session_view.py:3289` | `entry.bind("<Alt-Down>", lambda e: adjust_number(-1))` |
+| Alt+Up | `ui/session_view.py:3288` | `entry.bind("<Alt-Up>", lambda e: adjust_number(+1))` |
 | Backspace | `ui/cad_canvas.py:72` | `self.master.bind("<BackSpace>", lambda e: self.delete_selected())` |
 | Backspace | `ui/dieproc_dialog.py:87` | `self.preset_listbox.bind("<BackSpace>", lambda e: self.on_delete_clicked())` |
 | Backspace | `ui/main_window.py:575` | `self.bind_all("<BackSpace>", self.on_global_delete_key, add="+")` |
-| Backspace | `ui/session_view.py:653` | `self.tree_shapes.bind("<BackSpace>", lambda e: self._on_tree_shapes_delete())` |
-| Backspace | `ui/session_view.py:813` | `w.bind("<BackSpace>", self.remove_session_material)` |
-| Backspace | `ui/session_view.py:814` | `w.bind("<Key-BackSpace>", self.remove_session_material)` |
+| Backspace | `ui/session_view.py:654` | `self.tree_shapes.bind("<BackSpace>", lambda e: self._on_tree_shapes_delete())` |
+| Backspace | `ui/session_view.py:814` | `w.bind("<BackSpace>", self.remove_session_material)` |
+| Backspace | `ui/session_view.py:815` | `w.bind("<Key-BackSpace>", self.remove_session_material)` |
 | Backspace | `ui/shape_editor_view.py:248` | `self.bind("<BackSpace>", lambda e: self.delete_selected())` |
 | Backspace | `ui/shape_editor_view.py:250` | `self.canvas.bind("<BackSpace>", lambda e: self.delete_selected())` |
-| Ctrl+A | `ui/layout_editor_view.py:649` | `w.bind("<Control-a>", self.select_all)` |
-| Ctrl+A | `ui/layout_editor_view.py:650` | `w.bind("<Control-A>", self.select_all)` |
-| Ctrl+A | `ui/layout_editor_view.py:651` | `w.bind("<Control-Key-a>", self.select_all)` |
-| Ctrl+A | `ui/layout_editor_view.py:652` | `w.bind("<Control-Key-A>", self.select_all)` |
-| Ctrl+A | `ui/layout_editor_view.py:657` | `self.bind_all("<Control-a>", self.select_all)` |
-| Ctrl+A | `ui/layout_editor_view.py:658` | `self.bind_all("<Control-A>", self.select_all)` |
+| Ctrl+A | `ui/layout_editor_view.py:650` | `w.bind("<Control-a>", self.select_all)` |
+| Ctrl+A | `ui/layout_editor_view.py:651` | `w.bind("<Control-A>", self.select_all)` |
+| Ctrl+A | `ui/layout_editor_view.py:652` | `w.bind("<Control-Key-a>", self.select_all)` |
+| Ctrl+A | `ui/layout_editor_view.py:653` | `w.bind("<Control-Key-A>", self.select_all)` |
+| Ctrl+A | `ui/layout_editor_view.py:658` | `self.bind_all("<Control-a>", self.select_all)` |
+| Ctrl+A | `ui/layout_editor_view.py:659` | `self.bind_all("<Control-A>", self.select_all)` |
 | Ctrl+A | `ui/main_window.py:271` | `edit_menu.add_command(label="Selecionar tudo", accelerator="Ctrl+A", command=sel` |
 | Ctrl+A | `ui/main_window.py:576` | `self.bind_all("<Control-a>", self.on_select_all, add="+")` |
 | Ctrl+A | `ui/main_window.py:577` | `self.bind_all("<Control-A>", self.on_select_all, add="+")` |
 | Ctrl+A | `ui/main_window.py:578` | `self.bind_all("<Control-Key-a>", self.on_select_all, add="+")` |
 | Ctrl+A | `ui/main_window.py:579` | `self.bind_all("<Control-Key-A>", self.on_select_all, add="+")` |
 | Ctrl+C | `ui/main_window.py:267` | `edit_menu.add_command(label="Copiar", accelerator="Ctrl+C")` |
-| Ctrl+Down | `ui/session_view.py:3280` | `entry.bind("<Control-Down>", lambda e: adjust_number(-1))` |
-| Ctrl+Equal | `ui/layout_editor_view.py:564` | `w.bind("<Control-equal>", lambda e: (self.zoom_in(), "break")[1])` |
+| Ctrl+Down | `ui/session_view.py:3287` | `entry.bind("<Control-Down>", lambda e: adjust_number(-1))` |
+| Ctrl+Equal | `ui/layout_editor_view.py:565` | `w.bind("<Control-equal>", lambda e: (self.zoom_in(), "break")[1])` |
 | Ctrl+Equal | `ui/shape_catalog_view.py:273` | `self.bind("<Control-equal>", lambda e: self.zoom_step(1.2))` |
 | Ctrl+Kp_0 | `ui/shape_catalog_view.py:279` | `self.bind("<Control-KP_0>", lambda e: self.reset_zoom())` |
 | Ctrl+Kp_add | `ui/shape_catalog_view.py:275` | `self.bind("<Control-KP_Add>", lambda e: self.zoom_step(1.2))` |
 | Ctrl+Kp_subtract | `ui/shape_catalog_view.py:277` | `self.bind("<Control-KP_Subtract>", lambda e: self.zoom_step(1.0 / 1.2))` |
-| Ctrl+L | `ui/layout_editor_view.py:617` | `w.bind("<Control-l>", self._on_ctrl_l)` |
-| Ctrl+L | `ui/layout_editor_view.py:618` | `w.bind("<Control-L>", self._on_ctrl_l)` |
-| Ctrl+L | `ui/layout_editor_view.py:619` | `w.bind("<Control-Key-l>", self._on_ctrl_l)` |
-| Ctrl+L | `ui/layout_editor_view.py:620` | `w.bind("<Control-Key-L>", self._on_ctrl_l)` |
-| Ctrl+Minus | `ui/layout_editor_view.py:565` | `w.bind("<Control-minus>", lambda e: (self.zoom_out(), "break")[1])` |
+| Ctrl+L | `ui/layout_editor_view.py:618` | `w.bind("<Control-l>", self._on_ctrl_l)` |
+| Ctrl+L | `ui/layout_editor_view.py:619` | `w.bind("<Control-L>", self._on_ctrl_l)` |
+| Ctrl+L | `ui/layout_editor_view.py:620` | `w.bind("<Control-Key-l>", self._on_ctrl_l)` |
+| Ctrl+L | `ui/layout_editor_view.py:621` | `w.bind("<Control-Key-L>", self._on_ctrl_l)` |
+| Ctrl+Minus | `ui/layout_editor_view.py:566` | `w.bind("<Control-minus>", lambda e: (self.zoom_out(), "break")[1])` |
 | Ctrl+Minus | `ui/shape_catalog_view.py:276` | `self.bind("<Control-minus>", lambda e: self.zoom_step(1.0 / 1.2))` |
-| Ctrl+O | `ui/layout_editor_view.py:591` | `self.canvas.bind("<Control-o>", self.open_layout_dialog)` |
-| Ctrl+O | `ui/layout_editor_view.py:592` | `self.canvas.bind("<Control-O>", self.open_layout_dialog)` |
-| Ctrl+O | `ui/layout_editor_view.py:593` | `self.bind("<Control-o>", self.open_layout_dialog)` |
-| Ctrl+O | `ui/layout_editor_view.py:594` | `self.bind("<Control-O>", self.open_layout_dialog)` |
-| Ctrl+P | `ui/layout_editor_view.py:396` | `self.bind("<Control-p>", lambda e: self.print_layout())` |
-| Ctrl+P | `ui/layout_editor_view.py:397` | `self.bind("<Control-P>", lambda e: self.print_layout())` |
-| Ctrl+P | `ui/layout_editor_view.py:598` | `w.bind("<Control-p>", lambda e: (self.print_layout(), "break")[1])` |
-| Ctrl+P | `ui/layout_editor_view.py:599` | `w.bind("<Control-P>", lambda e: (self.print_layout(), "break")[1])` |
-| Ctrl+P | `ui/layout_print_dialog.py:747` | `self.bind("<Control-p>", lambda e: self.do_print())` |
-| Ctrl+P | `ui/layout_print_dialog.py:748` | `self.bind("<Control-P>", lambda e: self.do_print())` |
+| Ctrl+O | `ui/layout_editor_view.py:592` | `self.canvas.bind("<Control-o>", self.open_layout_dialog)` |
+| Ctrl+O | `ui/layout_editor_view.py:593` | `self.canvas.bind("<Control-O>", self.open_layout_dialog)` |
+| Ctrl+O | `ui/layout_editor_view.py:594` | `self.bind("<Control-o>", self.open_layout_dialog)` |
+| Ctrl+O | `ui/layout_editor_view.py:595` | `self.bind("<Control-O>", self.open_layout_dialog)` |
+| Ctrl+P | `ui/layout_editor_view.py:397` | `self.bind("<Control-p>", lambda e: self.print_layout())` |
+| Ctrl+P | `ui/layout_editor_view.py:398` | `self.bind("<Control-P>", lambda e: self.print_layout())` |
+| Ctrl+P | `ui/layout_editor_view.py:599` | `w.bind("<Control-p>", lambda e: (self.print_layout(), "break")[1])` |
+| Ctrl+P | `ui/layout_editor_view.py:600` | `w.bind("<Control-P>", lambda e: (self.print_layout(), "break")[1])` |
+| Ctrl+P | `ui/layout_print_dialog.py:748` | `self.bind("<Control-p>", lambda e: self.do_print())` |
+| Ctrl+P | `ui/layout_print_dialog.py:749` | `self.bind("<Control-P>", lambda e: self.do_print())` |
 | Ctrl+P | `ui/main_window.py:69` | `self.bind("<Control-p>", self.handle_ctrl_p)` |
 | Ctrl+P | `ui/main_window.py:70` | `self.bind("<Control-P>", self.handle_ctrl_p)` |
-| Ctrl+P | `ui/session_view.py:904` | `self.tree_lays.bind("<Control-p>", lambda e: (self.print_current_layout(), "brea` |
-| Ctrl+P | `ui/session_view.py:905` | `self.tree_lays.bind("<Control-P>", lambda e: (self.print_current_layout(), "brea` |
-| Ctrl+Plus | `ui/layout_editor_view.py:563` | `w.bind("<Control-plus>", lambda e: (self.zoom_in(), "break")[1])` |
+| Ctrl+P | `ui/session_view.py:905` | `self.tree_lays.bind("<Control-p>", lambda e: (self.print_current_layout(), "brea` |
+| Ctrl+P | `ui/session_view.py:906` | `self.tree_lays.bind("<Control-P>", lambda e: (self.print_current_layout(), "brea` |
+| Ctrl+Plus | `ui/layout_editor_view.py:564` | `w.bind("<Control-plus>", lambda e: (self.zoom_in(), "break")[1])` |
 | Ctrl+Plus | `ui/shape_catalog_view.py:274` | `self.bind("<Control-plus>", lambda e: self.zoom_step(1.2))` |
-| Ctrl+Q | `ui/layout_editor_view.py:561` | `w.bind("<Control-q>", lambda e: (self.zoom_in(), "break")[1])` |
-| Ctrl+Q | `ui/layout_editor_view.py:562` | `w.bind("<Control-Q>", lambda e: (self.zoom_in(), "break")[1])` |
-| Ctrl+S | `ui/layout_editor_view.py:398` | `self.bind("<Control-s>", self.save_layout)` |
-| Ctrl+S | `ui/layout_editor_view.py:399` | `self.bind("<Control-S>", self.save_layout)` |
-| Ctrl+S | `ui/layout_editor_view.py:586` | `self.canvas.bind("<Control-s>", self.save_layout)` |
-| Ctrl+S | `ui/layout_editor_view.py:587` | `self.canvas.bind("<Control-S>", self.save_layout)` |
-| Ctrl+S | `ui/layout_editor_view.py:588` | `self.bind("<Control-s>", self.save_layout)` |
-| Ctrl+S | `ui/layout_editor_view.py:589` | `self.bind("<Control-S>", self.save_layout)` |
+| Ctrl+Q | `ui/layout_editor_view.py:562` | `w.bind("<Control-q>", lambda e: (self.zoom_in(), "break")[1])` |
+| Ctrl+Q | `ui/layout_editor_view.py:563` | `w.bind("<Control-Q>", lambda e: (self.zoom_in(), "break")[1])` |
+| Ctrl+S | `ui/layout_editor_view.py:399` | `self.bind("<Control-s>", self.save_layout)` |
+| Ctrl+S | `ui/layout_editor_view.py:400` | `self.bind("<Control-S>", self.save_layout)` |
+| Ctrl+S | `ui/layout_editor_view.py:587` | `self.canvas.bind("<Control-s>", self.save_layout)` |
+| Ctrl+S | `ui/layout_editor_view.py:588` | `self.canvas.bind("<Control-S>", self.save_layout)` |
+| Ctrl+S | `ui/layout_editor_view.py:589` | `self.bind("<Control-s>", self.save_layout)` |
+| Ctrl+S | `ui/layout_editor_view.py:590` | `self.bind("<Control-S>", self.save_layout)` |
 | Ctrl+S | `ui/main_window.py:67` | `self.bind("<Control-s>", self.handle_ctrl_s)` |
 | Ctrl+S | `ui/main_window.py:68` | `self.bind("<Control-S>", self.handle_ctrl_s)` |
-| Ctrl+Shift+L | `ui/layout_editor_view.py:621` | `w.bind("<Control-Shift-l>", self._on_ctrl_shift_l)` |
-| Ctrl+Shift+L | `ui/layout_editor_view.py:622` | `w.bind("<Control-Shift-L>", self._on_ctrl_shift_l)` |
-| Ctrl+Shift+L | `ui/layout_editor_view.py:623` | `w.bind("<Control-Shift-Key-l>", self._on_ctrl_shift_l)` |
-| Ctrl+Shift+L | `ui/layout_editor_view.py:624` | `w.bind("<Control-Shift-Key-L>", self._on_ctrl_shift_l)` |
-| Ctrl+T | `ui/layout_editor_view.py:610` | `w.bind("<Control-t>", _on_ctrl_t)` |
-| Ctrl+T | `ui/layout_editor_view.py:611` | `w.bind("<Control-T>", _on_ctrl_t)` |
-| Ctrl+T | `ui/layout_editor_view.py:612` | `w.bind("<Control-Key-t>", _on_ctrl_t)` |
-| Ctrl+T | `ui/layout_editor_view.py:613` | `w.bind("<Control-Key-T>", _on_ctrl_t)` |
+| Ctrl+Shift+L | `ui/layout_editor_view.py:622` | `w.bind("<Control-Shift-l>", self._on_ctrl_shift_l)` |
+| Ctrl+Shift+L | `ui/layout_editor_view.py:623` | `w.bind("<Control-Shift-L>", self._on_ctrl_shift_l)` |
+| Ctrl+Shift+L | `ui/layout_editor_view.py:624` | `w.bind("<Control-Shift-Key-l>", self._on_ctrl_shift_l)` |
+| Ctrl+Shift+L | `ui/layout_editor_view.py:625` | `w.bind("<Control-Shift-Key-L>", self._on_ctrl_shift_l)` |
+| Ctrl+T | `ui/layout_editor_view.py:611` | `w.bind("<Control-t>", _on_ctrl_t)` |
+| Ctrl+T | `ui/layout_editor_view.py:612` | `w.bind("<Control-T>", _on_ctrl_t)` |
+| Ctrl+T | `ui/layout_editor_view.py:613` | `w.bind("<Control-Key-t>", _on_ctrl_t)` |
+| Ctrl+T | `ui/layout_editor_view.py:614` | `w.bind("<Control-Key-T>", _on_ctrl_t)` |
 | Ctrl+T | `ui/main_window.py:71` | `self.bind("<Control-t>", self.handle_ctrl_t)` |
 | Ctrl+T | `ui/main_window.py:72` | `self.bind("<Control-T>", self.handle_ctrl_t)` |
-| Ctrl+Up | `ui/session_view.py:3279` | `entry.bind("<Control-Up>", lambda e: adjust_number(+1))` |
+| Ctrl+Up | `ui/session_view.py:3286` | `entry.bind("<Control-Up>", lambda e: adjust_number(+1))` |
 | Ctrl+V | `ui/main_window.py:268` | `edit_menu.add_command(label="Colar", accelerator="Ctrl+V")` |
 | Ctrl+X | `ui/main_window.py:266` | `edit_menu.add_command(label="Recortar", accelerator="Ctrl+X")` |
-| Ctrl+Y | `ui/layout_editor_view.py:580` | `self.canvas.bind("<Control-y>", lambda e: "break")` |
-| Ctrl+Y | `ui/layout_editor_view.py:581` | `self.canvas.bind("<Control-Y>", lambda e: "break")` |
-| Ctrl+Y | `ui/layout_editor_view.py:582` | `self.bind("<Control-y>", lambda e: "break")` |
-| Ctrl+Y | `ui/layout_editor_view.py:583` | `self.bind("<Control-Y>", lambda e: "break")` |
-| Ctrl+Z | `ui/layout_editor_view.py:574` | `self.canvas.bind("<Control-z>", self.undo_action)` |
-| Ctrl+Z | `ui/layout_editor_view.py:575` | `self.canvas.bind("<Control-Z>", self.undo_action)` |
-| Ctrl+Z | `ui/layout_editor_view.py:576` | `self.bind("<Control-z>", self.undo_action)` |
-| Ctrl+Z | `ui/layout_editor_view.py:577` | `self.bind("<Control-Z>", self.undo_action)` |
+| Ctrl+Y | `ui/layout_editor_view.py:581` | `self.canvas.bind("<Control-y>", lambda e: "break")` |
+| Ctrl+Y | `ui/layout_editor_view.py:582` | `self.canvas.bind("<Control-Y>", lambda e: "break")` |
+| Ctrl+Y | `ui/layout_editor_view.py:583` | `self.bind("<Control-y>", lambda e: "break")` |
+| Ctrl+Y | `ui/layout_editor_view.py:584` | `self.bind("<Control-Y>", lambda e: "break")` |
+| Ctrl+Z | `ui/layout_editor_view.py:575` | `self.canvas.bind("<Control-z>", self.undo_action)` |
+| Ctrl+Z | `ui/layout_editor_view.py:576` | `self.canvas.bind("<Control-Z>", self.undo_action)` |
+| Ctrl+Z | `ui/layout_editor_view.py:577` | `self.bind("<Control-z>", self.undo_action)` |
+| Ctrl+Z | `ui/layout_editor_view.py:578` | `self.bind("<Control-Z>", self.undo_action)` |
 | Ctrl+Z | `ui/main_window.py:264` | `edit_menu.add_command(label="Desfazer / Reverter", accelerator="Ctrl+Z", command` |
 | Ctrl+Z | `ui/main_window.py:580` | `self.bind_all("<Control-z>", self.on_global_undo, add="+")` |
 | Ctrl+Z | `ui/main_window.py:581` | `self.bind_all("<Control-Z>", self.on_global_undo, add="+")` |
@@ -1421,20 +1429,20 @@ A ordem de corte do `.lay` para a mesa **não pode** ser aleatória:
 | Ctrl+Z | `ui/shape_editor_view.py:238` | `self.canvas.bind("<Control-Key-Z>", self.undo_or_revert)` |
 | Delete | `ui/cad_canvas.py:71` | `self.master.bind("<Delete>", lambda e: self.delete_selected())` |
 | Delete | `ui/dieproc_dialog.py:86` | `self.preset_listbox.bind("<Delete>", lambda e: self.on_delete_clicked())` |
-| Delete | `ui/layout_editor_view.py:656` | `self.bind_all("<Delete>", lambda e: self.delete_selected())` |
+| Delete | `ui/layout_editor_view.py:657` | `self.bind_all("<Delete>", lambda e: self.delete_selected())` |
 | Delete | `ui/main_window.py:269` | `edit_menu.add_command(label="Excluir", accelerator="Del", command=self.on_global` |
 | Delete | `ui/main_window.py:574` | `self.bind_all("<Delete>", self.on_global_delete_key, add="+")` |
 | Delete | `ui/main_window.py:2587` | `accelerator="Del",` |
 | Delete | `ui/main_window.py:2606` | `accelerator="Del",` |
 | Delete | `ui/main_window.py:2827` | `accelerator="Del",` |
 | Delete | `ui/main_window.py:2846` | `accelerator="Del",` |
-| Delete | `ui/session_view.py:652` | `self.tree_shapes.bind("<Delete>", lambda e: self._on_tree_shapes_delete())` |
-| Delete | `ui/session_view.py:811` | `w.bind("<Delete>", self.remove_session_material)` |
-| Delete | `ui/session_view.py:812` | `w.bind("<Key-Delete>", self.remove_session_material)` |
+| Delete | `ui/session_view.py:653` | `self.tree_shapes.bind("<Delete>", lambda e: self._on_tree_shapes_delete())` |
+| Delete | `ui/session_view.py:812` | `w.bind("<Delete>", self.remove_session_material)` |
+| Delete | `ui/session_view.py:813` | `w.bind("<Key-Delete>", self.remove_session_material)` |
 | Delete | `ui/shape_editor_view.py:247` | `self.bind("<Delete>", lambda e: self.delete_selected())` |
 | Delete | `ui/shape_editor_view.py:249` | `self.canvas.bind("<Delete>", lambda e: self.delete_selected())` |
-| Down | `ui/layout_editor_view.py:662` | `self.bind_all("<Down>", lambda e: self.nudge_selected(0, -5))` |
-| Down | `ui/session_view.py:3265` | `entry.bind("<Down>", move_down)` |
+| Down | `ui/layout_editor_view.py:663` | `self.bind_all("<Down>", lambda e: self.nudge_selected(0, -5))` |
+| Down | `ui/session_view.py:3272` | `entry.bind("<Down>", move_down)` |
 | Down | `ui/shape_catalog_view.py:263` | `self.bind("<Down>", lambda e: self.navigate_selection(0, 1))` |
 | Escape | `ui/cad_canvas.py:67` | `self.bind("<Escape>", self.cancel_drag)` |
 | Escape | `ui/cad_canvas.py:68` | `self.master.bind("<Escape>", self.cancel_drag)` |
@@ -1442,80 +1450,80 @@ A ordem de corte do `.lay` para a mesa **não pode** ser aleatória:
 | Escape | `ui/edit_shape_in_session_dialog.py:147` | `self.bind("<Escape>", lambda e: self.destroy())` |
 | Escape | `ui/fill_user_dialog.py:156` | `self.bind("<Escape>", lambda e: self.on_cancel())` |
 | Escape | `ui/import_materials_dialog.py:49` | `self.bind("<Escape>", lambda e: self.destroy())` |
-| Escape | `ui/layout_editor_view.py:648` | `w.bind("<Escape>", self.cancel_drag)` |
-| Escape | `ui/layout_print_dialog.py:750` | `self.bind("<Escape>", self.on_escape)` |
+| Escape | `ui/layout_editor_view.py:649` | `w.bind("<Escape>", self.cancel_drag)` |
+| Escape | `ui/layout_print_dialog.py:751` | `self.bind("<Escape>", self.on_escape)` |
 | Escape | `ui/main_window.py:66` | `self.bind("<Escape>", self.exit_fullscreen)` |
 | Escape | `ui/main_window.py:573` | `self.bind_all("<Escape>", self.dismiss_popup_menus, add="+")` |
 | Escape | `ui/main_window.py:3121` | `dialog.bind("<Escape>", lambda e: dialog.destroy())` |
 | Escape | `ui/material_codes_view.py:510` | `dlg.bind("<Escape>", lambda e: dlg.destroy())` |
 | Escape | `ui/options_dialog.py:40` | `self.bind("<Escape>", lambda e: self.on_cancel())` |
-| Escape | `ui/session_view.py:2740` | `entry.bind("<Escape>", cancel)` |
-| Escape | `ui/session_view.py:2858` | `dialog.bind("<Escape>", lambda e: dialog.destroy())` |
-| Escape | `ui/session_view.py:3275` | `entry.bind("<Escape>", cancel_edit)` |
+| Escape | `ui/session_view.py:2747` | `entry.bind("<Escape>", cancel)` |
+| Escape | `ui/session_view.py:2865` | `dialog.bind("<Escape>", lambda e: dialog.destroy())` |
+| Escape | `ui/session_view.py:3282` | `entry.bind("<Escape>", cancel_edit)` |
 | Escape | `ui/shape_catalog_view.py:268` | `self.bind("<Escape>", lambda e: self.on_close_click())` |
 | Escape | `ui/shape_editor_view.py:243` | `self.bind("<Escape>", self.on_escape_key)` |
 | Escape | `ui/shape_editor_view.py:244` | `self.canvas.bind("<Escape>", self.on_escape_key)` |
 | Escape | `ui/trim_layout_dialog.py:77` | `self.bind("<Escape>", lambda e: self.destroy())` |
-| F1 | `ui/layout_editor_view.py:628` | `w.bind("<F1>", self.on_f1_press)` |
-| F1 | `ui/layout_editor_view.py:629` | `w.bind("<Key-F1>", self.on_f1_press)` |
-| F11 | `ui/layout_print_dialog.py:749` | `self.bind("<F11>", self.toggle_fullscreen)` |
+| F1 | `ui/layout_editor_view.py:629` | `w.bind("<F1>", self.on_f1_press)` |
+| F1 | `ui/layout_editor_view.py:630` | `w.bind("<Key-F1>", self.on_f1_press)` |
+| F11 | `ui/layout_print_dialog.py:750` | `self.bind("<F11>", self.toggle_fullscreen)` |
 | F11 | `ui/main_window.py:65` | `self.bind("<F11>", self.toggle_fullscreen)` |
 | F11 | `ui/shape_editor_view.py:241` | `self.bind("<F11>", self.on_f11_fullscreen)` |
 | F11 | `ui/shape_editor_view.py:242` | `self.canvas.bind("<F11>", self.on_f11_fullscreen)` |
-| F2 | `ui/layout_editor_view.py:632` | `w.bind("<F2>", self.on_f2_press)` |
-| F2 | `ui/layout_editor_view.py:633` | `w.bind("<Key-F2>", self.on_f2_press)` |
-| F2 | `ui/session_view.py:656` | `self.tree_shapes.bind("<F2>", self.on_tree_shape_f2)` |
-| F2 | `ui/session_view.py:807` | `self.tree_mat.bind("<F2>", self.on_mat_f2_key)` |
-| F3 | `ui/layout_editor_view.py:636` | `w.bind("<F3>", self.on_f3_press)` |
-| F3 | `ui/layout_editor_view.py:637` | `w.bind("<Key-F3>", self.on_f3_press)` |
-| F4 | `ui/layout_editor_view.py:644` | `w.bind("<F4>", self.on_f4_press)` |
-| F4 | `ui/layout_editor_view.py:645` | `w.bind("<Key-F4>", self.on_f4_press)` |
+| F2 | `ui/layout_editor_view.py:633` | `w.bind("<F2>", self.on_f2_press)` |
+| F2 | `ui/layout_editor_view.py:634` | `w.bind("<Key-F2>", self.on_f2_press)` |
+| F2 | `ui/session_view.py:657` | `self.tree_shapes.bind("<F2>", self.on_tree_shape_f2)` |
+| F2 | `ui/session_view.py:808` | `self.tree_mat.bind("<F2>", self.on_mat_f2_key)` |
+| F3 | `ui/layout_editor_view.py:637` | `w.bind("<F3>", self.on_f3_press)` |
+| F3 | `ui/layout_editor_view.py:638` | `w.bind("<Key-F3>", self.on_f3_press)` |
+| F4 | `ui/layout_editor_view.py:645` | `w.bind("<F4>", self.on_f4_press)` |
+| F4 | `ui/layout_editor_view.py:646` | `w.bind("<Key-F4>", self.on_f4_press)` |
 | F5 | `ui/main_window.py:110` | `self.bind_all("<F5>", lambda e: self.on_refresh_f5())` |
 | F5 | `ui/main_window.py:287` | `tools_menu.add_command(label="Atualizar", accelerator="F5", command=self.on_refr` |
-| Iso_left_tab | `ui/session_view.py:3274` | `entry.bind("<ISO_Left_Tab>", move_prev_col)` |
-| Kp_down | `ui/session_view.py:3266` | `entry.bind("<KP_Down>", move_down)` |
+| Iso_left_tab | `ui/session_view.py:3281` | `entry.bind("<ISO_Left_Tab>", move_prev_col)` |
+| Kp_down | `ui/session_view.py:3273` | `entry.bind("<KP_Down>", move_down)` |
 | Kp_enter | `ui/fill_user_dialog.py:155` | `self.bind("<KP_Enter>", lambda e: self.on_ok())` |
-| Kp_enter | `ui/session_view.py:655` | `self.tree_shapes.bind("<KP_Enter>", self.on_tree_shape_enter)` |
-| Kp_enter | `ui/session_view.py:3270` | `entry.bind("<KP_Enter>", move_down)` |
+| Kp_enter | `ui/session_view.py:656` | `self.tree_shapes.bind("<KP_Enter>", self.on_tree_shape_enter)` |
+| Kp_enter | `ui/session_view.py:3277` | `entry.bind("<KP_Enter>", move_down)` |
 | Kp_enter | `ui/shape_catalog_view.py:267` | `self.bind("<KP_Enter>", lambda e: self.open_selected_shape())` |
-| Kp_up | `ui/session_view.py:3268` | `entry.bind("<KP_Up>", move_up)` |
-| Left | `ui/layout_editor_view.py:659` | `self.bind_all("<Left>", lambda e: self.nudge_selected(-5, 0))` |
+| Kp_up | `ui/session_view.py:3275` | `entry.bind("<KP_Up>", move_up)` |
+| Left | `ui/layout_editor_view.py:660` | `self.bind_all("<Left>", lambda e: self.nudge_selected(-5, 0))` |
 | Left | `ui/shape_catalog_view.py:264` | `self.bind("<Left>", lambda e: self.navigate_selection(-1, 0))` |
 | R | `ui/cad_canvas.py:69` | `self.master.bind("<r>", lambda e: self.rotate_selected(45))` |
 | R | `ui/cad_canvas.py:70` | `self.master.bind("<R>", lambda e: self.rotate_selected(45))` |
-| R | `ui/layout_editor_view.py:654` | `self.bind_all("<Key-r>", lambda e: self.rotate_selected(45))` |
-| R | `ui/layout_editor_view.py:655` | `self.bind_all("<Key-R>", lambda e: self.rotate_selected(45))` |
+| R | `ui/layout_editor_view.py:655` | `self.bind_all("<Key-r>", lambda e: self.rotate_selected(45))` |
+| R | `ui/layout_editor_view.py:656` | `self.bind_all("<Key-R>", lambda e: self.rotate_selected(45))` |
 | Return | `ui/edit_shape_in_session_dialog.py:146` | `self.bind("<Return>", lambda e: self.on_save())` |
 | Return | `ui/fill_user_dialog.py:154` | `self.bind("<Return>", lambda e: self.on_ok())` |
 | Return | `ui/import_materials_dialog.py:84` | `self.ent_filepath.bind("<Return>", lambda e: self.load_file_from_path(self.ent_f` |
 | Return | `ui/main_window.py:3120` | `dialog.bind("<Return>", lambda e: save())` |
 | Return | `ui/material_codes_view.py:212` | `self.tree.bind("<Return>", lambda e: self.open_edit_selected_dialog())` |
 | Return | `ui/material_codes_view.py:509` | `dlg.bind("<Return>", lambda e: save_action())` |
-| Return | `ui/session_view.py:370` | `self.entry_gap.bind("<Return>", self._on_gap_entry_change)` |
-| Return | `ui/session_view.py:575` | `self.entry_sname.bind("<Return>", self._on_entry_sname_commit)` |
-| Return | `ui/session_view.py:654` | `self.tree_shapes.bind("<Return>", self.on_tree_shape_enter)` |
-| Return | `ui/session_view.py:806` | `self.tree_mat.bind("<Return>", self.on_mat_enter_key)` |
-| Return | `ui/session_view.py:909` | `self.tree_lays.bind("<Return>", self.on_layout_row_double_click)` |
-| Return | `ui/session_view.py:2738` | `entry.bind("<Return>", lambda e: commit())` |
-| Return | `ui/session_view.py:2857` | `dialog.bind("<Return>", lambda e: save())` |
-| Return | `ui/session_view.py:3269` | `entry.bind("<Return>", move_down)` |
+| Return | `ui/session_view.py:371` | `self.entry_gap.bind("<Return>", self._on_gap_entry_change)` |
+| Return | `ui/session_view.py:576` | `self.entry_sname.bind("<Return>", self._on_entry_sname_commit)` |
+| Return | `ui/session_view.py:655` | `self.tree_shapes.bind("<Return>", self.on_tree_shape_enter)` |
+| Return | `ui/session_view.py:807` | `self.tree_mat.bind("<Return>", self.on_mat_enter_key)` |
+| Return | `ui/session_view.py:910` | `self.tree_lays.bind("<Return>", self.on_layout_row_double_click)` |
+| Return | `ui/session_view.py:2745` | `entry.bind("<Return>", lambda e: commit())` |
+| Return | `ui/session_view.py:2864` | `dialog.bind("<Return>", lambda e: save())` |
+| Return | `ui/session_view.py:3276` | `entry.bind("<Return>", move_down)` |
 | Return | `ui/shape_catalog_view.py:266` | `self.bind("<Return>", lambda e: self.open_selected_shape())` |
 | Return | `ui/shape_editor_view.py:312` | `self.entry_name.bind("<Return>", lambda e: self.on_name_change())` |
 | Return | `ui/shape_editor_view.py:358` | `self.entry_vx.bind("<Return>", self.on_vertex_entry_change)` |
 | Return | `ui/shape_editor_view.py:363` | `self.entry_vy.bind("<Return>", self.on_vertex_entry_change)` |
 | Return | `ui/trim_layout_dialog.py:76` | `self.bind("<Return>", lambda e: self.on_confirm())` |
-| Right | `ui/layout_editor_view.py:660` | `self.bind_all("<Right>", lambda e: self.nudge_selected(5, 0))` |
+| Right | `ui/layout_editor_view.py:661` | `self.bind_all("<Right>", lambda e: self.nudge_selected(5, 0))` |
 | Right | `ui/shape_catalog_view.py:265` | `self.bind("<Right>", lambda e: self.navigate_selection(1, 0))` |
-| Shift+F3 | `ui/layout_editor_view.py:641` | `w.bind("<Shift-F3>", lambda e: "break")` |
-| Shift+F3 | `ui/layout_editor_view.py:642` | `w.bind("<Shift-Key-F3>", lambda e: "break")` |
-| Shift+Return | `ui/session_view.py:3271` | `entry.bind("<Shift-Return>", move_up)` |
-| Shift+Tab | `ui/session_view.py:2742` | `entry.bind("<Shift-Tab>", on_shift_tab)` |
-| Shift+Tab | `ui/session_view.py:3273` | `entry.bind("<Shift-Tab>", move_prev_col)` |
+| Shift+F3 | `ui/layout_editor_view.py:642` | `w.bind("<Shift-F3>", lambda e: "break")` |
+| Shift+F3 | `ui/layout_editor_view.py:643` | `w.bind("<Shift-Key-F3>", lambda e: "break")` |
+| Shift+Return | `ui/session_view.py:3278` | `entry.bind("<Shift-Return>", move_up)` |
+| Shift+Tab | `ui/session_view.py:2749` | `entry.bind("<Shift-Tab>", on_shift_tab)` |
+| Shift+Tab | `ui/session_view.py:3280` | `entry.bind("<Shift-Tab>", move_prev_col)` |
 | Space | `ui/add_shapes_dialog.py:135` | `self.tree.bind("<space>", self.on_tree_space)` |
-| Tab | `ui/session_view.py:2741` | `entry.bind("<Tab>", on_tab)` |
-| Tab | `ui/session_view.py:3272` | `entry.bind("<Tab>", move_next_col)` |
-| Up | `ui/layout_editor_view.py:661` | `self.bind_all("<Up>", lambda e: self.nudge_selected(0, 5))` |
-| Up | `ui/session_view.py:3267` | `entry.bind("<Up>", move_up)` |
+| Tab | `ui/session_view.py:2748` | `entry.bind("<Tab>", on_tab)` |
+| Tab | `ui/session_view.py:3279` | `entry.bind("<Tab>", move_next_col)` |
+| Up | `ui/layout_editor_view.py:662` | `self.bind_all("<Up>", lambda e: self.nudge_selected(0, 5))` |
+| Up | `ui/session_view.py:3274` | `entry.bind("<Up>", move_up)` |
 | Up | `ui/shape_catalog_view.py:262` | `self.bind("<Up>", lambda e: self.navigate_selection(0, -1))` |
 
 **Conflitos reais detectados:**
@@ -1739,7 +1747,7 @@ Para equilibrar facilidade de uso fabril para o operador com controle cirúrgico
 ```
 
 1. **Camada 1 — Modos Industriais (Operador, 90% dos casos)**:
-   - **Automático (`auto`)**: Seleciona autonomamente a melhor combinação com base nas peças. Se a dimensão média das peças exceder 200 mm, aciona automaticamente `flashnestsheet` + `HighYield` via motor analítico NFP; caso contrário, executa o motor com IA Local.
+   - **Automático (`auto`)**: Aciona `flashnestsheet` + `HighYield` (motor analítico NFP/SAT). Decisão alterada em 30/10/2026 por medição em moldes reais (§8.12): essa combinação entrega 79,0% de rendimento em 8,3 s contra 65,8% em 9,1 s do motor IA-teste na sessão #156. O motor IA-teste continua disponível em `Personalizado`.
    - **Rápido (`fast`)**: `flashnestsheet` + `FastNest` via NFP.
    - **Econômico (`economic`)**: `flashnestsheet` + `HighYield` focado em rendimento máximo.
    - **Fitas (`tapes`)**: `tape_a` + `stdNOTFill`.
@@ -1881,6 +1889,138 @@ Implementação de telemetria de progresso determinado, salvaguardas de empacota
 
 ---
 
+## 8.11. Correção do Travamento do Nesting com Contornos Reais (Fase 6.8) `[CONFIRMADO]`
+
+Diagnóstico e correção do travamento da máquina ao executar o Encaixe em sessões com moldes reais
+(sessão #156: 15 moldes × 100 pares = 1.500 peças, placa 1380 × 2980 mm, 2 camadas).
+
+### 1. Causa raiz medida (não presumida)
+
+| Medição | Resultado |
+|---|---|
+| Molde real de calçado (`.die` importado) | 130–190 vértices, contorno côncavo |
+| `decompose_convex` (ear-clipping) nesse contorno | **147 partes convexas** (triângulos) |
+| `compute_nfp` entre dois moldes | 147 × 164 = **24.108 polígonos NFP por par de peças** |
+| Custo de um `compute_nfp` (perfil) | **~186 ms**; 1.471.412 chamadas de `minkowski_sum_convex` por placa |
+| Backend NFP: uma placa | **5,00 s** (bate no timeout) e coloca só **23 peças** |
+| Backend SAT (`dieproc_nest_pieces`): uma placa | **428 peças em 9,6 s** (~22 ms/peça), 0 colisões |
+| Sessão completa com NFP | 65 a 200 placas × 5 s = **5 a 17 minutos** de CPU a 100% |
+
+O NFP é ~25× mais lento que o motor SAT nesses moldes. Os benchmarks existentes
+(`tools/bench_multi_sheet.py`, `bench_10k_pieces.py`) usam `samples/Gaspea_Derby_41.die`,
+cujo contorno tem **7 vértices (1 parte convexa)** — por isso reportavam "1.600 peças em 242 ms"
+e nunca reproduziram a explosão combinatória de contornos reais.
+
+### 2. Correções aplicadas
+
+1. **Guard de complexidade no `NfpBackend`** (`cad/nesting_backend.py`, `count_convex_parts`):
+   se algum contorno tiver mais de `CORTEAC_NFP_MAX_PARTS` (padrão 12) partes convexas, o motor
+   delega ao SAT clássico — que é mais rápido **e** empaca mais peças nesses moldes.
+2. **Orçamento global de tempo no `nest_multi_sheet`** (`max_total_sec`, padrão 120 s ou
+   `CORTEAC_NEST_TOTAL_TIMEOUT`): nenhuma placa consome mais que o orçamento restante e o cálculo
+   termina com layouts parciais preservados em vez de prender a máquina.
+3. **Timeout por placa também no motor SAT** (`dieproc_nest_pieces`), que antes só tinha cancelamento.
+4. **Progresso honesto**: `progress_callback(sheet_idx, total_estimado)` passa a informar a
+   estimativa de placas pela densidade observada (0 = ainda desconhecido, exibido como
+   "Calculando chapa N..."), em vez de anunciar o limite de segurança `max_sheets` como total.
+5. **Thread safety da UI**: `_on_progress` rodava na thread de cálculo e chamava `self.after(...)`
+   (Tkinter não é thread-safe). Agora a thread só registra `_nest_progress` e o `_poll_nest_worker`
+   (thread principal) atualiza a barra — restaurando o botão `⏹ Cancelar` e a responsividade.
+6. **Chaves de controle não são preset**: `cancel_check`, `sheet_timeout_sec`,
+   `max_tries_per_piece` e `deterministic` deixaram de fazer os motores acharem que havia um
+   preset DieProc customizado (o que alterava silenciosamente `coupling`/`row_interlock`).
+
+### 3. Resultado na sessão #156 (mesmo cenário do travamento)
+
+| Métrica | Antes | Depois |
+|---|---|---|
+| Placas geradas | 65–200 (limite) | **8** |
+| Peças encaixadas | parcial (23/placa) | **1.500 / 1.500 (sucesso)** |
+| Tempo total | 5–17 min travado | **37 s** |
+| Colisões (gap 0) | — | **0** |
+| Peças fora da margem | — | **0** |
+| Cancelamento | não respondia | imediato, preservando placas prontas |
+
+### 4. Pendências abertas por este diagnóstico
+
+- **NFP em contorno real** (item estrutural, não aplicado): cachear o NFP por par de moldes +
+  rotação com translação (hoje a chave usa coordenadas absolutas e nunca acerta entre linhas),
+  pré-normalizar/CCW as partes uma única vez (hoje `_normalize_points` é rechamado 2,9 milhões de
+  vezes) e eliminar a cópia profunda dos milhares de polígonos por chamada.
+- **Benchmark de regressão**: incluir contorno real de 130+ vértices em `tools/bench_*.py`
+  e um teste de não-regressão de tempo, para o caso não voltar a passar despercebido.
+
+---
+
+
+## 8.12. Polimento dos Motores de Nesting e Medidas em Metros (v1.5.0) `[CONFIRMADO]`
+
+Trabalho de otimização medido em moldes reais de produção (sessão #156: 15 moldes de
+131-222 vértices, 1.500 peças, placa 1380 x 2980 mm, 2 camadas). O benchmark antigo não
+representava a fábrica: usava um `.die` de 7 vértices.
+
+### 1. Linha de base (antes) — 60 peças por medição
+
+| Motor | Tempo | ms/peça |
+|---|---|---|
+| `flashnestsheet` | 1,125 s | 18,8 |
+| `sint` | 1,159 s | 19,3 |
+| `freenest` | 1,084 s | 18,1 |
+| `tape_a` | 0,054 s | 0,9 |
+| `ia-teste` | 6,826 s | 113,8 |
+
+### 2. Depois (mesma medição)
+
+| Motor | Tempo | ms/peça | Ganho |
+|---|---|---|---|
+| `flashnestsheet` | 0,233 s | 3,9 | **4,8x** |
+| `sint` | 0,249 s | 4,2 | **4,7x** |
+| `freenest` | 0,204 s | 3,4 | **5,3x** |
+| `tape_a` | 0,030 s | 0,5 | 1,8x |
+| `ia-teste` | 0,300 s | 5,0 | **22,8x** |
+
+Sessão completa (1.500 peças), antes 5-17 min travada → **8,3 s** em 5 placas,
+**79,0%** de rendimento, 0 colisões e 0 peças fora da margem.
+
+### 3. O que foi otimizado
+
+1. **Colisão poligonal** (`cad/geometry.py`):
+   - `polygons_collide` passou a decidir contenção com **um** vértice (sem cruzamento de
+     arestas, ou um polígono contém o outro ou estão separados) em vez de testar todos os
+     vértices da janela — `point_in_polygon` caiu de 47,8 mil para ~4 mil chamadas.
+   - min/max inline no laço de arestas e novos parâmetros `segs_a`/`segs_b` com
+     `prepare_segments`, reaproveitando os segmentos da linha atual.
+   - `_collinear_overlap` detecta peças exatamente coincidentes/alinhadas, caso que o
+     teste de cruzamento estrito não enxergava (regressão coberta por teste de UI).
+2. **Busca de contato** (`find_contact_coordinate_binary`): 10 iterações (resolução
+   ~0,06 mm na janela típica) mantendo a verificação exata final com passo de 0,05 mm.
+3. **Pré-filtro de colisores na linha** (`dieproc_nest_pieces`): durante a busca a peça só
+   ocupa a janela `[min_cand_x + min_x, safe_start_x + max_x]`; peças fora dela nem são
+   testadas (antes a linha inteira era testada a cada iteração).
+4. **NFP com contornos complexos** (`cad/nfp.py`): `is_complex_polygon` (cache invariante a
+   translação) e `_contact_fallback` — `contact_placement_x/y` passam a usar busca binária
+   exata quando o polígono tem mais de 12 partes convexas. Beneficia o motor IA-teste e o
+   `NfpBackend`.
+5. **Guard de complexidade** (`NfpBackend`, §8.11): contorno complexo delega ao motor SAT.
+6. **Modo Automático**: passa a usar `flashnestsheet` + `HighYield` (melhor rendimento medido).
+
+### 4. Medidas em metros (exigência do operador)
+
+- Novo módulo `ui/units.py`: `format_m`, `format_dim_mm`, `format_dim_m`, `parse_m`,
+  `parse_m_to_mm` — vírgula decimal e sufixo `m` opcional na digitação.
+- Rótulos convertidos de centímetros para metros: mesa CAD (`Placa 1,38 x 2,98 m`), barra de
+  status, cabeçalho da miniatura de placa na sessão, relatório de impressão A4, badge de
+  refile e diálogo de refile (`Nova Altura da Placa (m)`).
+- O banco continua armazenando milímetros (`width_mm`/`height_mm`); a conversão acontece
+  apenas na borda da interface. Formulários de material já usavam metros com vírgula.
+
+### 5. Benchmark de regressão permanente
+
+- `tools/bench_real_shapes.py`: carrega a sessão real do banco, mede tempo/peças/colisões
+  por estratégia e expõe `--json`. Uso: `python3 tools/bench_real_shapes.py --session 156`.
+
+---
+
 ## 9. Pendências e arquivos faltantes
 
 ### 9.1 Tarefas abertas
@@ -1903,6 +2043,10 @@ Implementação de telemetria de progresso determinado, salvaguardas de empacota
 - [x] Recompilar executável Linux e pacote Windows após cada entrega — Concluído (`dist/teste_dola`, `teste_dola_linux`, `teste_dola_win11_pendrive.zip`)
 - [x] Instalar sincronização automática do `PROJETO_ATOM_JOBMANAGER.md` — Concluído (`tools/sync_project_doc.py`, `.githooks/pre-commit`, `git init`)
 - [x] Adicionar coluna 'Resto' na grade de Moldes da SessionView (paridade com sessão 619955 do Job Manager original) — Concluído (`cad/layers_rule.py`, `ui/session_view.py`, `ui/sort_utils.py`, `tests/test_shapes_resto.py`); regra inferida `[INFERIDO]` $-( (2 \times pares \pmod{camadas}) // 2 )$ pendente de confirmação empírica no Windows
+- [x] Corrigir travamento do Encaixe com contornos reais: guard de complexidade no NFP, orçamento global de tempo, timeout por placa no SAT, progresso por estimativa e thread safety da UI (Fase 6.8) — Concluído (`cad/nesting_backend.py`, `cad/nesting_engine.py`, `ui/main_window.py`, `ui/session_view.py`, `tests/test_multisheet_progress.py`)
+- [x] NFP para contorno real: `is_complex_polygon` + `_contact_fallback` eliminam a explosão combinatória nos motores que usam NFP (IA-teste e NfpBackend) — Concluído (§8.12)
+- [ ] Refino estrutural restante do NFP: cache por par de moldes + rotação com translação, pré-normalização única das partes convexas e fim das cópias profundas (só necessário para moldes simples/convexos em lote)
+- [x] Benchmark de regressão com contorno real de 130+ vértices — Concluído (`tools/bench_real_shapes.py`)
 
 ### 9.2 Arquivos de amostra que faltam (por prioridade)
 
@@ -2006,6 +2150,8 @@ Local: `/home/dola/Documentos/clone do job/antigo/arquivos pos instalacao/Common
 | Sex, 30/10/2026 | 12:20 | Antigravity | Feedback Visual de Nesting com Barra de Progresso Indeterminada e Bloqueio de Botões (Fase 6.5): (1) Adição de barra de progresso indeterminada (`ttk.Progressbar`, modo `indeterminate`) e rótulo de status dinâmico na parte inferior de `SessionView` (`ui/session_view.py`), com inicialização oculta sem consumo de espaço; (2) Métodos `show_progress()` e `hide_progress()` em `SessionView` controlando ciclo de vida, animação contínua, status transitório (`Calculando...`) e desabilitação atômica de botões (`[Gerar]`, `[Em espera]`, `[Refazer]`) prevenindo cliques duplos e concorrência; (3) Integração assíncrona na thread `_worker` e `_poll_nest_worker` em `MainWindow` (`ui/main_window.py`) com medição de tempo CAM via `time.perf_counter()`, exibição de tempo na status bar (ex: `concluído em 87 ms`) e tratamento resiliente de erros/retornos antecipados; (4) Nova suíte com 5 testes unitários dedicados em `tests/test_session_view_progress.py` (340/341 testes passando em todo o projeto, 100% de sucesso). | `ui/session_view.py`, `ui/main_window.py`, `tests/test_session_view_progress.py`, `docs/PROJETO_ATOM_JOBMANAGER.md` |
 | Sex, 30/10/2026 | 12:47 | Antigravity | Exclusão Múltipla de Moldes na SessionView via Tecla Delete e Menu de Contexto: (1) Suporte a exclusão em lote na grade de moldes da sessão (`tree_shapes` em `ui/session_view.py`), coletando todos os itens selecionados e removendo a restrição legada a um único índice (`sel[0]`); (2) Diálogo de confirmação dinâmico com mensagem personalizada no singular para 1 molde e plural com contagem para múltiplos moldes ($N > 1$); (3) Preservação de seleção múltipla (feita via Shift ou Ctrl) ao clicar com botão direito do mouse para abrir o menu de contexto, adaptando o rótulo do comando para `🗑️ Remover N Moldes da Sessão`; (4) Reatribuição automática de sequência contínua 1..N sem buracos, sincronização atômica com banco de dados/memória e limpeza do pré-visualizador CAD; (5) Retorno de `"break"` nos eventos `<Delete>` e `<BackSpace>` impedindo propagação e priorização de foco da `SessionView` em `MainWindow.on_global_delete_key`; (6) Nova suíte com 5 testes unitários dedicados em `tests/test_session_shapes_multidelete.py` (345 testes aprovados em todo o projeto, 100% de sucesso). | `ui/session_view.py`, `ui/main_window.py`, `tests/test_session_shapes_multidelete.py`, `docs/PROJETO_ATOM_JOBMANAGER.md` |
 | Sex, 30/10/2026 | 15:15 | Antigravity | Otimização Multi-Sheet, Progresso Determinado e Teste de Estresse 10k (Fases 6.6 & 6.6.1): (1) Instrumentação de `nest_multi_sheet` (`cad/nesting_engine.py`) com parâmetro `progress_callback(sheet_idx, max_sheets)` a cada nova chapa; (2) Feedback visual determinado na `SessionView` (`ui/session_view.py`) via `update_progress_text` exibindo "Calculando chapa {current} de {total}..." com normalização 0 para 1 e despacho thread-safe via `self.after(0, ...)` em `MainWindow.on_auto_nest`; (3) Proteções no `NfpBackend` (`cad/nesting_backend.py`) com `MAX_TRIES_PER_PIECE` (30/50 em FastNest) forçando fechamento de chapa em caso de estouro e timeout de chapa (`SHEET_TIMEOUT_SEC = 5.0 s`); (4) Nova ferramenta `tools/bench_multi_sheet.py` comprovando aninhamento de 1600 peças (16 tamanhos) em apenas 0.242 s (26 chapas); (5) Teste de estresse extremo `tools/bench_10k_pieces.py` com 10.000 peças (20 tamanhos) concluído em 1.51 s (154 chapas), pico de RAM de 358 MB (< 2 GB) e zero MemoryError; (6) Nova suíte com 4 testes unitários em `tests/test_multisheet_progress.py` (349 testes aprovados em todo o projeto, 100% de sucesso). | `cad/nesting_engine.py`, `cad/nesting_backend.py`, `ui/session_view.py`, `ui/main_window.py`, `tools/bench_multi_sheet.py`, `tools/bench_10k_pieces.py`, `tests/test_multisheet_progress.py`, `docs/PROJETO_ATOM_JOBMANAGER.md` |
+| Sex, 30/10/2026 | 17:10 | DeepSeek | Polimento de todos os motores de nesting e medidas em metros (v1.5.0): (1) `polygons_collide` com contenção por um único vértice, min/max inline, segmentos pré-computados (`prepare_segments`) e detecção de sobreposição colinear — 4,8x mais rápido; (2) pré-filtro exato de colisores na linha do motor SAT e busca de contato com 10 iterações; (3) `cad/nfp.py` com `is_complex_polygon` + `_contact_fallback`, eliminando a explosão combinatória do NFP em contornos reais — motor IA-teste 22,8x mais rápido (6,83 s → 0,30 s); (4) modo Automático passa a usar `flashnestsheet` + `HighYield` (79,0% de rendimento medido contra 65,8% do IA-teste); (5) medidas de placa/material em metros com vírgula via novo `ui/units.py`, aplicadas à mesa CAD, status, miniatura, impressão A4, refile e resumo; (6) novo benchmark permanente `tools/bench_real_shapes.py` com contornos reais. Sessão #156 (1.500 peças): 8,3 s, 5 placas, 1.500/1.500 peças, 79,0% de rendimento, 0 colisões, 0 invasões de margem; 357 testes + 1 skip. | `cad/geometry.py`, `cad/nesting_engine.py`, `cad/nesting_backend.py`, `cad/nfp.py`, `ui/main_window.py`, `ui/session_view.py`, `ui/layout_editor_view.py`, `ui/layout_print_dialog.py`, `ui/trim_layout_dialog.py`, `ui/units.py`, `tools/bench_real_shapes.py`, `tests/test_layout_editor_trim.py`, `tests/test_layout_editor_shortcuts.py`, `tests/fixtures/layout_screenshots/`, `config.py`, `.github/workflows/release.yml`, `docs/PROJETO_ATOM_JOBMANAGER.md` |
+| Sex, 30/10/2026 | 16:40 | DeepSeek | Correção do travamento do Encaixe com contornos reais (Fase 6.8): diagnóstico medido mostrando que contornos de 130–190 vértices geram 147 partes convexas e 24.108 polígonos NFP por par (~186 ms por par, 1,47 M de somas de Minkowski por placa); (1) guard `count_convex_parts` no `NfpBackend` delegando contornos complexos (> `CORTEAC_NFP_MAX_PARTS`, padrão 12) ao motor SAT, ~25× mais rápido e mais denso nesses moldes; (2) orçamento global `max_total_sec` (120 s / `CORTEAC_NEST_TOTAL_TIMEOUT`) com parada limpa preservando placas; (3) timeout por placa também no `dieproc_nest_pieces`; (4) progresso honesto por estimativa de densidade em vez de anunciar `max_sheets`; (5) correção de thread safety removendo chamada Tk (`self.after`) da thread de cálculo via `_nest_progress` + `_poll_nest_worker`; (6) chaves de controle (`cancel_check`, `sheet_timeout_sec`, `max_tries_per_piece`, `deterministic`) deixaram de ser confundidas com preset DieProc. Sessão #156 (1.500 peças): de 65–200 placas × 5 s (5–17 min travado) para **8 placas em 37 s**, 1.500/1.500 peças, 0 colisões e 0 invasões de margem; 355 testes + 1 skip (1 teste de UI instável com `grab failed` passa isolado). | `cad/nesting_backend.py`, `cad/nesting_engine.py`, `ui/main_window.py`, `ui/session_view.py`, `tests/test_multisheet_progress.py`, `docs/PROJETO_ATOM_JOBMANAGER.md` |
 | Sex, 30/10/2026 | 16:00 | Antigravity | Validação de Dimensões e Cancelamento de Nesting (Fase 6.7): (1) Validação de segurança em duas camadas impedindo chapas com dimensões > 10m (> 10.000 mm) no motor `nest_multi_sheet` e pré-checagem em `MainWindow.on_auto_nest`; (2) Auto-conversão transparente de unidades em mm para metros (divisão por 1000 com aviso explicativo ao operador) nos diálogos de cadastro/edição de material (`MaterialCodesView.open_material_dialog`, `MainWindow.on_create_material`, `SessionView.open_material_edit_dialog`, edição inline de célula `commit` e `notify_material_changed`); (3) Botão interativo `[ ⏹ Cancelar ]` no `frame_progress` do `SessionView`, acionando `self._cancel_nest = True`, desabilitando o botão e disparando `on_cancel_cb`; (4) Cancelamento imediato (< 1 segundo) no `nest_multi_sheet` e nos loops internos de `NfpBackend` e `dieproc_nest_pieces` via parâmetro `cancel_check`, preservando layouts parciais já calculados e restaurando a UI com a mensagem `"Cálculo cancelado pelo operador."`; (5) Nova suíte com 8 testes unitários em `tests/test_validation_and_cancellation.py` (357 testes aprovados na suíte do projeto, 100% de sucesso); zero alterações em `cad/macro_engine.py`. | `cad/nesting_engine.py`, `cad/nesting_backend.py`, `ui/session_view.py`, `ui/main_window.py`, `ui/material_codes_view.py`, `tests/test_validation_and_cancellation.py`, `docs/PROJETO_ATOM_JOBMANAGER.md` |
 
 
@@ -2014,6 +2160,7 @@ Local: `/home/dola/Documentos/clone do job/antigo/arquivos pos instalacao/Common
 <!-- AUTO:gitlog:start -->
 | Commit | Data | Autor | Mensagem |
 |---|---|---|---|
+| `cdea200` | 2026-10-30 | Doletabgi | feat(nesting): validacao de dimensoes max 10m e cancelamento de nesting imediato (Fase 6.7) |
 | `d03f25d` | 2026-10-30 | Doletabgi | feat(cad): otimizacao multi-sheet, progresso determinado e teste de estresse 10k pecas (Fase 6.6 e 6.6.1) |
 | `5b1c06d` | 2026-10-30 | Doletabgi | fix(ui): permitir exclusao multipla de moldes na SessionView via tecla Delete e menu |
 | `5612822` | 2026-10-30 | Doletabgi | chore(release): lancamento da versao v1.4.0 |
@@ -2028,7 +2175,6 @@ Local: `/home/dola/Documentos/clone do job/antigo/arquivos pos instalacao/Common
 | `d5f2d34` | 2026-10-27 | Doletabgi | feat(print): legenda a4 com shape id e pares n/m e remocao de texto placa na barra lateral |
 | `aabc7e3` | 2026-10-27 | Doletabgi | feat(nesting): suporte a multiplas placas lay0000 e lay0001 com sequencia estrita e exportacao dual |
 | `2d2e403` | 2026-10-27 | Doletabgi | fix(ui): remover opcoes de margem 20mm e 30mm da selecao rapida |
-| `a1f3eba` | 2026-10-26 | Doletabgi | feat(materiais): adicionar importação em lote de lista de materiais (CSV/TSV/JSON) |
 <!-- AUTO:gitlog:end -->
 
 ---

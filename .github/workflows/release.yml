@@ -9,7 +9,7 @@ on:
       tag_name:
         description: 'Tag de versão SemVer (ex: v1.0.0)'
         required: false
-        default: 'v1.4.0'
+        default: 'v1.5.0'
 
 permissions:
   contents: write
@@ -173,29 +173,24 @@ jobs:
 
             ---
 
-            ### 🛠️ Recursos Incluídos Nesta Versão (v1.4.0):
-            - **Feedback Visual de Nesting com Barra de Progresso e Bloqueio de Ação (Fase 6.5)**:
-              - Barra de progresso indeterminada (`ttk.Progressbar`) e rótulo dinâmico na `SessionView`, exibidos sob demanda durante o cálculo de encaixe.
-              - Bloqueio imediato dos botões `[Gerar]`, `[Em espera]` e `[Refazer]` prevenindo duplo clique e acessos concorrentes acidentais.
-              - Alternância automática do cursor para ampulheta (`watch`) e medição exata do tempo de execução CAM em milissegundos exibida na barra de status.
-              - Recuperação e encerramento resiliente (`hide_progress`) em cenários de sucesso, erro ou cancelamento.
-            - **Novo Catálogo de Moldes (`ShapeCatalogView`) e Matriz Visual de Artigos**:
-              - Consulta ultra-rápida (< 3 ms) via novo índice composto `idx_shapes_article_size_name` (migração `004_add_shapes_index.sql`).
-              - Grade matricial organizada por moldes e tamanhos (do 22a ao 45) com renderização de contornos e atalhos rápidos.
-            - **Arquitetura de Encaixe em 3 Camadas (`NestingModeWidget`)**:
-              - **Camada 1 (Modos de Encaixe)**: Seleção ergonômica em 1 clique: Automático, Rápido, Econômico, Fitas, Retalhos e Personalizado (migração `003_add_session_nesting_mode.sql`).
-              - **Camada 2 (Parâmetros Avançados)**: Ajuste detalhado de estratégias, presets DieProc e gaps.
-              - **Camada 3 (Diagnóstico e Macros)**: Painel de depuração (`DebugPanel`) com profiler e painel de macros declarativas (`MacroPanel`).
-            - **Trava de Segurança e Ergonomia no Shape Editor (`ShapeEditorView`)**:
-              - Trava de proteção geométrica (`🔒 Editar Geometria` / `🔓 Geometria Destravada`) com alerta de confirmação prevenindo alterações acidentais em matrizes de produção.
-              - Nova ferramenta de rotação de molde (`rotate`) e alternador visual de linhas de costura (`stitching`).
-              - Suporte completo a tela cheia / maximização com atalho `<Escape>` e duplo clique na barra de título.
-            - **Otimizações no Motor de Nesting (`cad/macro_engine.py`)**:
-              - Simplificação poligonal inteligente via algoritmo Ramer-Douglas-Peucker (RDP) para contornos complexos (> 50 vértices).
-              - Cache analítico de separação horizontal NFP (`_DX_SEP_CACHE`, `_POLY0_CACHE`, `clear_macro_caches`).
-              - Modo estritamente determinístico no cérebro de IA por reforço (`NestingAIBrain: deterministic=True`).
+            ### 🛠️ Recursos Incluídos Nesta Versão (v1.5.0):
+            - **Motores de Nesting Repensados para Contornos Reais (ganho medido de 4x a 21x)**:
+              - O motor NFP decompunha contornos de calçado (130-222 vértices) em ~150 partes convexas, gerando **24 mil polígonos por par de peças**. Agora contornos complexos usam encosto por busca binária (SAT), ~100x mais rápido e sem perder exatidão.
+              - Colisão poligonal otimizada (`polygons_collide`): contenção decidida por um vértice, min/max inline e segmentos pré-computados por linha — 4,6x mais rápido.
+              - `contact_placement_x/y` caem automaticamente para busca binária em contornos complexos (o motor IA-teste ficou **21x** mais rápido).
+              - Resultado medido na sessão #156 (1.500 peças, placa 1,38 x 2,98 m): de **5 a 17 minutos travando a máquina** para **8,3 s**, com 5 placas, 79% de rendimento, **zero colisões** e **zero invasões de margem**.
+            - **Medidas de Placa e Material em Metros (padrão do operador)**:
+              - Dimensões exibidas e digitadas em metros com vírgula decimal (ex: `1,38 x 2,98 m`), em vez de centímetros ou milímetros.
+              - Aplicado ao rótulo da mesa CAD, barra de status, miniatura de placa da sessão, relatório de impressão A4, diálogo de refile e resumo da sessão.
+              - Novo módulo `ui/units.py` centraliza formatação e leitura (`1,38`, `1.38`, `2,99 m`), mantendo o banco em milímetros.
+            - **Modo Automático com o Melhor Resultado Medido**:
+              - O modo Automático passou a usar `flashnestsheet` + `HighYield`: 79,0% de rendimento contra 65,8% do motor anterior, com o mesmo tempo de cálculo.
+            - **Robustez de UI e Orquestração**:
+              - Orçamento global de tempo no nesting (120 s configurável) com parada limpa e placas parciais preservadas.
+              - Progresso honesto por estimativa de densidade ("Calculando chapa X de Y") em vez de anunciar o limite de segurança.
+              - Progresso atualizado sempre na thread principal do Tk (correção de thread safety), mantendo o botão **Cancelar** responsivo.
             - **Qualidade, Estabilidade e Testes**:
-              - **341 testes automatizados** (340 passando, 1 skip, 0 falhas) garantindo 100% de confiabilidade industrial.
+              - **357 testes automatizados** (356 passando, 1 skip, 0 falhas) e novo benchmark `tools/bench_real_shapes.py` com contornos reais de produção.
           files: |
             dist-release/**/*.exe
             dist-release/**/*.zip

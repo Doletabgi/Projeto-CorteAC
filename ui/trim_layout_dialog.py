@@ -65,7 +65,7 @@ class TrimLayoutDialog(tk.Toplevel):
             initial_target_h = round(self.max_y + initial_gap, 1)
 
         self.var_gap_mm = tk.DoubleVar(value=initial_gap)
-        self.var_final_cm = tk.DoubleVar(value=round(initial_target_h / 10.0, 2))
+        self.var_final_m = tk.DoubleVar(value=round(initial_target_h / 1000.0, 3))
         self.var_cut_line = tk.BooleanVar(value=True)
 
         self._updating_vars = False
@@ -153,10 +153,10 @@ class TrimLayoutDialog(tk.Toplevel):
         grid_info.pack(fill="x")
 
         tk.Label(grid_info, text="Placa Atual:", bg=THEME["bg_surface"], fg=THEME["text_main"], font=("Segoe UI", 8), anchor="w").grid(row=0, column=0, sticky="w", pady=2)
-        tk.Label(grid_info, text=f"{cur_h_cm:.2f} X {cur_w_cm:.2f} cm ({self.current_sheet_h/1000.0:.2f} X {self.current_sheet_w/1000.0:.2f} M)", bg=THEME["bg_surface"], fg=THEME["text_main"], font=("Segoe UI", 8, "bold"), anchor="w").grid(row=0, column=1, sticky="w", padx=(8, 0), pady=2)
+        tk.Label(grid_info, text=f"{self.current_sheet_w/1000.0:.2f} X {self.current_sheet_h/1000.0:.2f} m", bg=THEME["bg_surface"], fg=THEME["text_main"], font=("Segoe UI", 8, "bold"), anchor="w").grid(row=0, column=1, sticky="w", padx=(8, 0), pady=2)
 
         tk.Label(grid_info, text="Extensão Peças (Y_max):", bg=THEME["bg_surface"], fg=THEME["text_main"], font=("Segoe UI", 8), anchor="w").grid(row=1, column=0, sticky="w", pady=2)
-        tk.Label(grid_info, text=f"{max_y_cm:.2f} cm ({self.max_y/1000.0:.3f} M) — Total: {len(self.placed_pieces)} peças", bg=THEME["bg_surface"], fg="#0369a1", font=("Segoe UI", 8, "bold"), anchor="w").grid(row=1, column=1, sticky="w", padx=(8, 0), pady=2)
+        tk.Label(grid_info, text=f"{self.max_y/1000.0:.2f} m — Total: {len(self.placed_pieces)} peças", bg=THEME["bg_surface"], fg="#0369a1", font=("Segoe UI", 8, "bold"), anchor="w").grid(row=1, column=1, sticky="w", padx=(8, 0), pady=2)
 
         # 3. Painel de Configuração do Refile
         cfg_box = tk.LabelFrame(
@@ -194,17 +194,17 @@ class TrimLayoutDialog(tk.Toplevel):
         self.ent_gap.bind("<<Increment>>", self._on_gap_changed)
         self.ent_gap.bind("<<Decrement>>", self._on_gap_changed)
 
-        # Linha B: Comprimento final da placa (cm)
+        # Linha B: Comprimento final da placa (m)
         row_b = tk.Frame(cfg_box, bg=THEME["bg_surface"])
         row_b.pack(fill="x", pady=3)
 
-        tk.Label(row_b, text="Nova Altura da Placa (cm):", bg=THEME["bg_surface"], fg=THEME["text_main"], font=("Segoe UI", 9), width=26, anchor="w").pack(side="left")
+        tk.Label(row_b, text="Nova Altura da Placa (m):", bg=THEME["bg_surface"], fg=THEME["text_main"], font=("Segoe UI", 9), width=26, anchor="w").pack(side="left")
         self.ent_final_cm = tk.Spinbox(
             row_b,
-            from_=round(max_y_cm, 1),
-            to=round(cur_h_cm, 1),
-            increment=1.0,
-            textvariable=self.var_final_cm,
+            from_=round(self.max_y / 1000.0, 2),
+            to=round(self.current_sheet_h / 1000.0, 2),
+            increment=0.01,
+            textvariable=self.var_final_m,
             width=8,
             bg=THEME["bg_input"],
             fg=THEME["text_main"],
@@ -217,7 +217,7 @@ class TrimLayoutDialog(tk.Toplevel):
         self.ent_final_cm.bind("<<Increment>>", self._on_final_cm_changed)
         self.ent_final_cm.bind("<<Decrement>>", self._on_final_cm_changed)
 
-        self.lbl_meter = tk.Label(row_b, text=f"({self.var_final_cm.get()/100.0:.2f} M)", bg=THEME["bg_surface"], fg=THEME.get("text_muted", "#64748b"), font=("Segoe UI", 8))
+        self.lbl_meter = tk.Label(row_b, text=f"({self.var_final_m.get():.2f} m)", bg=THEME["bg_surface"], fg=THEME.get("text_muted", "#64748b"), font=("Segoe UI", 8))
         self.lbl_meter.pack(side="left")
 
         # Linha C: Botões de Atalho Rápido
@@ -334,8 +334,8 @@ class TrimLayoutDialog(tk.Toplevel):
         try:
             gap_mm = float(self.var_gap_mm.get())
             final_h_mm = max(self.max_y, self.max_y + gap_mm)
-            self.var_final_cm.set(round(final_h_mm / 10.0, 2))
-            self.lbl_meter.config(text=f"({final_h_mm / 1000.0:.2f} M)")
+            self.var_final_m.set(round(final_h_mm / 1000.0, 3))
+            self.lbl_meter.config(text=f"({final_h_mm / 1000.0:.2f} m)")
             self._update_savings_label()
         except Exception:
             pass
@@ -347,11 +347,11 @@ class TrimLayoutDialog(tk.Toplevel):
             return
         self._updating_vars = True
         try:
-            final_cm = float(self.var_final_cm.get())
-            final_h_mm = final_cm * 10.0
+            final_m = float(self.var_final_m.get())
+            final_h_mm = final_m * 1000.0
             gap_mm = max(0.0, final_h_mm - self.max_y)
             self.var_gap_mm.set(round(gap_mm, 1))
-            self.lbl_meter.config(text=f"({final_cm / 100.0:.2f} M)")
+            self.lbl_meter.config(text=f"({final_m:.2f} m)")
             self._update_savings_label()
         except Exception:
             pass
@@ -363,8 +363,8 @@ class TrimLayoutDialog(tk.Toplevel):
         try:
             self.var_gap_mm.set(float(gap_val))
             final_h_mm = self.max_y + float(gap_val)
-            self.var_final_cm.set(round(final_h_mm / 10.0, 2))
-            self.lbl_meter.config(text=f"({final_h_mm / 1000.0:.2f} M)")
+            self.var_final_m.set(round(final_h_mm / 1000.0, 3))
+            self.lbl_meter.config(text=f"({final_h_mm / 1000.0:.2f} m)")
             self._update_savings_label()
         finally:
             self._updating_vars = False
@@ -373,31 +373,31 @@ class TrimLayoutDialog(tk.Toplevel):
         self._updating_vars = True
         try:
             final_cm_f = float(final_cm)
-            self.var_final_cm.set(final_cm_f)
+            self.var_final_m.set(round(final_cm_f / 100.0, 3))
             gap_mm = max(0.0, (final_cm_f * 10.0) - self.max_y)
             self.var_gap_mm.set(round(gap_mm, 1))
-            self.lbl_meter.config(text=f"({final_cm_f / 100.0:.2f} M)")
+            self.lbl_meter.config(text=f"({final_cm_f / 100.0:.2f} m)")
             self._update_savings_label()
         finally:
             self._updating_vars = False
 
     def _update_savings_label(self):
         try:
-            target_h_mm = float(self.var_final_cm.get()) * 10.0
+            target_h_mm = float(self.var_final_m.get()) * 1000.0
             saved_mm = max(0.0, self.current_sheet_h - target_h_mm)
             saved_m = saved_mm / 1000.0
             saved_cm = saved_mm / 10.0
             pct_saved = (saved_mm / max(1.0, self.current_sheet_h)) * 100.0
             self.lbl_savings.config(
-                text=f" Economia: {saved_cm:.1f} cm ({saved_m:.2f} M) de chapa poupada ({pct_saved:.1f}% do material)"
+                text=f" Economia: {saved_m:.2f} m de chapa poupada ({pct_saved:.1f}% do material)"
             )
         except Exception:
             pass
 
     def on_confirm(self):
         try:
-            final_cm = float(self.var_final_cm.get())
-            target_h_mm = round(final_cm * 10.0, 1)
+            final_m = float(self.var_final_m.get())
+            target_h_mm = round(final_m * 1000.0, 1)
         except Exception:
             messagebox.showerror("Valor Inválido", "Informe um valor numérico válido para o comprimento da placa.", parent=self)
             return
@@ -405,8 +405,8 @@ class TrimLayoutDialog(tk.Toplevel):
         if target_h_mm < self.max_y - 0.5:
             messagebox.showwarning(
                 "Cota Menor que as Peças",
-                f"O comprimento informado ({target_h_mm/10.0:.1f} cm) é menor que a altura das peças ({self.max_y/10.0:.1f} cm).\n"
-                f"Ajuste para pelo menos {self.max_y/10.0:.1f} cm para evitar corte sobre as peças.",
+                f"O comprimento informado ({target_h_mm/1000.0:.2f} m) é menor que a altura das peças ({self.max_y/1000.0:.2f} m).\n"
+                f"Ajuste para pelo menos {self.max_y/1000.0:.2f} m para evitar corte sobre as peças.",
                 parent=self
             )
             return
@@ -432,7 +432,17 @@ class TrimLayoutDialog(tk.Toplevel):
 
     @property
     def var_height_cm(self):
-        return self.var_final_cm
+        """Compatibilidade: leitura/escrita em centímetros (a UI usa metros)."""
+        m_var = self.var_final_m
+
+        class _CmWrapper:
+            def get(self):
+                return round(float(m_var.get()) * 100.0, 2)
+
+            def set(self, val):
+                m_var.set(round(float(val) / 100.0, 3))
+
+        return _CmWrapper()
 
     @property
     def var_add_cut_line(self):
@@ -440,11 +450,4 @@ class TrimLayoutDialog(tk.Toplevel):
 
     @property
     def var_height_m(self):
-        class _MeterWrapper:
-            def __init__(self, cm_var):
-                self._cm = cm_var
-            def get(self):
-                return round(float(self._cm.get()) / 100.0, 2)
-            def set(self, val):
-                self._cm.set(round(float(val) * 100.0, 1))
-        return _MeterWrapper(self.var_final_cm)
+        return self.var_final_m

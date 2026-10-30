@@ -4589,13 +4589,13 @@ class MainWindow(tk.Tk):
                 dieproc_params = {}
             dieproc_params["deterministic"] = True
 
-            if avg_piece_dim > 200.0:
-                # Mitigação Ressalva #1: peças grandes usam NFP analítico com HighYield
-                strategy = "flashnestsheet"
-                params = "HighYield"
-                os.environ["CORTEAC_BACKEND"] = "nfp"
-            else:
-                strategy = "IA-teste"
+            # Medição em moldes reais (sessão #156, 1.500 peças): flashnestsheet +
+            # HighYield entrega 79,0% de rendimento em 8,3 s; o motor IA-teste
+            # entregava 65,8% em 9,1 s. O modo Automático passa a usar o melhor
+            # resultado medido, independentemente do tamanho da peça.
+            strategy = "flashnestsheet"
+            params = "HighYield"
+            os.environ["CORTEAC_BACKEND"] = "nfp"
         elif nesting_mode == "fast":
             strategy = "flashnestsheet"
             params = "FastNest"
@@ -4700,11 +4700,13 @@ class MainWindow(tk.Tk):
             self.session_view.show_progress("Calculando encaixe... Por favor aguarde.")
 
         nest_q = queue.Queue()
+        self._nest_progress = None
 
         def _on_progress(current, total):
-            c_disp = current + 1 if current == 0 else current
-            if getattr(self, "session_view", None) and hasattr(self.session_view, "update_progress_text"):
-                self.after(0, lambda c=c_disp, t=total: self.session_view.update_progress_text(c, t))
+            # IMPORTANTE: esta função roda na thread de cálculo. Tkinter não é
+            # thread-safe, então aqui só registramos o estado; quem atualiza a
+            # interface é o _poll_nest_worker (thread principal do Tk).
+            self._nest_progress = (current, total)
 
         def _worker():
             t_start = time.perf_counter()
@@ -4758,6 +4760,16 @@ class MainWindow(tk.Tk):
         self.lbl_status_msg.config(text="Cancelando cálculo pelo operador... aguarde.")
 
     def _poll_nest_worker(self, q, strategy, params, machine, gap=1.0, margins=None, layers=2):
+        # Drena o progresso registrado pela thread de cálculo (sempre na thread do Tk)
+        prog = getattr(self, "_nest_progress", None)
+        if prog is not None:
+            self._nest_progress = None
+            try:
+                if getattr(self, "session_view", None) and hasattr(self.session_view, "update_progress_text"):
+                    self.session_view.update_progress_text(prog[0], prog[1])
+            except Exception:
+                pass
+
         try:
             status, data = q.get_nowait()
         except queue.Empty:

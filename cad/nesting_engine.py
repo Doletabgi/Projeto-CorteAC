@@ -4,10 +4,12 @@ Nesting Engine & ATOM Machine Cycle Estimator (Recriação de FreeNest & AtomCut
 """
 
 import math
+import os
+import time
 
 from cad.geometry import (
     transform_contour, polygon_area, polygon_perimeter, polygon_bbox,
-    polygons_collide, bbox_overlap, simplify_contour_for_collision,
+    polygons_collide, bbox_overlap, simplify_contour_for_collision, prepare_segments,
     SpatialGrid, find_contact_coordinate_binary
 )
 from cad.colors import get_color_for_size
@@ -404,9 +406,16 @@ def dieproc_nest_pieces(available_shapes, bed_width_mm, bed_height_mm, target_co
         rows = []
         queue_idx = 0
         cancel_check = dieproc_params.get("cancel_check") if isinstance(dieproc_params, dict) else None
+        try:
+            sheet_timeout_sec = float(dieproc_params.get("sheet_timeout_sec") or 0) if isinstance(dieproc_params, dict) else 0.0
+        except (TypeError, ValueError):
+            sheet_timeout_sec = 0.0
+        t_sheet_start = time.perf_counter()
 
         while queue_idx < len(shape_queue) and cur_row_y < bed_height_mm - m_top and len(placed) < target_count:
             if cancel_check is not None and cancel_check():
+                break
+            if sheet_timeout_sec > 0 and (time.perf_counter() - t_sheet_start) > sheet_timeout_sec:
                 break
             row_pieces = []
             is_odd_row = (row_idx % 2 == 1)
@@ -414,6 +423,8 @@ def dieproc_nest_pieces(available_shapes, bed_width_mm, bed_height_mm, target_co
             # Preenchimento horizontal da linha com encosto milimétrico contorno a contorno
             while queue_idx < len(shape_queue) and (len(placed) + len(row_pieces)) < target_count:
                 if cancel_check is not None and cancel_check():
+                    break
+                if sheet_timeout_sec > 0 and (time.perf_counter() - t_sheet_start) > sheet_timeout_sec:
                     break
                 shape = shape_queue[queue_idx]
                 piece_in_row_idx = len(row_pieces)
@@ -435,7 +446,21 @@ def dieproc_nest_pieces(available_shapes, bed_width_mm, bed_height_mm, target_co
                     prev = row_pieces[-1]
                     safe_start_x = prev["bbox"][2] + gap + 1.0
                     min_cand_x = max(m_left, prev["bbox"][0] - 25.0)
-                    colliders_row = [(p["poly"], p["bbox"]) for p in row_pieces]
+                    # Pré-filtro exato: durante a busca a peça só ocupa a janela
+                    # [min_cand_x + min_x, safe_start_x + max_x]; peças da linha fora
+                    # dessa janela (ou de outra faixa Y) não podem colidir.
+                    win_x_min = min_cand_x + min_x
+                    win_x_max = safe_start_x + max_x
+                    win_y_min = cur_row_y
+                    win_y_max = cur_row_y + h
+                    colliders_row = [
+                        (p["poly"], p["bbox"], p.get("_segs"))
+                        for p in row_pieces
+                        if p["bbox"][2] + gap >= win_x_min
+                        and p["bbox"][0] - gap <= win_x_max
+                        and p["bbox"][3] + gap >= win_y_min
+                        and p["bbox"][1] - gap <= win_y_max
+                    ]
                     poly_fn_x = lambda x, s=shape, mx=min_x, my=min_y, r=rot, cy=cur_row_y: transform_contour(s["contour"], x - mx, cy - my, r)
                     cand_x = find_contact_coordinate_binary(poly_fn_x, colliders_row, gap, start_val=safe_start_x, min_val=min_cand_x)
 
@@ -465,6 +490,7 @@ def dieproc_nest_pieces(available_shapes, bed_width_mm, bed_height_mm, target_co
                     "w": w,
                     "h": h
                 }
+                item["_segs"] = prepare_segments(c_poly)
                 row_pieces.append(item)
                 queue_idx += 1
                 idx += 1
@@ -489,7 +515,7 @@ def dieproc_nest_pieces(available_shapes, bed_width_mm, bed_height_mm, target_co
                             return True
                     return False
 
-                for _ in range(14):
+                for _ in range(10):
                     mid_y = (low_y + high_y) / 2.0
                     if row_collides_at(mid_y):
                         low_y = mid_y
@@ -523,6 +549,9 @@ def dieproc_nest_pieces(available_shapes, bed_width_mm, bed_height_mm, target_co
 
             for p in row_pieces:
                 grid.insert(p["id"], p["poly"], p["bbox"])
+                # Segmentos pré-computados servem só durante a montagem da linha;
+                # removê-los evita inchar o JSON persistido no banco.
+                p.pop("_segs", None)
                 placed.append(p)
             rows.append(row_pieces)
             row_idx += 1
@@ -971,7 +1000,11 @@ def _auto_nest_pieces_core(available_shapes, bed_width_mm, bed_height_mm, target
 
     # Estratégias de Sintéticos (DieProc dp98): flashnestsheet, freenest
     dp_config = dict(dieproc_params) if dieproc_params else {}
-    if not dp_config:
+    # Chaves de controle do orquestrador NÃO são parâmetros de preset DieProc:
+    # se só elas estiverem presentes, o preset deve ser mapeado normalmente.
+    control_keys = ("cancel_check", "sheet_timeout_sec", "max_tries_per_piece", "deterministic")
+    controls = {k: dp_config[k] for k in control_keys if k in dp_config}
+    if not any(k not in control_keys for k in dp_config):
         # Mapeia predefinições caso não tenha sido passado objeto customizado
         if params == "ALTERNADO":
             dp_config = {"coupling": "0/0 0/180", "gap1": gap_mm, "row_interlock": True, "range1_from": -3.0, "range1_to": 3.0, "range1_step": 1.0}
@@ -987,6 +1020,7 @@ def _auto_nest_pieces_core(available_shapes, bed_width_mm, bed_height_mm, target
             dp_config = {"coupling": "0/0 0/180", "gap1": max(1.5, float(gap_mm) * 1.5), "row_interlock": True, "range1_from": 0.0, "range1_to": 0.0, "range1_step": 0.0}
         else:
             dp_config = {"coupling": "0/0", "gap1": gap_mm, "row_interlock": False, "range1_from": 0.0, "range1_to": 1.0, "range1_step": 1.0}
+        dp_config.update(controls)
 
     # Prioridade absoluta do gap oficial configurado pelo usuário na sessão
     if gap_mm is not None:
@@ -1054,7 +1088,8 @@ def nest_multi_sheet(
     layers: int = 2,
     max_sheets: int = 200,
     progress_callback=None,
-    cancel_check=None
+    cancel_check=None,
+    max_total_sec: float = None
 ) -> dict:
     """
     Orquestrador de Nesting em Múltiplas Placas (lay0000, lay0001, ...) até encaixar
@@ -1065,11 +1100,23 @@ def nest_multi_sheet(
     - Loop por placas: nestar na placa k com o que falta; subtrair da demanda; abrir placa k+1.
     - Proteções: parada imediata se peça for maior que a placa útil ou se nenhuma peça couber, sem laço infinito.
     - Limite de segurança de max_sheets (padrão 200) com aviso.
+    - Orçamento global de tempo de cálculo (max_total_sec, padrão 120 s ou CORTEAC_NEST_TOTAL_TIMEOUT):
+      impede que sessões grandes prendam a máquina por minutos; encerra com layouts parciais.
     - Ordem de prioridade: coluna 'sequence' (# CONFIRMAR NO WINDOWS: ordem pela coluna Sequência).
-    - Feedback de progresso via progress_callback(sheet_idx, max_sheets) a cada nova placa.
+    - Feedback de progresso via progress_callback(sheet_idx, total_estimado) a cada nova placa.
     - Suporte a cancelamento imediato via cancel_check() retornando layouts parciais calculados.
     - Verificação de segurança de dimensões (máximo 10 metros / 10.000 mm).
     """
+    if max_total_sec is None:
+        try:
+            max_total_sec = float(os.getenv("CORTEAC_NEST_TOTAL_TIMEOUT", "120"))
+        except (TypeError, ValueError):
+            max_total_sec = 120.0
+    try:
+        sheet_timeout_base = float(os.getenv("CORTEAC_SHEET_TIMEOUT", "5.0"))
+    except (TypeError, ValueError):
+        sheet_timeout_base = 5.0
+    t_nest_start = time.perf_counter()
     if bed_width_mm > 10000.0 or bed_height_mm > 10000.0:
         return {
             "success": False,
@@ -1199,9 +1246,26 @@ def nest_multi_sheet(
             warning_msg = f"Limite de segurança de {max_sheets} placas atingido."
             break
 
+        elapsed_nest = time.perf_counter() - t_nest_start
+        if max_total_sec and elapsed_nest > max_total_sec:
+            warning_msg = (
+                f"Tempo máximo de cálculo ({max_total_sec:.0f} s) atingido — "
+                f"{len(layouts)} placa(s) calculada(s) preservada(s)."
+            )
+            break
+
         if progress_callback is not None:
+            # Total honesto: estimativa de placas pela densidade já observada,
+            # em vez de anunciar o limite de segurança de max_sheets.
+            placed_so_far = sum(len(ly.get("pieces", [])) for ly in layouts)
+            if layouts and placed_so_far > 0:
+                avg_per_sheet = placed_so_far / len(layouts)
+                total_est = max(sheet_idx + 1, int(math.ceil(total_pieces_demanded / avg_per_sheet)))
+            else:
+                # Ainda sem amostra de densidade: total desconhecido (0 = "chapa N...").
+                total_est = 0
             try:
-                progress_callback(sheet_idx, max_sheets)
+                progress_callback(sheet_idx, min(total_est, max_sheets))
             except Exception:
                 pass
 
@@ -1219,6 +1283,14 @@ def nest_multi_sheet(
         round_dp_params = dict(dieproc_params) if dieproc_params else {}
         if cancel_check is not None:
             round_dp_params["cancel_check"] = cancel_check
+        if max_total_sec:
+            # Nenhuma placa pode consumir sozinha mais que o orçamento global restante.
+            remaining_budget = max(0.5, max_total_sec - elapsed_nest)
+            try:
+                cur_sheet_timeout = float(round_dp_params.get("sheet_timeout_sec") or sheet_timeout_base)
+            except (TypeError, ValueError):
+                cur_sheet_timeout = sheet_timeout_base
+            round_dp_params["sheet_timeout_sec"] = min(cur_sheet_timeout, remaining_budget)
 
         placed_round = auto_nest_pieces(
             available_shapes=round_shapes,
