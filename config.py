@@ -35,7 +35,7 @@ from cad.semver import SemVer
 
 # Application Metadata
 APP_NAME = "CorteAC"
-APP_VERSION = "1.5.0"
+APP_VERSION = "1.5.1"
 
 # UI Classic Windows XP Theme Palette (Amostrado exatamente dos prints do usuário)
 THEME = {

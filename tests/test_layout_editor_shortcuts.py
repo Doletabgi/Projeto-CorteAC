@@ -2131,6 +2131,48 @@ class TestLayoutEditorShortcuts(unittest.TestCase):
         self.assertEqual(stats3["misses"], 0)
         self.assertEqual(stats3["size"], 0)
 
+    def test_piece_cache_identity_is_content_based_and_resets_on_switch(self):
+        """
+        Regressão: os caches de geometria/colisão usavam id(contorno) (endereço de
+        memória). Como o Layout Editor é reaproveitado entre sessões, o Python recicla
+        o endereço de listas liberadas e o editor desenhava peças com a geometria de
+        outra sessão (formas deformadas e faixas vermelhas de falsa colisão).
+        """
+        from ui.layout_editor_view import _contour_key
+
+        c1 = [{"x": 0.0, "y": 0.0}, {"x": 10.0, "y": 0.0}, {"x": 10.0, "y": 10.0}]
+        c2 = [dict(pt) for pt in c1]  # lista diferente, mesmo conteúdo
+        c3 = [{"x": 0.0, "y": 0.0}, {"x": 10.0, "y": 0.0}, {"x": 10.0, "y": 20.0}]
+        self.assertEqual(_contour_key(c1), _contour_key(c2))
+        self.assertNotEqual(_contour_key(c1), _contour_key(c3))
+
+        layouts = [
+            {
+                "layout_index": 0,
+                "name": "lay0000",
+                "width_mm": 500.0,
+                "height_mm": 500.0,
+                "pieces": [{"contour": c1, "x": 10.0, "y": 10.0, "rotation": 0.0, "color": "#3b82f6"}],
+            },
+            {
+                "layout_index": 1,
+                "name": "lay0001",
+                "width_mm": 500.0,
+                "height_mm": 500.0,
+                "pieces": [{"contour": c3, "x": 20.0, "y": 20.0, "rotation": 0.0, "color": "#10b981"}],
+            },
+        ]
+        self.view.set_session_layouts(layouts, initial_index=0)
+        self.view.redraw()
+        self.assertGreater(len(self.view._piece_geom_cache), 0)
+
+        # Trocar de placa deve descartar geometria/colisões da placa anterior
+        old_key = (_contour_key(c1), 10.0, 10.0, 0.0, False)
+        self.assertIn(old_key, self.view._piece_geom_cache)
+        self.view.switch_to_layout(1, save_current=False)
+        self.assertNotIn(old_key, self.view._piece_geom_cache)
+        self.assertEqual(len(self.view._cached_colliding_indices), 0)
+
     def test_lod_level_selection_and_piece_preservation(self):
         """Valida a transição entre Full, Simplified e LOD, garantindo 0 peças perdidas em todos os níveis."""
         # Cria 220 peças para acionar regras de LOD
@@ -2161,7 +2203,9 @@ class TestLayoutEditorShortcuts(unittest.TestCase):
         poly0_simp = self.view.canvas.find_withtag("piece_poly_0")
         self.assertTrue(len(poly0_simp) > 0)
         self.assertEqual(self.view.canvas.type(poly0_simp[0]), "polygon")
-        self.assertEqual(self.view.canvas.itemcget(poly0_simp[0], "fill"), "")
+        # Simplified mantém a cor do tamanho (paridade visual com o mini-preview da sessão);
+        # só a peça selecionada fica sem preenchimento (SELECTED_OUTLINE_ONLY).
+        self.assertNotEqual(self.view.canvas.itemcget(poly0_simp[0], "fill"), "")
 
         # 3. Nível LOD (zoom baixo -> effective_scale < 0.15)
         self.view.zoom_factor = 0.2

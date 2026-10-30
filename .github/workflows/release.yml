@@ -9,7 +9,7 @@ on:
       tag_name:
         description: 'Tag de versão SemVer (ex: v1.0.0)'
         required: false
-        default: 'v1.5.0'
+        default: 'v1.5.1'
 
 permissions:
   contents: write
@@ -173,7 +173,13 @@ jobs:
 
             ---
 
-            ### 🛠️ Recursos Incluídos Nesta Versão (v1.5.0):
+            ### 🛠️ Recursos Incluídos Nesta Versão (v1.5.1):
+            - **Correção: Layout Editor mostrava o desenho diferente do mini-preview**:
+              - Os caches de geometria e de colisão do editor usavam o endereço de memória do contorno (`id()`). Como a janela do editor é reaproveitada entre sessões, o Python recicla esse endereço e o editor passava a desenhar peças com a geometria de **outra** sessão — peças deformadas e uma faixa vermelha de falsa colisão.
+              - Nova identidade por conteúdo do contorno + limpeza dos caches ao abrir/trocar de placa.
+              - O editor agora mantém as **cores por tamanho** (paridade visual com o mini-preview) e a barra de título avisa quando há colisão real (`⚠ N peça(s) sobrepostas`).
+              - **358 testes automatizados** (357 passando, 1 skip, 0 falhas).
+            - **Recursos da v1.5.0 (mantidos)**:
             - **Motores de Nesting Repensados para Contornos Reais (ganho medido de 4x a 21x)**:
               - O motor NFP decompunha contornos de calçado (130-222 vértices) em ~150 partes convexas, gerando **24 mil polígonos por par de peças**. Agora contornos complexos usam encosto por busca binária (SAT), ~100x mais rápido e sem perder exatidão.
               - Colisão poligonal otimizada (`polygons_collide`): contenção decidida por um vértice, min/max inline e segmentos pré-computados por linha — 4,6x mais rápido.

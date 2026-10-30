@@ -47,6 +47,35 @@ ROT_DIR_F3 = 1                  # Sentido de rotação do F3 (+90°)
 UNDO_MAX_LEVELS = 100           # Níveis máximos de desfazer (Ctrl+Z)
 UNDO_GROUP_AUTOREPEAT = True    # Agrupar repetições rápidas de F1/F2 em uma única entrada de Undo
 SAVE_TARGET = "db+file"         # Salva em SQLite e regrava arquivo .lay (se associado)
+def _contour_key(cntr):
+    """
+    Identidade ESTÁVEL do contorno (pelo conteúdo, não por id() de memória).
+
+    Os caches de geometria e de colisão usavam id(contorno). Como a janela do
+    Layout Editor é reaproveitada entre sessões, o Python recicla o endereço de
+    listas liberadas e o editor passava a desenhar/colidir peças com a geometria
+    de OUTRA sessão (peças deformadas e manchas vermelhas de "colisão").
+    """
+    try:
+        n = len(cntr)
+        if n < 3:
+            return ("curto", n)
+        a = cntr[0]
+        b = cntr[n // 2]
+        c = cntr[-1]
+        return (
+            n,
+            round(a["x"], 1), round(a["y"], 1),
+            round(b["x"], 1), round(b["y"], 1),
+            round(c["x"], 1), round(c["y"], 1),
+        )
+    except Exception:
+        try:
+            return ("inv", len(cntr))
+        except Exception:
+            return ("inv", 0)
+
+
 SELECTED_OUTLINE_ONLY = True    # Fiel à Secção E.2: apenas o contorno da peça selecionada é visível (sem preenchimento opaco)
 
 # Coalescencia de eventos de arraste/pan: limita o trabalho pesado por segundo e
@@ -1397,6 +1426,8 @@ class LayoutEditorView(tk.Frame):
             return
         self.layouts = [dict(l) for l in layouts]
         self.layout_undo_stacks = {}
+        # Nova sessão/placa: descarta geometria e colisões da anterior
+        self.clear_piece_cache()
         idx = max(0, min(initial_index, len(self.layouts) - 1))
         self.switch_to_layout(idx, save_current=False)
 
@@ -1422,6 +1453,7 @@ class LayoutEditorView(tk.Frame):
                     pass
 
         self.current_layout_index = index
+        self.clear_piece_cache()
         ly = self.layouts[index]
         self.placed_pieces = copy.deepcopy(ly.get("pieces") or ly.get("placed_pieces") or [])
         for p in self.placed_pieces:
@@ -1495,6 +1527,9 @@ class LayoutEditorView(tk.Frame):
         cur_lay_num = cur_idx + 1
         name_str = getattr(self, "layout_name", f"lay{cur_idx:04d}")
         indicator = f"Layout {cur_lay_num}/{tot_lays} ({name_str})"
+        col_count = len(getattr(self, "_cached_colliding_indices", None) or ())
+        if col_count:
+            indicator += f"  ⚠ {col_count} peça(s) sobrepostas (contorno vermelho)"
 
         if hasattr(self, "lbl_title") and self.lbl_title:
             self.lbl_title.config(text=f"Layout Editor - {indicator}")
@@ -1624,7 +1659,7 @@ class LayoutEditorView(tk.Frame):
             cntr = p.get("contour") or (p.get("shape", {}).get("contour") if isinstance(p.get("shape"), dict) else None)
             if not cntr:
                 return ([], (0.0, 0.0, 0.0, 0.0))
-            cid = id(cntr)
+            cid = _contour_key(cntr)
             px = round(float(p.get("x", 0.0)), 2)
             py = round(float(p.get("y", 0.0)), 2)
             rot = round(float(p.get("rotation", p.get("rot", 0.0))), 2)
@@ -1907,7 +1942,7 @@ class LayoutEditorView(tk.Frame):
             if not cntr:
                 cached_geoms.append(([], (0.0, 0.0, 0.0, 0.0)))
                 continue
-            cid = id(cntr)
+            cid = _contour_key(cntr)
             px = round(float(p.get("x", 0.0)), 2)
             py = round(float(p.get("y", 0.0)), 2)
             rot = round(float(p.get("rotation", p.get("rot", 0.0))), 2)
@@ -1978,6 +2013,10 @@ class LayoutEditorView(tk.Frame):
                             colliding_indices.add(i)
                             colliding_indices.add(j)
             self._cached_colliding_indices = colliding_indices
+            # Explica ao operador o vermelho no desenho (colisão real, não enfeite)
+            if len(colliding_indices) != getattr(self, "_reported_collisions", None):
+                self._reported_collisions = len(colliding_indices)
+                self.update_title_and_status()
 
         # 6. Nível de Detalhe (LOD) e Peças Aninhadas (Fase 3 - Tarefa 3)
         # Full: zoom >= 0.5 OU num_pieces < 200 -> contorno completo preenchido + rótulo
@@ -2083,7 +2122,9 @@ class LayoutEditorView(tk.Frame):
                 else:
                     screen_pts = [c for pt in poly for c in (x1 + pt["x"] * scale, y2 - pt["y"] * scale)]
 
-                fill_col = "" if (SELECTED_OUTLINE_ONLY and is_sel) or (lod_level == "simplified" and not is_sel) else base_col
+                # Mantém a cor do tamanho também no LOD simplificado: o operador
+                # precisa que o editor mostre o mesmo desenho do mini-preview.
+                fill_col = "" if (SELECTED_OUTLINE_ONLY and is_sel) else base_col
 
                 self.canvas.create_polygon(
                     screen_pts,
