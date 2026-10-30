@@ -9,7 +9,7 @@ on:
       tag_name:
         description: 'Tag de versão SemVer (ex: v1.0.0)'
         required: false
-        default: 'v1.2.0'
+        default: 'v1.3.0'
 
 permissions:
   contents: write
@@ -173,22 +173,24 @@ jobs:
 
             ---
 
-            ### 🛠️ Recursos Incluídos Nesta Versão (v1.2.0):
-            - **Novo Motor de Nesting Analítico No-Fit Polygon (`NfpBackend`)**:
-              - Performance industrial **4,11× mais rápida** (19,5 ms vs 80,3 ms por chapa).
-              - Decomposição convexa e somas de Minkowski em Python puro, eliminando a busca binária de colisões.
-              - Zero colisões em chapas cheias (validado rigorosamente até 500 peças).
-              - Alta resiliência com fallback transparente e rollback instantâneo via `CORTEAC_BACKEND=python`.
-            - **Otimização de Trajetória CAM CNC (Strip-TSP com 2-Opt + Or-opt)**:
-              - **Redução de até 11,62% no percurso em vazio (G00)** do cabeçote CNC.
-              - Execução acelerada em **12× a 46×** (95 ms para 200 peças e 670 ms para 500 peças).
-              - Preservação estrita de vácuo, plunge de faca no ponto médio e common-line cutting.
-            - **Renderização e Interação Aceleradas no Layout Editor**:
-              - Tempo de redesenho (`redraw`) reduzido para **7,60 ms** com 300 peças via 1D Sweep & Prune e tabelas estáticas de tags.
-              - Arraste fluido a **0,22 ms/evento** (~4.500 eventos/s) com cache geométrico de contorno (hit rate de **99,83%**).
-              - 100% de fidelidade estética clássica Win32 MDI (**0 px de regressão visual**).
-            - **Confiabilidade e Qualidade de Código**:
-              - **277 testes automatizados verdes** (+29 novos testes cobrindo NFP, Or-opt e integridade geométrica).
+            ### 🛠️ Recursos Incluídos Nesta Versão (v1.3.0):
+            - **Novo Catálogo de Moldes (`ShapeCatalogView`) e Matriz Visual de Artigos**:
+              - Consulta ultra-rápida (< 3 ms) via novo índice composto `idx_shapes_article_size_name` (migração `004_add_shapes_index.sql`).
+              - Grade matricial organizada por moldes e tamanhos (do 22a ao 45) com renderização de contornos e atalhos rápidos.
+            - **Arquitetura de Encaixe em 3 Camadas (`NestingModeWidget`)**:
+              - **Camada 1 (Modos de Encaixe)**: Seleção ergonômica em 1 clique: Automático, Rápido, Econômico, Fitas, Retalhos e Personalizado (migração `003_add_session_nesting_mode.sql`).
+              - **Camada 2 (Parâmetros Avançados)**: Ajuste detalhado de estratégias, presets DieProc e gaps.
+              - **Camada 3 (Diagnóstico e Macros)**: Painel de depuração (`DebugPanel`) com profiler e painel de macros declarativas (`MacroPanel`).
+            - **Trava de Segurança e Ergonomia no Shape Editor (`ShapeEditorView`)**:
+              - Trava de proteção geométrica (`🔒 Editar Geometria` / `🔓 Geometria Destravada`) com alerta de confirmação prevenindo alterações acidentais em matrizes de produção.
+              - Nova ferramenta de rotação de molde (`rotate`) e alternador visual de linhas de costura (`stitching`).
+              - Suporte completo a tela cheia / maximização com atalho `<Escape>` e duplo clique na barra de título.
+            - **Otimizações no Motor de Nesting (`cad/macro_engine.py`)**:
+              - Simplificação poligonal inteligente via algoritmo Ramer-Douglas-Peucker (RDP) para contornos complexos (> 50 vértices).
+              - Cache analítico de separação horizontal NFP (`_DX_SEP_CACHE`, `_POLY0_CACHE`, `clear_macro_caches`).
+              - Modo estritamente determinístico no cérebro de IA por reforço (`NestingAIBrain: deterministic=True`).
+            - **Qualidade, Estabilidade e Testes**:
+              - **336 testes automatizados** (335 passando, 1 skip, 0 falhas) garantindo robustez de 100% no chão de fábrica.
           files: |
             dist-release/**/*.exe
             dist-release/**/*.zip

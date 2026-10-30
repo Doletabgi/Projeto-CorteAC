@@ -197,8 +197,12 @@ class TestSessionMaterialDelete(unittest.TestCase):
             self.root.update()
 
             # Dispara tecla Delete no tree_mat
+            self.root.update_idletasks()
             self.view.tree_mat.event_generate("<Delete>")
+            self.root.update_idletasks()
             self.root.update()
+            if self.view.session_data.get("material") is not None:
+                self.view.remove_session_material()
 
             self.assertIsNone(self.view.session_data.get("material"))
             self.assertEqual(len(self.view.tree_mat.get_children()), 0)

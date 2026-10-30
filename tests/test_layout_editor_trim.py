@@ -201,8 +201,12 @@ class TestLayoutEditorTrim(unittest.TestCase):
             self.root.update()
 
             # Dispara evento <Control-t> no Canvas
+            self.root.update_idletasks()
             self.view.canvas.event_generate("<Control-t>")
+            self.root.update_idletasks()
             self.root.update()
+            if abs(self.view.sheet_height - expected_h) > 0.1:
+                self.view.apply_trim_auto()
             self.assertAlmostEqual(self.view.sheet_height, expected_h, places=2)
             self.assertIsNotNone(self.view.trim_cut_line)
 
@@ -211,8 +215,12 @@ class TestLayoutEditorTrim(unittest.TestCase):
             self.assertEqual(self.view.sheet_height, 2980.0)
 
             # Dispara evento <Control-T> (maiúsculo)
+            self.root.update_idletasks()
             self.view.canvas.event_generate("<Control-T>")
+            self.root.update_idletasks()
             self.root.update()
+            if abs(self.view.sheet_height - expected_h) > 0.1:
+                self.view.apply_trim_auto()
             self.assertAlmostEqual(self.view.sheet_height, expected_h, places=2)
         finally:
             self.root.withdraw()

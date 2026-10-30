@@ -74,7 +74,8 @@ CREATE TABLE IF NOT EXISTS shapes (
     FOREIGN KEY (article_id) REFERENCES articles(id) ON DELETE SET NULL,
     INDEX idx_shapes_article (article_id),
     INDEX idx_shapes_name (name),
-    INDEX idx_shapes_folder (folder)
+    INDEX idx_shapes_folder (folder),
+    INDEX idx_shapes_article_size_name (article_id, size, name)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- 6. Sessões de Corte / Nesting (Sessions)
@@ -98,6 +99,7 @@ CREATE TABLE IF NOT EXISTS sessions (
     margin_right DOUBLE DEFAULT 10.0,
     margin_top DOUBLE DEFAULT 10.0,
     margin_bottom DOUBLE DEFAULT 10.0,
+    nesting_mode VARCHAR(50) DEFAULT 'auto',
     created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (order_id) REFERENCES orders(id) ON DELETE SET NULL,
     FOREIGN KEY (material_id) REFERENCES materials(id) ON DELETE SET NULL,

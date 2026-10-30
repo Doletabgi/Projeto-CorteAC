@@ -110,7 +110,7 @@ class TestStrategyRemoval(unittest.TestCase):
             self.assertIn("y", p)
 
     def test_session_view_has_recommended_combinations_table(self):
-        """Valida presença e interatividade da tabela de combinações recomendadas no SessionView."""
+        """Valida que o Guia de Combinações Recomendadas foi removido da tela do SessionView a pedido da fábrica."""
         mock_db = MagicMock()
         session_dict = {
             "id": 1,
@@ -122,52 +122,7 @@ class TestStrategyRemoval(unittest.TestCase):
             "placed_pieces": []
         }
         sv = SessionView(self.root, session_dict, db=mock_db)
-        self.assertTrue(hasattr(sv, "tree_guide"))
-        cols = list(sv.tree_guide["columns"])
-        self.assertEqual(cols, ["objetivo", "estrategia", "parametro", "resultado"])
-
-        items = sv.tree_guide.get_children()
-        self.assertGreaterEqual(len(items), 7)
-
-        # A linha correspondente a ("sint", "stdNOTFill") deve estar destacada inicialmente
-        sel = sv.tree_guide.selection()
-        self.assertTrue(len(sel) > 0)
-        vals_initial = sv.tree_guide.item(sel[0], "values")
-        self.assertEqual(vals_initial[1], "sint")
-        self.assertEqual(vals_initial[2], "stdNOTFill")
-
-        # Verifica que a combinação de HighYield foi removida da tabela
-        all_guide_pairs = [(sv.tree_guide.item(it, "values")[1], sv.tree_guide.item(it, "values")[2]) for it in items]
-        self.assertNotIn(("flashnestsheet", "HighYield"), all_guide_pairs)
-
-        # Seleciona linha do flashnestsheet + DIREITA e aplica
-        target_item = None
-        for item in items:
-            vals = sv.tree_guide.item(item, "values")
-            if vals[1] == "flashnestsheet" and vals[2] == "DIREITA":
-                target_item = item
-                break
-        self.assertIsNotNone(target_item)
-        sv.tree_guide.selection_set(target_item)
-        sv.on_guide_apply_clicked()
-
-        self.assertEqual(sv.cb_strategy.get(), "flashnestsheet")
-        self.assertEqual(sv.cb_params.get(), "DIREITA")
-
-        # Seleciona linha do tape_a e simula duplo clique
-        target_tape = None
-        for item in items:
-            vals = sv.tree_guide.item(item, "values")
-            if vals[1] == "tape_a":
-                target_tape = item
-                break
-        self.assertIsNotNone(target_tape)
-        sv.tree_guide.selection_set(target_tape)
-        sv.on_guide_double_click()
-
-        self.assertEqual(sv.cb_strategy.get(), "tape_a")
-        self.assertEqual(sv.cb_params.get(), "stdNOTFill")
-
+        self.assertFalse(hasattr(sv, "tree_guide"))
         sv.destroy()
 
     def test_strategy_label_and_descriptions(self):

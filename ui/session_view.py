@@ -17,6 +17,9 @@ from cad.colors import get_color_for_size, get_color_emoji, get_contrast_text_co
 from ui.add_shapes_dialog import AddShapesDialog
 from ui.dieproc_dialog import DieProcDialog
 from ui.edit_shape_in_session_dialog import EditShapeInSessionDialog
+from ui.nesting_mode_widget import NestingModeWidget, MODES
+from ui.macro_panel import MacroPanel
+from ui.debug_panel import DebugPanel
 from cad.lay_parser import parse_lay, export_layout_from_pieces, validate_layout_placement
 from cad.dual_exporter import DualLayoutExporter
 from cad.layers_rule import calc_resto
@@ -111,6 +114,8 @@ class SessionView(tk.Frame):
         self.active_dieproc_params = None
         self.shape_sort_col = None
         self.shape_sort_desc = True
+        self.current_mode = self.session_data.get("nesting_mode") or "custom"
+        self._suppress_auto_promote = False
         self.setup_ui()
 
     def setup_ui(self):
@@ -168,23 +173,62 @@ class SessionView(tk.Frame):
         gen_container = tk.Frame(tab_gen, bg=THEME["bg_card"])
         gen_container.pack(fill="both", expand=True)
 
+        # -------------------------------------------------------------
+        # Camada 1: Modo de Encaixe (NestingModeWidget)
+        # -------------------------------------------------------------
+        self.mode_widget = NestingModeWidget(
+            gen_container,
+            current_mode=self.current_mode,
+            on_mode_change=self._on_nesting_mode_changed,
+            bg=THEME["bg_card"]
+        )
+        self.mode_widget.pack(fill="x", pady=(2, 6))
+
+        # -------------------------------------------------------------
+        # Camada 2: Avançado (Parâmetros de Corte)
+        # -------------------------------------------------------------
+        self.box_advanced = tk.LabelFrame(
+            gen_container,
+            text="Avançado (Parâmetros de Corte)",
+            bg=THEME["bg_card"],
+            fg=THEME["text_main"],
+            font=("Segoe UI", 9, "bold"),
+            relief="groove",
+            padx=8,
+            pady=4
+        )
+        self.box_advanced.pack(fill="x", pady=(2, 6))
+
         # Grade de 2 colunas para Estratégia, Parâmetros, Códigos materiais e Máquina
-        grid_params = tk.Frame(gen_container, bg=THEME["bg_card"])
-        grid_params.pack(fill="x", pady=(2, 10))
+        grid_params = tk.Frame(self.box_advanced, bg=THEME["bg_card"])
+        grid_params.pack(fill="x", pady=(2, 4))
 
         # Coluna 1 (Esquerda): Estratégia e Parâmetros
         col_left = tk.Frame(grid_params, bg=THEME["bg_card"])
         col_left.pack(side="left", fill="x", expand=True, padx=(0, 16))
 
         # 1. Estratégia
-        tk.Label(
+        self.lbl_strat_title = tk.Label(
             col_left,
             text="A Estratégia define a geometria física do corte e do material:",
             anchor="w",
             bg=THEME["bg_card"],
             fg=THEME["text_main"],
             font=("Segoe UI", 9)
-        ).pack(fill="x", pady=(0, 2))
+        )
+        self.lbl_strat_title.pack(fill="x", pady=(0, 2))
+
+        self.lbl_strat_badge = tk.Label(
+            col_left,
+            text="(auto)",
+            bg="#e8f5e9",
+            fg="#2e7d32",
+            font=("Segoe UI", 8, "bold"),
+            relief="solid",
+            bd=1,
+            padx=4,
+            pady=0
+        )
 
         self.cb_strategy = ttk.Combobox(
             col_left,
@@ -219,6 +263,18 @@ class SessionView(tk.Frame):
             command=self.open_dieproc_configuration
         )
         self.btn_dieproc_cfg.pack(side="right")
+
+        self.lbl_params_badge = tk.Label(
+            params_header,
+            text="(auto)",
+            bg="#e8f5e9",
+            fg="#2e7d32",
+            font=("Segoe UI", 8, "bold"),
+            relief="solid",
+            bd=1,
+            padx=4,
+            pady=0
+        )
 
         tk.Label(
             params_header,
@@ -370,6 +426,28 @@ class SessionView(tk.Frame):
         # Máquina de corte padrão fixa (ATOM FlashCut Flex 3020) mantida nos dados da sessão sem exibir opção no editor
         self.session_data["machine"] = self.session_data.get("machine") or "ATOM FlashCut Flex 3020"
 
+        # -------------------------------------------------------------
+        # Camada 3: Macro / Aprendizado (IA Local)
+        # -------------------------------------------------------------
+        self.macro_panel = MacroPanel(
+            gen_container,
+            db=self.db,
+            on_macro_changed=self._on_macro_changed_from_panel,
+            on_open_editor=self.open_dieproc_configuration,
+            bg=THEME["bg_card"]
+        )
+        self.macro_panel.pack(fill="x", pady=(2, 6))
+
+        # -------------------------------------------------------------
+        # Camada 4: Debug / Diagnóstico
+        # -------------------------------------------------------------
+        self.debug_panel = DebugPanel(
+            gen_container,
+            on_engine_change=self._on_debug_engine_changed,
+            bg=THEME["bg_card"]
+        )
+        self.debug_panel.pack(fill="x", pady=(2, 6))
+
         # Linha de Botões de Ação estilo Windows XP
         btn_action_box = tk.Frame(gen_container, bg=THEME["bg_card"])
         btn_action_box.pack(fill="x", pady=(6, 10))
@@ -490,89 +568,7 @@ class SessionView(tk.Frame):
         self.lbl_strategy_desc.pack(fill="x", pady=(6, 0))
         self.update_strategy_description(self.cb_strategy.get())
 
-        # -----------------------------------------------------------------
-        # Tabela de Consulta: Matriz de Combinações Recomendadas (Estratégia + Parâmetro)
-        # -----------------------------------------------------------------
-        guide_frame = tk.LabelFrame(
-            gen_container,
-            text="Guia de Combinações Recomendadas (Estratégias & Parâmetros)",
-            bg=THEME["bg_card"],
-            fg=THEME["text_main"],
-            font=("Segoe UI", 9, "bold"),
-            relief="groove",
-            padx=8,
-            pady=6
-        )
-        guide_frame.pack(fill="both", expand=True, pady=(6, 2))
-
-        guide_table_frame = tk.Frame(guide_frame, bg="#ffffff", relief="sunken", bd=1)
-        guide_table_frame.pack(fill="both", expand=True)
-
-        sb_guide_y = ttk.Scrollbar(guide_table_frame, orient="vertical")
-        sb_guide_y.pack(side="right", fill="y")
-        sb_guide_x = ttk.Scrollbar(guide_table_frame, orient="horizontal")
-        sb_guide_x.pack(side="bottom", fill="x")
-
-        guide_cols = ("objetivo", "estrategia", "parametro", "resultado")
-        self.tree_guide = ttk.Treeview(
-            guide_table_frame,
-            columns=guide_cols,
-            show="headings",
-            height=7,
-            yscrollcommand=sb_guide_y.set,
-            xscrollcommand=sb_guide_x.set,
-            selectmode="browse"
-        )
-        self.tree_guide.pack(fill="both", expand=True)
-        sb_guide_y.config(command=self.tree_guide.yview)
-        sb_guide_x.config(command=self.tree_guide.xview)
-
-        self.tree_guide.heading("objetivo", text="Objetivo / Aplicação na Fábrica", anchor="w")
-        self.tree_guide.heading("estrategia", text="Estratégia", anchor="center")
-        self.tree_guide.heading("parametro", text="Parâmetro", anchor="center")
-        self.tree_guide.heading("resultado", text="Comportamento Técnico do Corte", anchor="w")
-
-        self.tree_guide.column("objetivo", width=270, anchor="w")
-        self.tree_guide.column("estrategia", width=115, anchor="center")
-        self.tree_guide.column("parametro", width=110, anchor="center")
-        self.tree_guide.column("resultado", width=440, anchor="w")
-
-        self.tree_guide.tag_configure("even", background="#ffffff")
-        self.tree_guide.tag_configure("odd", background="#f8f9fa")
-
-        for idx, row in enumerate(RECOMMENDED_COMBINATIONS):
-            tag = "even" if idx % 2 == 0 else "odd"
-            self.tree_guide.insert("", "end", iid=f"guide_{idx}", values=(row["objetivo"], row["estrategia"], row["parametro"], row["resultado"]), tags=(tag,))
-
-        self.tree_guide.bind("<Double-1>", self.on_guide_double_click)
-
-        guide_footer = tk.Frame(guide_frame, bg=THEME["bg_card"], pady=4)
-        guide_footer.pack(fill="x")
-
-        btn_apply_combo = tk.Button(
-            guide_footer,
-            text="✓ Aplicar Selecionado",
-            bg=THEME["bg_surface"],
-            fg=THEME["text_main"],
-            font=("Segoe UI", 8, "bold"),
-            relief="raised",
-            bd=1,
-            cursor="hand2",
-            padx=8,
-            pady=2,
-            command=self.on_guide_apply_clicked
-        )
-        btn_apply_combo.pack(side="left")
-
-        tk.Label(
-            guide_footer,
-            text="Dica: Dê um duplo-clique em qualquer linha (ou clique em 'Aplicar Selecionado') para preencher a Estratégia e o Parâmetro.",
-            bg=THEME["bg_card"],
-            fg="#555555",
-            font=("Segoe UI", 8, "italic")
-        ).pack(side="left", padx=(10, 0))
-
-        self.highlight_guide_matching()
+        self._refresh_layer_2_widgets()
 
 
         # -----------------------------------------------------------------
@@ -1603,6 +1599,7 @@ class SessionView(tk.Frame):
         self.session_data["strategy"] = strat
         self.update_strategy_description(strat)
         self.highlight_guide_matching()
+        self._on_decision_changed("Estratégia")
         if self.on_strategy_change_cb:
             self.on_strategy_change_cb(strat)
 
@@ -1615,8 +1612,138 @@ class SessionView(tk.Frame):
             if p:
                 self.active_dieproc_params = p
         self.highlight_guide_matching()
+        self._on_decision_changed("Parâmetros")
         if self.on_strategy_change_cb:
             self.on_strategy_change_cb(self.get_strategy(), params)
+
+    def _on_macro_changed_from_panel(self, macro_name: str):
+        self._on_decision_changed("Macro")
+
+    def _on_debug_engine_changed(self, engine_name: str):
+        self._on_decision_changed("Engine")
+
+    def _on_decision_changed(self, decision_name: str):
+        """Disparado quando usuário altera Strategy, Params, Engine ou Macro."""
+        if getattr(self, "_suppress_auto_promote", False):
+            return
+        if getattr(self, "current_mode", "custom") != "custom":
+            self.current_mode = "custom"
+            if hasattr(self, "mode_widget"):
+                self.mode_widget.set_mode("custom", notify=False)
+            self._show_toast(f"Modo alterado para Personalizado (você sobrepôs: {decision_name})")
+            self._refresh_layer_2_widgets()
+            if self.db and self.session_data.get("id"):
+                try:
+                    self.db.update_session(self.session_data["id"], nesting_mode="custom")
+                except Exception:
+                    pass
+
+    def _show_toast(self, message: str):
+        """Exibe mensagem informativa na interface."""
+        if hasattr(self, "lbl_strategy_desc"):
+            self.lbl_strategy_desc.config(text=f"📢 {message}", fg="#b71c1c")
+            self.after(5000, lambda: self.update_strategy_description(self.get_strategy()) if hasattr(self, "lbl_strategy_desc") else None)
+        print(f"[JobManager UX] {message}")
+
+    def _on_nesting_mode_changed(self, mode_key: str, mode_info: dict):
+        self.current_mode = mode_key
+        self._suppress_auto_promote = True
+        try:
+            strat = mode_info.get("strategy")
+            params = mode_info.get("params")
+            engine = mode_info.get("engine")
+
+            if strat and hasattr(self, "cb_strategy"):
+                vals = list(self.cb_strategy["values"])
+                if strat not in vals:
+                    self.cb_strategy["values"] = vals + [strat]
+                self.cb_strategy.set(strat)
+                self.session_data["strategy"] = strat
+                self.update_strategy_description(strat)
+                if self.on_strategy_change_cb:
+                    self.on_strategy_change_cb(strat)
+
+            if params and hasattr(self, "cb_params"):
+                vals = list(self.cb_params["values"])
+                if params not in vals:
+                    self.cb_params["values"] = vals + [params]
+                self.cb_params.set(params)
+                self.session_data["params"] = params
+                if self.db:
+                    p = self.db.get_dieproc_preset(params)
+                    if p:
+                        self.active_dieproc_params = p
+
+            if engine and hasattr(self, "debug_panel"):
+                self.debug_panel.set_engine(engine)
+
+            self.highlight_guide_matching()
+            self._refresh_layer_2_widgets()
+
+            if self.db and self.session_data.get("id"):
+                try:
+                    self.db.update_session(
+                        self.session_data["id"],
+                        nesting_mode=mode_key,
+                        strategy=self.get_strategy(),
+                        params=self.get_params(),
+                    )
+                except Exception:
+                    pass
+        finally:
+            self._suppress_auto_promote = False
+
+    def _refresh_layer_2_widgets(self):
+        mode = getattr(self, "current_mode", "custom")
+        is_auto = (mode == "auto")
+
+        # Estratégia
+        if hasattr(self, "cb_strategy"):
+            if is_auto:
+                self.cb_strategy.config(state="disabled")
+                if hasattr(self, "lbl_strat_badge"):
+                    self.lbl_strat_badge.pack(anchor="e", pady=(0, 2), before=self.cb_strategy)
+            else:
+                self.cb_strategy.config(state="readonly")
+                if hasattr(self, "lbl_strat_badge"):
+                    self.lbl_strat_badge.pack_forget()
+
+        # Parâmetros
+        if hasattr(self, "cb_params"):
+            if is_auto:
+                self.cb_params.config(state="disabled")
+                if hasattr(self, "lbl_params_badge"):
+                    self.lbl_params_badge.pack(side="right", padx=2)
+            else:
+                self.cb_params.config(state="readonly")
+                if hasattr(self, "lbl_params_badge"):
+                    self.lbl_params_badge.pack_forget()
+
+        # Gap e Margens permanecem SEMPRE ativos e operáveis
+        if hasattr(self, "entry_gap"):
+            self.entry_gap.config(state="normal")
+        if hasattr(self, "btn_gap_minus"):
+            self.btn_gap_minus.config(state="normal")
+        if hasattr(self, "btn_gap_plus"):
+            self.btn_gap_plus.config(state="normal")
+        if hasattr(self, "rb_margins"):
+            for rb in self.rb_margins.values():
+                rb.config(state="normal")
+
+        # Atualiza Camada 3 e 4
+        if hasattr(self, "macro_panel"):
+            self.macro_panel.set_mode(mode)
+        if hasattr(self, "debug_panel"):
+            self.debug_panel.set_mode(mode)
+
+    def get_nesting_mode(self) -> str:
+        return getattr(self, "current_mode", "custom")
+
+    def set_nesting_mode(self, mode: str):
+        if hasattr(self, "mode_widget"):
+            self.mode_widget.set_mode(mode, notify=True)
+        else:
+            self.current_mode = mode
 
     def _get_available_params_list(self) -> list:
         params_list = []
@@ -1868,6 +1995,12 @@ class SessionView(tk.Frame):
         if hasattr(self, "lbl_status_val"):
             self.lbl_status_val.config(text=status)
 
+        # Carrega nesting_mode (sessões legadas -> 'custom', novas -> 'auto')
+        mode = session_data.get("nesting_mode") or "custom"
+        self.current_mode = mode
+        if hasattr(self, "mode_widget"):
+            self.mode_widget.set_mode(mode, notify=False)
+
         strat = session_data.get("strategy") or "flashnestsheet"
         if strat == "flashnestroll":
             strat = "flashnestsheet"
@@ -1912,6 +2045,11 @@ class SessionView(tk.Frame):
             mt = session_data.get("margin_top", 10.0)
             mb = session_data.get("margin_bottom", 10.0)
             self.set_margins(left=ml, right=mr, top=mt, bottom=mb)
+
+        self._refresh_layer_2_widgets()
+        if hasattr(self, "macro_panel"):
+            self.macro_panel.refresh_presets()
+            self.macro_panel.refresh_status()
 
         # Atualiza a tabela da aba Moldes
         session_shapes = session_data.get("shapes", [])

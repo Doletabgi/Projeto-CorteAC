@@ -22,12 +22,13 @@ from cad.nesting_engine import auto_nest_pieces, calculate_yield, calculate_atom
 from cad.colors import get_color_for_size
 from cad.exporter import export_gcode, export_xml_report
 from cad.die_parser import parse_die_file, save_die_file
-from cad.geometry import polygon_area
+from cad.geometry import polygon_area, polygon_bbox
 from cad.layers_rule import calc_resto
 from ui.cad_canvas import CADCanvas
 from ui.order_view import OrderView
 from ui.session_view import SessionView
 from ui.shape_editor_view import ShapeEditorView
+from ui.shape_catalog_view import ShapeCatalogView
 from ui.layout_editor_view import LayoutEditorView
 from ui.material_codes_view import MaterialCodesView
 from ui.options_dialog import OptionsDialog
@@ -285,6 +286,7 @@ class MainWindow(tk.Tk):
         tools_menu.add_separator()
         tools_menu.add_command(label="🧩 Layout Editor (Nesting)...", command=self.show_layout_editor)
         tools_menu.add_command(label="Shape Editor (Editor de Moldes)...", command=self.show_shape_editor)
+        tools_menu.add_command(label="📐 Catálogo de Moldes (Grid View)...", command=self.show_shape_catalog)
         tools_menu.add_command(label="📋 Códigos materiais (Listagem)...", command=self.show_material_codes_window)
         tools_menu.add_command(label="📥 Importar lista de materiais...", command=self.open_import_materials_dialog)
         tools_menu.add_command(label="📁 Criar Produção...", command=self.on_create_production)
@@ -303,6 +305,7 @@ class MainWindow(tk.Tk):
         win_menu = tk.Menu(menubar, tearoff=0, bg=THEME["bg_surface"], fg=THEME["text_main"], activebackground=THEME["select_bg"], activeforeground=THEME["select_fg"])
         win_menu.add_command(label="Layout Editor", command=self.show_layout_editor)
         win_menu.add_command(label="Shape Editor", command=self.show_shape_editor)
+        win_menu.add_command(label="Catálogo de Moldes", command=self.show_shape_catalog)
         win_menu.add_command(label="Códigos materiais", command=self.show_material_codes_window)
         win_menu.add_command(label="Detalhes da Sessão", command=self.show_session_window)
         win_menu.add_separator()
@@ -352,6 +355,12 @@ class MainWindow(tk.Tk):
 
         btn_shed_kw = {"image": self.icons["shed"]} if self.icons.get("shed") else {"text": "📐"}
         tk.Button(tbar, **btn_shed_kw, bg=THEME["bg_surface"], relief="raised", bd=1, width=22, height=22, command=self.show_shape_editor).pack(side="left", padx=1)
+
+        self.btn_shape_catalog = tk.Button(
+            tbar, text="▦ Catálogo", bg=THEME["bg_surface"], fg=THEME["text_main"],
+            relief="raised", bd=1, padx=4, font=("Segoe UI", 8), command=self.show_shape_catalog
+        )
+        self.btn_shape_catalog.pack(side="left", padx=1)
 
         tk.Button(
             tbar, text="📂 Importar .die", bg=THEME["bg_surface"], fg=THEME["text_main"],
@@ -503,12 +512,21 @@ class MainWindow(tk.Tk):
             on_maximize=lambda *args: self.toggle_maximize_window(self.order_view)
         )
         self.shape_editor_view = ShapeEditorView(
-            self.mdi_workspace,
+            self,
             on_close=lambda *args: self.close_window(self.shape_editor_view),
             on_minimize=lambda *args: self.minimize_window(self.shape_editor_view),
             on_maximize=lambda *args: self.toggle_maximize_window(self.shape_editor_view),
             on_save=self.on_shape_saved,
             on_import_die=self.on_import_die
+        )
+        self.shape_catalog_view = ShapeCatalogView(
+            self.mdi_workspace,
+            article_id=1,
+            db=self.db,
+            on_close=lambda *args: self.close_window(self.shape_catalog_view),
+            on_minimize=lambda *args: self.minimize_window(self.shape_catalog_view),
+            on_maximize=lambda *args: self.toggle_maximize_window(self.shape_catalog_view),
+            on_edit_shape=self.show_shape_editor
         )
         self.layout_editor_view = LayoutEditorView(
             self,
@@ -850,7 +868,7 @@ class MainWindow(tk.Tk):
                 if w != window:
                     w.pack_forget()
                     w.place_forget()
-            if window == self.layout_editor_view:
+            if window in (self.layout_editor_view, self.shape_editor_view):
                 window.place(in_=self, x=0, y=0, relwidth=1.0, relheight=1.0)
                 window.lift()
             else:
@@ -861,7 +879,7 @@ class MainWindow(tk.Tk):
             if not window.winfo_ismapped():
                 ww = max(420, int(self.mdi_workspace.winfo_width() * 0.85))
                 wh = max(320, int(self.mdi_workspace.winfo_height() * 0.85))
-                if window == self.layout_editor_view:
+                if window in (self.layout_editor_view, self.shape_editor_view):
                     window.place(in_=self.mdi_workspace, x=25, y=15, width=ww, height=wh)
                 else:
                     window.place(x=25, y=15, width=ww, height=wh)
@@ -993,7 +1011,7 @@ class MainWindow(tk.Tk):
             window.place_forget()
             ww = max(420, int(self.mdi_workspace.winfo_width() * 0.85))
             wh = max(320, int(self.mdi_workspace.winfo_height() * 0.85))
-            if window == self.layout_editor_view:
+            if window in (self.layout_editor_view, self.shape_editor_view):
                 window.place(in_=self.mdi_workspace, x=25, y=15, width=ww, height=wh)
             else:
                 window.place(x=25, y=15, width=ww, height=wh)
@@ -1011,7 +1029,7 @@ class MainWindow(tk.Tk):
             w.place_forget()
             if w != window:
                 w.pack_forget()
-        if window == self.layout_editor_view:
+        if window in (self.layout_editor_view, self.shape_editor_view):
             window.place(in_=self, x=0, y=0, relwidth=1.0, relheight=1.0)
             window.lift()
         else:
@@ -1042,7 +1060,7 @@ class MainWindow(tk.Tk):
                 del self.open_sessions[sid]
                 break
 
-        if window not in (self.order_view, self.shape_editor_view, self.layout_editor_view, getattr(self, "material_codes_view", None)):
+        if window not in (self.order_view, self.shape_editor_view, getattr(self, "shape_catalog_view", None), self.layout_editor_view, getattr(self, "material_codes_view", None)):
             try:
                 window.destroy()
             except Exception:
@@ -1077,7 +1095,7 @@ class MainWindow(tk.Tk):
         N = len(self.open_windows)
         for i, w in enumerate(self.open_windows):
             w.pack_forget()
-            if w == self.layout_editor_view:
+            if w in (self.layout_editor_view, self.shape_editor_view):
                 w.place(in_=self.mdi_workspace, x=2, rely=i / N, relwidth=0.99, relheight=1.0 / N - 0.01)
             else:
                 w.place(x=2, rely=i / N, relwidth=0.99, relheight=1.0 / N - 0.01)
@@ -1093,7 +1111,7 @@ class MainWindow(tk.Tk):
         N = len(self.open_windows)
         for i, w in enumerate(self.open_windows):
             w.pack_forget()
-            if w == self.layout_editor_view:
+            if w in (self.layout_editor_view, self.shape_editor_view):
                 w.place(in_=self.mdi_workspace, relx=i / N, y=2, relwidth=1.0 / N - 0.01, relheight=0.99)
             else:
                 w.place(relx=i / N, y=2, relwidth=1.0 / N - 0.01, relheight=0.99)
@@ -1111,7 +1129,7 @@ class MainWindow(tk.Tk):
         for i, w in enumerate(self.open_windows):
             w.pack_forget()
             offset = i * 26
-            if w == self.layout_editor_view:
+            if w in (self.layout_editor_view, self.shape_editor_view):
                 w.place(in_=self.mdi_workspace, x=10 + offset, y=10 + offset, width=ww, height=wh)
             else:
                 w.place(x=10 + offset, y=10 + offset, width=ww, height=wh)
@@ -1321,11 +1339,54 @@ class MainWindow(tk.Tk):
 
         if self.shape_editor_view in self.minimized_windows:
             self.restore_window(self.shape_editor_view)
-        else:
-            self.activate_window(self.shape_editor_view)
+        self.maximize_window(self.shape_editor_view)
+        self.after(50, lambda: self.shape_editor_view.reset_view() if hasattr(self, "shape_editor_view") else None)
 
         shp_name = target_shape.get("name", "Molde") if target_shape else ""
-        self.lbl_status_msg.config(text=f"Shape Editor: [{shp_name}] aberto na área de trabalho.")
+        self.lbl_status_msg.config(text=f"Shape Editor: [{shp_name}] aberto em tela cheia.")
+
+    def show_shape_catalog(self, article_id=None):
+        target_article_id = 1
+        if isinstance(article_id, int):
+            target_article_id = article_id
+        elif article_id is None:
+            sel = self.tree_main.selection()
+            if sel:
+                val = self.tree_main.item(sel[0], "values")
+                if val and len(val) >= 2 and val[0] in ("article", "shape"):
+                    try:
+                        if val[0] == "article":
+                            target_article_id = int(val[1])
+                        elif val[0] == "shape":
+                            shp = self.db.get_shape(int(val[1]))
+                            if shp and shp.get("article_id"):
+                                target_article_id = int(shp["article_id"])
+                    except (ValueError, TypeError):
+                        pass
+
+        art_name = f"Artigo #{target_article_id}"
+        try:
+            with self.db.get_connection() as conn:
+                c = conn.cursor()
+                c.execute("SELECT name FROM articles WHERE id = ?", (target_article_id,))
+                r = c.fetchone()
+                if r:
+                    art_name = r["name"] if hasattr(r, "__getitem__") and "name" in r else r[0]
+        except Exception:
+            pass
+
+        if hasattr(self, "shape_catalog_view") and self.shape_catalog_view:
+            self.shape_catalog_view.article_id = target_article_id
+            self.shape_catalog_view.article_name = art_name
+            self.shape_catalog_view.lbl_title.config(text=f"📐 Catálogo de Moldes - [{art_name}]")
+            self.shape_catalog_view.load_data(target_article_id)
+
+            if self.shape_catalog_view in self.minimized_windows:
+                self.restore_window(self.shape_catalog_view)
+            else:
+                self.activate_window(self.shape_catalog_view)
+
+        self.lbl_status_msg.config(text=f"Catálogo de Moldes: [{art_name}] aberto na área de trabalho.")
 
     def show_layout_editor(self, layout_name=None, force=False, session_data=None):
         # Sincroniza moldes e peças da sessão ativa caso existam
@@ -4466,6 +4527,67 @@ class MainWindow(tk.Tk):
         if not dieproc_params and self.db:
             dieproc_params = self.db.get_dieproc_preset(params)
 
+        # Determina o Modo de Encaixe ativo (Camada 1)
+        nesting_mode = "custom"
+        if getattr(self, "session_view", None) and hasattr(self.session_view, "get_nesting_mode"):
+            nesting_mode = self.session_view.get_nesting_mode()
+        elif self.current_session:
+            nesting_mode = self.current_session.get("nesting_mode") or "custom"
+
+        # Detecção de tamanho médio das peças para mitigação de Ressalva #1 (large_pieces)
+        avg_piece_dim = 0.0
+        if sess_shapes:
+            dims = []
+            for s in sess_shapes:
+                cntr = s.get("contour", [])
+                if cntr and len(cntr) >= 3:
+                    min_x, min_y, max_x, max_y = polygon_bbox(cntr)
+                    dims.append(max(max_x - min_x, max_y - min_y))
+            if dims:
+                avg_piece_dim = sum(dims) / len(dims)
+
+        orig_backend = os.environ.get("CORTEAC_BACKEND")
+
+        # Ajuste de estratégia/parâmetros/motor conforme Camada 1
+        if nesting_mode == "auto":
+            if dieproc_params is None:
+                dieproc_params = {}
+            dieproc_params["deterministic"] = True
+
+            if avg_piece_dim > 200.0:
+                # Mitigação Ressalva #1: peças grandes usam NFP analítico com HighYield
+                strategy = "flashnestsheet"
+                params = "HighYield"
+                os.environ["CORTEAC_BACKEND"] = "nfp"
+            else:
+                strategy = "IA-teste"
+        elif nesting_mode == "fast":
+            strategy = "flashnestsheet"
+            params = "FastNest"
+            os.environ["CORTEAC_BACKEND"] = "nfp"
+        elif nesting_mode == "economic":
+            strategy = "flashnestsheet"
+            params = "HighYield"
+            os.environ["CORTEAC_BACKEND"] = "nfp"
+        elif nesting_mode == "tapes":
+            strategy = "tape_a"
+            params = "stdNOTFill"
+            os.environ["CORTEAC_BACKEND"] = "nfp"
+        elif nesting_mode == "remnants":
+            strategy = "freenest"
+            params = "stdNOTFill"
+            os.environ["CORTEAC_BACKEND"] = "nfp"
+        elif nesting_mode == "custom":
+            # Respeita o engine configurado no DebugPanel, se presente
+            if getattr(self, "session_view", None) and hasattr(self.session_view, "debug_panel"):
+                selected_engine = self.session_view.debug_panel.get_engine()
+                if selected_engine:
+                    os.environ["CORTEAC_BACKEND"] = selected_engine
+
+        do_profile = False
+        if getattr(self, "session_view", None) and hasattr(self.session_view, "debug_panel"):
+            do_profile = self.session_view.debug_panel.is_profile_requested()
+
         gap = 1.0
         if getattr(self, "session_view", None) and hasattr(self.session_view, "get_gap_mm"):
             try:
@@ -4532,6 +4654,11 @@ class MainWindow(tk.Tk):
         def _worker():
             try:
                 sorted_sess_shapes, _ = sort_shapes_by_sequence(sess_shapes)
+                if do_profile:
+                    import cProfile, pstats, io
+                    pr = cProfile.Profile()
+                    pr.enable()
+
                 result = nest_multi_sheet(
                     available_shapes=sorted_sess_shapes,
                     bed_width_mm=mat_w,
@@ -4544,9 +4671,20 @@ class MainWindow(tk.Tk):
                     margins=margins,
                     layers=mat_layers
                 )
+
+                if do_profile:
+                    pr.disable()
+                    s = io.StringIO()
+                    ps = pstats.Stats(pr, stream=s).sort_stats('tottime')
+                    ps.print_stats(20)
+                    print(f"[cProfile Nesting Auto - {strategy} ({params})]\n{s.getvalue()}")
+
                 nest_q.put(("SUCCESS", result))
             except Exception as e:
                 nest_q.put(("ERROR", str(e)))
+            finally:
+                if orig_backend is not None:
+                    os.environ["CORTEAC_BACKEND"] = orig_backend
 
         th = threading.Thread(target=_worker, daemon=True)
         th.start()

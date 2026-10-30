@@ -95,7 +95,7 @@ class DatabaseManager:
                 try:
                     cursor.execute("""
                     SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS
-                    WHERE TABLE_NAME = 'dieproc_presets' AND COLUMN_NAME = 'macro_script'
+                    WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'dieproc_presets' AND COLUMN_NAME = 'macro_script'
                     """)
                     if not cursor.fetchone():
                         cursor.execute("ALTER TABLE dieproc_presets ADD COLUMN macro_script LONGTEXT NULL")
@@ -110,6 +110,18 @@ class DatabaseManager:
                         conn.commit()
                     except Exception:
                         pass
+                except Exception:
+                    pass
+
+                # Migração transparente idempotente para MySQL (nesting_mode em sessions)
+                try:
+                    cursor.execute("""
+                    SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS
+                    WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'sessions' AND COLUMN_NAME = 'nesting_mode'
+                    """)
+                    if not cursor.fetchone():
+                        cursor.execute("ALTER TABLE sessions ADD COLUMN nesting_mode VARCHAR(50) DEFAULT 'auto'")
+                        conn.commit()
                 except Exception:
                     pass
             else:
@@ -186,6 +198,12 @@ class DatabaseManager:
                 if "size" not in cols:
                     cursor.execute("ALTER TABLE shapes ADD COLUMN size TEXT DEFAULT '41'")
 
+                # Migração 004: Índice Composto para Performance do Catálogo de Moldes (Grid View Matrix)
+                cursor.execute("""
+                CREATE INDEX IF NOT EXISTS idx_shapes_article_size_name 
+                ON shapes(article_id, size, name)
+                """)
+
                 cursor.execute("""
                 CREATE TABLE IF NOT EXISTS sessions (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -198,6 +216,7 @@ class DatabaseManager:
                     yield_percent REAL DEFAULT 0.0,
                     cutting_time_sec REAL DEFAULT 0.0,
                     placed_pieces_json TEXT DEFAULT '[]',
+                    nesting_mode TEXT DEFAULT 'auto',
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     FOREIGN KEY (order_id) REFERENCES orders(id),
                     FOREIGN KEY (material_id) REFERENCES materials(id) ON DELETE SET NULL
@@ -230,6 +249,8 @@ class DatabaseManager:
                     cursor.execute("ALTER TABLE sessions ADD COLUMN margin_top REAL DEFAULT 10.0")
                 if "margin_bottom" not in s_cols:
                     cursor.execute("ALTER TABLE sessions ADD COLUMN margin_bottom REAL DEFAULT 10.0")
+                if "nesting_mode" not in s_cols:
+                    cursor.execute("ALTER TABLE sessions ADD COLUMN nesting_mode TEXT DEFAULT 'custom'")
 
                 cursor.execute("PRAGMA table_info(orders)")
                 o_cols = [c[1] for c in cursor.fetchall()]
@@ -730,6 +751,32 @@ class DatabaseManager:
                 shapes.append(d)
             return shapes
 
+    def get_article_shape_catalog(self, article_id):
+        """
+        Retorna os moldes de um artigo específico organizados para o ShapeCatalogView.
+        Utiliza o índice composto idx_shapes_article_size_name para busca ultra-rápida (< 3 ms).
+        """
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                "SELECT id, article_id, name, color, contour_json, holes_json, stitching_json, folder, size "
+                "FROM shapes WHERE article_id = ? ORDER BY size ASC, name ASC",
+                (article_id,)
+            )
+            shapes = []
+            for row in cursor.fetchall():
+                d = dict(row)
+                d["contour"] = json.loads(d["contour_json"])
+                d["holes"] = json.loads(d["holes_json"]) if d.get("holes_json") else []
+                d["stitching"] = json.loads(d["stitching_json"]) if d.get("stitching_json") else []
+                d["folder"] = d.get("folder", "") or ""
+                d["size"] = str(d.get("size") or "41")
+                d["color"] = get_color_for_size(d.get("size") or d.get("name") or "41")
+                # TODO: Fase 6.2 — ler de shapes.pairs_per_shape se coluna existir
+                d["pairs_per_shape"] = int(d.get("pairs_per_shape", 2) or 2)
+                shapes.append(d)
+            return shapes
+
     def get_all_shapes(self):
         with self.get_connection() as conn:
             cursor = conn.cursor()
@@ -1105,6 +1152,7 @@ class DatabaseManager:
                 d["margin_right"] = float(d.get("margin_right", 10.0) if d.get("margin_right") is not None else 10.0)
                 d["margin_top"] = float(d.get("margin_top", 10.0) if d.get("margin_top") is not None else 10.0)
                 d["margin_bottom"] = float(d.get("margin_bottom", 10.0) if d.get("margin_bottom") is not None else 10.0)
+                d["nesting_mode"] = d.get("nesting_mode") or "custom"
 
                 for idx, s in enumerate(d["shapes"], start=1):
                     s_sz = str(s.get("size") or s.get("name") or "41")
@@ -1137,6 +1185,7 @@ class DatabaseManager:
             d["margin_right"] = float(d.get("margin_right", 10.0) if d.get("margin_right") is not None else 10.0)
             d["margin_top"] = float(d.get("margin_top", 10.0) if d.get("margin_top") is not None else 10.0)
             d["margin_bottom"] = float(d.get("margin_bottom", 10.0) if d.get("margin_bottom") is not None else 10.0)
+            d["nesting_mode"] = d.get("nesting_mode") or "custom"
             d["placed_pieces"] = json.loads(d.get("placed_pieces_json") or "[]")
             for p in d["placed_pieces"]:
                 p_sz = p.get("size", "41")
@@ -1197,7 +1246,8 @@ class DatabaseManager:
         margin_left: float = 10.0,
         margin_right: float = 10.0,
         margin_top: float = 10.0,
-        margin_bottom: float = 10.0
+        margin_bottom: float = 10.0,
+        nesting_mode: str = "auto"
     ) -> int:
         with self.get_connection() as conn:
             cursor = conn.cursor()
@@ -1253,27 +1303,28 @@ class DatabaseManager:
             # 5. Gravação da sessão
             if conn.backend == "mysql":
                 cursor.execute("""
-                INSERT INTO sessions (id, code, order_id, material_id, name, job, status, yield_percent, cutting_time_sec, placed_pieces_json, strategy, params, machine, shapes_json, gap_mm, margin_left, margin_right, margin_top, margin_bottom)
-                VALUES (?, ?, ?, ?, ?, ?, ?, 0.0, 0.0, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                INSERT INTO sessions (id, code, order_id, material_id, name, job, status, yield_percent, cutting_time_sec, placed_pieces_json, strategy, params, machine, shapes_json, gap_mm, margin_left, margin_right, margin_top, margin_bottom, nesting_mode)
+                VALUES (?, ?, ?, ?, ?, ?, ?, 0.0, 0.0, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ON DUPLICATE KEY UPDATE
                     code = VALUES(code), name = VALUES(name), job = VALUES(job), status = VALUES(status),
                     material_id = VALUES(material_id), placed_pieces_json = VALUES(placed_pieces_json),
                     strategy = VALUES(strategy), params = VALUES(params), machine = VALUES(machine), shapes_json = VALUES(shapes_json),
                     gap_mm = VALUES(gap_mm), margin_left = VALUES(margin_left), margin_right = VALUES(margin_right),
-                    margin_top = VALUES(margin_top), margin_bottom = VALUES(margin_bottom)
+                    margin_top = VALUES(margin_top), margin_bottom = VALUES(margin_bottom),
+                    nesting_mode = VALUES(nesting_mode)
                 """, (
                     session_id, code, valid_order_id, valid_mat_id, name, job, status,
                     json.dumps(placed_pieces or []), strategy, params, machine, json.dumps(shapes or []), float(gap_mm),
-                    float(margin_left), float(margin_right), float(margin_top), float(margin_bottom)
+                    float(margin_left), float(margin_right), float(margin_top), float(margin_bottom), str(nesting_mode)
                 ))
             else:
                 cursor.execute("""
-                REPLACE INTO sessions (id, code, order_id, material_id, name, job, status, yield_percent, cutting_time_sec, placed_pieces_json, strategy, params, machine, shapes_json, gap_mm, margin_left, margin_right, margin_top, margin_bottom)
-                VALUES (?, ?, ?, ?, ?, ?, ?, 0.0, 0.0, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                REPLACE INTO sessions (id, code, order_id, material_id, name, job, status, yield_percent, cutting_time_sec, placed_pieces_json, strategy, params, machine, shapes_json, gap_mm, margin_left, margin_right, margin_top, margin_bottom, nesting_mode)
+                VALUES (?, ?, ?, ?, ?, ?, ?, 0.0, 0.0, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """, (
                     session_id, code, valid_order_id, valid_mat_id, name, job, status,
                     json.dumps(placed_pieces or []), strategy, params, machine, json.dumps(shapes or []), float(gap_mm),
-                    float(margin_left), float(margin_right), float(margin_top), float(margin_bottom)
+                    float(margin_left), float(margin_right), float(margin_top), float(margin_bottom), str(nesting_mode)
                 ))
 
             # 6. Atualiza o contador permanente de último número de sessão
@@ -1291,7 +1342,7 @@ class DatabaseManager:
             conn.commit()
             return session_id
 
-    def update_session(self, session_id, name=None, status=None, placed_pieces=None, yield_pct=None, time_sec=None, material_id=_SENTINEL, strategy=None, params=None, machine=None, shapes=None, job=None, clear_material=False, gap_mm=None, margin_left=None, margin_right=None, margin_top=None, margin_bottom=None):
+    def update_session(self, session_id, name=None, status=None, placed_pieces=None, yield_pct=None, time_sec=None, material_id=_SENTINEL, strategy=None, params=None, machine=None, shapes=None, job=None, clear_material=False, gap_mm=None, margin_left=None, margin_right=None, margin_top=None, margin_bottom=None, nesting_mode=None):
         with self.get_connection() as conn:
             cursor = conn.cursor()
             updates = []
@@ -1346,6 +1397,9 @@ class DatabaseManager:
             if margin_bottom is not None:
                 updates.append("margin_bottom = ?")
                 values.append(float(margin_bottom))
+            if nesting_mode is not None:
+                updates.append("nesting_mode = ?")
+                values.append(str(nesting_mode))
             if updates:
                 values.append(session_id)
                 cursor.execute(f"UPDATE sessions SET {', '.join(updates)} WHERE id = ?", values)

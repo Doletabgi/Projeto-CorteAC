@@ -10,6 +10,7 @@ Componentes:
 4. nest_ia_teste_engine: Ponto de entrada padrão para a estratégia "IA-teste".
 """
 
+import os
 import ast
 import re
 import math
@@ -20,8 +21,148 @@ from cad.geometry import (
     rotate_point, transform_contour, polygon_area, polygon_perimeter, polygon_bbox,
     bbox_overlap, polygons_collide, SpatialGrid, find_contact_coordinate_binary
 )
+from cad.nfp import contact_placement_x
 from cad.colors import get_color_for_size
 from cad.ai_learner import ShapeFeatureExtractor, NestingAIBrain
+
+
+_DX_SEP_CACHE: Dict[Tuple[int, float, int, float, float], float] = {}
+_POLY0_CACHE: Dict[Tuple[int, float], Any] = {}
+
+
+def clear_macro_caches() -> None:
+    """Limpa os caches de NFP analítico horizontal e contornos base pré-calculados."""
+    _DX_SEP_CACHE.clear()
+    _POLY0_CACHE.clear()
+
+
+def ramer_douglas_peucker(points: List[Any], epsilon: float = 0.2) -> List[Any]:
+    """
+    Simplifica contorno poligonal usando o algoritmo Ramer-Douglas-Peucker (RDP).
+    Aplicado apenas em contornos complexos (> 50 vértices) durante cálculo de contato e NFP.
+    Preserva o contorno original intacto para renderização e exportação .lay.
+    """
+    if os.getenv("CORTEAC_RDP_DISABLED", "0") == "1" or len(points) <= 3:
+        return points
+
+    def perpendicular_distance(pt, line_start, line_end):
+        x0 = pt["x"] if isinstance(pt, dict) else pt[0]
+        y0 = pt["y"] if isinstance(pt, dict) else pt[1]
+        x1 = line_start["x"] if isinstance(line_start, dict) else line_start[0]
+        y1 = line_start["y"] if isinstance(line_start, dict) else line_start[1]
+        x2 = line_end["x"] if isinstance(line_end, dict) else line_end[0]
+        y2 = line_end["y"] if isinstance(line_end, dict) else line_end[1]
+        dx = x2 - x1
+        dy = y2 - y1
+        mag_sq = dx * dx + dy * dy
+        if mag_sq < 1e-12:
+            return math.hypot(x0 - x1, y0 - y1)
+        return abs(dy * x0 - dx * y0 + x2 * y1 - y2 * x1) / math.sqrt(mag_sq)
+
+    def _rdp(pts):
+        if len(pts) <= 2:
+            return pts
+        dmax = 0.0
+        index = 0
+        for i in range(1, len(pts) - 1):
+            d = perpendicular_distance(pts[i], pts[0], pts[-1])
+            if d > dmax:
+                index = i
+                dmax = d
+        if dmax > epsilon:
+            rec1 = _rdp(pts[:index + 1])
+            rec2 = _rdp(pts[index:])
+            return rec1[:-1] + rec2
+        else:
+            return [pts[0], pts[-1]]
+
+    pt0 = points[0]
+    pt_last = points[-1]
+    x0 = pt0["x"] if isinstance(pt0, dict) else pt0[0]
+    y0 = pt0["y"] if isinstance(pt0, dict) else pt0[1]
+    xl = pt_last["x"] if isinstance(pt_last, dict) else pt_last[0]
+    yl = pt_last["y"] if isinstance(pt_last, dict) else pt_last[1]
+    is_closed = math.hypot(x0 - xl, y0 - yl) < 1e-5
+
+    if is_closed and len(points) > 4:
+        pts = points[:-1] if is_closed else points
+        half = len(pts) // 2
+        p1 = _rdp(pts[:half + 1])
+        p2 = _rdp(pts[half:] + [pts[0]])
+        return p1[:-1] + p2
+    return _rdp(points)
+
+
+def _find_best_horizontal_slot_nfp(piece: Any, row_obstacles: List[Any], gap: float = 1.0) -> float:
+    """
+    Encontra X onde a peça móvel encosta na fileira de obstáculos.
+    Usa NFP analítico como chute inicial + loop de convergência via SAT (máximo 20 iterações)
+    para garantir zero colisão em contornos côncavos, com fallback seguro para find_contact_coordinate_binary.
+    """
+    if not row_obstacles:
+        return 0.0
+
+    if isinstance(piece, dict):
+        piece_poly = piece.get("poly") or piece.get("contour", [])
+    else:
+        piece_poly = piece
+
+    if not piece_poly:
+        return 0.0
+
+    b_m = polygon_bbox(piece_poly)
+    w_m = b_m[2] - b_m[0]
+    h_m = b_m[3] - b_m[1]
+    m_norm = [{"x": p["x"] - b_m[0], "y": p["y"] - b_m[1]} for p in piece_poly]
+
+    norm_obs = []
+    for obs in row_obstacles:
+        if isinstance(obs, dict):
+            p = obs.get("poly") or obs.get("contour", [])
+            b = obs.get("bbox") or polygon_bbox(p)
+            norm_obs.append((p, b))
+        elif isinstance(obs, (tuple, list)) and len(obs) == 2 and isinstance(obs[1], (tuple, list)):
+            norm_obs.append((obs[0], obs[1]))
+        else:
+            norm_obs.append((obs, polygon_bbox(obs)))
+
+    # Passo 1: chute inicial = max dos encostos individuais via NFP
+    cand_x = 0.0
+    for o_poly, o_bbox in norm_obs:
+        cx = contact_placement_x(m_norm, o_poly, 0.0, gap)
+        if cx is not None and cx <= (o_bbox[2] + gap + 5.0) and cx >= -25.0:
+            cand_x = max(cand_x, cx)
+
+    if cand_x <= 0.0:
+        cand_x = max(ob[2] + gap for _, ob in norm_obs)
+
+    # Passo 2: LOOP DE CONVERGÊNCIA — se colidir com algum obstáculo, empurra mais à direita e re-testa (máx 20 iterações)
+    for _ in range(20):
+        piece_at_cand = [{"x": p["x"] + cand_x, "y": p["y"]} for p in m_norm]
+        cand_bbox = (cand_x, 0.0, cand_x + w_m, h_m)
+        collisions = [(op, ob) for op, ob in norm_obs if polygons_collide(piece_at_cand, op, gap=gap, bbox_a=cand_bbox, bbox_b=ob)]
+
+        if not collisions:
+            return cand_x
+
+        new_cand = cand_x
+        for op, ob in collisions:
+            cx = contact_placement_x(m_norm, op, 0.0, gap)
+            if cx is not None and cx <= (ob[2] + gap + 5.0) and cx > new_cand:
+                new_cand = cx
+
+        # Se não avançou (deadlock por concavidade complexa) -> fallback seguro
+        if new_cand <= cand_x + 1e-4:
+            poly_fn = lambda x: [{"x": p["x"] + x, "y": p["y"]} for p in m_norm]
+            safe_start = max(ob[2] for _, ob in norm_obs) + gap + 1.0
+            return find_contact_coordinate_binary(poly_fn, norm_obs, gap, start_val=safe_start, min_val=cand_x)
+
+        cand_x = new_cand
+
+    poly_fn = lambda x: [{"x": p["x"] + x, "y": p["y"]} for p in m_norm]
+    safe_start = max(ob[2] for _, ob in norm_obs) + gap + 1.0
+    return find_contact_coordinate_binary(poly_fn, norm_obs, gap, start_val=safe_start, min_val=cand_x)
+
 
 
 def check_collision_against_placed(cand_poly, cand_bbox, placed_pieces, gap=1.0, exclude_id=None, grid=None):
@@ -370,6 +511,46 @@ class OmniNestMacroEngine:
         self.db = db
         self.ai_brain = NestingAIBrain(db=db)
 
+    def _get_poly0_info(self, shape: Dict[str, Any], rot: float) -> Tuple[Any, float, float, float, float, List[Dict[str, float]]]:
+        """Calcula ou recupera do cache o contorno transformado poly0, bbox e forma normalizada."""
+        c = shape.get("contour", [])
+        c_id = id(c)
+        r_key = round(float(rot), 2)
+        key = (c_id, r_key)
+        if key in _POLY0_CACHE:
+            return _POLY0_CACHE[key]
+
+        poly0 = transform_contour(c, 0.0, 0.0, r_key)
+        min_x, min_y, max_x, max_y = polygon_bbox(poly0)
+        w = max_x - min_x
+        h = max_y - min_y
+        poly_norm = [{"x": p["x"] - min_x, "y": p["y"] - min_y} for p in poly0]
+        info = (poly0, min_x, min_y, w, h, poly_norm)
+        if len(_POLY0_CACHE) >= 5000:
+            _POLY0_CACHE.clear()
+        _POLY0_CACHE[key] = info
+        return info
+
+    def _get_dx_sep(self, s_m: Dict[str, Any], rot_m: float, s_o: Dict[str, Any], rot_o: float, gap_val: float) -> float:
+        """Calcula ou recupera do cache a distância de contato horizontal analítica via NFP com Loop de Convergência."""
+        c_m = s_m.get("contour", [])
+        c_o = s_o.get("contour", [])
+        key = (id(c_m), round(float(rot_m), 2), id(c_o), round(float(rot_o), 2), round(float(gap_val), 2))
+        if key in _DX_SEP_CACHE:
+            return _DX_SEP_CACHE[key]
+
+        info_m = self._get_poly0_info(s_m, rot_m)
+        info_o = self._get_poly0_info(s_o, rot_o)
+        m_norm = info_m[5]
+        o_norm = info_o[5]
+
+        dx = _find_best_horizontal_slot_nfp(m_norm, [o_norm], gap=gap_val)
+
+        if len(_DX_SEP_CACHE) >= 5000:
+            _DX_SEP_CACHE.clear()
+        _DX_SEP_CACHE[key] = dx
+        return dx
+
     def run(
         self,
         available_shapes: List[Dict[str, Any]],
@@ -380,9 +561,10 @@ class OmniNestMacroEngine:
         macro_script: Optional[str] = None,
         dieproc_params: Optional[Dict[str, Any]] = None,
         margins: Optional[Dict[str, float]] = None,
-        layers: Optional[int] = None
+        layers: Optional[int] = None,
+        deterministic: bool = False
     ) -> List[Dict[str, Any]]:
-        """Executa o pipeline completo da macro sobre as peças."""
+        """Executa o pipeline completo da macro sobre as peças com otimizações NFP analíticas e zero colisão."""
         if not available_shapes:
             return []
 
@@ -427,7 +609,7 @@ class OmniNestMacroEngine:
 
         bandit_suggestion = None
         if config.ai_auto_tune:
-            bandit_suggestion = self.ai_brain.suggest_optimized_macro_params(primary_family)
+            bandit_suggestion = self.ai_brain.suggest_optimized_macro_params(primary_family, deterministic=deterministic)
             if bandit_suggestion:
                 config.shift_x = float(bandit_suggestion.get("shift_x", config.shift_x))
                 config.gravity_vx = float(bandit_suggestion.get("gravity_x", config.gravity_vx))
@@ -499,7 +681,7 @@ class OmniNestMacroEngine:
         rows = []
         cur_row_y = m_bottom
         row_idx = 0
-        grid = SpatialGrid(cell_size=100.0)
+        grid = SpatialGrid(cell_size=150.0)
         queue_idx = 0
         idx = 1
 
@@ -510,7 +692,7 @@ class OmniNestMacroEngine:
             row_pieces = []
             is_odd_row = (row_idx % 2 == 1)
 
-            # 1. Preenche a fileira horizontalmente (eixo X) com bumping contorno a contorno
+            # 1. Preenche a fileira horizontalmente (eixo X) com bumping contorno a contorno analítico
             while queue_idx < max_pieces:
                 shape = shape_queue[queue_idx % len(shape_queue)]
                 piece_in_row_idx = len(row_pieces)
@@ -520,49 +702,52 @@ class OmniNestMacroEngine:
                 else:
                     base_rot = angles_pool[piece_in_row_idx % len(angles_pool)]
 
-                sweep_angles = [base_rot]
-                swp = config.sweep_from
-                while swp <= config.sweep_to + 1e-4:
-                    ang = (base_rot + swp) % 360.0
-                    if ang not in sweep_angles:
-                        sweep_angles.append(ang)
-                    swp += config.sweep_step
-
-                best_cand = None
-                best_x = float("inf")
-
-                for rot_candidate in sweep_angles:
-                    poly0 = transform_contour(shape["contour"], 0, 0, rot_candidate)
-                    min_x, min_y, max_x, max_y = polygon_bbox(poly0)
-                    w = max_x - min_x
-                    h = max_y - min_y
-
-                    if not row_pieces:
-                        cand_x = m_left
-                    else:
-                        prev_piece = row_pieces[-1]
-                        safe_start_x = prev_piece["bbox"][2] + gap + 1.0
-                        min_cand_x = max(m_left, prev_piece["bbox"][0] - 25.0)
-                        colliders_row = [(p["poly"], p["bbox"]) for p in row_pieces]
-                        poly_fn_x = lambda x, s=shape, mx=min_x, my=min_y, r=rot_candidate, ry=cur_row_y: transform_contour(s["contour"], x - mx, ry - my, r)
-                        cand_x = find_contact_coordinate_binary(poly_fn_x, colliders_row, gap, start_val=safe_start_x, min_val=min_cand_x)
-
-                    cand_poly = transform_contour(shape["contour"], cand_x - min_x, cur_row_y - min_y, rot_candidate)
-                    cand_bbox = polygon_bbox(cand_poly)
-
+                if not row_pieces:
+                    poly0, min_x, min_y, w, h, poly_norm = self._get_poly0_info(shape, base_rot)
+                    cand_x = m_left
+                    cand_bbox = (cand_x, cur_row_y, cand_x + w, cur_row_y + h)
+                    best_cand = None
                     if cand_bbox[2] <= bed_width_mm - m_right:
-                        if cand_x < best_x:
-                            best_x = cand_x
-                            best_cand = {
-                                "cand_x": cand_x,
-                                "rot": rot_candidate,
-                                "poly": cand_poly,
-                                "bbox": cand_bbox,
-                                "min_x": min_x,
-                                "min_y": min_y,
-                                "w": w,
-                                "h": h
-                            }
+                        best_cand = {
+                            "cand_x": cand_x,
+                            "rot": base_rot,
+                            "min_x": min_x,
+                            "min_y": min_y,
+                            "w": w,
+                            "h": h,
+                            "poly_norm": poly_norm
+                        }
+                else:
+                    sweep_angles = [base_rot]
+                    swp = config.sweep_from
+                    while swp <= config.sweep_to + 1e-4:
+                        ang = (base_rot + swp) % 360.0
+                        if ang not in sweep_angles:
+                            sweep_angles.append(ang)
+                        swp += config.sweep_step
+
+                    best_cand = None
+                    best_x = float("inf")
+
+                    for rot_candidate in sweep_angles:
+                        poly0, min_x, min_y, w, h, poly_norm = self._get_poly0_info(shape, rot_candidate)
+                        prev_piece = row_pieces[-1]
+                        sep_x = self._get_dx_sep(shape, rot_candidate, prev_piece["shape"], prev_piece["rot"], gap)
+                        cand_x = prev_piece["cand_x"] + sep_x
+
+                        cand_bbox = (cand_x, cur_row_y, cand_x + w, cur_row_y + h)
+                        if cand_bbox[2] <= bed_width_mm - m_right:
+                            if cand_x < best_x:
+                                best_x = cand_x
+                                best_cand = {
+                                    "cand_x": cand_x,
+                                    "rot": rot_candidate,
+                                    "min_x": min_x,
+                                    "min_y": min_y,
+                                    "w": w,
+                                    "h": h,
+                                    "poly_norm": poly_norm
+                                }
 
                 if best_cand is None:
                     # Largura útil da chapa atingida para esta fileira
@@ -570,6 +755,18 @@ class OmniNestMacroEngine:
 
                 s_sz = str(shape.get("size") or shape.get("taglia") or "41")
                 p_color = get_color_for_size(s_sz, idx)
+                cand_x = best_cand["cand_x"]
+                min_x = best_cand["min_x"]
+                min_y = best_cand["min_y"]
+                w = best_cand["w"]
+                h = best_cand["h"]
+                rot = best_cand["rot"]
+                poly_norm = best_cand["poly_norm"]
+
+                # Translação vetorial pura sem recalculação trigonométrica
+                cand_poly = [{"x": p["x"] + cand_x, "y": p["y"] + cur_row_y} for p in poly_norm]
+                cand_bbox = (cand_x, cur_row_y, cand_x + w, cur_row_y + h)
+
                 item = {
                     "id": idx,
                     "shape": shape,
@@ -580,15 +777,17 @@ class OmniNestMacroEngine:
                     "holes": shape.get("holes", []),
                     "internal_cuts": shape.get("internal_cuts", []),
                     "stitching": shape.get("stitching", []),
-                    "x": best_cand["cand_x"] - best_cand["min_x"],
-                    "y": cur_row_y - best_cand["min_y"],
-                    "rotation": best_cand["rot"],
-                    "poly": best_cand["poly"],
-                    "bbox": best_cand["bbox"],
-                    "min_x": best_cand["min_x"],
-                    "min_y": best_cand["min_y"],
-                    "w": best_cand["w"],
-                    "h": best_cand["h"]
+                    "cand_x": cand_x,
+                    "rot": rot,
+                    "x": cand_x - min_x,
+                    "y": cur_row_y - min_y,
+                    "rotation": rot,
+                    "poly": cand_poly,
+                    "bbox": cand_bbox,
+                    "min_x": min_x,
+                    "min_y": min_y,
+                    "w": w,
+                    "h": h
                 }
                 row_pieces.append(item)
                 queue_idx += 1
@@ -599,20 +798,33 @@ class OmniNestMacroEngine:
 
             # 2. Encaixe vertical contorno a contorno da fileira inteira como bloco rígido (Row Interlock)
             if row_idx > 0:
-                def row_collides(test_row_y):
-                    for p in row_pieces:
-                        test_p_poly = transform_contour(p["shape"]["contour"], p["x"], test_row_y - p["min_y"], p["rotation"])
-                        test_p_bbox = polygon_bbox(test_p_poly)
-                        if check_collision_against_placed(test_p_poly, test_p_bbox, placed, gap=gap, grid=grid):
-                            return True
-                    return False
-
                 prev_row = rows[-1]
                 prev_max_y = max(p["bbox"][3] for p in prev_row)
+                last_hit_idx = [0]
+
+                def row_collides(test_row_y):
+                    dy = test_row_y - cur_row_y
+                    n_rp = len(row_pieces)
+                    order = [last_hit_idx[0]] + [i for i in range(n_rp) if i != last_hit_idx[0]]
+                    for i in order:
+                        p = row_pieces[i]
+                        test_p_bbox = (p["bbox"][0], p["bbox"][1] + dy, p["bbox"][2], p["bbox"][3] + dy)
+                        if test_p_bbox[1] - gap > prev_max_y:
+                            continue
+                        near_c = grid.query_items(test_p_bbox, gap=gap)
+                        if not near_c:
+                            continue
+                        test_p_poly = [{"x": pt["x"], "y": pt["y"] + dy} for pt in p["poly"]]
+                        for it_id, p_poly, p_bbox in near_c:
+                            if polygons_collide(test_p_poly, p_poly, gap=gap, bbox_a=test_p_bbox, bbox_b=p_bbox):
+                                last_hit_idx[0] = i
+                                return True
+                    return False
+
                 high_y = prev_max_y + gap + 5.0
                 low_y = prev_max_y - 80.0
 
-                for _ in range(16):
+                for _ in range(8):
                     mid_y = (low_y + high_y) / 2.0
                     if row_collides(mid_y):
                         low_y = mid_y
@@ -622,11 +834,12 @@ class OmniNestMacroEngine:
                 while row_collides(final_row_y):
                     final_row_y += 0.1
 
+                dy_final = final_row_y - cur_row_y
                 cur_row_y = final_row_y
                 for p in row_pieces:
-                    p["y"] = cur_row_y - p["min_y"]
-                    p["poly"] = transform_contour(p["shape"]["contour"], p["x"], p["y"], p["rotation"])
-                    p["bbox"] = polygon_bbox(p["poly"])
+                    p["y"] += dy_final
+                    p["bbox"] = (p["bbox"][0], p["bbox"][1] + dy_final, p["bbox"][2], p["bbox"][3] + dy_final)
+                    p["poly"] = [{"x": pt["x"], "y": pt["y"] + dy_final} for pt in p["poly"]]
 
             # 3. Interrompe se a fileira ultrapassar a margem do topo da placa
             if any(p["bbox"][3] > bed_height_mm - m_top for p in row_pieces):
@@ -639,48 +852,35 @@ class OmniNestMacroEngine:
             row_idx += 1
             cur_row_y += 100.0
 
-        # 5. Compactação por Gravidade Vetorial Contínua (apenas horizontal para manter o alinhamento reto das fileiras)
+        # 5. Compactação por Gravidade Vetorial Contínua
         if config.gravity_vx != 0:
             self._apply_vector_gravity(placed, bed_width_mm, bed_height_mm, config, margins_dict, gap)
 
-        # 8. Trava Final Inviolável de Sanity Pass Pós-Processamento
-        # Re-audita 100% das peças par-a-par com polígonos reais reconstruídos
-        # exatamente como no LayoutEditorView: transform_contour(p["contour"], p["x"], p["y"], p["rotation"])
+        # 8. Trava Final Inviolável de Sanity Pass Pós-Processamento com SpatialGrid
         audit_gap = max(0.0, gap - 0.02)
-        max_safety_passes = 12
-        for _ in range(max_safety_passes):
+        for _ in range(12):
             conflict_found = False
+            audit_grid = SpatialGrid(cell_size=150.0)
             for p in placed:
-                p["poly"] = transform_contour(p["contour"], p["x"], p["y"], p["rotation"])
-                p["bbox"] = polygon_bbox(p["poly"])
+                audit_grid.insert(p["id"], p["poly"], p["bbox"])
+            for pi in placed:
+                near = audit_grid.query_items(pi["bbox"], gap=audit_gap)
+                for pj_id, pj_poly, pj_bbox in near:
+                    if pj_id <= pi["id"]:
+                        continue
+                    if polygons_collide(pi["poly"], pj_poly, gap=audit_gap, bbox_a=pi["bbox"], bbox_b=pj_bbox):
+                        conflict_found = True
+                        pj = next(p for p in placed if p["id"] == pj_id)
+                        p_upper = pi if pi["bbox"][1] >= pj["bbox"][1] else pj
+                        p_other = pj if p_upper is pi else pi
 
-            for i in range(len(placed)):
-                pi = placed[i]
-                poly_i = pi["poly"]
-                bbox_i = pi["bbox"]
-
-                for j in range(i + 1, len(placed)):
-                    pj = placed[j]
-                    poly_j = pj["poly"]
-                    bbox_j = pj["bbox"]
-
-                    if bbox_overlap(bbox_i, bbox_j, audit_gap):
-                        if polygons_collide(poly_i, poly_j, gap=audit_gap, bbox_a=bbox_i, bbox_b=bbox_j):
-                            conflict_found = True
-                            if pi["bbox"][1] >= pj["bbox"][1]:
-                                p_upper = pi
-                                p_other = pj
-                            else:
-                                p_upper = pj
-                                p_other = pi
-
-                            # Empurra a peça superior para cima em passos de 0.2mm até descolidir
-                            while polygons_collide(p_upper["poly"], p_other["poly"], gap=audit_gap, bbox_a=p_upper["bbox"], bbox_b=p_other["bbox"]):
-                                p_upper["y"] += 0.2
-                                p_upper["poly"] = transform_contour(p_upper["contour"], p_upper["x"], p_upper["y"], p_upper["rotation"])
-                                p_upper["bbox"] = polygon_bbox(p_upper["poly"])
-                                if p_upper["bbox"][3] > bed_height_mm - m_top:
-                                    break
+                        # Empurra a peça superior para cima em passos de 0.2mm até descolidir
+                        while polygons_collide(p_upper["poly"], p_other["poly"], gap=audit_gap, bbox_a=p_upper["bbox"], bbox_b=p_other["bbox"]):
+                            p_upper["y"] += 0.2
+                            p_upper["poly"] = [{"x": pt["x"], "y": pt["y"] + 0.2} for pt in p_upper["poly"]]
+                            p_upper["bbox"] = (p_upper["bbox"][0], p_upper["bbox"][1] + 0.2, p_upper["bbox"][2], p_upper["bbox"][3] + 0.2)
+                            if p_upper["bbox"][3] > bed_height_mm - m_top:
+                                break
             if not conflict_found:
                 break
 
@@ -692,7 +892,7 @@ class OmniNestMacroEngine:
         bed_area_m2 = (bed_width_mm * bed_height_mm) / 1_000_000.0
         yield_pct = (useful_area_mm2 / 1_000_000.0 / bed_area_m2 * 100.0) if bed_area_m2 > 0 else 0.0
 
-        if config.ai_auto_tune and bandit_suggestion and "arm_index" in bandit_suggestion:
+        if config.ai_auto_tune and bandit_suggestion and "arm_index" in bandit_suggestion and not deterministic:
             self.ai_brain.record_macro_execution_feedback(
                 primary_family,
                 bandit_suggestion["arm_index"],
@@ -734,7 +934,7 @@ class OmniNestMacroEngine:
         margins: Union[float, Dict[str, float], None],
         gap: float
     ) -> None:
-        """Move as peças na direção do vetor de gravidade (vx, vy) em passos decrescentes."""
+        """Move as peças na direção do vetor de gravidade (vx, vy) em passos decrescentes usando translações vetoriais diretas."""
         if not placed:
             return
 
@@ -756,50 +956,99 @@ class OmniNestMacroEngine:
         dx_dir = vx / norm
         dy_dir = vy / norm
 
+        grid_g = SpatialGrid(cell_size=150.0)
+        for item in placed:
+            grid_g.insert(item["id"], item["poly"], item["bbox"])
+
         for step in config.gravity_steps:
             # 1. Puxada vertical em Y (para baixo)
             if abs(dy_dir) > 0.01:
                 step_y = dy_dir * step
-                grid_y = SpatialGrid(cell_size=100.0)
-                for item in placed:
-                    grid_y.insert(item["id"], item["poly"], item["bbox"])
-                for p in placed:
+                order_y = sorted(placed, key=lambda p: p["bbox"][1] if dy_dir < 0 else -p["bbox"][3])
+                moved_y = False
+                for p in order_y:
                     p_id = p["id"]
-                    c = p["contour"]
-                    rot = p["rotation"]
-                    old_x = p["x"]
-                    old_y = p["y"]
-                    test_y = old_y + step_y
-                    test_poly = transform_contour(c, old_x, test_y, rot)
-                    test_bbox = polygon_bbox(test_poly)
+                    old_bbox = p["bbox"]
+                    if dy_dir < 0 and old_bbox[1] <= m_bottom + 0.05:
+                        continue
+                    test_bbox = (old_bbox[0], old_bbox[1] + step_y, old_bbox[2], old_bbox[3] + step_y)
                     if test_bbox[1] < m_bottom or test_bbox[3] > bed_height - m_top:
                         continue
-                    if not check_collision_against_placed(test_poly, test_bbox, placed, gap=gap, exclude_id=p_id, grid=grid_y):
-                        p["y"] = test_y
+                    near_c = grid_g.query_items(test_bbox, gap=gap)
+                    colliders = [it for it in near_c if it[0] != p_id]
+                    if not colliders:
+                        p["y"] += step_y
+                        p["poly"] = [{"x": pt["x"], "y": pt["y"] + step_y} for pt in p["poly"]]
+                        p["bbox"] = test_bbox
+                        moved_y = True
+                        continue
+                    # Prioriza o último obstáculo que colidiu com esta peça
+                    last_c = p.get("_lc_y")
+                    if last_c is not None:
+                        for c_i, it in enumerate(colliders):
+                            if it[0] == last_c:
+                                colliders.insert(0, colliders.pop(c_i))
+                                break
+                    test_poly = [{"x": pt["x"], "y": pt["y"] + step_y} for pt in p["poly"]]
+                    collides = False
+                    for it_id, o_poly, o_bbox in colliders:
+                        if polygons_collide(test_poly, o_poly, gap=gap, bbox_a=test_bbox, bbox_b=o_bbox):
+                            collides = True
+                            p["_lc_y"] = it_id
+                            break
+                    if not collides:
+                        p["y"] += step_y
                         p["poly"] = test_poly
                         p["bbox"] = test_bbox
+                        moved_y = True
+                if moved_y:
+                    grid_g = SpatialGrid(cell_size=150.0)
+                    for item in placed:
+                        grid_g.insert(item["id"], item["poly"], item["bbox"])
 
             # 2. Puxada horizontal em X (para a esquerda)
             if abs(dx_dir) > 0.01:
                 step_x = dx_dir * step
-                grid_x = SpatialGrid(cell_size=100.0)
-                for item in placed:
-                    grid_x.insert(item["id"], item["poly"], item["bbox"])
-                for p in placed:
+                order_x = sorted(placed, key=lambda p: p["bbox"][0] if dx_dir < 0 else -p["bbox"][2])
+                moved_x = False
+                for p in order_x:
                     p_id = p["id"]
-                    c = p["contour"]
-                    rot = p["rotation"]
-                    old_x = p["x"]
-                    old_y = p["y"]
-                    test_x = old_x + step_x
-                    test_poly = transform_contour(c, test_x, old_y, rot)
-                    test_bbox = polygon_bbox(test_poly)
+                    old_bbox = p["bbox"]
+                    if dx_dir < 0 and old_bbox[0] <= m_left + 0.05:
+                        continue
+                    test_bbox = (old_bbox[0] + step_x, old_bbox[1], old_bbox[2] + step_x, old_bbox[3])
                     if test_bbox[0] < m_left or test_bbox[2] > bed_width - m_right:
                         continue
-                    if not check_collision_against_placed(test_poly, test_bbox, placed, gap=gap, exclude_id=p_id, grid=grid_x):
-                        p["x"] = test_x
+                    near_c = grid_g.query_items(test_bbox, gap=gap)
+                    colliders = [it for it in near_c if it[0] != p_id]
+                    if not colliders:
+                        p["x"] += step_x
+                        p["poly"] = [{"x": pt["x"] + step_x, "y": pt["y"]} for pt in p["poly"]]
+                        p["bbox"] = test_bbox
+                        moved_x = True
+                        continue
+                    last_c = p.get("_lc_x")
+                    if last_c is not None:
+                        for c_i, it in enumerate(colliders):
+                            if it[0] == last_c:
+                                colliders.insert(0, colliders.pop(c_i))
+                                break
+                    test_poly = [{"x": pt["x"] + step_x, "y": pt["y"]} for pt in p["poly"]]
+                    collides = False
+                    for it_id, o_poly, o_bbox in colliders:
+                        if polygons_collide(test_poly, o_poly, gap=gap, bbox_a=test_bbox, bbox_b=o_bbox):
+                            collides = True
+                            p["_lc_x"] = it_id
+                            break
+                    if not collides:
+                        p["x"] += step_x
                         p["poly"] = test_poly
                         p["bbox"] = test_bbox
+                        moved_x = True
+                if moved_x:
+                    grid_g = SpatialGrid(cell_size=150.0)
+                    for item in placed:
+                        grid_g.insert(item["id"], item["poly"], item["bbox"])
 
     def _apply_jiggle(
         self,
@@ -990,13 +1239,17 @@ def nest_ia_teste_engine(
     db=None,
     dieproc_params: Optional[Dict[str, Any]] = None,
     margins: Optional[Dict[str, float]] = None,
-    layers: Optional[int] = None
+    layers: Optional[int] = None,
+    deterministic: bool = False
 ) -> List[Dict[str, Any]]:
     """
     Função de entrada oficial do motor 'IA-teste'.
     Combina macros declarativas com aprendizado de máquina local e zero colisão.
     """
     # Se o script não foi passado explicitamente, busca no dieproc_params ou banco
+    if not deterministic and dieproc_params and isinstance(dieproc_params, dict):
+        deterministic = bool(dieproc_params.get("deterministic", False))
+
     script = macro_script
     if not script and dieproc_params and isinstance(dieproc_params, dict):
         script = dieproc_params.get("macro_script")
@@ -1023,5 +1276,7 @@ def nest_ia_teste_engine(
         macro_script=script,
         dieproc_params=dieproc_params,
         margins=margins,
-        layers=layers
+        layers=layers,
+        deterministic=deterministic
     )
+

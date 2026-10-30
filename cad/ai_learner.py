@@ -336,11 +336,12 @@ class NestingAIBrain:
     # Aprendizado por Reforço (UCB1 Multi-Armed Bandit por Família)
     # -----------------------------------------------------------------------
 
-    def suggest_optimized_macro_params(self, family_name: str = "COMPACTA_SOLA_CALCANHAR") -> Dict[str, Any]:
+    def suggest_optimized_macro_params(self, family_name: str = "COMPACTA_SOLA_CALCANHAR", deterministic: bool = False) -> Dict[str, Any]:
         """
         Seleciona o melhor braço de hiperparâmetros usando o algoritmo UCB1:
         UCB_i = avg_reward_i + c * sqrt(ln(N) / n_i)
         Garante equilíbrio entre explorar novos passos e explorar os melhores resultados.
+        Se deterministic=True, congela exploração aleatória e seleciona estritamente por melhor recompensa média ou braço 0 padrão.
         """
         setting_key = f"ai_bandit_{family_name}"
         bandit_data = {}
@@ -352,8 +353,34 @@ class NestingAIBrain:
             except Exception:
                 bandit_data = {}
 
-        total_trials = int(bandit_data.get("total_trials", 0))
         arms_stats = bandit_data.get("arms", {})
+
+        if deterministic:
+            # Seleção puramente determinística para testes e reproducibilidade exata
+            if not arms_stats:
+                return {
+                    **BANDIT_ARMS[0],
+                    "arm_index": 0,
+                    "family": family_name,
+                    "reason": "Exploração Determinística (Braço 0 Padrão)"
+                }
+            best_arm = BANDIT_ARMS[0]
+            best_reward = -float("inf")
+            for arm in BANDIT_ARMS:
+                arm_id = str(arm["id"])
+                stats = arms_stats.get(arm_id, {})
+                avg_r = stats.get("avg_reward", 0.0)
+                if avg_r > best_reward:
+                    best_reward = avg_r
+                    best_arm = arm
+            return {
+                **best_arm,
+                "arm_index": best_arm["id"],
+                "family": family_name,
+                "reason": f"Aproveitamento Determinístico Puro (reward={round(best_reward, 2)})"
+            }
+
+        total_trials = int(bandit_data.get("total_trials", 0))
 
         # 1. Se algum braço nunca foi testado, seleciona-o para exploração inicial
         for arm in BANDIT_ARMS:
