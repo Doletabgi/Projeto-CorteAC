@@ -41,14 +41,46 @@ def get_transform_cache_stats() -> dict:
     }
 
 def _get_contour_hash(contour) -> int:
-    """Calcula ou recupera o hash imutável de um contorno em O(1) via id() ou tupla."""
+    """
+    Hash imutável do contorno, com cache O(1) por identidade VALIDADA.
+
+    O cache é indexado por id(contorno) (endereço), mas o Python recicla endereços
+    de listas liberadas: sem validação, um contorno novo herdaria o hash de outro
+    molde e `transform_contour` devolveria a geometria errada (peças deslocadas,
+    colisões falsas e resultados de nesting corrompidos). A validação barata
+    (tamanho + 3 vértices de referência) transforma a reciclagem em cache miss.
+    """
     cid = id(contour)
-    h = _CONTOUR_HASH_CACHE.get(cid)
-    if h is None:
-        h = hash(tuple((int(p["x"] * 1000), int(p["y"] * 1000)) for p in contour))
-        if len(_CONTOUR_HASH_CACHE) >= 2000:
-            _CONTOUR_HASH_CACHE.clear()
-        _CONTOUR_HASH_CACHE[cid] = h
+    n = len(contour)
+    entrada = _CONTOUR_HASH_CACHE.get(cid)
+    if entrada is not None:
+        h_cached, n_cached, amostra = entrada
+        if n_cached == n:
+            try:
+                a0 = contour[0]
+                am = contour[n // 2]
+                az = contour[-1]
+                if (
+                    round(amostra[0], 4) == round(a0["x"], 4)
+                    and round(amostra[1], 4) == round(a0["y"], 4)
+                    and round(amostra[2], 4) == round(am["x"], 4)
+                    and round(amostra[3], 4) == round(am["y"], 4)
+                    and round(amostra[4], 4) == round(az["x"], 4)
+                    and round(amostra[5], 4) == round(az["y"], 4)
+                ):
+                    return h_cached
+            except (KeyError, IndexError, TypeError):
+                pass
+    h = hash(tuple((int(p["x"] * 1000), int(p["y"] * 1000)) for p in contour))
+    if len(_CONTOUR_HASH_CACHE) >= 2000:
+        _CONTOUR_HASH_CACHE.clear()
+    try:
+        amostra = (contour[0]["x"], contour[0]["y"],
+                   contour[n // 2]["x"], contour[n // 2]["y"],
+                   contour[-1]["x"], contour[-1]["y"])
+    except (KeyError, IndexError, TypeError):
+        amostra = None
+    _CONTOUR_HASH_CACHE[cid] = (h, n, amostra) if amostra is not None else (h, n, None)
     return h
 
 def transform_contour(contour, offset_x, offset_y, angle_deg):

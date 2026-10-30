@@ -9,7 +9,7 @@ on:
       tag_name:
         description: 'Tag de versão SemVer (ex: v1.0.0)'
         required: false
-        default: 'v1.5.3'
+        default: 'v1.5.4'
 
 permissions:
   contents: write
@@ -183,7 +183,13 @@ jobs:
 
             ---
 
-            ### 🛠️ Recursos Incluídos Nesta Versão (v1.5.3):
+            ### 🛠️ Recursos Incluídos Nesta Versão (v1.5.4):
+            - **Correção crítica: cache geométrico podia devolver o polígono de outro molde**:
+              - O cache de transformação de contornos era indexado pelo endereço de memória da lista, sem validar o conteúdo. Como o Python recicla endereços, após muitas sessões o editor/nesting podia usar a geometria de outra peça — desenhos deformados, colisões falsas e risco de posicionamento errado.
+              - Cada entrada passou a ser validada por tamanho e por 3 vértices de referência: reciclagem de endereço agora é apenas um cache miss, nunca um resultado errado.
+              - Detectado pelo fuzz test de 1.000 pares, que falhava de forma intermitente; novos testes reproduzem o defeito no código antigo e validam a correção.
+              - **361 testes automatizados** (360 passando, 1 skip, 0 falhas), estáveis em 3 execuções consecutivas.
+            - **Correções da v1.5.3 / v1.5.2 / v1.5.1 (mantidas)**:
             - **Layout Editor com leitura contínua do encaixe (igual ao mini-preview)**:
               - O encaixe sempre esteve correto (1,05–1,12 mm contorno a contorno, zero colisões), mas o traço escuro de 1,2 px em cada peça fazia o operador enxergar "vãos" entre elas no editor.
               - No zoom de visão geral o contorno passou a usar um tom escurecido da própria cor da peça: o desenho fica contínuo como no mini-preview. No zoom de detalhe o contorno escuro permanece para edição.

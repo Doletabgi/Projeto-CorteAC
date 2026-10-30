@@ -4,7 +4,7 @@
 > **Regra de ouro:** o que está marcado `[CONFIRMADO]` veio do relatório, do código ou do usuário. O que está `[NÃO CONFIRMADO]` é suposição e não deve virar "fato" sem validação. O que está `[PREENCHER]` a IA deve completar lendo o código real.
 
 <!-- AUTO:header:start -->
-**Última sincronização com o código:** 2026-10-30 18:55 (HEAD ao gerar: `49a5391`; 108 arquivos Python, ~53810 linhas)
+**Última sincronização com o código:** 2026-10-30 19:03 (HEAD ao gerar: `d4dbdc6`; 108 arquivos Python, ~53889 linhas)
 <!-- AUTO:header:end -->
 **Versão deste documento:** 1
 
@@ -253,7 +253,7 @@ ui/units.py                                          # ui/units.py - Formataçã
 - funções: `rotate_piece_in_place_math`, `_parse_margins`, `fill_row_pieces`, `fill_row_alternate_pieces`, `fill_column_pieces`, `find_piece_vertical_contact_y`, `find_row_vertical_contact_y`, `fill_sheet_pieces`, `fill_sheet_alternate_pieces`, `fill_user_pieces`
 
 ### `cad/geometry.py`
-- `class SpatialGrid` (linha 350, 5 métodos): Indexação Espacial 2D (Spatial Grid Hashing).
+- `class SpatialGrid` (linha 382, 5 métodos): Indexação Espacial 2D (Spatial Grid Hashing).
 - funções: `rotate_point`, `clear_transform_cache`, `get_transform_cache_stats`, `_get_contour_hash`, `transform_contour`, `polygon_area`, `polygon_perimeter`, `polygon_bbox`, `bbox_overlap`, `point_in_polygon`, `_ccw`, `segments_intersect`, `_collinear_overlap`, `point_segment_distance_sq`, `simplify_contour_for_collision` (+3)
 
 ### `cad/lay_parser.py`
@@ -383,6 +383,7 @@ ui/units.py                                          # ui/units.py - Formataçã
 
 ### `tests/test_nfp.py`
 - `class TestNFP` (linha 38, 7 métodos)
+- `class TestTransformCacheIdentity` (linha 161, 2 métodos): Regressão: o cache de transformação era indexado por id(contorno) sem validar o
 
 ### `tests/test_semver.py`
 - `class TestSemVer` (linha 12, 7 métodos)
@@ -2158,6 +2159,49 @@ fundem e o desenho parece compacto.
 
 ---
 
+
+## 8.16. Cache de transformação devolvia geometria de outro molde (v1.5.4) `[CONFIRMADO]`
+
+Defeito de fundo encontrado ao investigar as divergências de desenho entre o mini-preview e o
+Layout Editor, e exposto pelo fuzz test `test_05` quando a suíte completa rodava.
+
+### 1. Causa raiz
+
+`cad/geometry.py::_get_contour_hash` guardava o hash do contorno em
+`_CONTOUR_HASH_CACHE[id(contorno)]` — **endereço de memória**, sem validar o conteúdo.
+Como o CPython recicla endereços de listas liberadas, um contorno novo podia herdar o hash de
+outro molde; `transform_contour` então respondia do `_TRANSFORM_CACHE`/`_ROT_CACHE` com a
+geometria de **outra peça**. Consequências: peças desenhadas deslocadas/deformadas, colisões
+falsas no editor e risco de contato/posicionamento calculado sobre o polígono errado.
+
+Ficou invisível em processos novos (o endereço só é reciclado depois de muitas sessões), o que
+explica por que só o app do operador — aberto por horas — mostrava o problema.
+
+### 2. Correção
+
+- A entrada do cache passou a guardar `(hash, tamanho, amostra de 3 vértices)`; a cada consulta
+  a amostra é comparada com o contorno real. Reciclagem de endereço vira **cache miss**, nunca
+  resultado errado. Custo: 6 comparações por chamada (O(1)).
+- O restante do caminho (hash de conteúdo → `_TRANSFORM_CACHE`/`_ROT_CACHE`) permanece intacto,
+  preservando o desempenho.
+
+### 3. Evidência
+
+- **Fuzz test**: `test_05_fuzz_1000_pairs_nfp_vs_collision_oracle` falhou de forma intermitente
+  na suíte completa antes da correção e passou em 3 execuções completas consecutivas depois.
+- Novos testes `TestTransformCacheIdentity`:
+  - **falham no código antigo** (`2 failed`);
+  - **passam no código novo** (`2 passed`);
+  - cobrem offset 0 e offset + rotação 180°.
+
+### 4. Validação final
+
+```
+pytest tests/ -q  →  361 passed, 1 skipped  (3 execuções consecutivas)
+```
+
+---
+
 ## 9. Pendências e arquivos faltantes
 
 ### 9.1 Tarefas abertas
@@ -2287,6 +2331,7 @@ Local: `/home/dola/Documentos/clone do job/antigo/arquivos pos instalacao/Common
 | Sex, 30/10/2026 | 12:20 | Antigravity | Feedback Visual de Nesting com Barra de Progresso Indeterminada e Bloqueio de Botões (Fase 6.5): (1) Adição de barra de progresso indeterminada (`ttk.Progressbar`, modo `indeterminate`) e rótulo de status dinâmico na parte inferior de `SessionView` (`ui/session_view.py`), com inicialização oculta sem consumo de espaço; (2) Métodos `show_progress()` e `hide_progress()` em `SessionView` controlando ciclo de vida, animação contínua, status transitório (`Calculando...`) e desabilitação atômica de botões (`[Gerar]`, `[Em espera]`, `[Refazer]`) prevenindo cliques duplos e concorrência; (3) Integração assíncrona na thread `_worker` e `_poll_nest_worker` em `MainWindow` (`ui/main_window.py`) com medição de tempo CAM via `time.perf_counter()`, exibição de tempo na status bar (ex: `concluído em 87 ms`) e tratamento resiliente de erros/retornos antecipados; (4) Nova suíte com 5 testes unitários dedicados em `tests/test_session_view_progress.py` (340/341 testes passando em todo o projeto, 100% de sucesso). | `ui/session_view.py`, `ui/main_window.py`, `tests/test_session_view_progress.py`, `docs/PROJETO_ATOM_JOBMANAGER.md` |
 | Sex, 30/10/2026 | 12:47 | Antigravity | Exclusão Múltipla de Moldes na SessionView via Tecla Delete e Menu de Contexto: (1) Suporte a exclusão em lote na grade de moldes da sessão (`tree_shapes` em `ui/session_view.py`), coletando todos os itens selecionados e removendo a restrição legada a um único índice (`sel[0]`); (2) Diálogo de confirmação dinâmico com mensagem personalizada no singular para 1 molde e plural com contagem para múltiplos moldes ($N > 1$); (3) Preservação de seleção múltipla (feita via Shift ou Ctrl) ao clicar com botão direito do mouse para abrir o menu de contexto, adaptando o rótulo do comando para `🗑️ Remover N Moldes da Sessão`; (4) Reatribuição automática de sequência contínua 1..N sem buracos, sincronização atômica com banco de dados/memória e limpeza do pré-visualizador CAD; (5) Retorno de `"break"` nos eventos `<Delete>` e `<BackSpace>` impedindo propagação e priorização de foco da `SessionView` em `MainWindow.on_global_delete_key`; (6) Nova suíte com 5 testes unitários dedicados em `tests/test_session_shapes_multidelete.py` (345 testes aprovados em todo o projeto, 100% de sucesso). | `ui/session_view.py`, `ui/main_window.py`, `tests/test_session_shapes_multidelete.py`, `docs/PROJETO_ATOM_JOBMANAGER.md` |
 | Sex, 30/10/2026 | 15:15 | Antigravity | Otimização Multi-Sheet, Progresso Determinado e Teste de Estresse 10k (Fases 6.6 & 6.6.1): (1) Instrumentação de `nest_multi_sheet` (`cad/nesting_engine.py`) com parâmetro `progress_callback(sheet_idx, max_sheets)` a cada nova chapa; (2) Feedback visual determinado na `SessionView` (`ui/session_view.py`) via `update_progress_text` exibindo "Calculando chapa {current} de {total}..." com normalização 0 para 1 e despacho thread-safe via `self.after(0, ...)` em `MainWindow.on_auto_nest`; (3) Proteções no `NfpBackend` (`cad/nesting_backend.py`) com `MAX_TRIES_PER_PIECE` (30/50 em FastNest) forçando fechamento de chapa em caso de estouro e timeout de chapa (`SHEET_TIMEOUT_SEC = 5.0 s`); (4) Nova ferramenta `tools/bench_multi_sheet.py` comprovando aninhamento de 1600 peças (16 tamanhos) em apenas 0.242 s (26 chapas); (5) Teste de estresse extremo `tools/bench_10k_pieces.py` com 10.000 peças (20 tamanhos) concluído em 1.51 s (154 chapas), pico de RAM de 358 MB (< 2 GB) e zero MemoryError; (6) Nova suíte com 4 testes unitários em `tests/test_multisheet_progress.py` (349 testes aprovados em todo o projeto, 100% de sucesso). | `cad/nesting_engine.py`, `cad/nesting_backend.py`, `ui/session_view.py`, `ui/main_window.py`, `tools/bench_multi_sheet.py`, `tools/bench_10k_pieces.py`, `tests/test_multisheet_progress.py`, `docs/PROJETO_ATOM_JOBMANAGER.md` |
+| Sex, 30/10/2026 | 19:15 | DeepSeek | Correção do cache de transformação com identidade reciclada (v1.5.4): `_CONTOUR_HASH_CACHE` era indexado por `id(contorno)` sem validar o conteúdo; com a reciclagem de endereços pelo CPython, `transform_contour` podia devolver a geometria de OUTRO molde (peças deslocadas/deformadas, colisões falsas e risco de posicionamento sobre o polígono errado). Detectado pelo fuzz `test_05` falhando de forma intermitente na suíte completa. Correção: entrada do cache passa a guardar `(hash, tamanho, amostra de 3 vértices)` e é validada a cada consulta (O(1)); reciclagem vira cache miss. Novos testes `TestTransformCacheIdentity` (falham no código antigo, passam no novo, cobrindo offset 0 e offset + rotação 180°). 361 testes + 1 skip em 3 execuções consecutivas. | `cad/geometry.py`, `tests/test_nfp.py`, `docs/PROJETO_ATOM_JOBMANAGER.md`, `config.py`, `.github/workflows/release.yml` |
 | Sex, 30/10/2026 | 19:05 | DeepSeek | Leitura visual do encaixe no editor (v1.5.3): o operador via "vãos" entre peças no Layout Editor, mas a medição provou que o encaixe está correto (1,05-1,12 mm contorno a contorno, 0 colisões, polígono desenhado idêntico ao esperado — 0,001 px). O que separava visualmente era o traço escuro `#1e293b` de 1,2 px em cada peça somado ao gap de 1 mm; no preview (menor) as peças se fundem. Correção: no LOD de visão geral o contorno passou a ser um tom escurecido da própria cor (largura 1,0 px), deixando o desenho contínuo como no mini-preview; no zoom de detalhe o contorno escuro permanece, e colisão/seleção mantêm vermelho. 359 testes + 1 skip. | `ui/layout_editor_view.py`, `docs/PROJETO_ATOM_JOBMANAGER.md`, `config.py`, `.github/workflows/release.yml` |
 | Sex, 30/10/2026 | 18:45 | DeepSeek | Correção do editor abrindo sem a placa cinza/grade após "Limpar" (v1.5.2): `redraw()` só desenha o fundo quando a assinatura `_last_bg_sig` muda, mas `set_session_layouts([])` apagava o canvas sem invalidá-la — na reabertura com a mesma chapa o fundo era pulado e ficavam apenas as peças sobre fundo branco (reproduzido: abrir→placa=1, limpar→0, reabrir→0). Correções: invalidação explícita da assinatura ao limpar + autoconserto no `redraw()` quando o item `sheet_bed` não existe mais. Confirmado também que o "vermelho" da captura era o laranja do tamanho maior (`#ea580c`), sem colisões falsas. Novo teste `test_plate_is_redrawn_after_clearing_layouts`; 359 testes + 1 skip. | `ui/layout_editor_view.py`, `tests/test_layout_editor_shortcuts.py`, `docs/PROJETO_ATOM_JOBMANAGER.md`, `config.py`, `.github/workflows/release.yml` |
 | Sex, 30/10/2026 | 18:30 | DeepSeek | Correção do CI de release: pushes de `master`, `main` e da tag publicavam a MESMA release em paralelo e a etapa `publish-release` falhava (faltava `allowUpdates`), deixando a v1.5.1 sem o `CorteAC.exe`; adicionados `concurrency: corteac-release` (serializa as publicações), `allowUpdates: true` e `overwrite_files: true`. | `.github/workflows/release.yml`, `docs/PROJETO_ATOM_JOBMANAGER.md` |
@@ -2302,6 +2347,7 @@ Local: `/home/dola/Documentos/clone do job/antigo/arquivos pos instalacao/Common
 <!-- AUTO:gitlog:start -->
 | Commit | Data | Autor | Mensagem |
 |---|---|---|---|
+| `d4dbdc6` | 2026-10-30 | Doletabgi | fix(ui): leitura continua do encaixe no editor (v1.5.3) |
 | `49a5391` | 2026-10-30 | Doletabgi | fix(ui): editor reabria sem a placa cinza/grade apos limpar layout (v1.5.2) |
 | `a99aeca` | 2026-10-30 | Doletabgi | ci(release): serializar publicacoes e permitir atualizar release existente |
 | `b4a11d7` | 2026-10-30 | Doletabgi | fix(ui): Layout Editor mostrava geometria de outra sessao e falsa colisao (v1.5.1) |
@@ -2316,7 +2362,6 @@ Local: `/home/dola/Documentos/clone do job/antigo/arquivos pos instalacao/Common
 | `35b3a62` | 2026-10-30 | Doletabgi | docs: oficializar regra de centralizacao total no PROJETO_ATOM_JOBMANAGER |
 | `62bfa25` | 2026-10-30 | Doletabgi | docs: sincronizar header e gitlog apos reorganizacao de docs |
 | `143d9d0` | 2026-10-30 | Doletabgi | docs: consolidar especificacoes no PROJETO_ATOM_JOBMANAGER e organizar docs/ |
-| `9de94fd` | 2026-10-30 | Doletabgi | feat(release): lancamento da versao v1.3.0 - catalogo de moldes, modos de encaixe em 3 camadas e seguranca cad |
 <!-- AUTO:gitlog:end -->
 
 ---

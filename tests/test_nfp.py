@@ -158,5 +158,52 @@ class TestNFP(unittest.TestCase):
             self.assertEqual(p, first)
 
 
+class TestTransformCacheIdentity(unittest.TestCase):
+    """
+    Regressão: o cache de transformação era indexado por id(contorno) sem validar o
+    conteúdo. Como o Python recicla o endereço de listas liberadas, um contorno novo
+    podia herdar o hash de outro molde e `transform_contour` devolvia a geometria
+    errada — colisões falsas e resultados de nesting corrompidos.
+    (Detectado pelo fuzz test test_05 em execuções da suíte completa.)
+    """
+
+    def test_transform_cache_rejeita_entrada_de_outro_contorno(self):
+        from cad import geometry
+        from cad.geometry import clear_transform_cache, transform_contour
+
+        clear_transform_cache()
+        outro = [{"x": float(i) * 3.0, "y": float(i) * 5.0} for i in range(60)]
+        alvo = [{"x": float(i), "y": float(i) * 2.0} for i in range(60)]
+
+        # Popula o cache com o conteúdo de "outro" e o copia para o id de "alvo",
+        # simulando a reciclagem de endereço que o CPython faz após o GC.
+        transform_contour(outro, 0.0, 0.0, 0.0)  # popula o cache de transformação
+        geometry._CONTOUR_HASH_CACHE[id(alvo)] = geometry._CONTOUR_HASH_CACHE[id(outro)]
+
+        saida = transform_contour(alvo, 0.0, 0.0, 0.0)
+        self.assertEqual(len(saida), len(alvo))
+        for obtido, esperado in zip(saida, alvo):
+            self.assertAlmostEqual(obtido["x"], esperado["x"], places=6)
+            self.assertAlmostEqual(obtido["y"], esperado["y"], places=6)
+
+    def test_transform_contour_com_offset_e_rotacao_apos_reciclagem(self):
+        from cad import geometry
+        from cad.geometry import clear_transform_cache, transform_contour
+
+        clear_transform_cache()
+        outro = [{"x": float(i) * 4.0, "y": float(i) * 7.0} for i in range(80)]
+        alvo = [{"x": float(i), "y": float(i) * 1.5} for i in range(80)]
+        transform_contour(outro, 100.0, 50.0, 180.0)  # popula o cache de transformação
+        geometry._CONTOUR_HASH_CACHE[id(alvo)] = geometry._CONTOUR_HASH_CACHE[id(outro)]
+
+        saida = transform_contour(alvo, 100.0, 50.0, 180.0)
+        esperado = transform_contour(alvo, 100.0, 50.0, 180.0)  # já validado acima
+        for a, b in zip(saida, esperado):
+            self.assertAlmostEqual(a["x"], b["x"], places=6)
+            self.assertAlmostEqual(a["y"], b["y"], places=6)
+        # e a geometria tem que ser a do alvo (rotação 180 de x,y), não a do outro
+        self.assertAlmostEqual(saida[1]["x"], 100.0 - 1.0, places=3)
+
+
 if __name__ == "__main__":
     unittest.main()
