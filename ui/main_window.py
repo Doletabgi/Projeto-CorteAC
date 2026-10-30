@@ -4507,6 +4507,8 @@ class MainWindow(tk.Tk):
             sess_shapes = self.current_session["shapes"]
 
         if not sess_shapes:
+            if getattr(self, "session_view", None) and hasattr(self.session_view, "hide_progress"):
+                self.session_view.hide_progress()
             messagebox.showwarning(
                 "Nenhum Molde na Sessão",
                 "A sessão atual está em branco.\n\nPor favor, vá até a aba 'Moldes' e clique em '➕ Adicionar Molde...' para selecionar os moldes a cortar antes de executar o Nesting.",
@@ -4517,6 +4519,8 @@ class MainWindow(tk.Tk):
             return
 
         if not self.current_material:
+            if getattr(self, "session_view", None) and hasattr(self.session_view, "hide_progress"):
+                self.session_view.hide_progress()
             self.lbl_status_msg.config(text="Atenção: Selecione um material na aba Materiais para calcular.")
             return
 
@@ -4648,10 +4652,13 @@ class MainWindow(tk.Tk):
         self._nesting_in_progress = True
         self.config(cursor="watch")
         self.lbl_status_msg.config(text=f"Calculando Nesting automático '{strategy}' ({params})... aguarde.")
+        if getattr(self, "session_view", None) and hasattr(self.session_view, "show_progress"):
+            self.session_view.show_progress("Calculando encaixe... Por favor aguarde.")
 
         nest_q = queue.Queue()
 
         def _worker():
+            t_start = time.perf_counter()
             try:
                 sorted_sess_shapes, _ = sort_shapes_by_sequence(sess_shapes)
                 if do_profile:
@@ -4679,6 +4686,10 @@ class MainWindow(tk.Tk):
                     ps.print_stats(20)
                     print(f"[cProfile Nesting Auto - {strategy} ({params})]\n{s.getvalue()}")
 
+                elapsed_ms = int((time.perf_counter() - t_start) * 1000)
+                if isinstance(result, dict):
+                    result["elapsed_ms"] = elapsed_ms
+
                 nest_q.put(("SUCCESS", result))
             except Exception as e:
                 nest_q.put(("ERROR", str(e)))
@@ -4699,6 +4710,8 @@ class MainWindow(tk.Tk):
 
         self._nesting_in_progress = False
         self.config(cursor="")
+        if getattr(self, "session_view", None) and hasattr(self.session_view, "hide_progress"):
+            self.session_view.hide_progress()
 
         if status == "SUCCESS":
             nest_result = data
@@ -4794,10 +4807,13 @@ class MainWindow(tk.Tk):
             spans_list = nest_result.get("shape_spans", [])
             spans_compact = "; ".join(s["span_text"] for s in spans_list if s.get("start_layout"))
 
+            elapsed_ms = nest_result.get("elapsed_ms")
+            elapsed_text = f" em {elapsed_ms} ms" if elapsed_ms is not None else ""
+
             if n_sheets > 1:
-                msg_status = f"{tot_pairs} pares encaixados em {n_sheets} placas ({yields_str}) na máquina {machine}."
+                msg_status = f"{tot_pairs} pares encaixados em {n_sheets} placas ({yields_str}) na máquina {machine}{elapsed_text}."
             else:
-                msg_status = f"Auto-Nest concluído com estratégia '{strategy}' ({params}) na máquina {machine}. ({len(pieces)} peças encaixadas)"
+                msg_status = f"Encaixe concluído com estratégia '{strategy}' ({params}) na máquina {machine}{elapsed_text}. ({len(pieces)} peças encaixadas)"
 
             if spans_compact:
                 msg_status += f" [{spans_compact}]"
@@ -4815,6 +4831,8 @@ class MainWindow(tk.Tk):
 
             self.lbl_status_msg.config(text=msg_status)
         else:
+            if getattr(self, "session_view", None) and hasattr(self.session_view, "hide_progress"):
+                self.session_view.hide_progress()
             messagebox.showerror("Erro no Auto-Nest", f"Falha no cálculo de nesting:\n{data}", parent=self)
             self.lbl_status_msg.config(text="Erro ao calcular nesting automático.")
 

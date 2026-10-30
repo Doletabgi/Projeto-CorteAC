@@ -497,6 +497,25 @@ class SessionView(tk.Frame):
         # Botão Cut removido conforme solicitação
         self.btn_action_cut = None
 
+        # Feedback visual de Nesting (Barra de progresso indeterminada e texto)
+        self.frame_progress = tk.Frame(btn_action_box, bg=THEME["bg_card"])
+        # Por padrão, fica oculto (sem pack no init)
+        self.progress_bar = ttk.Progressbar(
+            self.frame_progress,
+            mode="indeterminate",
+            length=180
+        )
+        self.progress_bar.pack(side="left", padx=(0, 8))
+
+        self.lbl_progress = tk.Label(
+            self.frame_progress,
+            text="Calculando encaixe... Por favor aguarde.",
+            bg=THEME["bg_card"],
+            fg=THEME["text_main"],
+            font=("Segoe UI", 8, "italic")
+        )
+        self.lbl_progress.pack(side="left")
+
         # Moldura clássica para dados da sessão (Nome e Status)
         info_frame = tk.LabelFrame(
             gen_container,
@@ -1951,8 +1970,76 @@ class SessionView(tk.Frame):
                 self.on_material_change_cb(mat_id)
 
     def on_nest_button_click(self):
+        self.show_progress()
         if self.on_nest_cb:
             self.on_nest_cb()
+
+    def show_progress(self, text: str = "Calculando encaixe... Por favor aguarde."):
+        """Exibe a barra de progresso indeterminada e desabilita botões de ação para evitar concorrência."""
+        if hasattr(self, "lbl_status_val") and self.lbl_status_val.winfo_exists():
+            self._prev_status_text = self.lbl_status_val.cget("text")
+            self.lbl_status_val.config(text="Calculando...", fg="#B8860B")
+
+        if hasattr(self, "lbl_progress") and self.lbl_progress.winfo_exists():
+            self.lbl_progress.config(text=text)
+
+        if hasattr(self, "frame_progress") and self.frame_progress.winfo_exists():
+            if not self.frame_progress.winfo_ismapped():
+                self.frame_progress.pack(fill="x", pady=(4, 2))
+
+        if hasattr(self, "progress_bar") and self.progress_bar.winfo_exists():
+            try:
+                self.progress_bar.start(10)
+            except Exception:
+                pass
+
+        try:
+            self.config(cursor="watch")
+        except Exception:
+            pass
+
+        # Desabilita botões de ação para evitar cliques duplos e concorrência
+        for btn in (getattr(self, "btn_action_nest", None),
+                    getattr(self, "btn_action_standby", None),
+                    getattr(self, "btn_action_rewind", None)):
+            if btn and btn.winfo_exists():
+                try:
+                    btn.config(state="disabled")
+                except Exception:
+                    pass
+
+    def hide_progress(self):
+        """Para e oculta a barra de progresso e reabilita os botões de ação."""
+        if hasattr(self, "progress_bar") and self.progress_bar.winfo_exists():
+            try:
+                self.progress_bar.stop()
+            except Exception:
+                pass
+
+        if hasattr(self, "frame_progress") and self.frame_progress.winfo_exists():
+            try:
+                self.frame_progress.pack_forget()
+            except Exception:
+                pass
+
+        if hasattr(self, "lbl_status_val") and self.lbl_status_val.winfo_exists():
+            if getattr(self, "_prev_status_text", None) and self.lbl_status_val.cget("text") == "Calculando...":
+                self.lbl_status_val.config(text=self._prev_status_text, fg="#006400")
+
+        try:
+            self.config(cursor="")
+        except Exception:
+            pass
+
+        # Reabilita botões de ação
+        for btn in (getattr(self, "btn_action_nest", None),
+                    getattr(self, "btn_action_standby", None),
+                    getattr(self, "btn_action_rewind", None)):
+            if btn and btn.winfo_exists():
+                try:
+                    btn.config(state="normal")
+                except Exception:
+                    pass
 
     def on_standby_button_click(self):
         if self.on_standby_cb:
