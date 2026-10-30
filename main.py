@@ -26,6 +26,11 @@ import multiprocessing
 from ui.main_window import MainWindow
 
 def main():
+    if "--version" in sys.argv or "-v" in sys.argv:
+        from config import APP_NAME, APP_VERSION
+        print(f"{APP_NAME} {APP_VERSION}")
+        sys.exit(0)
+
     if "--check-db" in sys.argv:
         import db
         print(f"Backend ativo: {db.get_active_backend()}")
