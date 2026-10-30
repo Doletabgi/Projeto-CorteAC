@@ -403,13 +403,18 @@ def dieproc_nest_pieces(available_shapes, bed_width_mm, bed_height_mm, target_co
         grid = SpatialGrid(cell_size=100.0)
         rows = []
         queue_idx = 0
+        cancel_check = dieproc_params.get("cancel_check") if isinstance(dieproc_params, dict) else None
 
         while queue_idx < len(shape_queue) and cur_row_y < bed_height_mm - m_top and len(placed) < target_count:
+            if cancel_check is not None and cancel_check():
+                break
             row_pieces = []
             is_odd_row = (row_idx % 2 == 1)
 
             # Preenchimento horizontal da linha com encosto milimétrico contorno a contorno
             while queue_idx < len(shape_queue) and (len(placed) + len(row_pieces)) < target_count:
+                if cancel_check is not None and cancel_check():
+                    break
                 shape = shape_queue[queue_idx]
                 piece_in_row_idx = len(row_pieces)
 
@@ -1048,7 +1053,8 @@ def nest_multi_sheet(
     margins: dict = None,
     layers: int = 2,
     max_sheets: int = 200,
-    progress_callback=None
+    progress_callback=None,
+    cancel_check=None
 ) -> dict:
     """
     Orquestrador de Nesting em Múltiplas Placas (lay0000, lay0001, ...) até encaixar
@@ -1061,10 +1067,30 @@ def nest_multi_sheet(
     - Limite de segurança de max_sheets (padrão 200) com aviso.
     - Ordem de prioridade: coluna 'sequence' (# CONFIRMAR NO WINDOWS: ordem pela coluna Sequência).
     - Feedback de progresso via progress_callback(sheet_idx, max_sheets) a cada nova placa.
+    - Suporte a cancelamento imediato via cancel_check() retornando layouts parciais calculados.
+    - Verificação de segurança de dimensões (máximo 10 metros / 10.000 mm).
     """
+    if bed_width_mm > 10000.0 or bed_height_mm > 10000.0:
+        return {
+            "success": False,
+            "cancelled": False,
+            "layouts": [],
+            "total_pieces": 0,
+            "total_pairs_cut": 0,
+            "total_pairs_demanded": sum(int(x.get("pairs", 0)) for x in (available_shapes or [])),
+            "yields": [],
+            "unplaced_shapes": [str(s.get("name") or s.get("id") or "Molde") for s in (available_shapes or [])],
+            "warning": f"Dimensões da chapa ({bed_width_mm:.1f} x {bed_height_mm:.1f} mm) excedem o limite de segurança de 10 metros (10.000 mm).",
+            "missing_sequence_warning": None,
+            "shape_spans": [],
+            "spans_summary": "",
+            "num_sheets": 0
+        }
+
     if not available_shapes:
         return {
             "success": True,
+            "cancelled": False,
             "layouts": [],
             "total_pieces": 0,
             "total_pairs_cut": 0,
@@ -1072,6 +1098,9 @@ def nest_multi_sheet(
             "yields": [],
             "unplaced_shapes": [],
             "warning": None,
+            "missing_sequence_warning": None,
+            "shape_spans": [],
+            "spans_summary": "",
             "num_sheets": 0
         }
 
@@ -1098,6 +1127,7 @@ def nest_multi_sheet(
                 shp_name = str(s.get("name") or s.get("id") or "Molde")
                 return {
                     "success": False,
+                    "cancelled": False,
                     "layouts": [],
                     "total_pieces": 0,
                     "total_pairs_cut": 0,
@@ -1105,6 +1135,9 @@ def nest_multi_sheet(
                     "yields": [],
                     "unplaced_shapes": [shp_name],
                     "warning": f"Molde '{shp_name}' ({bw:.1f}x{bh:.1f} mm) excede a área útil da placa ({usable_w:.1f}x{usable_h:.1f} mm).",
+                    "missing_sequence_warning": None,
+                    "shape_spans": [],
+                    "spans_summary": "",
                     "num_sheets": 0
                 }
 
@@ -1137,6 +1170,7 @@ def nest_multi_sheet(
     if total_pieces_demanded == 0:
         return {
             "success": True,
+            "cancelled": False,
             "layouts": [],
             "total_pieces": 0,
             "total_pairs_cut": 0,
@@ -1153,8 +1187,14 @@ def nest_multi_sheet(
     layouts = []
     sheet_idx = 0
     warning_msg = None
+    cancelled = False
 
     while any(d["remaining_pieces"] > 0 for d in demands):
+        if cancel_check is not None and cancel_check():
+            cancelled = True
+            warning_msg = "Cálculo cancelado pelo operador."
+            break
+
         if sheet_idx >= max_sheets:
             warning_msg = f"Limite de segurança de {max_sheets} placas atingido."
             break
@@ -1176,6 +1216,10 @@ def nest_multi_sheet(
 
         target_count_round = sum(d["remaining_pieces"] for d in demands)
 
+        round_dp_params = dict(dieproc_params) if dieproc_params else {}
+        if cancel_check is not None:
+            round_dp_params["cancel_check"] = cancel_check
+
         placed_round = auto_nest_pieces(
             available_shapes=round_shapes,
             bed_width_mm=bed_width_mm,
@@ -1184,11 +1228,16 @@ def nest_multi_sheet(
             strategy=strategy,
             params=params,
             gap_mm=gap_mm,
-            dieproc_params=dieproc_params,
+            dieproc_params=round_dp_params,
             db=db,
             margins=m_dict,
             layers=l_val
         )
+
+        if cancel_check is not None and cancel_check():
+            cancelled = True
+            warning_msg = "Cálculo cancelado pelo operador."
+            break
 
         # Proteção contra laço infinito: se a rodada não encaixou nada
         if not placed_round:
@@ -1307,7 +1356,7 @@ def nest_multi_sheet(
     total_pairs_cut = (total_placed * l_val) // 2
     yields = [ly["yield_percent"] for ly in layouts]
     unplaced_names = [d["shape"].get("name", "Molde") for d in demands if d["remaining_pieces"] > 0]
-    success = (len(unplaced_names) == 0 and len(layouts) > 0)
+    success = (len(unplaced_names) == 0 and len(layouts) > 0 and not cancelled)
 
     final_warning = warning_msg
     if missing_seq_warn:
@@ -1315,6 +1364,7 @@ def nest_multi_sheet(
 
     return {
         "success": success,
+        "cancelled": cancelled,
         "layouts": layouts,
         "total_pieces": total_placed,
         "total_pairs_cut": total_pairs_cut,

@@ -440,6 +440,25 @@ class MaterialCodesView(tk.Frame):
             except ValueError:
                 gap = 1.0
 
+            adjustments = []
+            if w_m > 10.0:
+                w_m = w_m / 1000.0
+                adjustments.append(f"Largura ajustada automaticamente para {w_m:.3f}m (o valor anterior parecia estar em mm).")
+            if l_m > 10.0:
+                l_m = l_m / 1000.0
+                adjustments.append(f"Comprimento/Altura ajustado automaticamente para {l_m:.3f}m (o valor anterior parecia estar em mm).")
+
+            if w_m > 10.0 or l_m > 10.0:
+                messagebox.showerror(
+                    "Dimensão Inválida",
+                    f"As dimensões do material não podem exceder 10 metros.\n\nLargura: {w_m:.2f}m\nComprimento: {l_m:.2f}m",
+                    parent=dlg
+                )
+                return
+
+            if adjustments:
+                messagebox.showinfo("Ajuste de Unidade", "\n".join(adjustments), parent=dlg)
+
             if not code:
                 messagebox.showwarning("Campo Obrigatório", "Informe o código do material.", parent=dlg)
                 entries[0].focus_set()

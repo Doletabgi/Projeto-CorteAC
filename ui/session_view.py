@@ -77,7 +77,7 @@ RECOMMENDED_COMBINATIONS = [
 ]
 
 class SessionView(tk.Frame):
-    def __init__(self, parent, session_data=None, canvas_ref=None, on_close=None, on_minimize=None, on_maximize=None, on_edit_shape=None, on_delete_shape=None, on_import_die=None, on_open_layout_editor=None, on_material_change=None, on_nest=None, on_standby=None, on_rewind=None, on_cut=None, on_strategy_change=None, on_add_shapes=None, all_shapes_catalog=None, db=None, on_open_dieproc=None, **kwargs):
+    def __init__(self, parent, session_data=None, canvas_ref=None, on_close=None, on_minimize=None, on_maximize=None, on_edit_shape=None, on_delete_shape=None, on_import_die=None, on_open_layout_editor=None, on_material_change=None, on_nest=None, on_standby=None, on_rewind=None, on_cut=None, on_strategy_change=None, on_add_shapes=None, all_shapes_catalog=None, db=None, on_open_dieproc=None, on_cancel=None, **kwargs):
         super().__init__(parent, bg=THEME["bg_surface"], relief="ridge", bd=2, **kwargs)
         self.session_data = session_data or {
             "id": 91,
@@ -116,6 +116,8 @@ class SessionView(tk.Frame):
         self.shape_sort_desc = True
         self.current_mode = self.session_data.get("nesting_mode") or "custom"
         self._suppress_auto_promote = False
+        self._cancel_nest = False
+        self.on_cancel_cb = on_cancel
         self.setup_ui()
 
     def setup_ui(self):
@@ -514,7 +516,24 @@ class SessionView(tk.Frame):
             fg=THEME["text_main"],
             font=("Segoe UI", 8, "italic")
         )
-        self.lbl_progress.pack(side="left")
+        self.lbl_progress.pack(side="left", padx=(0, 8))
+
+        self.btn_action_cancel = tk.Button(
+            self.frame_progress,
+            text="⏹ Cancelar",
+            bg=THEME.get("danger", "#dc3545"),
+            fg="#ffffff",
+            activebackground="#c82333",
+            activeforeground="#ffffff",
+            font=("Segoe UI", 8, "bold"),
+            relief="raised",
+            bd=1,
+            padx=8,
+            pady=1,
+            cursor="hand2",
+            command=self.on_cancel_nest_click
+        )
+        self.btn_action_cancel.pack(side="left")
 
         # Moldura clássica para dados da sessão (Nome e Status)
         info_frame = tk.LabelFrame(
@@ -1975,8 +1994,26 @@ class SessionView(tk.Frame):
         if self.on_nest_cb:
             self.on_nest_cb()
 
+    def on_cancel_nest_click(self):
+        """Disparado ao clicar no botão [ ⏹ Cancelar ] da barra de progresso."""
+        self._cancel_nest = True
+        if hasattr(self, "btn_action_cancel") and self.btn_action_cancel.winfo_exists():
+            try:
+                self.btn_action_cancel.config(state="disabled")
+            except Exception:
+                pass
+        if hasattr(self, "lbl_progress") and self.lbl_progress.winfo_exists():
+            self.lbl_progress.config(text="Cancelando cálculo...")
+        if callable(self.on_cancel_cb):
+            try:
+                self.on_cancel_cb()
+            except Exception:
+                pass
+
     def update_progress_text(self, current: int, total: int):
         """Atualiza o texto da barra de progresso para: Calculando chapa {current} de {total}..."""
+        if getattr(self, "_cancel_nest", False):
+            return
         display_current = current + 1 if current == 0 else current
         text = f"Calculando chapa {display_current} de {total}..."
         if hasattr(self, "lbl_progress") and self.lbl_progress.winfo_exists():
@@ -1992,6 +2029,13 @@ class SessionView(tk.Frame):
 
     def show_progress(self, text: str = "Calculando encaixe... Por favor aguarde."):
         """Exibe a barra de progresso indeterminada e desabilita botões de ação para evitar concorrência."""
+        self._cancel_nest = False
+        if hasattr(self, "btn_action_cancel") and self.btn_action_cancel.winfo_exists():
+            try:
+                self.btn_action_cancel.config(state="normal", text="⏹ Cancelar")
+            except Exception:
+                pass
+
         if hasattr(self, "lbl_status_val") and self.lbl_status_val.winfo_exists():
             self._prev_status_text = self.lbl_status_val.cget("text")
             self.lbl_status_val.config(text="Calculando...", fg="#B8860B")
@@ -2026,6 +2070,13 @@ class SessionView(tk.Frame):
 
     def hide_progress(self):
         """Para e oculta a barra de progresso e reabilita os botões de ação."""
+        self._cancel_nest = False
+        if hasattr(self, "btn_action_cancel") and self.btn_action_cancel.winfo_exists():
+            try:
+                self.btn_action_cancel.config(state="normal", text="⏹ Cancelar")
+            except Exception:
+                pass
+
         if hasattr(self, "progress_bar") and self.progress_bar.winfo_exists():
             try:
                 self.progress_bar.stop()
@@ -2478,6 +2529,8 @@ class SessionView(tk.Frame):
         if col_key in ("width", "len") or col_index in (4, 5):
             try:
                 f = float(new_val_str.replace(",", "."))
+                if f > 10.0:
+                    f = f / 1000.0
                 new_val_str = f"{f:.2f}".replace(".", ",")
             except ValueError:
                 pass
@@ -2609,6 +2662,21 @@ class SessionView(tk.Frame):
             if col_key in ("width", "len") or col_index in (4, 5):
                 try:
                     f = float(new_val.replace(",", "."))
+                    if f > 10.0:
+                        dim_name = "Largura" if (col_key == "width" or col_index == 4) else "Comprimento/Altura"
+                        f = f / 1000.0
+                        messagebox.showinfo(
+                            "Ajuste de Unidade",
+                            f"{dim_name} ajustada automaticamente para {f:.3f}m (o valor digitado parecia estar em mm).",
+                            parent=self
+                        )
+                    if f > 10.0:
+                        messagebox.showerror(
+                            "Dimensão Inválida",
+                            f"A dimensão do material não pode exceder 10 metros ({f:.2f}m).",
+                            parent=self
+                        )
+                        return
                     new_val = f"{f:.2f}".replace(".", ",")
                 except ValueError:
                     pass
@@ -2735,13 +2803,43 @@ class SessionView(tk.Frame):
         btn_box.pack(fill="x", padx=14)
 
         def save():
+            raw_w = entries[3].get().strip().replace(",", ".")
+            raw_l = entries[4].get().strip().replace(",", ".")
+            try:
+                w_m = float(raw_w)
+            except ValueError:
+                w_m = 1.38
+            try:
+                l_m = float(raw_l)
+            except ValueError:
+                l_m = 1.08
+
+            adjustments = []
+            if w_m > 10.0:
+                w_m = w_m / 1000.0
+                adjustments.append(f"Largura ajustada automaticamente para {w_m:.3f}m (o valor digitado parecia estar em mm).")
+            if l_m > 10.0:
+                l_m = l_m / 1000.0
+                adjustments.append(f"Comprimento/Altura ajustado automaticamente para {l_m:.3f}m (o valor digitado parecia estar em mm).")
+
+            if w_m > 10.0 or l_m > 10.0:
+                messagebox.showerror(
+                    "Dimensão Inválida",
+                    f"As dimensões do material não podem exceder 10 metros.\n\nLargura: {w_m:.2f}m\nComprimento: {l_m:.2f}m",
+                    parent=dialog
+                )
+                return
+
+            if adjustments:
+                messagebox.showinfo("Ajuste de Unidade", "\n".join(adjustments), parent=dialog)
+
             new_vals = [
                 "▶",
                 entries[0].get().strip(),
                 entries[1].get().strip(),
                 entries[2].get().strip(),
-                entries[3].get().strip().replace(".", ","),
-                entries[4].get().strip().replace(".", ","),
+                str(round(w_m, 4)).replace(".", ","),
+                str(round(l_m, 4)).replace(".", ","),
                 entries[5].get().strip(),
                 entries[6].get().strip(),
                 entries[7].get().strip(),
@@ -2772,6 +2870,10 @@ class SessionView(tk.Frame):
             defn = str(val_map.get("defn", "como placa"))
             w_m = float(str(val_map.get("width", "1,38")).replace(",", "."))
             l_m = float(str(val_map.get("len", "1,08")).replace(",", "."))
+            if w_m > 10.0:
+                w_m = w_m / 1000.0
+            if l_m > 10.0:
+                l_m = l_m / 1000.0
             layers = int(str(val_map.get("layers", 2)))
             thick = float(str(val_map.get("thick", 0)).replace(",", "."))
             gap = float(str(val_map.get("gap", 1)).replace(",", "."))

@@ -367,8 +367,11 @@ class NfpBackend:
 
         t_sheet_start = time.perf_counter()
         shape_tries = 0
+        cancel_check = dieproc_params.get("cancel_check") if isinstance(dieproc_params, dict) else None
 
         while queue_idx < len(shape_queue) and cur_row_y < bed_height_mm - m_top and len(placed) < max_pieces:
+            if cancel_check is not None and cancel_check():
+                break
             if time.perf_counter() - t_sheet_start > timeout_sec:
                 logger.warning("Timeout de chapa atingido (%.2fs). Fechando chapa antecipadamente.", timeout_sec)
                 break
@@ -378,6 +381,8 @@ class NfpBackend:
 
             # Preenchimento horizontal da linha com encosto milimétrico acelerado por NFP
             while queue_idx < len(shape_queue) and (len(placed) + len(row_pieces)) < max_pieces:
+                if cancel_check is not None and cancel_check():
+                    break
                 if time.perf_counter() - t_sheet_start > timeout_sec:
                     logger.warning("Timeout de chapa atingido (%.2fs) durante preenchimento de linha.", timeout_sec)
                     break

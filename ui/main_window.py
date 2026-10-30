@@ -3060,6 +3060,25 @@ class MainWindow(tk.Tk):
             except ValueError:
                 thick = 0.0
 
+            adjustments = []
+            if w_m > 10.0:
+                w_m = w_m / 1000.0
+                adjustments.append(f"Largura ajustada automaticamente para {w_m:.3f}m (o valor anterior parecia estar em mm).")
+            if l_m > 10.0:
+                l_m = l_m / 1000.0
+                adjustments.append(f"Comprimento/Altura ajustado automaticamente para {l_m:.3f}m (o valor anterior parecia estar em mm).")
+
+            if w_m > 10.0 or l_m > 10.0:
+                messagebox.showerror(
+                    "Dimensão Inválida",
+                    f"As dimensões do material não podem exceder 10 metros.\n\nLargura: {w_m:.2f}m\nComprimento: {l_m:.2f}m",
+                    parent=dialog
+                )
+                return
+
+            if adjustments:
+                messagebox.showinfo("Ajuste de Unidade", "\n".join(adjustments), parent=dialog)
+
             w_mm = w_m * 1000.0
             h_mm = l_m * 1000.0
             area_m2 = round(w_m * l_m, 4)
@@ -4661,6 +4680,19 @@ class MainWindow(tk.Tk):
         mat_w = self.current_material["width_mm"]
         mat_h = self.current_material["height_mm"]
 
+        if mat_w > 10000.0 or mat_h > 10000.0:
+            messagebox.showerror(
+                "Dimensão Inválida",
+                f"As dimensões da chapa ({mat_w/1000.0:.2f}m x {mat_h/1000.0:.2f}m) excedem o limite de segurança de 10 metros.\n"
+                "Ajuste os parâmetros do material antes de executar o aninhamento.",
+                parent=self
+            )
+            return
+
+        self._cancel_nest = False
+        if getattr(self, "session_view", None):
+            self.session_view.on_cancel_cb = self.on_cancel_nest
+
         self._nesting_in_progress = True
         self.config(cursor="watch")
         self.lbl_status_msg.config(text=f"Calculando Nesting automático '{strategy}' ({params})... aguarde.")
@@ -4694,7 +4726,8 @@ class MainWindow(tk.Tk):
                     db=self.db,
                     margins=margins,
                     layers=mat_layers,
-                    progress_callback=_on_progress
+                    progress_callback=_on_progress,
+                    cancel_check=lambda: getattr(self, "_cancel_nest", False)
                 )
 
                 if do_profile:
@@ -4719,6 +4752,11 @@ class MainWindow(tk.Tk):
         th.start()
         self.after(50, lambda: self._poll_nest_worker(nest_q, strategy, params, machine, gap, margins, mat_layers))
 
+    def on_cancel_nest(self):
+        """Disparado quando o usuário solicita o cancelamento do aninhamento."""
+        self._cancel_nest = True
+        self.lbl_status_msg.config(text="Cancelando cálculo pelo operador... aguarde.")
+
     def _poll_nest_worker(self, q, strategy, params, machine, gap=1.0, margins=None, layers=2):
         try:
             status, data = q.get_nowait()
@@ -4733,6 +4771,29 @@ class MainWindow(tk.Tk):
 
         if status == "SUCCESS":
             nest_result = data
+            if nest_result.get("cancelled"):
+                self.lbl_status_msg.config(text="Cálculo cancelado pelo operador.")
+                layouts = nest_result.get("layouts", [])
+                if layouts:
+                    first_layout = layouts[0]
+                    pieces = first_layout.get("pieces", [])
+                    self.canvas.set_pieces(pieces)
+                    if self.current_session:
+                        self.current_session["placed_pieces"] = pieces
+                        self.current_session["layouts"] = layouts
+                        try:
+                            self.db.save_session_layouts(self.current_session["id"], layouts)
+                        except Exception as e:
+                            print(f"[AVISO] Falha ao persistir layouts da sessão cancelada: {e}")
+                    if hasattr(self, "layout_editor_view") and self.layout_editor_view:
+                        if hasattr(self.layout_editor_view, "set_session_layouts"):
+                            self.layout_editor_view.set_session_layouts(layouts, initial_index=0)
+                        elif hasattr(self.layout_editor_view, "set_pieces"):
+                            self.layout_editor_view.set_pieces(pieces)
+                    if self.session_view:
+                        self.session_view.load_session(self.current_session)
+                return
+
             layouts = nest_result.get("layouts", [])
             if not layouts:
                 warn = nest_result.get("warning") or "Nenhuma peça coube nas dimensões especificadas."
