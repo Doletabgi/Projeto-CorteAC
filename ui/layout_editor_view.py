@@ -1417,6 +1417,9 @@ class LayoutEditorView(tk.Frame):
             self.layout_undo_stacks = {}
             self.placed_pieces = []
             self.current_layout_index = 0
+            # O canvas será limpo abaixo: invalida a assinatura de fundo para que a
+            # placa cinza/grade seja redesenhada na próxima abertura.
+            self._last_bg_sig = None
             if hasattr(self, "canvas") and hasattr(self.canvas, "clear_bed"):
                 self.canvas.clear_bed()
             elif hasattr(self, "canvas") and hasattr(self.canvas, "delete"):
@@ -1817,6 +1820,10 @@ class LayoutEditorView(tk.Frame):
             cw, ch, div_x
         )
         bg_changed = (getattr(self, "_last_bg_sig", None) != bg_sig)
+        if not bg_changed and not self.canvas.find_withtag("sheet_bed"):
+            # Autoconserto: se a placa sumiu do canvas (ex.: "Limpar" / sessão vazia
+            # chamou set_session_layouts([])), redesenha o fundo mesmo com assinatura igual.
+            bg_changed = True
 
         if bg_changed:
             self._last_bg_sig = bg_sig

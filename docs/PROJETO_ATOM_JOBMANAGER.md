@@ -4,7 +4,7 @@
 > **Regra de ouro:** o que está marcado `[CONFIRMADO]` veio do relatório, do código ou do usuário. O que está `[NÃO CONFIRMADO]` é suposição e não deve virar "fato" sem validação. O que está `[PREENCHER]` a IA deve completar lendo o código real.
 
 <!-- AUTO:header:start -->
-**Última sincronização com o código:** 2026-10-30 18:09 (HEAD ao gerar: `b4a11d7`; 108 arquivos Python, ~53752 linhas)
+**Última sincronização com o código:** 2026-10-30 18:37 (HEAD ao gerar: `a99aeca`; 108 arquivos Python, ~53789 linhas)
 <!-- AUTO:header:end -->
 **Versão deste documento:** 1
 
@@ -337,7 +337,7 @@ ui/units.py                                          # ui/units.py - Formataçã
 ### `tests/test_layout_editor_shortcuts.py`
 - `class DummyEvent` (linha 32, 1 métodos)
 - `class DummyMouseEvent` (linha 38, 1 métodos)
-- `class TestLayoutEditorShortcuts` (linha 46, 68 métodos)
+- `class TestLayoutEditorShortcuts` (linha 46, 69 métodos)
 
 ### `tests/test_layout_editor_trim.py`
 - `class TestLayoutEditorTrim` (linha 16, 9 métodos)
@@ -2073,6 +2073,52 @@ o operador viu, e impossível de reproduzir em um processo novo.
 
 ---
 
+
+## 8.14. Editor reabria sem a placa (fundo cinza/grade) após "Limpar" (v1.5.2) `[CONFIRMADO]`
+
+Sintoma relatado: o desenho do mini-preview estava correto, mas ao abrir o Layout Editor
+apareciam só as peças soltas sobre fundo branco — **sem a placa cinza, a grade, as margens e o
+rótulo de dimensões** (as peças em si estavam certas).
+
+### 1. Causa raiz (reproduzida)
+
+`redraw()` só desenha o fundo quando a "assinatura" `_last_bg_sig` (posição da chapa, escala,
+zoom, tamanho, canvas, divisor) muda — é uma otimização para não redesenhar grade e chapa a
+cada frame. Porém `set_session_layouts([])` (acionado por *Limpar layout*, sessão sem layout ou
+"Refazer") **apagava o canvas sem invalidar a assinatura**. Na abertura seguinte, com a mesma
+chapa e o mesmo tamanho de janela, `bg_changed` era `False`: o editor desenhava as peças e
+pulava a placa para sempre.
+
+Reprodução determinística:
+
+```
+abrir    : placa=1 grade=42 pecas=220
+limpar   : placa=0 grade=0  pecas=0
+reabrir  : placa=0 grade=0  pecas=220   <-- defeito
+```
+
+### 2. Correção
+
+1. `set_session_layouts([])` invalida `_last_bg_sig = None` ao limpar o canvas.
+2. **Autoconserto no `redraw()`**: se a assinatura não mudou mas o item `sheet_bed` não existe
+   mais no canvas, o fundo é redesenhado (`bg_changed = True`). Isso cobre qualquer outro caminho
+   que apague o canvas sem avisar.
+
+### 3. Validação
+
+```
+abrir    : placa=1 grade=42 pecas=220
+limpar   : placa=0 grade=0  pecas=0
+reabrir  : placa=1 grade=42 pecas=220   <-- corrigido
+```
+
+Novo teste `test_plate_is_redrawn_after_clearing_layouts`; suíte em **359 testes + 1 skip**.
+Também confirmado que as peças em "vermelho" da captura anterior eram, na verdade, o **laranja
+do tamanho maior (`#ea580c`)** — as colisões falsas da §8.13 não reapareceram (0 colisões
+reais e 0 marcadas em lay0000/lay0001/lay0002 da sessão 203).
+
+---
+
 ## 9. Pendências e arquivos faltantes
 
 ### 9.1 Tarefas abertas
@@ -2202,6 +2248,7 @@ Local: `/home/dola/Documentos/clone do job/antigo/arquivos pos instalacao/Common
 | Sex, 30/10/2026 | 12:20 | Antigravity | Feedback Visual de Nesting com Barra de Progresso Indeterminada e Bloqueio de Botões (Fase 6.5): (1) Adição de barra de progresso indeterminada (`ttk.Progressbar`, modo `indeterminate`) e rótulo de status dinâmico na parte inferior de `SessionView` (`ui/session_view.py`), com inicialização oculta sem consumo de espaço; (2) Métodos `show_progress()` e `hide_progress()` em `SessionView` controlando ciclo de vida, animação contínua, status transitório (`Calculando...`) e desabilitação atômica de botões (`[Gerar]`, `[Em espera]`, `[Refazer]`) prevenindo cliques duplos e concorrência; (3) Integração assíncrona na thread `_worker` e `_poll_nest_worker` em `MainWindow` (`ui/main_window.py`) com medição de tempo CAM via `time.perf_counter()`, exibição de tempo na status bar (ex: `concluído em 87 ms`) e tratamento resiliente de erros/retornos antecipados; (4) Nova suíte com 5 testes unitários dedicados em `tests/test_session_view_progress.py` (340/341 testes passando em todo o projeto, 100% de sucesso). | `ui/session_view.py`, `ui/main_window.py`, `tests/test_session_view_progress.py`, `docs/PROJETO_ATOM_JOBMANAGER.md` |
 | Sex, 30/10/2026 | 12:47 | Antigravity | Exclusão Múltipla de Moldes na SessionView via Tecla Delete e Menu de Contexto: (1) Suporte a exclusão em lote na grade de moldes da sessão (`tree_shapes` em `ui/session_view.py`), coletando todos os itens selecionados e removendo a restrição legada a um único índice (`sel[0]`); (2) Diálogo de confirmação dinâmico com mensagem personalizada no singular para 1 molde e plural com contagem para múltiplos moldes ($N > 1$); (3) Preservação de seleção múltipla (feita via Shift ou Ctrl) ao clicar com botão direito do mouse para abrir o menu de contexto, adaptando o rótulo do comando para `🗑️ Remover N Moldes da Sessão`; (4) Reatribuição automática de sequência contínua 1..N sem buracos, sincronização atômica com banco de dados/memória e limpeza do pré-visualizador CAD; (5) Retorno de `"break"` nos eventos `<Delete>` e `<BackSpace>` impedindo propagação e priorização de foco da `SessionView` em `MainWindow.on_global_delete_key`; (6) Nova suíte com 5 testes unitários dedicados em `tests/test_session_shapes_multidelete.py` (345 testes aprovados em todo o projeto, 100% de sucesso). | `ui/session_view.py`, `ui/main_window.py`, `tests/test_session_shapes_multidelete.py`, `docs/PROJETO_ATOM_JOBMANAGER.md` |
 | Sex, 30/10/2026 | 15:15 | Antigravity | Otimização Multi-Sheet, Progresso Determinado e Teste de Estresse 10k (Fases 6.6 & 6.6.1): (1) Instrumentação de `nest_multi_sheet` (`cad/nesting_engine.py`) com parâmetro `progress_callback(sheet_idx, max_sheets)` a cada nova chapa; (2) Feedback visual determinado na `SessionView` (`ui/session_view.py`) via `update_progress_text` exibindo "Calculando chapa {current} de {total}..." com normalização 0 para 1 e despacho thread-safe via `self.after(0, ...)` em `MainWindow.on_auto_nest`; (3) Proteções no `NfpBackend` (`cad/nesting_backend.py`) com `MAX_TRIES_PER_PIECE` (30/50 em FastNest) forçando fechamento de chapa em caso de estouro e timeout de chapa (`SHEET_TIMEOUT_SEC = 5.0 s`); (4) Nova ferramenta `tools/bench_multi_sheet.py` comprovando aninhamento de 1600 peças (16 tamanhos) em apenas 0.242 s (26 chapas); (5) Teste de estresse extremo `tools/bench_10k_pieces.py` com 10.000 peças (20 tamanhos) concluído em 1.51 s (154 chapas), pico de RAM de 358 MB (< 2 GB) e zero MemoryError; (6) Nova suíte com 4 testes unitários em `tests/test_multisheet_progress.py` (349 testes aprovados em todo o projeto, 100% de sucesso). | `cad/nesting_engine.py`, `cad/nesting_backend.py`, `ui/session_view.py`, `ui/main_window.py`, `tools/bench_multi_sheet.py`, `tools/bench_10k_pieces.py`, `tests/test_multisheet_progress.py`, `docs/PROJETO_ATOM_JOBMANAGER.md` |
+| Sex, 30/10/2026 | 18:45 | DeepSeek | Correção do editor abrindo sem a placa cinza/grade após "Limpar" (v1.5.2): `redraw()` só desenha o fundo quando a assinatura `_last_bg_sig` muda, mas `set_session_layouts([])` apagava o canvas sem invalidá-la — na reabertura com a mesma chapa o fundo era pulado e ficavam apenas as peças sobre fundo branco (reproduzido: abrir→placa=1, limpar→0, reabrir→0). Correções: invalidação explícita da assinatura ao limpar + autoconserto no `redraw()` quando o item `sheet_bed` não existe mais. Confirmado também que o "vermelho" da captura era o laranja do tamanho maior (`#ea580c`), sem colisões falsas. Novo teste `test_plate_is_redrawn_after_clearing_layouts`; 359 testes + 1 skip. | `ui/layout_editor_view.py`, `tests/test_layout_editor_shortcuts.py`, `docs/PROJETO_ATOM_JOBMANAGER.md`, `config.py`, `.github/workflows/release.yml` |
 | Sex, 30/10/2026 | 18:30 | DeepSeek | Correção do CI de release: pushes de `master`, `main` e da tag publicavam a MESMA release em paralelo e a etapa `publish-release` falhava (faltava `allowUpdates`), deixando a v1.5.1 sem o `CorteAC.exe`; adicionados `concurrency: corteac-release` (serializa as publicações), `allowUpdates: true` e `overwrite_files: true`. | `.github/workflows/release.yml`, `docs/PROJETO_ATOM_JOBMANAGER.md` |
 | Sex, 30/10/2026 | 18:20 | DeepSeek | Correção da divergência entre o mini-preview e o Layout Editor (v1.5.1): (1) caches de geometria e de colisão do editor usavam `id(contorno)` (endereço de memória) e, como a janela é reaproveitada entre sessões, o Python reciclava o endereço e o editor desenhava peças com a geometria de outra sessão — resultado: formas deformadas e faixa vermelha de falsa colisão; nova `_contour_key` (identidade por conteúdo) elimina o problema; (2) `set_session_layouts` e `switch_to_layout` agora limpam `clear_piece_cache()`; (3) LOD simplificado deixou de remover o preenchimento — o editor passa a mostrar as mesmas cores por tamanho do mini-preview; (4) título indica `⚠ N peça(s) sobrepostas` quando há colisão real. Diagnóstico medido na sessão 190 (359/256/135 peças): 0 colisões reais, 0 divergências entre `piece.poly` e o render. Novo teste de regressão; 358 testes + 1 skip. | `ui/layout_editor_view.py`, `tests/test_layout_editor_shortcuts.py`, `docs/PROJETO_ATOM_JOBMANAGER.md`, `config.py`, `.github/workflows/release.yml` |
 | Sex, 30/10/2026 | 17:15 | DeepSeek | Diagnóstico de versão no executável: nova flag `--version` / `-v` em `main.py` (imprime `CorteAC 1.5.0` sem abrir a interface, facilitando conferir qual build está instalado na fábrica), recompilação dos binários Linux (`corteac_linux`, `teste_dola_linux`, `dist/CorteAC`) e confirmação de que a release oficial `v1.5.0` está publicada no GitHub com os 4 artefatos. | `main.py`, `docs/PROJETO_ATOM_JOBMANAGER.md`, `corteac_linux`, `teste_dola_linux`, `dist/CorteAC` |
@@ -2215,6 +2262,7 @@ Local: `/home/dola/Documentos/clone do job/antigo/arquivos pos instalacao/Common
 <!-- AUTO:gitlog:start -->
 | Commit | Data | Autor | Mensagem |
 |---|---|---|---|
+| `a99aeca` | 2026-10-30 | Doletabgi | ci(release): serializar publicacoes e permitir atualizar release existente |
 | `b4a11d7` | 2026-10-30 | Doletabgi | fix(ui): Layout Editor mostrava geometria de outra sessao e falsa colisao (v1.5.1) |
 | `ed24d46` | 2026-10-30 | Doletabgi | feat(cli): flag --version para conferir o build instalado |
 | `d4e6bc7` | 2026-10-30 | Doletabgi | perf(nesting): motores 4x-23x mais rapidos, medidas em metros e v1.5.0 |
@@ -2229,7 +2277,6 @@ Local: `/home/dola/Documentos/clone do job/antigo/arquivos pos instalacao/Common
 | `143d9d0` | 2026-10-30 | Doletabgi | docs: consolidar especificacoes no PROJETO_ATOM_JOBMANAGER e organizar docs/ |
 | `9de94fd` | 2026-10-30 | Doletabgi | feat(release): lancamento da versao v1.3.0 - catalogo de moldes, modos de encaixe em 3 camadas e seguranca cad |
 | `769010f` | 2026-10-28 | Doletabgi | feat(perf): otimizacao de gargalos de cpu, nfp backend, sweep-and-prune e or-opt cam (v1.2.0) |
-| `65e8f96` | 2026-10-27 | Doletabgi | chore(release): lancamento da versao v1.1.0 |
 <!-- AUTO:gitlog:end -->
 
 ---

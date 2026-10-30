@@ -9,7 +9,7 @@ on:
       tag_name:
         description: 'Tag de versão SemVer (ex: v1.0.0)'
         required: false
-        default: 'v1.5.1'
+        default: 'v1.5.2'
 
 permissions:
   contents: write
@@ -183,7 +183,12 @@ jobs:
 
             ---
 
-            ### 🛠️ Recursos Incluídos Nesta Versão (v1.5.1):
+            ### 🛠️ Recursos Incluídos Nesta Versão (v1.5.2):
+            - **Correção: Layout Editor reabria sem a placa (fundo cinza, grade, margens e rótulo)**:
+              - Depois de usar *Limpar layout* (ou abrir uma sessão ainda sem layout), o editor passava a mostrar somente as peças sobre fundo branco: a otimização que evita redesenhar o fundo a cada frame não era invalidada quando o canvas era apagado.
+              - Correção em duas camadas: invalidação explícita ao limpar e autoconserto que redesenha a placa caso ela tenha sumido do canvas.
+              - **359 testes automatizados** (358 passando, 1 skip, 0 falhas).
+            - **Correções da v1.5.1 (mantidas)**:
             - **Correção: Layout Editor mostrava o desenho diferente do mini-preview**:
               - Os caches de geometria e de colisão do editor usavam o endereço de memória do contorno (`id()`). Como a janela do editor é reaproveitada entre sessões, o Python recicla esse endereço e o editor passava a desenhar peças com a geometria de **outra** sessão — peças deformadas e uma faixa vermelha de falsa colisão.
               - Nova identidade por conteúdo do contorno + limpeza dos caches ao abrir/trocar de placa.

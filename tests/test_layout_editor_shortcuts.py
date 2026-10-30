@@ -2173,6 +2173,36 @@ class TestLayoutEditorShortcuts(unittest.TestCase):
         self.assertNotIn(old_key, self.view._piece_geom_cache)
         self.assertEqual(len(self.view._cached_colliding_indices), 0)
 
+    def test_plate_is_redrawn_after_clearing_layouts(self):
+        """
+        Regressão: 'Limpar layout' (ou abrir sessão sem layout) chama
+        set_session_layouts([]), que apaga o canvas. A assinatura de fundo ficava
+        válida e o editor reabria só com as peças, SEM a placa cinza/grade/rótulo.
+        """
+        layout = {
+            "layout_index": 0,
+            "name": "lay0000",
+            "width_mm": 1350.0,
+            "height_mm": 2990.0,
+            "pieces": [
+                {"contour": list(CONTOUR_CON), "x": 20.0, "y": 20.0, "rotation": 0.0, "color": "#3b82f6"}
+            ],
+        }
+        self.view.set_session_layouts([layout], initial_index=0)
+        self.view.update_idletasks()
+        self.assertEqual(len(self.view.canvas.find_withtag("sheet_bed")), 1)
+
+        # Limpar: canvas apagado
+        self.view.set_session_layouts([], initial_index=0)
+        self.view.update_idletasks()
+        self.assertEqual(len(self.view.canvas.find_withtag("sheet_bed")), 0)
+
+        # Reabrir a mesma placa: a placa cinza precisa voltar
+        self.view.set_session_layouts([layout], initial_index=0)
+        self.view.update_idletasks()
+        self.assertEqual(len(self.view.canvas.find_withtag("sheet_bed")), 1)
+        self.assertGreater(len(self.view.canvas.find_withtag("grid_line")), 0)
+
     def test_lod_level_selection_and_piece_preservation(self):
         """Valida a transição entre Full, Simplified e LOD, garantindo 0 peças perdidas em todos os níveis."""
         # Cria 220 peças para acionar regras de LOD
