@@ -1,10 +1,10 @@
 # PROJETO ATOM JobManager Reborn: Documento Vivo
 
-> **Finalidade:** ser a fonte única de verdade entre o código (Antigravity) e o Claude.
-> **Regra de ouro:** o que está marcado `[CONFIRMADO]` veio do relatório, do código ou do usuário. O que está `[NÃO CONFIRMADO]` é suposição e não deve virar "fato" sem validação. O que está `[PREENCHER]` o Antigravity deve completar lendo o código real.
+> **Finalidade:** Documento mestre estruturado e autocontido projetado para alimentar e contextualizar qualquer Inteligência Artificial (Antigravity, Claude, ChatGPT, etc.) ou engenheiro sobre 100% do projeto — regras de negócio de calçados/couro (ATOM), arquitetura técnica, schemas de banco (MySQL/SQLite), formatos proprietários (.LAY, .ONX/CZLIB), algoritmos de nesting/CAM, UI/UX e histórico — em um único arquivo de referência imediata.
+> **Regra de ouro:** o que está marcado `[CONFIRMADO]` veio do relatório, do código ou do usuário. O que está `[NÃO CONFIRMADO]` é suposição e não deve virar "fato" sem validação. O que está `[PREENCHER]` a IA deve completar lendo o código real.
 
 <!-- AUTO:header:start -->
-**Última sincronização com o código:** 2026-10-30 12:09 (HEAD ao gerar: `62bfa25`; 100 arquivos Python, ~51515 linhas)
+**Última sincronização com o código:** 2026-10-30 12:10 (HEAD ao gerar: `35b3a62`; 100 arquivos Python, ~51515 linhas)
 <!-- AUTO:header:end -->
 **Versão deste documento:** 1
 
@@ -1926,6 +1926,7 @@ Local: `/home/dola/Documentos/clone do job/antigo/arquivos pos instalacao/Common
 <!-- AUTO:gitlog:start -->
 | Commit | Data | Autor | Mensagem |
 |---|---|---|---|
+| `35b3a62` | 2026-10-30 | Doletabgi | docs: oficializar regra de centralizacao total no PROJETO_ATOM_JOBMANAGER |
 | `62bfa25` | 2026-10-30 | Doletabgi | docs: sincronizar header e gitlog apos reorganizacao de docs |
 | `143d9d0` | 2026-10-30 | Doletabgi | docs: consolidar especificacoes no PROJETO_ATOM_JOBMANAGER e organizar docs/ |
 | `9de94fd` | 2026-10-30 | Doletabgi | feat(release): lancamento da versao v1.3.0 - catalogo de moldes, modos de encaixe em 3 camadas e seguranca cad |
@@ -1940,7 +1941,6 @@ Local: `/home/dola/Documentos/clone do job/antigo/arquivos pos instalacao/Common
 | `36877e2` | 2026-10-26 | Doletabgi | chore(release): lancamento da versao v2026.3 |
 | `5429600` | 2026-10-26 | Doletabgi | feat(ui): traduzir menus para pt-br, renomear Nest para Gerar e remover botao Cut |
 | `0441e48` | 2026-10-26 | Doletabgi | build: manter apenas codigo de producao no repositorio (ignorar tools, scratch e githooks) |
-| `cff9bf7` | 2026-10-26 | Doletabgi | build: ignorar pasta docs no gitignore e desmonitorar arquivos |
 <!-- AUTO:gitlog:end -->
 
 ---
