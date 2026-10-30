@@ -9,7 +9,7 @@ on:
       tag_name:
         description: 'Tag de versão SemVer (ex: v1.0.0)'
         required: false
-        default: 'v1.3.0'
+        default: 'v1.4.0'
 
 permissions:
   contents: write
@@ -173,7 +173,12 @@ jobs:
 
             ---
 
-            ### 🛠️ Recursos Incluídos Nesta Versão (v1.3.0):
+            ### 🛠️ Recursos Incluídos Nesta Versão (v1.4.0):
+            - **Feedback Visual de Nesting com Barra de Progresso e Bloqueio de Ação (Fase 6.5)**:
+              - Barra de progresso indeterminada (`ttk.Progressbar`) e rótulo dinâmico na `SessionView`, exibidos sob demanda durante o cálculo de encaixe.
+              - Bloqueio imediato dos botões `[Gerar]`, `[Em espera]` e `[Refazer]` prevenindo duplo clique e acessos concorrentes acidentais.
+              - Alternância automática do cursor para ampulheta (`watch`) e medição exata do tempo de execução CAM em milissegundos exibida na barra de status.
+              - Recuperação e encerramento resiliente (`hide_progress`) em cenários de sucesso, erro ou cancelamento.
             - **Novo Catálogo de Moldes (`ShapeCatalogView`) e Matriz Visual de Artigos**:
               - Consulta ultra-rápida (< 3 ms) via novo índice composto `idx_shapes_article_size_name` (migração `004_add_shapes_index.sql`).
               - Grade matricial organizada por moldes e tamanhos (do 22a ao 45) com renderização de contornos e atalhos rápidos.
@@ -190,7 +195,7 @@ jobs:
               - Cache analítico de separação horizontal NFP (`_DX_SEP_CACHE`, `_POLY0_CACHE`, `clear_macro_caches`).
               - Modo estritamente determinístico no cérebro de IA por reforço (`NestingAIBrain: deterministic=True`).
             - **Qualidade, Estabilidade e Testes**:
-              - **336 testes automatizados** (335 passando, 1 skip, 0 falhas) garantindo robustez de 100% no chão de fábrica.
+              - **341 testes automatizados** (340 passando, 1 skip, 0 falhas) garantindo 100% de confiabilidade industrial.
           files: |
             dist-release/**/*.exe
             dist-release/**/*.zip

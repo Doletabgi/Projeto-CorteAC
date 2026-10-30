@@ -4,7 +4,7 @@
 > **Regra de ouro:** o que está marcado `[CONFIRMADO]` veio do relatório, do código ou do usuário. O que está `[NÃO CONFIRMADO]` é suposição e não deve virar "fato" sem validação. O que está `[PREENCHER]` a IA deve completar lendo o código real.
 
 <!-- AUTO:header:start -->
-**Última sincronização com o código:** 2026-10-30 12:21 (HEAD ao gerar: `093bb38`; 101 arquivos Python, ~51770 linhas)
+**Última sincronização com o código:** 2026-10-30 12:24 (HEAD ao gerar: `85a2392`; 101 arquivos Python, ~51770 linhas)
 <!-- AUTO:header:end -->
 **Versão deste documento:** 1
 
@@ -1950,6 +1950,7 @@ Local: `/home/dola/Documentos/clone do job/antigo/arquivos pos instalacao/Common
 <!-- AUTO:gitlog:start -->
 | Commit | Data | Autor | Mensagem |
 |---|---|---|---|
+| `85a2392` | 2026-10-30 | Doletabgi | feat(ui): implementar feedback visual de nesting com barra de progresso indeterminada e bloqueio de botoes (Fase 6.5) |
 | `093bb38` | 2026-10-30 | Doletabgi | docs: definir finalidade do PROJETO_ATOM_JOBMANAGER como injecao de contexto universal para IA |
 | `35b3a62` | 2026-10-30 | Doletabgi | docs: oficializar regra de centralizacao total no PROJETO_ATOM_JOBMANAGER |
 | `62bfa25` | 2026-10-30 | Doletabgi | docs: sincronizar header e gitlog apos reorganizacao de docs |
@@ -1964,7 +1965,6 @@ Local: `/home/dola/Documentos/clone do job/antigo/arquivos pos instalacao/Common
 | `3963ee5` | 2026-10-26 | david guimaraes | Update README to remove ATOM Cutting Simulator section |
 | `7dc964b` | 2026-10-26 | Doletabgi | feat(version): implementar sistema de versionamento SemVer (MAJOR.MINOR.PATCH) |
 | `36877e2` | 2026-10-26 | Doletabgi | chore(release): lancamento da versao v2026.3 |
-| `5429600` | 2026-10-26 | Doletabgi | feat(ui): traduzir menus para pt-br, renomear Nest para Gerar e remover botao Cut |
 <!-- AUTO:gitlog:end -->
 
 ---
