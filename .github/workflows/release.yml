@@ -9,7 +9,7 @@ on:
       tag_name:
         description: 'Tag de versão SemVer (ex: v1.0.0)'
         required: false
-        default: 'v1.5.4'
+        default: 'v1.5.5'
 
 permissions:
   contents: write
@@ -183,7 +183,16 @@ jobs:
 
             ---
 
-            ### 🛠️ Recursos Incluídos Nesta Versão (v1.5.4):
+            ### 🛠️ Recursos Incluídos Nesta Versão (v1.5.5):
+            - **Novo: Bump Magnético Interativo com o Mouse (paridade com o Layout.exe)**:
+              - Três gatilhos: **botão do meio com peça selecionada** (sem seleção continua Pan), **duplo-clique + arrasto** (< 300 ms) e **Ctrl+Shift + arrasto**.
+              - Direção livre: a peça desliza em linha reta até encostar em outra peça (contorno real, respeitando o gap da sessão) ou na margem da placa, com linha elástica do centro da seleção até o mouse.
+              - `Esc` cancela, arrasto curto (< 3 px) não move, 1 único Ctrl+Z desfaz, seleção múltipla desliza em bloco preservando a formação.
+              - Cursor de arco (`circle`, equivalente ao Cursor ID 149).
+            - **Setas agora fazem BUMP** (antes moviam 5 mm fixos): `Ctrl+Setas` faz ajuste fino de 0,5 mm.
+            - **Correção: rendimento falso na barra de status** (piso artificial de 83,02%) — agora mostra o rendimento real.
+            - **374 testes automatizados** (373 passando, 1 skip, 0 falhas), incluindo 13 novos do bump.
+            - **Correções anteriores (mantidas)**: cache geométrico sem geometria cruzada, placa sempre visível, leitura contínua do encaixe e contornos reais no nesting.
             - **Correção crítica: cache geométrico podia devolver o polígono de outro molde**:
               - O cache de transformação de contornos era indexado pelo endereço de memória da lista, sem validar o conteúdo. Como o Python recicla endereços, após muitas sessões o editor/nesting podia usar a geometria de outra peça — desenhos deformados, colisões falsas e risco de posicionamento errado.
               - Cada entrada passou a ser validada por tamanho e por 3 vértices de referência: reciclagem de endereço agora é apenas um cache miss, nunca um resultado errado.

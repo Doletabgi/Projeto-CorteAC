@@ -90,6 +90,12 @@ def _contour_key(cntr):
             return ("inv", 0)
 
 
+# Bump interativo com o mouse (equivalente ao Bump Magnético do Layout.exe)
+BUMP_MIN_DRAG_PX = 3.0          # arrasto menor que isso cancela (evita bump por clique)
+BUMP_DOUBLE_CLICK_MS = 300.0    # janela do duplo-clique + arrasto
+BUMP_CURSOR = "circle"          # equivalente Tk ao Cursor ID 149 (arco); fallback "crosshair"
+BUMP_SEARCH_ITERS = 16          # resolução da busca binária de encosto (mm)
+
 SELECTED_OUTLINE_ONLY = True    # Fiel à Secção E.2: apenas o contorno da peça selecionada é visível (sem preenchimento opaco)
 
 # Coalescencia de eventos de arraste/pan: limita o trabalho pesado por segundo e
@@ -335,6 +341,15 @@ class LayoutEditorView(tk.Frame):
 
         # Estado da coalescencia de movimento (arraste de peca / pan / divisor)
         self._drag_job = None
+        # Estado do Bump interativo com o mouse
+        self._bump_mode = False
+        self._bump_armed = False
+        self._bump_line_id = None
+        self._bump_press_xy = None
+        self._bump_center_screen = None
+        self._last_piece_press_idx = None
+        self._last_piece_press_ms = 0.0
+
         self._pending_drag_xy = None
         self._last_drag_update_ts = 0.0
         self._last_status_update_ts = 0.0
@@ -590,10 +605,17 @@ class LayoutEditorView(tk.Frame):
         self.canvas.bind("<ButtonRelease-1>", self.on_canvas_release)
         self.canvas.bind("<Motion>", self.on_mouse_move)
 
-        # Pan com botão do meio (roda)
+        # Botão do meio (roda): BUMP com peça selecionada, PAN sem seleção
         self.canvas.bind("<ButtonPress-2>", self.on_pan_start)
         self.canvas.bind("<B2-Motion>", self.on_pan_drag)
         self.canvas.bind("<ButtonRelease-2>", self.on_pan_end)
+
+        # Bump direcional com Ctrl+Shift + arrasto do botão esquerdo
+        self.canvas.bind("<Control-Shift-ButtonPress-1>", self.on_ctrl_shift_bump_start)
+        self.canvas.bind("<Control-Shift-B1-Motion>", self.on_ctrl_shift_bump_drag)
+        self.canvas.bind("<Control-Shift-ButtonRelease-1>", self.on_ctrl_shift_bump_end)
+        # Esc cancela o bump em andamento
+        self.canvas.bind("<Escape>", self.on_canvas_escape)
 
         # Zoom com roda do mouse segurando Ctrl
         self.canvas.bind("<Control-MouseWheel>", self.on_ctrl_mousewheel)
@@ -700,10 +722,17 @@ class LayoutEditorView(tk.Frame):
         self.bind_all("<Delete>", lambda e: self.delete_selected())
         self.bind_all("<Control-a>", self.select_all)
         self.bind_all("<Control-A>", self.select_all)
-        self.bind_all("<Left>", lambda e: self.nudge_selected(-5, 0))
-        self.bind_all("<Right>", lambda e: self.nudge_selected(5, 0))
-        self.bind_all("<Up>", lambda e: self.nudge_selected(0, 5))
-        self.bind_all("<Down>", lambda e: self.nudge_selected(0, -5))
+        # Setas = BUMP MAGNÉTICO (desliza até encostar), conforme LAYOUT_EDITOR_RE.md.
+        # O movimento fino de 5 mm continua disponível em nudge_selected() (interno).
+        self.bind_all("<Left>", lambda e: self.bump_selection_vector(-1, 0))
+        self.bind_all("<Right>", lambda e: self.bump_selection_vector(1, 0))
+        self.bind_all("<Up>", lambda e: self.bump_selection_vector(0, 1))
+        self.bind_all("<Down>", lambda e: self.bump_selection_vector(0, -1))
+        # Ctrl+Setas = ajuste fino de 0,5 mm (paridade com o Layout.exe [EVIDÊNCIA])
+        self.bind_all("<Control-Left>", lambda e: self.nudge_selected(-0.5, 0))
+        self.bind_all("<Control-Right>", lambda e: self.nudge_selected(0.5, 0))
+        self.bind_all("<Control-Up>", lambda e: self.nudge_selected(0, 0.5))
+        self.bind_all("<Control-Down>", lambda e: self.nudge_selected(0, -0.5))
 
         # -------------------------------------------------------------
         # 5. Barra de Status Inferior Autêntica
@@ -2379,6 +2408,28 @@ class LayoutEditorView(tk.Frame):
                 break
 
         if hit_idx >= 0:
+            # Duplo-clique esquerdo na peça (2º press < 300 ms) arma o bump por arrasto
+            try:
+                now_ms = time.time() * 1000.0
+                segundo_clique = (
+                    self._last_piece_press_idx == hit_idx
+                    and (now_ms - self._last_piece_press_ms) < BUMP_DOUBLE_CLICK_MS
+                )
+                self._last_piece_press_idx = hit_idx
+                self._last_piece_press_ms = now_ms
+                if segundo_clique:
+                    self.selected_indices = [hit_idx]
+                    self.selected_index = hit_idx
+                    self._bump_armed = True
+                    self._bump_press_xy = (event.x, event.y)
+                    self.is_dragging_piece = False
+                    self._drag_indices = []
+                    self.canvas.delete("drag_ghost")
+                    self.update_status()
+                    return "break"
+            except Exception:
+                pass
+
             self.is_rubberbanding = False
             self.canvas.delete("rubberband_box")
 
@@ -2480,6 +2531,14 @@ class LayoutEditorView(tk.Frame):
                 self.update_status()
 
     def on_canvas_drag(self, event):
+        # 0. Bump armado por duplo-clique: o primeiro movimento inicia o bump
+        if getattr(self, "_bump_armed", False):
+            if not self._bump_mode:
+                px, py = self._bump_press_xy or (event.x, event.y)
+                self._start_mouse_bump_at(px, py)
+            self._update_mouse_bump(event)
+            return "break"
+
         # 1. Movimentação da linha divisória para os lados (redraw coalescido)
         if getattr(self, "is_dragging_divider", False):
             cw = self.canvas.winfo_width()
@@ -2780,6 +2839,15 @@ class LayoutEditorView(tk.Frame):
         return None
 
     def on_canvas_release(self, event):
+        # 0. Bump (duplo-clique armado ou arrasto em andamento)
+        if getattr(self, "_bump_armed", False) or self._bump_mode:
+            if self._bump_mode:
+                self._finish_mouse_bump(event)
+            else:
+                self._bump_armed = False
+                self._bump_status("Ready")
+            return "break"
+
         # 1. Conclusão da Caixa Elástica (Rubberband)
         if getattr(self, "is_rubberbanding", False):
             self.canvas.delete("rubberband_box")
@@ -3873,6 +3941,10 @@ class LayoutEditorView(tk.Frame):
             pass
 
     def on_pan_start(self, event):
+        # Conflito resolvido: COM peça selecionada o botão do meio faz Bump;
+        # SEM seleção continua fazendo Pan (comportamento original).
+        if self.get_selected_indices() and self._start_mouse_bump(event):
+            return "break"
         self.is_panning = True
         self.pan_start_x = event.x
         self.pan_start_y = event.y
@@ -3880,6 +3952,9 @@ class LayoutEditorView(tk.Frame):
         return "break"
 
     def on_pan_drag(self, event):
+        if self._bump_mode:
+            self._update_mouse_bump(event)
+            return "break"
         if getattr(self, "is_panning", False):
             dx = event.x - self.pan_start_x
             dy = event.y - self.pan_start_y
@@ -3891,6 +3966,9 @@ class LayoutEditorView(tk.Frame):
         return "break"
 
     def on_pan_end(self, event):
+        if self._bump_mode:
+            self._finish_mouse_bump(event)
+            return "break"
         self.is_panning = False
         self._cancel_redraw_job()
         self._set_cursor("arrow")
@@ -3927,6 +4005,236 @@ class LayoutEditorView(tk.Frame):
             self.selected_index = len(self.placed_pieces) - 1
             self.redraw()
             self.update_status()
+        return "break"
+
+    # =================================================================
+    # BUMP MAGNÉTICO (setas + mouse) — desliza até encostar
+    # =================================================================
+    def _bump_status(self, text):
+        """Mensagem curta na barra de status (usada durante o bump)."""
+        try:
+            if hasattr(self, "lbl_stat_pos") and self.lbl_stat_pos.winfo_exists():
+                self.lbl_stat_pos.config(text=text, fg="#1e40af")
+        except Exception:
+            pass
+
+    def _bump_static_grid(self, skip_indices):
+        """Grade espacial com as peças NÃO selecionadas (obstáculos do bump)."""
+        grid = SpatialGrid(cell_size=100.0)
+        for j, other in enumerate(self.placed_pieces):
+            if j in skip_indices:
+                continue
+            poly = transform_contour(other["contour"], other["x"], other["y"], other["rotation"])
+            grid.insert(j, poly, polygon_bbox(poly))
+        return grid
+
+    def _bump_margins(self):
+        return (
+            float(getattr(self, "margin_left", 10.0)),
+            float(getattr(self, "margin_right", 10.0)),
+            float(getattr(self, "margin_top", 10.0)),
+            float(getattr(self, "margin_bottom", 10.0)),
+        )
+
+    def _bump_collides_at(self, indices, ux, uy, travel, grid, gap):
+        """Testa a seleção deslocada de travel*(ux,uy): colisão real ou fora das margens."""
+        m_left, m_right, m_top, m_bottom = self._bump_margins()
+        eps = 1e-6
+        for idx in indices:
+            p = self.placed_pieces[idx]
+            poly = transform_contour(p["contour"], p["x"] + ux * travel, p["y"] + uy * travel, p["rotation"])
+            bb = polygon_bbox(poly)
+            if (bb[0] < m_left - eps or bb[1] < m_bottom - eps
+                    or bb[2] > self.sheet_width - m_right + eps
+                    or bb[3] > self.sheet_height - m_top + eps):
+                return True
+            for c_poly, c_bbox in grid.query_potential_colliders(bb, gap=gap):
+                if polygons_collide(poly, c_poly, gap=gap, bbox_a=bb, bbox_b=c_bbox):
+                    return True
+        return False
+
+    def _bump_max_travel(self, indices, ux, uy):
+        """Deslocamento máximo antes de sair da área útil da placa, na direção dada."""
+        m_left, m_right, m_top, m_bottom = self._bump_margins()
+        lim = float("inf")
+        for idx in indices:
+            p = self.placed_pieces[idx]
+            bb = polygon_bbox(transform_contour(p["contour"], p["x"], p["y"], p["rotation"]))
+            if ux > 1e-9:
+                lim = min(lim, (self.sheet_width - m_right - bb[2]) / ux)
+            elif ux < -1e-9:
+                lim = min(lim, (m_left - bb[0]) / ux)
+            if uy > 1e-9:
+                lim = min(lim, (self.sheet_height - m_top - bb[3]) / uy)
+            elif uy < -1e-9:
+                lim = min(lim, (m_bottom - bb[1]) / uy)
+        if lim == float("inf"):
+            return 0.0
+        return max(0.0, lim)
+
+    def bump_selection_vector(self, dx, dy):
+        """
+        Bump Magnético: desliza a seleção na direção (dx, dy) até encostar em outra
+        peça (contorno real, respeitando o gap da sessão) ou no limite da placa.
+
+        Usado pelas SETAS e pelos três gatilhos de mouse (botão do meio, duplo-clique
+        + arrasto e Ctrl+Shift + arrasto). Retorna True se algo se moveu.
+        """
+        focused = self.focus_get()
+        if isinstance(focused, (tk.Entry, ttk.Entry, tk.Text, ttk.Treeview)):
+            return False
+
+        indices = list(self.get_selected_indices() or [])
+        if not indices:
+            return False
+
+        norm = math.hypot(float(dx), float(dy))
+        if norm < 1e-9:
+            return False
+        ux, uy = float(dx) / norm, float(dy) / norm
+
+        gap = float(getattr(self, "gap_mm", 1.0) or 0.0)
+        grid = self._bump_static_grid(set(indices))
+        max_travel = self._bump_max_travel(indices, ux, uy)
+        if max_travel <= 0.01:
+            self._bump_status("Ready")
+            return False
+
+        # Procura o PRIMEIRO contato ao longo da trajetória (pode haver obstáculo no
+        # meio do caminho, não só no fim): varredura grossa + refino binário.
+        step = max(1.0, min(10.0, max_travel / 400.0))
+        travel = max_travel
+        prev_free = 0.0
+        t = 0.0
+        while t < max_travel - 1e-9:
+            t = min(max_travel, t + step)
+            if self._bump_collides_at(indices, ux, uy, t, grid, gap):
+                lo, hi = prev_free, t
+                for _ in range(BUMP_SEARCH_ITERS):
+                    mid = (lo + hi) / 2.0
+                    if self._bump_collides_at(indices, ux, uy, mid, grid, gap):
+                        hi = mid
+                    else:
+                        lo = mid
+                travel = lo
+                break
+            prev_free = t
+
+        # Validação final obrigatória (exata): se ainda colidir, não move
+        if travel > 0.05 and self._bump_collides_at(indices, ux, uy, travel, grid, gap):
+            travel = 0.0
+
+        if travel <= 0.05:
+            self._bump_status("Ready")
+            return False
+
+        self.push_undo()
+        for idx in indices:
+            p = self.placed_pieces[idx]
+            p["x"] += ux * travel
+            p["y"] += uy * travel
+            self.redraw_single_piece(idx)
+        self.set_modified(True)
+        self.update_status()
+        self._bump_status("Ready")
+        return True
+
+    # ---------------- Gatilhos de mouse ----------------
+    def _selection_world_center(self, indices):
+        m_left = m_bottom = float("inf")
+        m_right = m_top = float("-inf")
+        for idx in indices:
+            p = self.placed_pieces[idx]
+            bb = polygon_bbox(transform_contour(p["contour"], p["x"], p["y"], p["rotation"]))
+            m_left = min(m_left, bb[0]); m_bottom = min(m_bottom, bb[1])
+            m_right = max(m_right, bb[2]); m_top = max(m_top, bb[3])
+        return ((m_left + m_right) / 2.0, (m_bottom + m_top) / 2.0)
+
+    def _start_mouse_bump(self, event):
+        return self._start_mouse_bump_at(event.x, event.y)
+
+    def _start_mouse_bump_at(self, x, y):
+        """Inicia o bump por arrasto: linha elástica do centro da seleção até o mouse."""
+        indices = list(self.get_selected_indices() or [])
+        if not indices:
+            return False
+        cx, cy = self._selection_world_center(indices)
+        sx, sy = self.world_to_screen(cx, cy)
+        self._bump_mode = True
+        self._bump_press_xy = (x, y)
+        self._bump_center_screen = (sx, sy)
+        self.canvas.delete("bump_rubber")
+        self._bump_line_id = self.canvas.create_line(
+            sx, sy, x, y,
+            fill="#2563eb", dash=(4, 2), width=1.5, tags="bump_rubber"
+        )
+        try:
+            self._set_cursor(BUMP_CURSOR)
+        except tk.TclError:
+            self._set_cursor("crosshair")
+        self._bump_status("Bump the Selection")
+        # não deixa o arrasto normal de peça rodar em paralelo
+        self.is_dragging_piece = False
+        self._drag_indices = []
+        self.canvas.delete("drag_ghost")
+        return True
+
+    def _update_mouse_bump(self, event):
+        if not self._bump_mode or self._bump_line_id is None:
+            return
+        sx, sy = self._bump_center_screen
+        self.canvas.coords(self._bump_line_id, sx, sy, event.x, event.y)
+
+    def _finish_mouse_bump(self, event):
+        """Ao soltar: converte o vetor do arrasto e executa o bump."""
+        if not self._bump_mode:
+            return False
+        self._bump_mode = False
+        self._bump_armed = False
+        self.canvas.delete("bump_rubber")
+        self._bump_line_id = None
+        self._set_cursor("arrow")
+        sx, sy = self._bump_press_xy or (event.x, event.y)
+        dx_px = event.x - sx
+        dy_px = event.y - sy
+        if math.hypot(dx_px, dy_px) < BUMP_MIN_DRAG_PX:
+            self._bump_status("Ready")
+            return False
+        scale = self.plate_scale if getattr(self, "plate_scale", 0) > 0 else 1.0
+        # Y da tela é invertido em relação ao mundo (mm)
+        self.bump_selection_vector(dx_px / scale, -dy_px / scale)
+        self._bump_status("Ready")
+        return True
+
+    def _cancel_mouse_bump(self):
+        """Cancela o bump em andamento (Esc): remove a linha elástica e restaura o cursor."""
+        if self._bump_line_id is not None:
+            self.canvas.delete("bump_rubber")
+        self._bump_mode = False
+        self._bump_armed = False
+        self._bump_line_id = None
+        self._set_cursor("arrow")
+        self._bump_status("Ready")
+
+    def on_canvas_escape(self, event=None):
+        if self._bump_mode or self._bump_armed:
+            self._cancel_mouse_bump()
+            return "break"
+        return None
+
+    def on_ctrl_shift_bump_start(self, event):
+        """Ctrl+Shift + arrasto do botão esquerdo: bump direcional."""
+        self.canvas.focus_set()
+        if self._start_mouse_bump(event):
+            return "break"
+        return None
+
+    def on_ctrl_shift_bump_drag(self, event):
+        self._update_mouse_bump(event)
+        return "break"
+
+    def on_ctrl_shift_bump_end(self, event):
+        self._finish_mouse_bump(event)
         return "break"
 
     def nudge_selected(self, dx_mm, dy_mm):
@@ -4224,11 +4532,11 @@ class LayoutEditorView(tk.Frame):
         sheet_area = (self.sheet_width * self.sheet_height)
         if self.placed_pieces and sheet_area > 0:
             total_piece_area = sum(polygon_area(p.get("contour", [])) for p in self.placed_pieces)
+            # Rendimento REAL: área das peças / área da placa. Antes havia um piso
+            # artificial (83,02%) que mascarava encaixes ruins e confundia o operador.
             yd = round((total_piece_area / sheet_area) * 100.0, 2)
-            if total_p >= 200 and yd < 80.0:
-                yd = 83.02
         else:
-            yd = 83.02 if total_p >= 200 else (78.4 if total_p >= 20 else round((total_p / 21) * 78.4, 2))
+            yd = 0.0
 
         if hasattr(self, "lbl_stat_yield"):
             self.lbl_stat_yield.config(text=f"{yd:.2f}%")

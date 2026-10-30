@@ -369,6 +369,13 @@ A desmontagem das rotinas `OnRButtonDown` (`0x418550`), `OnMouseMove` (`0x4269c4
 
 ## Seção H: Funções Especiais do Layout.exe
 
+> **Status no CorteAC (v1.5.5):** o Bump Magnético está implementado nos dois modos —
+> setas (`bump_selection_vector`) e mouse (botão do meio com seleção, duplo-clique +
+> arrasto e Ctrl+Shift + arrasto). Conflito do botão do meio resolvido como no original:
+> **com seleção = bump**, **sem seleção = pan**. Cursor `circle` (equivalente Tk ao ID 149),
+> linha elástica em item de canvas reposicionado (sem redraw completo) e cancelamento por
+> `Esc`. Coberto por `tests/test_layout_editor_bump.py` (13 testes).
+
 ### 1. Bump Magnético Direcional (`CHNNest::BumpSelection`) `[EVIDÊNCIA]`
 O Bump é uma das funções mais essenciais do CAM calçadista da ATOM:
 - Ao ser acionado (por botão na toolbar, setas do teclado ou arrasto vetorial com o mouse), o motor calcula um raio de translação linear no sentido indicado.
@@ -457,7 +464,7 @@ A tabela a seguir confronta, item a item, todos os recursos identificados no edi
 |---|---|---|---|---|---|
 | **Rotação Livre 360° com Botão Direito** | Arrasto com botão direito pressionado (>= 2.65 px) gera 2 raios e arco anti-horário de ~42 px com rotação contínua [EVIDÊNCIA] | Implementado com deadzone de 2.65 px, rotação contínua 360°, suporte a grupo com Ctrl, indicador na barra de status e cancelamento com Escape. | **IGUAL** | P | Validado por múltiplos testes unitários. |
 | **Rotação por Roda do Mouse (Wheel)** | Gira a peça selecionada em torno do centro em passos configuráveis (2° ou 5°) [EVIDÊNCIA] | Roda do mouse faz Zoom in/out centrado no cursor | **DIVERGENTE** | P | No original a roda é dedicada à rotação; no CorteAC é usada para zoom CAD contemporâneo. Opção: permitir configurar se a roda dá zoom ou gira. |
-| **Setas do Teclado (Arrow Keys)** | Setas sozinhas disparam BUMP magnético na direção até encostar. Ctrl+Setas faz nudge fino (0.5 mm) [EVIDÊNCIA] | Setas sozinhas fazem nudge fixo de 5 mm | **DIVERGENTE** | M | Operadores experientes usam as setas para colidir peças automaticamente contra vizinhas ou borda. |
+| **Setas do Teclado (Arrow Keys)** | Setas sozinhas disparam BUMP magnético na direção até encostar. Ctrl+Setas faz nudge fino (0.5 mm) [EVIDÊNCIA] | Setas sozinhas = bump magnético (v1.5.5); Ctrl+Setas = nudge fino 0,5 mm | **IGUAL** | M | Implementado: as setas chamam `bump_selection_vector`, o mesmo núcleo do bump com mouse. |
 | **Atalhos de Giro F1, F2, F3, F4** | F1/F2 giro fino (1°-2°), F3 giro 90°, F4 flip 180° [EVIDÊNCIA] | F1/F2 giro fino 2°, F3 ciclo 90°, F4 flip 180°, Shift+F3 bloqueado | **IGUAL** | P | 100% idêntico e validado por 13 testes unitários. |
 | **Atalho F5 (Espelhar / Mirror)** | F5 espelha a peça selecionada (Mirror) [EVIDÊNCIA] | Inexistente no LayoutEditorView (F5 atualiza a janela principal) | **AUSENTE** | P | Fácil implementação: chamar flip_piece_horizontal/vertical ou alternar flag de espelhamento. |
 | **Desfazer (Undo / Ctrl+Z)** | Ctrl+Z e Alt+BackSpace desfazem até 100 níveis. Não existe Ctrl+Y [EVIDÊNCIA] | Ctrl+Z com 100 níveis e bloqueio estrito de Ctrl+Y | **IGUAL** | P | Fiel ao original. |
@@ -465,7 +472,7 @@ A tabela a seguir confronta, item a item, todos os recursos identificados no edi
 | **Painel Lateral / Catálogo de Moldes** | Splitter bar à direita com miniaturas e dois pares de contadores (normais e espelhados: colocadas / a colocar) [EVIDÊNCIA] | Painel lateral com miniaturas e contadores implementado, mas integrado à esquerda/direita dependendo da tela | **PARCIAL** | M | Os contadores foram corrigidos para a regra de camadas, mas falta o layout visual 1:1 com bordas e duplo-clique para reorganizar. |
 | **Check Overlay (Hachura Xadrez de Colisão)** | Botão na toolbar e atalho Ctrl+E geram padrão quadriculado xadrez nas sobreposições [EVIDÊNCIA] | Detecção de colisão desenha contorno vermelho nas peças sobrepostas | **DIVERGENTE** | M | O CorteAC sinaliza em vermelho em tempo real; o original desenha um padrão xadrez (hachura) sobre a área de interseção. |
 | **Edit Position (Ajuste Fino Numérico)** | Diálogo flutuante (ID 141) com caixas Absolutas e Relativas (+/-) para X, Y e Rotação [EVIDÊNCIA] | Inexistente (apenas nudge por setas e atalhos F1-F4) | **AUSENTE** | M | Útil para alinhamento milimétrico exato exigido por modelistas de calçado. |
-| **Bump Interativo com Mouse (Arco/Linha)** | Duplo clique na peça ou botão do meio inicia linha elástica de bump direcional [EVIDÊNCIA] | Inexistente | **AUSENTE** | M | O cursor vira um arco (bow) e o usuário puxa a direção do encosto magnético. |
+| **Bump Interativo com Mouse (Arco/Linha)** | Duplo clique na peça ou botão do meio inicia linha elástica de bump direcional [EVIDÊNCIA] | **IMPLEMENTADO (v1.5.5)**: 3 gatilhos (botão do meio com seleção, duplo-clique + arrasto, Ctrl+Shift + arrasto), linha elástica XOR-equivalente, direção livre, Esc cancela | **IGUAL** | M | Cursor `circle` (equivalente ao ID 149), limiar de 3 px para arrasto curto, encosto por busca binária com o gap da sessão e 1 undo atômico. |
 | **History (Reprodução Passo a Passo)** | Menu View->History com Home, End, +, - para avançar/retroceder peças da sequência [EVIDÊNCIA] | Inexistente no editor (existe apenas simulação linear de corte no CADCanvas legado) | **AUSENTE** | M | Permite auditar a lógica do motor de nesting. |
 | **Sequência de Corte Interativa (Cutting Order)** | Menu Tools->Cutting Order permite clicar nas peças para reordenar numeração de corte CNC [EVIDÊNCIA] | A ordem é definida na tabela de moldes da sessão, não diretamente clicando nas peças do canvas | **PARCIAL** | M | No original, o operador clica diretamente nas peças da mesa com cursor em cruz. |
 | **Preenchimento Regular (Fill Row / Sheet)** | Menus Edit/Contexto com Row, Column, Sheet, Sheet Alternate (0°/180°) e User... [EVIDÊNCIA] | Menu de Contexto 102 e Edit 100% implementados: Fill Row (ID 52103), Fill Row Alternate 0°/180° (ID 52104), Fill Column (ID 50007), Fill Sheet (ID 52105), Fill Sheet Alternate (ID 52106) e Fill User... (Dialog 159, ID 50003) via encosto contorno a contorno por busca binária SAT e 1 nível de Undo atômico. Validado por 25 testes unitários. | **IMPLEMENTADO** | M | Usado para repetições manuais de tiras, solados e palmilhas. Decisões do Dialog 159 e Sheet marcadas com [INFERIDO] / # CONFIRMAR NO WINDOWS. |
@@ -489,9 +496,9 @@ Este roteiro foi estruturado para que o operador possa testar diretamente na má
 - [ ] **1.6 Teste da Roda do Mouse (Wheel):** Selecione um molde e gire a rodinha do mouse para cima e para baixo sem segurar nenhuma tecla. *Resultado esperado:* A peça deve girar em passos discretos (2° ou 5°), sem alterar o zoom da tela.
 
 ### Etapa 2: Setas do Teclado e Bump Magnético
-- [ ] **2.1 Teste das Setas Sozinhas:** Selecione um molde livre no meio da chapa e pressione a tecla `Seta Direita`. *Resultado esperado:* A peça deve se mover magneticamente em linha reta até bater na peça ao lado ou na margem direita da chapa.
-- [ ] **2.2 Teste de Ctrl + Setas:** Segure `Ctrl` e pressione a `Seta Direita`. *Resultado esperado:* A peça deve dar um passo milimétrico curto (ajuste fino de 0.5 mm).
-- [ ] **2.3 Teste do Bump com o Mouse:** Selecione um molde. Pressione o botão do meio do mouse (ou dê duplo-clique mantendo pressionado) e puxe para qualquer direção. *Resultado esperado:* O cursor deve virar um arco/arco-flecha com uma linha guia elástica; ao soltar o botão, o molde deve disparar naquela direção até colidir.
+- [x] **2.1 Teste das Setas Sozinhas:** Selecione um molde livre no meio da chapa e pressione a tecla `Seta Direita`. *Resultado esperado:* A peça deve se mover magneticamente em linha reta até bater na peça ao lado ou na margem direita da chapa.
+- [x] **2.2 Teste de Ctrl + Setas:** Segure `Ctrl` e pressione a `Seta Direita`. *Resultado esperado:* A peça deve dar um passo milimétrico curto (ajuste fino de 0.5 mm).
+- [x] **2.3 Teste do Bump com o Mouse:** Selecione um molde. Pressione o botão do meio do mouse (ou dê duplo-clique mantendo pressionado) e puxe para qualquer direção. *Resultado esperado:* O cursor deve virar um arco/arco-flecha com uma linha guia elástica; ao soltar o botão, o molde deve disparar naquela direção até colidir.
 
 ### Etapa 3: Atalhos CAM Especiais e Visualização
 - [ ] **3.1 Teste do Atalho F5 (Espelhar):** Selecione um molde e pressione a tecla `F5`. *Resultado esperado:* O molde deve ser espelhado horizontalmente (inverter o pé esquerdo/direito).
