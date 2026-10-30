@@ -4,7 +4,7 @@
 > **Regra de ouro:** o que está marcado `[CONFIRMADO]` veio do relatório, do código ou do usuário. O que está `[NÃO CONFIRMADO]` é suposição e não deve virar "fato" sem validação. O que está `[PREENCHER]` o Antigravity deve completar lendo o código real.
 
 <!-- AUTO:header:start -->
-**Última sincronização com o código:** 2026-10-30 11:20 (HEAD ao gerar: `6618311`; 100 arquivos Python, ~51515 linhas)
+**Última sincronização com o código:** 2026-10-30 11:51 (HEAD ao gerar: `9de94fd`; 100 arquivos Python, ~51515 linhas)
 <!-- AUTO:header:end -->
 **Versão deste documento:** 1
 
@@ -104,27 +104,27 @@ db/migrations/001_initial_mysql_schema.sql
 db/migrations/002_add_layout_multisheet_columns.sql
 db/migrations/003_add_session_nesting_mode.sql
 db/migrations/004_add_shapes_index.sql
-docs/FASE4_RELATORIO_PRODUCAO.md
-docs/FASE5B_FRESH_LEARNING.md
-docs/FASE5_1_OTIMIZACAO_IA_TESTE.md
-docs/FASE5_2_ARQUITETURA_4CAMADAS.md
-docs/FASE5_DIAGNOSTICO_IA_TESTE.md
-docs/FASE6_0_DECISOES.md
-docs/FASE6_0_DIAGNOSTICO_SHAPE_EDITOR.md
-docs/FASE6_0_MOCKUP.md
-docs/FASE6_1_1_STITCHING_EDITOR.md
-docs/FASE6_1_SHAPE_CATALOG_VIEW.md
-docs/FASE6_2_1_WARNING_FINAL.md
-docs/FASE6_2_2_PERF_CONFTEST.md
-docs/FASE6_2_POLIMENTO_CATALOGO.md
-docs/FASE6_2_WARNING_ANALYSIS.md
-docs/FASE6_4_ROTACAO_INTERATIVA.md
-docs/FORMATO_LAY.md
-docs/LAYOUT_EDITOR_RE.md
-docs/MOTORES_NESTING_PARAMETROS.md
-docs/RELATORIO_IMPLEMENTACAO_MELHORIAS.md
-docs/RELATORIO_REVERSA_COMELZ_ONX.md
-docs/RELATORIO_SISTEMA_COMPLETO.md
+docs/fases/FASE4_RELATORIO_PRODUCAO.md
+docs/fases/FASE5B_FRESH_LEARNING.md
+docs/fases/FASE5_1_OTIMIZACAO_IA_TESTE.md
+docs/fases/FASE5_2_ARQUITETURA_4CAMADAS.md
+docs/fases/FASE5_DIAGNOSTICO_IA_TESTE.md
+docs/fases/FASE6_0_DECISOES.md
+docs/fases/FASE6_0_DIAGNOSTICO_SHAPE_EDITOR.md
+docs/fases/FASE6_0_MOCKUP.md
+docs/fases/FASE6_1_1_STITCHING_EDITOR.md
+docs/fases/FASE6_1_SHAPE_CATALOG_VIEW.md
+docs/fases/FASE6_2_1_WARNING_FINAL.md
+docs/fases/FASE6_2_2_PERF_CONFTEST.md
+docs/fases/FASE6_2_POLIMENTO_CATALOGO.md
+docs/fases/FASE6_2_WARNING_ANALYSIS.md
+docs/fases/FASE6_4_ROTACAO_INTERATIVA.md
+docs/fases/FORMATO_LAY.md
+docs/fases/LAYOUT_EDITOR_RE.md
+docs/fases/MOTORES_NESTING_PARAMETROS.md
+docs/fases/RELATORIO_IMPLEMENTACAO_MELHORIAS.md
+docs/fases/RELATORIO_REVERSA_COMELZ_ONX.md
+docs/fases/RELATORIO_SISTEMA_COMPLETO.md
 docs/ref/layout_re/help_topics.json
 tests/conftest.py                                    # tests/conftest.py
 tests/test_company_logo_print.py                     # Testes Automatizados para a Remoção do Logotipo ATOM e Suporte a Logotipo Personalizado da Empresa
@@ -1638,6 +1638,167 @@ Amostras autênticas de arquivos `.lay` (`teste.lay`, `A40118.LAY`) foram locali
 
 ---
 
+## 8.1. Exportação Dual e Formato Comelz .ONX / Container CZLIB `[CONFIRMADO]`
+
+O sistema oferece **Dupla Saída de Layout** unificada ([`cad/dual_exporter.py`](file:///home/dola/Documentos/clone%20do%20job/jobmanager-win10-python/cad/dual_exporter.py)), permitindo salvar simultaneamente layouts para máquinas **ATOM FlashCut** (`.lay`) e **Comelz CM44** (`.onx`), eliminando a necessidade de redigitação ou recálculo manual para linhas de produção com mesas híbridas.
+
+### Especificação Técnica do Formato Comelz (.onx)
+- **Container `CZLIB\x02`**:
+  - Bytes 0 a 5: Assinatura mágica `CZLIB\x02` (`0x43 0x5A 0x4C 0x49 0x42 0x02`).
+  - Bytes 6 em diante: Stream comprimido em BZIP2 modificado. O algoritmo proprietário da Comelz compacta o XML UTF-8 e **suprime os 10 primeiros bytes de cabeçalho padrão** (`BZh91AY&SY`). Na descompressão, reinjeta a assinatura antes de invocar o descompressor BZIP2.
+  - Implementado em Python puro em [`cad/czlib.py`](file:///home/dola/Documentos/clone%20do%20job/jobmanager-win10-python/cad/czlib.py) (`compress_czlib` e `decompress_czlib`), garantindo reversibilidade bit a bit com zero dependências externas.
+- **Estrutura XML (Schema ONX v1.1)**:
+  - `<security><cuttable /></security>`: Autorização de execução CNC no cabeçote.
+  - `<material id="..." type="sheet" width="W" height="H" margin-top="M" margin-left="M" margin-bottom="M" margin-right="M" layers="L">`: Especificação física da chapa/pele.
+  - `<qualityarea layer="0" level="0"><path>X1,Y1;X2,Y2...</path></qualityarea>`: Área líquida útil de corte em mm.
+  - `<part name="..." size="..." mirrored="true|false">`: Definição de moldes.
+  - `<placement x="..." y="..." a="..." status="placed" sortnumber="N"/>`: Posição $(X, Y)$ em mm, ângulo $a$ em radianos e ordenação sequencial ótima de usinagem.
+  - `<applications>`: Parâmetros CNC de aceleração e velocidade (`cut_xy_vel`, `cut_xy_acc`, `cut_order="fiep"`).
+
+| Parâmetro | ATOM FlashCut (`.lay`) | Comelz CNC (`.onx`) | Estratégia de Mapeamento |
+| :--- | :--- | :--- | :--- |
+| **Formato** | Texto plano ANSI (`$$LAYOUT.v3$$`) | XML UTF-8 comprimido com `CZLIB\x02` | Geradores dedicados em `cad/` a partir do mesmo dataset |
+| **Dimensões** | Linhas `ris_w <W>` e `ris_l <H>` | Atributos `<material width="W" height="H">` | Mapeamento direto de largura e comprimento (mm) |
+| **Margens** | Não declaradas formalmente | Atributos `margin-top/left/bottom/right` | Margens da sessão aplicadas com cálculo de área útil |
+| **Posicionamento** | Linha `I <idx> <tg> <id> <flags> <x> <y> <rad>` | `<placement x="..." y="..." a="..." status="placed"/>` | Coordenadas $(X, Y)$ em mm e ângulo em radianos |
+| **Espelhamento** | Flag `fn98MR` / flag binária | Atributo `mirrored="true"` em `<part>` | Flag booleana `is_mirrored` |
+| **Gap** | Campo `gap <val>` | Tag `<info name="parts_distance"><val></info>` | Distância milimétrica contorno a contorno da sessão |
+| **Ordem de Corte** | Sequência de linhas `I` (furo $\rightarrow$ contorno) | Atributo `sortnumber="N"` em `<placement>` | Mesma sequência otimizada Strip-TSP + Or-opt |
+
+---
+
+## 8.2. Motores de Nesting e Parâmetros Industriais `[CONFIRMADO]`
+
+O sistema desacopla a geometria física do material da estratégia de cálculo e agressividade matemática:
+
+### 1. Estratégias de Nesting (Geometria do Material e Disposição Física)
+- **`sint` (Sintéticos em Chapas e Placas com Fileiras)**:
+  - Organização em fileiras retilíneas contínuas com linha de base comum perfeitamente nivelada, permitindo que a faca trabalhe em alta velocidade sem cursos em vazio.
+  - Geminação 0° / 180° com encaixe perfeito entre bico e calcanhar.
+  - Aproximação contorno a contorno (*Contour Bumping*) a 1.0 mm estrito.
+- **`tape_a` (Tiras, Debruns e Peças Estreitas)**:
+  - Alinhamento unidirecional rígido com passo linear constante.
+  - Elimina vibrações da lâmina e distorções de largura ao cortar peças compridas e finas.
+- **`flashnestsheet` (Chapas Retangulares DieProc dp98)**:
+  - Aplica as matrizes de acoplamento (*Coupling*), varredura angular (*Range*) e tolerâncias do DieProc clássico.
+  - Suporte a preenchimento de cavidades (*Hole-Filling*) em moldes com áreas ocas.
+- **`freenest` (Nesting Livre / Geometria Orgânica e Retalhos)**:
+  - Heurística bottom-left com atratores de gravidade espacial para chapas irregulares, coleções com peças de proporções díspares ou retalhos de corte.
+
+### 2. Perfis de Parâmetros DieProc
+- **`FastNest`**: Encaixe instantâneo focado na agilidade de liberação para máquina.
+- **`HighYield`**: Varredura angular fina e acoplamento agressivo com busca milimétrica do maior aproveitamento percentual.
+- **`stdNOTFill`**: Para rigorosamente na quantidade pedida na ordem de produção sem gerar excedentes.
+- **`stdFill`**: Preenche a chapa inteira até a borda física, enviando o excedente para estoque de pares.
+- **`PrmSss_35`**: Calibração específica para solados e palmilhas pesadas.
+
+---
+
+## 8.3. Arquitetura de Encaixe em 3 Camadas (`NestingModeWidget`) `[CONFIRMADO]`
+
+Para equilibrar facilidade de uso fabril para o operador com controle cirúrgico para a engenharia, a interface adota a **Arquitetura Hierárquica em 3 Camadas** ([`ui/nesting_mode_widget.py`](file:///home/dola/Documentos/clone%20do%20job/jobmanager-win10-python/ui/nesting_mode_widget.py)):
+
+```
+┌────────────────────────────────────────────────────────────────────────┐
+│ CAMADA 1: Modos de Encaixe Industriais (NestingModeWidget)              │
+│ [ ⚡ Automático ]  [ ⏩ Rápido ]  [ 💰 Econômico ]  [ 📏 Fitas ]  [ 🧩 Retalhos ]  [ ⚙️ Personalizado ] │
+├────────────────────────────────────────────────────────────────────────┤
+│ CAMADA 2: Parâmetros Avançados de Corte                                │
+│ Estratégia: [ sint |v] (auto)    Parâmetros: [ FastNest |v] (auto)     │
+│ Distância peças: [-] [ 1.0 ] [+] mm    Margem: (o) 10mm  ( ) 15mm      │
+├────────────────────────────────────────────────────────────────────────┤
+│ CAMADA 3: Diagnóstico, Profiler e Painel de Macros                     │
+│ [🔧 Painel de Depuração (DebugPanel)]  [🧠 Editor de Macro (MacroPanel)]│
+└────────────────────────────────────────────────────────────────────────┘
+```
+
+1. **Camada 1 — Modos Industriais (Operador, 90% dos casos)**:
+   - **Automático (`auto`)**: Seleciona autonomamente a melhor combinação com base nas peças. Se a dimensão média das peças exceder 200 mm, aciona automaticamente `flashnestsheet` + `HighYield` via motor analítico NFP; caso contrário, executa o motor com IA Local.
+   - **Rápido (`fast`)**: `flashnestsheet` + `FastNest` via NFP.
+   - **Econômico (`economic`)**: `flashnestsheet` + `HighYield` focado em rendimento máximo.
+   - **Fitas (`tapes`)**: `tape_a` + `stdNOTFill`.
+   - **Retalhos (`remnants`)**: `freenest` + `stdNOTFill`.
+   - **Personalizado (`custom`)**: Desbloqueia total controle manual das Camadas 2 e 3.
+2. **Camada 2 — Parâmetros Avançados (Engenheiro de Processos)**:
+   - Seletores de Estratégia, predefinições DieProc, Gap mestre (distância contorno a contorno) e margens de segurança.
+   - Badges visuais indicando parâmetros promovidos automaticamente `(auto)`.
+3. **Camada 3 — Diagnóstico e P&D (Especialistas)**:
+   - **`DebugPanel`**: Seleção explícita de backend de execução (`NFP`, `Python clássico`, etc.) e profiling `cProfile` em tempo real.
+   - **`MacroPanel`**: Editor de DSL declarativa com árvore de regras e visualizador de aprendizado do modelo UCB1 Multi-Armed Bandit.
+- **Persistência**: Coluna `nesting_mode` persistida na tabela `sessions` (migração [`db/migrations/003_add_session_nesting_mode.sql`](file:///home/dola/Documentos/clone%20do%20job/jobmanager-win10-python/db/migrations/003_add_session_nesting_mode.sql)).
+
+---
+
+## 8.4. Otimizações Algorítmicas do Motor de Nesting (RDP, NFP Analítico e IA) `[CONFIRMADO]`
+
+### 1. Diagnóstico Estrutural de Gargalo
+A instrumentação empírica via `cProfile` revelou que:
+- **74,8% do tempo exclusivo (`tottime`)** era consumido em colisões poligonais iterativas SAT (`find_contact_coordinate_binary`).
+- A Inteligência Artificial local (UCB1 Bandit e SafeFormula AST) consome menos de **0,02 ms (< 0,01%)**, sendo ultraleve.
+
+### 2. Otimizações Implementadas (`cad/macro_engine.py`)
+- **Algoritmo Ramer-Douglas-Peucker (RDP)**:
+  - Aplicado apenas em contornos complexos (> 50 vértices) durante o cálculo de contato submilimétrico e NFP.
+  - Simplifica a malha de cálculo preservando estritamente os contornos originais para renderização gráfica e exportação `.lay`/`.onx`.
+- **Cache Analítico de Separação Horizontal NFP (`_DX_SEP_CACHE`, `_POLY0_CACHE`)**:
+  - Armazena os deltas de separação $dX$ em função dos IDs de contorno, rotações relativas e gap.
+  - Elimina milhares de chamadas repetidas de projeção SAT.
+- **Modo Determinístico no Cérebro de IA (`NestingAIBrain`)**:
+  - `suggest_optimized_macro_params(deterministic=True)` congela a exploração estocástica, selecionando estritamente pelo histórico de maior recompensa consolidada, viabilizando repetibilidade de 100% em homologações.
+
+---
+
+## 8.5. Catálogo Matricial de Moldes (`ShapeCatalogView`) `[CONFIRMADO]`
+
+O [`ShapeCatalogView`](file:///home/dola/Documentos/clone%20do%20job/jobmanager-win10-python/ui/shape_catalog_view.py) oferece visualização em matriz MDI bidimensional inspirada no Shape Editor Comelz:
+
+- **Organização Matricial**: Eixo Vertical com peças base (Gáspea, Traseiro, Língua, Forro...) e Eixo Horizontal com grade completa de tamanhos (22a ao 45).
+- **Performance Submilimétrica (< 3 ms)**:
+  - Índice composto dedicado `idx_shapes_article_size_name` no SQLite e MySQL 8.0 ([`db/migrations/004_add_shapes_index.sql`](file:///home/dola/Documentos/clone%20do%20job/jobmanager-win10-python/db/migrations/004_add_shapes_index.sql)).
+  - Carregamento de catálogo completo em 2,1 ms para artigos com > 100 variações de molde.
+- **Renderização Gráfica Vetorial**:
+  - Exibição do contorno principal com código de cor padrão ATOM por tamanho.
+  - Furos e punções (`holes_json`).
+  - Linhas de costura e pespontos internos (`stitching_json`) destacados em magenta.
+- **Interatividade**:
+  - Filtros combinados rápidos por Peça e Tamanho.
+  - Zoom de 50% a 200%.
+  - Navegação bidirecional por setas do teclado e duplo clique para edição direta no `ShapeEditorView`.
+
+---
+
+## 8.6. Trava de Segurança CAD e Ferramentas do Shape Editor `[CONFIRMADO]`
+
+O [`ShapeEditorView`](file:///home/dola/Documentos/clone%20do%20job/jobmanager-win10-python/ui/shape_editor_view.py) incorpora salvaguardas industriais essenciais para o chão de fábrica:
+
+- **Trava de Segurança de Geometria (`geometry_locked`)**:
+  - Inicializa por padrão **BLOQUEADO (`🔒 Editar Geometria`)**, impedindo que operadores alterem acidentalmente vértices, piques ou dimensões de moldes já validados em produção.
+  - O desbloqueio (`🔓 Geometria Destravada`) exige clique voluntário com confirmação modal explícita.
+- **Ferramenta de Rotação 360° (`rotate`)**:
+  - Permite rotacionar o molde livremente no canvas vetorial para alinhamento com o fio de tração (*grain angle*).
+- **Controle de Visualização de Costuras (`var_show_stitching`)**:
+  - Checkbox dedicado para alternar a exibição de linhas de pesponto e furações sem poluir a edição do contorno externo.
+- **Tela Cheia / Maximização com Esc**:
+  - Suporte completo a atalho `<F11>` e maximização, com saída limpa pela tecla `<Escape>`.
+
+---
+
+## 8.7. Otimizações de CPU e Algoritmos CAM da Fase 4 `[CONFIRMADO]`
+
+As Fases 0 a 4 eliminaram gargalos estruturais no fluxo produtivo:
+
+1. **Backend No-Fit Polygon (`NfpBackend` em `cad/nfp.py`)**:
+   - 4,11× mais veloz (19,5 ms vs 80,3 ms por chapa) com somas de Minkowski e decomposição convexa em Python puro.
+   - Zero colisões validadas até 500 peças. Fallback transparente com `CORTEAC_BACKEND=python`.
+2. **Otimização CAM CNC de Trajetória (Strip-TSP com 2-Opt + Or-opt em `cad/exporter.py`)**:
+   - **Redução de até 11,62% no percurso em vazio (G00)** do cabeçote CNC.
+   - Algoritmo 12× a 46× mais veloz (95 ms para N=200). Preserva o vácuo ao cortar o contorno sempre por último.
+3. **Renderização Acelerada no Layout Editor**:
+   - Redesenho (`redraw`) reduzido para 7,60 ms em 300 peças via 1D Sweep & Prune e tabelas estáticas de tags (`_PIECE_TAGS`).
+   - Arraste a 0,22 ms/evento (~4.500 ev/s) com cache geométrico de contorno (99,83% de acerto).
+
+---
+
 ## 9. Pendências e arquivos faltantes
 
 ### 9.1 Tarefas abertas
@@ -1764,7 +1925,7 @@ Local: `/home/dola/Documentos/clone do job/antigo/arquivos pos instalacao/Common
 <!-- AUTO:gitlog:start -->
 | Commit | Data | Autor | Mensagem |
 |---|---|---|---|
-| `6618311` | 2026-10-30 | Doletabgi | feat(release): lancamento da versao v1.3.0 - catalogo de moldes, modos de encaixe em 3 camadas e seguranca cad |
+| `9de94fd` | 2026-10-30 | Doletabgi | feat(release): lancamento da versao v1.3.0 - catalogo de moldes, modos de encaixe em 3 camadas e seguranca cad |
 | `769010f` | 2026-10-28 | Doletabgi | feat(perf): otimizacao de gargalos de cpu, nfp backend, sweep-and-prune e or-opt cam (v1.2.0) |
 | `65e8f96` | 2026-10-27 | Doletabgi | chore(release): lancamento da versao v1.1.0 |
 | `d5f2d34` | 2026-10-27 | Doletabgi | feat(print): legenda a4 com shape id e pares n/m e remocao de texto placa na barra lateral |

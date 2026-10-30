@@ -19,7 +19,10 @@ profile_*.txt
 *.json
 docs/*
 !docs/PROJETO_ATOM_JOBMANAGER.md
-!docs/FASE4_RELATORIO_PRODUCAO.md
+!docs/fases/
+!docs/fases/*
+!docs/img/
+!docs/img/*
 tools/
 scratch/
 .githooks/
