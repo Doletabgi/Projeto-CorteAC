@@ -4,7 +4,7 @@
 > **Regra de ouro:** o que está marcado `[CONFIRMADO]` veio do relatório, do código ou do usuário. O que está `[NÃO CONFIRMADO]` é suposição e não deve virar "fato" sem validação. O que está `[PREENCHER]` o Antigravity deve completar lendo o código real.
 
 <!-- AUTO:header:start -->
-**Última sincronização com o código:** 2026-10-30 11:56 (HEAD ao gerar: `143d9d0`; 100 arquivos Python, ~51515 linhas)
+**Última sincronização com o código:** 2026-10-30 12:09 (HEAD ao gerar: `62bfa25`; 100 arquivos Python, ~51515 linhas)
 <!-- AUTO:header:end -->
 **Versão deste documento:** 1
 
@@ -19,6 +19,7 @@
 3. Ao mudar um item de `[NÃO CONFIRMADO]` para `[CONFIRMADO]`, registrar quem confirmou e quando.
 4. O Claude só afirma sobre o código aquilo que está descrito aqui. Se algo não estiver aqui, o Claude pergunta em vez de presumir.
 5. **Publicação Automática de Releases a Cada 5 Commits (`v2026.X`) (seção 12)**: a cada 5 commits acumulados no repositório (medidos e monitorados via `tools/check_release_cadence.py`), uma nova release oficial deve ser publicada automaticamente via GitHub Actions gerando binários portáteis Windows (`CorteAC.exe`) e Linux (`corteac_linux`) atualizados, incrementando rigorosamente a sequência de versões em `config.py`, `.github/workflows/release.yml` e tags do Git.
+6. **Centralização Total de Relatórios e Especificações**: A partir de 30/10/2026, **todo e qualquer relatório de fase, diagnóstico técnico, benchmark, especificação de arquitetura ou decisão de projeto deve ser documentado DIRETAMENTE neste arquivo (`docs/PROJETO_ATOM_JOBMANAGER.md`)**. É expressamente proibido criar novos arquivos `.md` avulsos na pasta `docs/`, mantendo a pasta limpa e este arquivo como a fonte única de verdade absoluta.
 
 ---
 
@@ -1925,6 +1926,7 @@ Local: `/home/dola/Documentos/clone do job/antigo/arquivos pos instalacao/Common
 <!-- AUTO:gitlog:start -->
 | Commit | Data | Autor | Mensagem |
 |---|---|---|---|
+| `62bfa25` | 2026-10-30 | Doletabgi | docs: sincronizar header e gitlog apos reorganizacao de docs |
 | `143d9d0` | 2026-10-30 | Doletabgi | docs: consolidar especificacoes no PROJETO_ATOM_JOBMANAGER e organizar docs/ |
 | `9de94fd` | 2026-10-30 | Doletabgi | feat(release): lancamento da versao v1.3.0 - catalogo de moldes, modos de encaixe em 3 camadas e seguranca cad |
 | `769010f` | 2026-10-28 | Doletabgi | feat(perf): otimizacao de gargalos de cpu, nfp backend, sweep-and-prune e or-opt cam (v1.2.0) |
@@ -1939,7 +1941,6 @@ Local: `/home/dola/Documentos/clone do job/antigo/arquivos pos instalacao/Common
 | `5429600` | 2026-10-26 | Doletabgi | feat(ui): traduzir menus para pt-br, renomear Nest para Gerar e remover botao Cut |
 | `0441e48` | 2026-10-26 | Doletabgi | build: manter apenas codigo de producao no repositorio (ignorar tools, scratch e githooks) |
 | `cff9bf7` | 2026-10-26 | Doletabgi | build: ignorar pasta docs no gitignore e desmonitorar arquivos |
-| `bef488b` | 2026-10-26 | Doletabgi | docs: sincronizar gitlog apos implementacao da cadencia de release |
 <!-- AUTO:gitlog:end -->
 
 ---
