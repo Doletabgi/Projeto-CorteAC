@@ -9,7 +9,7 @@ on:
       tag_name:
         description: 'Tag de versão SemVer (ex: v1.0.0)'
         required: false
-        default: 'v1.5.2'
+        default: 'v1.5.3'
 
 permissions:
   contents: write
@@ -183,7 +183,13 @@ jobs:
 
             ---
 
-            ### 🛠️ Recursos Incluídos Nesta Versão (v1.5.2):
+            ### 🛠️ Recursos Incluídos Nesta Versão (v1.5.3):
+            - **Layout Editor com leitura contínua do encaixe (igual ao mini-preview)**:
+              - O encaixe sempre esteve correto (1,05–1,12 mm contorno a contorno, zero colisões), mas o traço escuro de 1,2 px em cada peça fazia o operador enxergar "vãos" entre elas no editor.
+              - No zoom de visão geral o contorno passou a usar um tom escurecido da própria cor da peça: o desenho fica contínuo como no mini-preview. No zoom de detalhe o contorno escuro permanece para edição.
+              - Colisão real continua destacada em vermelho e seleção em vermelho vivo.
+              - **359 testes automatizados** (358 passando, 1 skip, 0 falhas).
+            - **Correções da v1.5.2 / v1.5.1 (mantidas)**:
             - **Correção: Layout Editor reabria sem a placa (fundo cinza, grade, margens e rótulo)**:
               - Depois de usar *Limpar layout* (ou abrir uma sessão ainda sem layout), o editor passava a mostrar somente as peças sobre fundo branco: a otimização que evita redesenhar o fundo a cada frame não era invalidada quando o canvas era apagado.
               - Correção em duas camadas: invalidação explícita ao limpar e autoconserto que redesenha a placa caso ela tenha sumido do canvas.

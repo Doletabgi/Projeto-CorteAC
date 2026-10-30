@@ -47,6 +47,20 @@ ROT_DIR_F3 = 1                  # Sentido de rotação do F3 (+90°)
 UNDO_MAX_LEVELS = 100           # Níveis máximos de desfazer (Ctrl+Z)
 UNDO_GROUP_AUTOREPEAT = True    # Agrupar repetições rápidas de F1/F2 em uma única entrada de Undo
 SAVE_TARGET = "db+file"         # Salva em SQLite e regrava arquivo .lay (se associado)
+def _shade_color(hex_color, factor=0.82):
+    """Escurece uma cor #rrggbb por um fator (contorno suave da peça no zoom de visão geral)."""
+    try:
+        h = str(hex_color).lstrip("#")
+        if len(h) != 6:
+            return hex_color
+        r = int(int(h[0:2], 16) * factor)
+        g = int(int(h[2:4], 16) * factor)
+        b = int(int(h[4:6], 16) * factor)
+        return f"#{r:02x}{g:02x}{b:02x}"
+    except Exception:
+        return hex_color
+
+
 def _contour_key(cntr):
     """
     Identidade ESTÁVEL do contorno (pelo conteúdo, não por id() de memória).
@@ -2069,6 +2083,13 @@ class LayoutEditorView(tk.Frame):
             elif is_sel:
                 outline_col = "#ff0000"
                 line_w = 2.5
+            elif lod_level == "simplified":
+                # Visão geral (>200 peças): contorno no tom da própria peça, para o
+                # desenho ficar contínuo como no mini-preview da sessão. O traço escuro
+                # de 1,2 px fazia as peças parecerem separadas por "vãos" de vários mm,
+                # quando na verdade estão a 1 mm (gap de corte) umas das outras.
+                outline_col = _shade_color(base_col, 0.82)
+                line_w = 1.0
             else:
                 outline_col = "#1e293b"
                 line_w = 1.2
