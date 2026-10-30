@@ -630,7 +630,8 @@ class SessionView(tk.Frame):
         self.tree_shapes.bind("<Button-1>", self.on_tree_shape_cell_click, add="+")
         self.tree_shapes.bind("<Double-1>", self.on_tree_shape_double_click)
         self.tree_shapes.bind("<Button-3>", self.show_shapes_context_menu)
-        self.tree_shapes.bind("<Delete>", lambda e: self.delete_selected_shape())
+        self.tree_shapes.bind("<Delete>", lambda e: self._on_tree_shapes_delete())
+        self.tree_shapes.bind("<BackSpace>", lambda e: self._on_tree_shapes_delete())
         self.tree_shapes.bind("<Return>", self.on_tree_shape_enter)
         self.tree_shapes.bind("<KP_Enter>", self.on_tree_shape_enter)
         self.tree_shapes.bind("<F2>", self.on_tree_shape_f2)
@@ -3570,11 +3571,17 @@ class SessionView(tk.Frame):
         if self.on_import_die_cb:
             self.on_import_die_cb()
 
+    def _on_tree_shapes_delete(self):
+        self.delete_selected_shape()
+        return "break"
+
     def show_shapes_context_menu(self, event):
         if event.widget == self.tree_shapes:
             iid = self.tree_shapes.identify_row(event.y)
             if iid:
-                self.tree_shapes.selection_set(iid)
+                curr_sel = self.tree_shapes.selection()
+                if iid not in curr_sel:
+                    self.tree_shapes.selection_set(iid)
         menu = tk.Menu(self, tearoff=0, bg=THEME["bg_surface"], fg=THEME["text_main"], activebackground=THEME["select_bg"], activeforeground=THEME["select_fg"])
         menu.add_command(label="➕ Adicionar Molde do Catálogo...", command=self.on_add_shape_click)
         menu.add_command(label="📂 Importar .die...", command=self.on_import_button_click)
@@ -3602,7 +3609,9 @@ class SessionView(tk.Frame):
             sort_sub.add_command(label="🔢 Sequência: 1 → N", command=lambda: self.sort_shapes_by("sequencia", force_desc=False))
             menu.add_cascade(label="📊 Classificar Moldes...", menu=sort_sub)
             menu.add_separator()
-            menu.add_command(label="🗑️ Remover Molde da Sessão", command=self.delete_selected_shape)
+            sel_count = len(self.tree_shapes.selection())
+            del_label = f"🗑️ Remover {sel_count} Moldes da Sessão" if sel_count > 1 else "🗑️ Remover Molde da Sessão"
+            menu.add_command(label=del_label, command=self.delete_selected_shape)
         try:
             menu.tk_popup(event.x_root, event.y_root)
         finally:
@@ -3613,19 +3622,56 @@ class SessionView(tk.Frame):
         if not sel or not self.shapes_list:
             return
         try:
-            idx = int(sel[0])
-            if 0 <= idx < len(self.shapes_list):
+            # Coleta todos os índices válidos da seleção
+            indices_to_remove = set()
+            for item in sel:
+                try:
+                    idx = int(item)
+                    if 0 <= idx < len(self.shapes_list):
+                        indices_to_remove.add(idx)
+                except (ValueError, TypeError):
+                    vals = self.tree_shapes.item(item, "values")
+                    if vals and len(vals) > 0:
+                        sid = str(vals[0])
+                        for i, s in enumerate(self.shapes_list):
+                            if str(s.get("id")) == sid:
+                                indices_to_remove.add(i)
+                                break
+
+            if not indices_to_remove:
+                return
+
+            count = len(indices_to_remove)
+            if count == 1:
+                idx = next(iter(indices_to_remove))
                 target = self.shapes_list[idx]
                 shp_name = target.get("name", "Molde")
-                if messagebox.askyesno(
-                    "Remover Molde da Sessão",
-                    f"Deseja remover o molde '{shp_name}' desta sessão de corte?\n\n(O molde continuará disponível no catálogo geral)",
-                    parent=self
-                ):
-                    self.shapes_list.pop(idx)
-                    self.set_shapes_data(self.shapes_list)
-                    if self.on_add_shapes_cb:
-                        self.on_add_shapes_cb(self.session_data.get("id"), self.shapes_list)
+                msg = (
+                    f"Deseja remover o molde '{shp_name}' desta sessão de corte?\n\n"
+                    f"(O molde continuará disponível no catálogo geral)"
+                )
+                title = "Remover Molde da Sessão"
+            else:
+                msg = (
+                    f"Deseja remover os {count} moldes selecionados desta sessão de corte?\n\n"
+                    f"(Os moldes continuarão disponíveis no catálogo geral)"
+                )
+                title = "Remover Moldes da Sessão"
+
+            if messagebox.askyesno(title, msg, parent=self):
+                # Filtra mantendo apenas os moldes não removidos
+                self.shapes_list = [s for i, s in enumerate(self.shapes_list) if i not in indices_to_remove]
+
+                # Reatribui sequência ordenada 1..N
+                for i, s in enumerate(self.shapes_list, start=1):
+                    s["sequence"] = i
+
+                self.set_shapes_data(self.shapes_list)
+                if not self.shapes_list:
+                    self.draw_preview_shape(None)
+
+                if self.on_add_shapes_cb:
+                    self.on_add_shapes_cb(self.session_data.get("id"), self.shapes_list)
         except Exception:
             pass
 

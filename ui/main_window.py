@@ -169,10 +169,13 @@ class MainWindow(tk.Tk):
                 except Exception:
                     pass
 
-        if app_icon_photos:
-            self.iconphoto(True, *app_icon_photos)
-        elif self.icons.get("app_icon"):
-            self.iconphoto(True, self.icons["app_icon"])
+        try:
+            if app_icon_photos:
+                self.iconphoto(True, *app_icon_photos)
+            elif self.icons.get("app_icon"):
+                self.iconphoto(True, self.icons["app_icon"])
+        except Exception:
+            pass
 
         ico_p = assets_dir / "app_icon.ico"
         if ico_p.exists():
@@ -4180,6 +4183,15 @@ class MainWindow(tk.Tk):
             if sel_grid:
                 self.on_delete_grid_item()
                 return "break"
+
+        # Se o foco está dentro de uma SessionView aberta (ex: grade de moldes)
+        for sv in self.open_sessions.values():
+            if sv.winfo_ismapped() and hasattr(sv, "tree_shapes"):
+                if widget and (widget == sv.tree_shapes or str(widget).startswith(str(sv))):
+                    sel_shp = sv.tree_shapes.selection()
+                    if sel_shp:
+                        sv.delete_selected_shape()
+                        return "break"
 
         sel_tree = self.tree_main.selection()
         if sel_tree:
