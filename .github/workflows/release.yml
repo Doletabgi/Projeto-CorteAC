@@ -14,6 +14,12 @@ on:
 permissions:
   contents: write
 
+# master, main e a tag disparam o mesmo release: serializa para não criar/atualizar
+# a release em paralelo (era a causa de falhas e de assets faltando).
+concurrency:
+  group: corteac-release
+  cancel-in-progress: false
+
 jobs:
   build-windows:
     name: Compilar Binário Windows (.exe)
@@ -145,6 +151,10 @@ jobs:
         with:
           tag_name: ${{ steps.release_tag.outputs.tag }}
           name: CorteAC ${{ steps.release_tag.outputs.tag }} (Windows & Linux)
+          # Sem allowUpdates o run que encontra a release já criada FALHA
+          # (era o caso dos pushes de master/main/tag na mesma versão).
+          allowUpdates: true
+          overwrite_files: true
           body: |
             # CorteAC — Lançamento Oficial para Windows 10/11 e Linux 64-bit
 
