@@ -4669,6 +4669,11 @@ class MainWindow(tk.Tk):
 
         nest_q = queue.Queue()
 
+        def _on_progress(current, total):
+            c_disp = current + 1 if current == 0 else current
+            if getattr(self, "session_view", None) and hasattr(self.session_view, "update_progress_text"):
+                self.after(0, lambda c=c_disp, t=total: self.session_view.update_progress_text(c, t))
+
         def _worker():
             t_start = time.perf_counter()
             try:
@@ -4688,7 +4693,8 @@ class MainWindow(tk.Tk):
                     dieproc_params=dieproc_params,
                     db=self.db,
                     margins=margins,
-                    layers=mat_layers
+                    layers=mat_layers,
+                    progress_callback=_on_progress
                 )
 
                 if do_profile:

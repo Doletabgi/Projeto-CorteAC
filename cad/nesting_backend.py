@@ -15,6 +15,7 @@ from __future__ import annotations
 import logging
 import math
 import os
+import time
 from typing import Any, Dict, List, Optional, Protocol, Tuple
 
 from cad.colors import get_color_for_size
@@ -92,6 +93,10 @@ class PythonBackend:
 
 class NfpBackend:
     """Backend analítico de alta performance baseado em No-Fit Polygon (NFP)."""
+
+    MAX_TRIES_PER_PIECE: int = 30
+    FASTNEST_MAX_TRIES_PER_PIECE: int = 50
+    SHEET_TIMEOUT_SEC: float = 5.0
 
     def nest_sheet(
         self,
@@ -348,12 +353,35 @@ class NfpBackend:
 
         sanity_enabled = os.getenv("CORTEAC_NFP_SANITY", "0").strip() == "1"
 
+        # Configuração de segurança de performance: timeout e limite de tentativas
+        timeout_sec = float(
+            (dieproc_params.get("sheet_timeout_sec") if isinstance(dieproc_params, dict) else None)
+            or os.getenv("CORTEAC_SHEET_TIMEOUT", str(self.SHEET_TIMEOUT_SEC))
+        )
+        is_fastnest = (str(params).strip().lower() == "fastnest")
+        default_max_tries = self.FASTNEST_MAX_TRIES_PER_PIECE if is_fastnest else self.MAX_TRIES_PER_PIECE
+        max_tries_per_piece = int(
+            (dieproc_params.get("max_tries_per_piece") if isinstance(dieproc_params, dict) else None)
+            or os.getenv("CORTEAC_MAX_TRIES_PER_PIECE", str(default_max_tries))
+        )
+
+        t_sheet_start = time.perf_counter()
+        shape_tries = 0
+
         while queue_idx < len(shape_queue) and cur_row_y < bed_height_mm - m_top and len(placed) < max_pieces:
+            if time.perf_counter() - t_sheet_start > timeout_sec:
+                logger.warning("Timeout de chapa atingido (%.2fs). Fechando chapa antecipadamente.", timeout_sec)
+                break
+
             row_pieces: list[dict[str, Any]] = []
             is_odd_row = (row_idx % 2 == 1)
 
             # Preenchimento horizontal da linha com encosto milimétrico acelerado por NFP
             while queue_idx < len(shape_queue) and (len(placed) + len(row_pieces)) < max_pieces:
+                if time.perf_counter() - t_sheet_start > timeout_sec:
+                    logger.warning("Timeout de chapa atingido (%.2fs) durante preenchimento de linha.", timeout_sec)
+                    break
+
                 shape = shape_queue[queue_idx]
                 piece_in_row_idx = len(row_pieces)
 
@@ -390,12 +418,18 @@ class NfpBackend:
                         colliders_row = [(p["poly"], p["bbox"]) for p in row_pieces]
                         c_poly = transform_contour(shape["contour"], cand_x - min_x, cur_row_y - min_y, rot)
                         c_bbox = polygon_bbox(c_poly)
+                        tries = 0
                         while any(polygons_collide(c_poly, cp, gap=gap, bbox_a=c_bbox, bbox_b=cb) for cp, cb in colliders_row):
                             cand_x += 0.05
+                            tries += 1
+                            if tries >= max_tries_per_piece:
+                                cand_x = bed_width_mm
+                                break
                             c_poly = transform_contour(shape["contour"], cand_x - min_x, cur_row_y - min_y, rot)
                             c_bbox = polygon_bbox(c_poly)
 
                 if cand_x + w > bed_width_mm - m_right:
+                    shape_tries += 1
                     break
 
                 c_poly = transform_contour(shape["contour"], cand_x - min_x, cur_row_y - min_y, rot)
@@ -424,8 +458,12 @@ class NfpBackend:
                 row_pieces.append(item)
                 queue_idx += 1
                 idx += 1
+                shape_tries = 0
 
             if not row_pieces:
+                break
+
+            if shape_tries >= max_tries_per_piece:
                 break
 
             # Rebaixamento da LINHA INTEIRA como corpo rígido (Row Interlock acelerado)
@@ -466,8 +504,12 @@ class NfpBackend:
                                 return True
                         return False
 
+                    row_tries = 0
                     while row_collides_at(target_y):
                         target_y += 0.05
+                        row_tries += 1
+                        if row_tries >= max_tries_per_piece:
+                            break
 
                 delta_y = target_y - cur_row_y
                 cur_row_y = target_y

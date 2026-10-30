@@ -4,7 +4,7 @@
 > **Regra de ouro:** o que está marcado `[CONFIRMADO]` veio do relatório, do código ou do usuário. O que está `[NÃO CONFIRMADO]` é suposição e não deve virar "fato" sem validação. O que está `[PREENCHER]` a IA deve completar lendo o código real.
 
 <!-- AUTO:header:start -->
-**Última sincronização com o código:** 2026-10-30 12:51 (HEAD ao gerar: `5612822`; 102 arquivos Python, ~52004 linhas)
+**Última sincronização com o código:** 2026-10-30 15:25 (HEAD ao gerar: `5b1c06d`; 105 arquivos Python, ~52651 linhas)
 <!-- AUTO:header:end -->
 **Versão deste documento:** 1
 
@@ -144,6 +144,7 @@ tests/test_macro_engine_ia_teste.py                  # Testes de Homologação p
 tests/test_macro_engine_ia_teste_optimized.py        # JobManager 2000 (Python Edition)
 tests/test_material_import.py                        # JobManager 2000 (Python Edition)
 tests/test_multisheet_nesting.py                     # Testes automatizados completos para Nesting em Múltiplas Placas (Multi-Sheet Nesting).
+tests/test_multisheet_progress.py                    # tests/test_multisheet_progress.py - Suíte de testes para a Fase 6.6 (Multi-sheet e Progresso Determinado)
 tests/test_mysql_concurrency.py                      # JobManager 2000 (Python Edition)
 tests/test_nesting_backend.py                        # tests/test_nesting_backend.py - Testes unitários para a arquitetura de backends de Nesting
 tests/test_nesting_contour_gap.py
@@ -164,9 +165,11 @@ tests/test_shape_sorting.py                          # Testes Unitários: Classi
 tests/test_shapes_resto.py                           # Testes unitários e de integração para a coluna 'Resto' na grade de Moldes da SessionView.
 tests/test_strategy_removal.py                       # Testes automatizados para validação da remoção da estratégia flashnestroll (bobinas contínuas):
 tests/fixtures/ia_teste_baseline.json
+tools/bench_10k_pieces.py                            # tools/bench_10k_pieces.py
 tools/bench_ia_teste.py                              # tools/bench_ia_teste.py
 tools/bench_ia_teste_optimized.py                    # tools/bench_ia_teste_optimized.py
 tools/bench_layout_drag.py                           # tools/bench_layout_drag.py
+tools/bench_multi_sheet.py                           # tools/bench_multi_sheet.py
 tools/bench_nest.py                                  # tools/bench_nest.py
 tools/bench_tsp.py                                   # tools/bench_tsp.py
 tools/capture_catalog_screenshots.py                 # tools/capture_catalog_screenshots.py
@@ -271,9 +274,9 @@ ui/trim_layout_dialog.py                             # JobManager 2000 (Python E
 - funções: `_decode_bytes`, `_parse_float`, `_parse_int`, `_normalize_dimension`, `_match_header_key`, `detect_delimiter`, `parse_material_file`, `_parse_json_materials`, `_parse_csv_materials`, `_build_material_record`, `_build_response_payload`, `generate_csv_template`
 
 ### `cad/nesting_backend.py`
-- `class NestingBackend` (linha 40, 1 métodos): Protocolo formal para motores de nesting 2D intercambiáveis.
-- `class PythonBackend` (linha 59, 1 métodos): Backend legado padrão: executa o motor clássico em cad/nesting_engine.py.
-- `class NfpBackend` (linha 93, 2 métodos): Backend analítico de alta performance baseado em No-Fit Polygon (NFP).
+- `class NestingBackend` (linha 41, 1 métodos): Protocolo formal para motores de nesting 2D intercambiáveis.
+- `class PythonBackend` (linha 60, 1 métodos): Backend legado padrão: executa o motor clássico em cad/nesting_engine.py.
+- `class NfpBackend` (linha 94, 2 métodos): Backend analítico de alta performance baseado em No-Fit Polygon (NFP).
 - funções: `get_nesting_backend`
 
 ### `cad/nesting_engine.py`
@@ -360,6 +363,9 @@ ui/trim_layout_dialog.py                             # JobManager 2000 (Python E
 - `class DummyEvent` (linha 44, 1 métodos)
 - `class TestMultiSheetNesting` (linha 50, 30 métodos)
 
+### `tests/test_multisheet_progress.py`
+- `class TestMultiSheetProgress` (linha 16, 7 métodos)
+
 ### `tests/test_mysql_concurrency.py`
 - `class TestMySQLConcurrency` (linha 29, 4 métodos)
 
@@ -421,6 +427,9 @@ ui/trim_layout_dialog.py                             # JobManager 2000 (Python E
 ### `tests/test_strategy_removal.py`
 - `class TestStrategyRemoval` (linha 19, 9 métodos)
 
+### `tools/bench_10k_pieces.py`
+- funções: `get_current_rss_mb`, `get_peak_rss_mb`, `generate_10k_shapes`, `run_stress_test`, `main`
+
 ### `tools/bench_ia_teste.py`
 - funções: `calculate_sheet_g00`, `run_ia_teste_benchmark`, `main`
 
@@ -429,6 +438,9 @@ ui/trim_layout_dialog.py                             # JobManager 2000 (Python E
 
 ### `tools/bench_layout_drag.py`
 - funções: `build_pieces`, `screen_of`, `run_single_benchmark`, `main`
+
+### `tools/bench_multi_sheet.py`
+- funções: `generate_benchmark_shapes`, `run_benchmark`, `main`
 
 ### `tools/bench_nest.py`
 - funções: `load_benchmark_shapes`, `run_benchmark`, `main`
@@ -540,7 +552,7 @@ ui/trim_layout_dialog.py                             # JobManager 2000 (Python E
 - `class NestingParamsDialog` (linha 10, 2 métodos)
 
 ### `ui/session_view.py`
-- `class SessionView` (linha 79, 102 métodos)
+- `class SessionView` (linha 79, 103 métodos)
 
 ### `ui/shape_catalog_view.py`
 - `class ShapeCatalogView` (linha 38, 44 métodos): Visão MDI em Matriz Grid (Peças × Tamanhos) para exibição e gerenciamento
@@ -1307,8 +1319,8 @@ A ordem de corte do `.lay` para a mesa **não pode** ser aleatória:
 
 | Atalho | Local | Linha |
 |---|---|---|
-| Alt+Down | `ui/session_view.py:3165` | `entry.bind("<Alt-Down>", lambda e: adjust_number(-1))` |
-| Alt+Up | `ui/session_view.py:3164` | `entry.bind("<Alt-Up>", lambda e: adjust_number(+1))` |
+| Alt+Down | `ui/session_view.py:3180` | `entry.bind("<Alt-Down>", lambda e: adjust_number(-1))` |
+| Alt+Up | `ui/session_view.py:3179` | `entry.bind("<Alt-Up>", lambda e: adjust_number(+1))` |
 | Backspace | `ui/cad_canvas.py:72` | `self.master.bind("<BackSpace>", lambda e: self.delete_selected())` |
 | Backspace | `ui/dieproc_dialog.py:87` | `self.preset_listbox.bind("<BackSpace>", lambda e: self.on_delete_clicked())` |
 | Backspace | `ui/main_window.py:575` | `self.bind_all("<BackSpace>", self.on_global_delete_key, add="+")` |
@@ -1329,7 +1341,7 @@ A ordem de corte do `.lay` para a mesa **não pode** ser aleatória:
 | Ctrl+A | `ui/main_window.py:578` | `self.bind_all("<Control-Key-a>", self.on_select_all, add="+")` |
 | Ctrl+A | `ui/main_window.py:579` | `self.bind_all("<Control-Key-A>", self.on_select_all, add="+")` |
 | Ctrl+C | `ui/main_window.py:267` | `edit_menu.add_command(label="Copiar", accelerator="Ctrl+C")` |
-| Ctrl+Down | `ui/session_view.py:3163` | `entry.bind("<Control-Down>", lambda e: adjust_number(-1))` |
+| Ctrl+Down | `ui/session_view.py:3178` | `entry.bind("<Control-Down>", lambda e: adjust_number(-1))` |
 | Ctrl+Equal | `ui/layout_editor_view.py:564` | `w.bind("<Control-equal>", lambda e: (self.zoom_in(), "break")[1])` |
 | Ctrl+Equal | `ui/shape_catalog_view.py:273` | `self.bind("<Control-equal>", lambda e: self.zoom_step(1.2))` |
 | Ctrl+Kp_0 | `ui/shape_catalog_view.py:279` | `self.bind("<Control-KP_0>", lambda e: self.reset_zoom())` |
@@ -1377,7 +1389,7 @@ A ordem de corte do `.lay` para a mesa **não pode** ser aleatória:
 | Ctrl+T | `ui/layout_editor_view.py:613` | `w.bind("<Control-Key-T>", _on_ctrl_t)` |
 | Ctrl+T | `ui/main_window.py:71` | `self.bind("<Control-t>", self.handle_ctrl_t)` |
 | Ctrl+T | `ui/main_window.py:72` | `self.bind("<Control-T>", self.handle_ctrl_t)` |
-| Ctrl+Up | `ui/session_view.py:3162` | `entry.bind("<Control-Up>", lambda e: adjust_number(+1))` |
+| Ctrl+Up | `ui/session_view.py:3177` | `entry.bind("<Control-Up>", lambda e: adjust_number(+1))` |
 | Ctrl+V | `ui/main_window.py:268` | `edit_menu.add_command(label="Colar", accelerator="Ctrl+V")` |
 | Ctrl+X | `ui/main_window.py:266` | `edit_menu.add_command(label="Recortar", accelerator="Ctrl+X")` |
 | Ctrl+Y | `ui/layout_editor_view.py:580` | `self.canvas.bind("<Control-y>", lambda e: "break")` |
@@ -1418,7 +1430,7 @@ A ordem de corte do `.lay` para a mesa **não pode** ser aleatória:
 | Delete | `ui/shape_editor_view.py:247` | `self.bind("<Delete>", lambda e: self.delete_selected())` |
 | Delete | `ui/shape_editor_view.py:249` | `self.canvas.bind("<Delete>", lambda e: self.delete_selected())` |
 | Down | `ui/layout_editor_view.py:662` | `self.bind_all("<Down>", lambda e: self.nudge_selected(0, -5))` |
-| Down | `ui/session_view.py:3148` | `entry.bind("<Down>", move_down)` |
+| Down | `ui/session_view.py:3163` | `entry.bind("<Down>", move_down)` |
 | Down | `ui/shape_catalog_view.py:263` | `self.bind("<Down>", lambda e: self.navigate_selection(0, 1))` |
 | Escape | `ui/cad_canvas.py:67` | `self.bind("<Escape>", self.cancel_drag)` |
 | Escape | `ui/cad_canvas.py:68` | `self.master.bind("<Escape>", self.cancel_drag)` |
@@ -1433,9 +1445,9 @@ A ordem de corte do `.lay` para a mesa **não pode** ser aleatória:
 | Escape | `ui/main_window.py:3102` | `dialog.bind("<Escape>", lambda e: dialog.destroy())` |
 | Escape | `ui/material_codes_view.py:491` | `dlg.bind("<Escape>", lambda e: dlg.destroy())` |
 | Escape | `ui/options_dialog.py:40` | `self.bind("<Escape>", lambda e: self.on_cancel())` |
-| Escape | `ui/session_view.py:2657` | `entry.bind("<Escape>", cancel)` |
-| Escape | `ui/session_view.py:2745` | `dialog.bind("<Escape>", lambda e: dialog.destroy())` |
-| Escape | `ui/session_view.py:3158` | `entry.bind("<Escape>", cancel_edit)` |
+| Escape | `ui/session_view.py:2672` | `entry.bind("<Escape>", cancel)` |
+| Escape | `ui/session_view.py:2760` | `dialog.bind("<Escape>", lambda e: dialog.destroy())` |
+| Escape | `ui/session_view.py:3173` | `entry.bind("<Escape>", cancel_edit)` |
 | Escape | `ui/shape_catalog_view.py:268` | `self.bind("<Escape>", lambda e: self.on_close_click())` |
 | Escape | `ui/shape_editor_view.py:243` | `self.bind("<Escape>", self.on_escape_key)` |
 | Escape | `ui/shape_editor_view.py:244` | `self.canvas.bind("<Escape>", self.on_escape_key)` |
@@ -1456,13 +1468,13 @@ A ordem de corte do `.lay` para a mesa **não pode** ser aleatória:
 | F4 | `ui/layout_editor_view.py:645` | `w.bind("<Key-F4>", self.on_f4_press)` |
 | F5 | `ui/main_window.py:110` | `self.bind_all("<F5>", lambda e: self.on_refresh_f5())` |
 | F5 | `ui/main_window.py:287` | `tools_menu.add_command(label="Atualizar", accelerator="F5", command=self.on_refr` |
-| Iso_left_tab | `ui/session_view.py:3157` | `entry.bind("<ISO_Left_Tab>", move_prev_col)` |
-| Kp_down | `ui/session_view.py:3149` | `entry.bind("<KP_Down>", move_down)` |
+| Iso_left_tab | `ui/session_view.py:3172` | `entry.bind("<ISO_Left_Tab>", move_prev_col)` |
+| Kp_down | `ui/session_view.py:3164` | `entry.bind("<KP_Down>", move_down)` |
 | Kp_enter | `ui/fill_user_dialog.py:155` | `self.bind("<KP_Enter>", lambda e: self.on_ok())` |
 | Kp_enter | `ui/session_view.py:636` | `self.tree_shapes.bind("<KP_Enter>", self.on_tree_shape_enter)` |
-| Kp_enter | `ui/session_view.py:3153` | `entry.bind("<KP_Enter>", move_down)` |
+| Kp_enter | `ui/session_view.py:3168` | `entry.bind("<KP_Enter>", move_down)` |
 | Kp_enter | `ui/shape_catalog_view.py:267` | `self.bind("<KP_Enter>", lambda e: self.open_selected_shape())` |
-| Kp_up | `ui/session_view.py:3151` | `entry.bind("<KP_Up>", move_up)` |
+| Kp_up | `ui/session_view.py:3166` | `entry.bind("<KP_Up>", move_up)` |
 | Left | `ui/layout_editor_view.py:659` | `self.bind_all("<Left>", lambda e: self.nudge_selected(-5, 0))` |
 | Left | `ui/shape_catalog_view.py:264` | `self.bind("<Left>", lambda e: self.navigate_selection(-1, 0))` |
 | R | `ui/cad_canvas.py:69` | `self.master.bind("<r>", lambda e: self.rotate_selected(45))` |
@@ -1480,9 +1492,9 @@ A ordem de corte do `.lay` para a mesa **não pode** ser aleatória:
 | Return | `ui/session_view.py:635` | `self.tree_shapes.bind("<Return>", self.on_tree_shape_enter)` |
 | Return | `ui/session_view.py:787` | `self.tree_mat.bind("<Return>", self.on_mat_enter_key)` |
 | Return | `ui/session_view.py:890` | `self.tree_lays.bind("<Return>", self.on_layout_row_double_click)` |
-| Return | `ui/session_view.py:2655` | `entry.bind("<Return>", lambda e: commit())` |
-| Return | `ui/session_view.py:2744` | `dialog.bind("<Return>", lambda e: save())` |
-| Return | `ui/session_view.py:3152` | `entry.bind("<Return>", move_down)` |
+| Return | `ui/session_view.py:2670` | `entry.bind("<Return>", lambda e: commit())` |
+| Return | `ui/session_view.py:2759` | `dialog.bind("<Return>", lambda e: save())` |
+| Return | `ui/session_view.py:3167` | `entry.bind("<Return>", move_down)` |
 | Return | `ui/shape_catalog_view.py:266` | `self.bind("<Return>", lambda e: self.open_selected_shape())` |
 | Return | `ui/shape_editor_view.py:312` | `self.entry_name.bind("<Return>", lambda e: self.on_name_change())` |
 | Return | `ui/shape_editor_view.py:358` | `self.entry_vx.bind("<Return>", self.on_vertex_entry_change)` |
@@ -1492,14 +1504,14 @@ A ordem de corte do `.lay` para a mesa **não pode** ser aleatória:
 | Right | `ui/shape_catalog_view.py:265` | `self.bind("<Right>", lambda e: self.navigate_selection(1, 0))` |
 | Shift+F3 | `ui/layout_editor_view.py:641` | `w.bind("<Shift-F3>", lambda e: "break")` |
 | Shift+F3 | `ui/layout_editor_view.py:642` | `w.bind("<Shift-Key-F3>", lambda e: "break")` |
-| Shift+Return | `ui/session_view.py:3154` | `entry.bind("<Shift-Return>", move_up)` |
-| Shift+Tab | `ui/session_view.py:2659` | `entry.bind("<Shift-Tab>", on_shift_tab)` |
-| Shift+Tab | `ui/session_view.py:3156` | `entry.bind("<Shift-Tab>", move_prev_col)` |
+| Shift+Return | `ui/session_view.py:3169` | `entry.bind("<Shift-Return>", move_up)` |
+| Shift+Tab | `ui/session_view.py:2674` | `entry.bind("<Shift-Tab>", on_shift_tab)` |
+| Shift+Tab | `ui/session_view.py:3171` | `entry.bind("<Shift-Tab>", move_prev_col)` |
 | Space | `ui/add_shapes_dialog.py:135` | `self.tree.bind("<space>", self.on_tree_space)` |
-| Tab | `ui/session_view.py:2658` | `entry.bind("<Tab>", on_tab)` |
-| Tab | `ui/session_view.py:3155` | `entry.bind("<Tab>", move_next_col)` |
+| Tab | `ui/session_view.py:2673` | `entry.bind("<Tab>", on_tab)` |
+| Tab | `ui/session_view.py:3170` | `entry.bind("<Tab>", move_next_col)` |
 | Up | `ui/layout_editor_view.py:661` | `self.bind_all("<Up>", lambda e: self.nudge_selected(0, 5))` |
-| Up | `ui/session_view.py:3150` | `entry.bind("<Up>", move_up)` |
+| Up | `ui/session_view.py:3165` | `entry.bind("<Up>", move_up)` |
 | Up | `ui/shape_catalog_view.py:262` | `self.bind("<Up>", lambda e: self.navigate_selection(0, -1))` |
 
 **Conflitos reais detectados:**
@@ -1847,6 +1859,24 @@ Implementação de exclusão em lote na grade de moldes da `SessionView` (`ui/se
 
 ---
 
+## 8.10. Otimização Multi-Sheet, Progresso Determinado e Teste de Estresse 10k (Fases 6.6 & 6.6.1) `[CONFIRMADO]`
+
+Implementação de telemetria de progresso determinado, salvaguardas de empacotamento contra testes exaustivos e validação extrema de estabilidade de memória (`cad/nesting_engine.py`, `cad/nesting_backend.py`, `ui/session_view.py`, `ui/main_window.py`):
+
+1. **Instrumentação e Telemetria de Progresso Determinado**:
+   - `nest_multi_sheet(..., progress_callback=None)` em `cad/nesting_engine.py` aceita callback de progresso invocado a cada nova chapa `progress_callback(sheet_idx, max_sheets)`.
+   - `SessionView.update_progress_text(current, total)` atualiza dinamicamente o texto da barra de progresso para: `Calculando chapa {display_current} de {total}...`, com normalização de índice 0-base para 1-base na UI.
+   - `MainWindow.on_auto_nest` despacha atualizações thread-safe usando `self.after(0, ...)`.
+2. **Salvaguardas de Tempo e Limite de Tentativas no NfpBackend**:
+   - Adicionadas constantes e parâmetros de proteção: `MAX_TRIES_PER_PIECE = 30`, `FASTNEST_MAX_TRIES_PER_PIECE = 50` e `SHEET_TIMEOUT_SEC = 5.0` em `NfpBackend`.
+   - Limitador de tentativas por peça (`shape_tries`): se a peça não couber após atingir o limite, a chapa atual é fechada imediatamente e a peça passa para a chapa seguinte, eliminando loops de testes infinitos na grade espacial.
+   - Timeout por chapa (5 s padrão ou via `CORTEAC_SHEET_TIMEOUT` / `dieproc_params`): encerra o empacotamento da placa atual com segurança se o tempo limite for atingido.
+3. **Benchmarks de Produção e Estresse Extremo**:
+   - Carga padrão de 1.600 peças (100 pares x 16 tamanhos graduados, `tools/bench_multi_sheet.py`): **0.242 segundos** (**242 ms**) para 26 chapas no modo NFP / FastNest (meta < 10 s superada amplamente).
+   - Teste de estresse com 10.000 peças (500 pares x 20 tamanhos graduados, `tools/bench_10k_pieces.py`): **1.510 segundos** (**1509 ms**) para 154 chapas, consumo de pico de RAM contido em **358.00 MB** (teto de 2 GB respeitado com folga de 82%), e zero ocorrência de `MemoryError`.
+
+---
+
 ## 9. Pendências e arquivos faltantes
 
 ### 9.1 Tarefas abertas
@@ -1859,6 +1889,7 @@ Implementação de exclusão em lote na grade de moldes da `SessionView` (`ui/se
 - [x] Correção de contadores do Layout Editor e eliminação de colisão de ID da peça sequencial com ID do molde (molde 36a) — Concluído (`ui/main_window.py`, `ui/layout_editor_view.py`)
 - [x] Feedback visual de Nesting (barra de progresso indeterminada e bloqueio de botões contra duplo-clique na SessionView — Fase 6.5) — Concluído (`ui/session_view.py`, `ui/main_window.py`, `tests/test_session_view_progress.py`)
 - [x] Exclusão múltipla de moldes na grade da SessionView via Delete/BackSpace/Menu — Concluído (`ui/session_view.py`, `ui/main_window.py`, `tests/test_session_shapes_multidelete.py`)
+- [x] Otimização Multi-Sheet (1600 peças em 242 ms), feedback determinado "chapa X de Y" e teste de estresse 10.000 peças (1.51 s, 358 MB RAM — Fases 6.6 e 6.6.1) — Concluído (`cad/nesting_engine.py`, `cad/nesting_backend.py`, `ui/session_view.py`, `ui/main_window.py`, `tools/bench_multi_sheet.py`, `tools/bench_10k_pieces.py`, `tests/test_multisheet_progress.py`)
 - [ ] `.die` com múltiplas sagomas
 - [ ] `scale_factor` configurável
 - [ ] Validação do driver ANP em máquina real
@@ -1970,6 +2001,7 @@ Local: `/home/dola/Documentos/clone do job/antigo/arquivos pos instalacao/Common
 | Sex, 30/10/2026 | 11:15 | Antigravity | Catálogo de Moldes por Artigo, Modos de Encaixe em 3 Camadas, Trava de Segurança no Shape Editor, Otimizações RDP e Cache Analítico NFP (Lançamento v1.3.0): (1) Novo Catálogo de Moldes (`ShapeCatalogView` em `ui/shape_catalog_view.py`) com grade matricial por moldes e tamanhos (22a ao 45), busca ultra-rápida (< 3 ms) via índice composto no banco (`004_add_shapes_index.sql`), visualização de contornos e atalhos rápidos; (2) Arquitetura de Modos de Encaixe em 3 Camadas (`NestingModeWidget` em `ui/nesting_mode_widget.py`, `ui/session_view.py`, migração `003_add_session_nesting_mode.sql`): Camada 1 com modos visuais (Automático, Rápido, Econômico, Fitas, Retalhos, Personalizado), Camada 2 com parâmetros avançados e Camada 3 com painel de depuração (`DebugPanel`) e macros (`MacroPanel`); (3) Trava de Segurança e Proteção de Geometria no Shape Editor (`ShapeEditorView`: `🔒 Editar Geometria` / `🔓 Geometria Destravada`) com alerta de confirmação contra alterações acidentais de matrizes de corte, modo ferramenta de rotação (`rotate`), alternador de linhas de costura (`stitching`) e suporte a tela cheia/maximização com tecla `Escape`; (4) Otimizações algorítmicas no motor de nesting (`cad/macro_engine.py`): algoritmo Ramer-Douglas-Peucker (RDP) para simplificação inteligente de contornos complexos (> 50 vértices), cache analítico horizontal NFP (`_DX_SEP_CACHE`, `_POLY0_CACHE`, `clear_macro_caches`) e modo determinístico no cérebro de IA bandit (`NestingAIBrain: deterministic=True`); (5) Limpeza completa de artefatos temporários e backups locais (~800 MB); (6) Suíte expandida para 336 testes automatizados (335 aprovados, 1 skip) com 100% de estabilidade. | `ui/shape_catalog_view.py`, `ui/nesting_mode_widget.py`, `ui/macro_panel.py`, `ui/debug_panel.py`, `ui/shape_editor_view.py`, `ui/session_view.py`, `ui/main_window.py`, `cad/macro_engine.py`, `cad/ai_learner.py`, `database.py`, `db/schema_mysql.sql`, `db/migrations/003_add_session_nesting_mode.sql`, `db/migrations/004_add_shapes_index.sql`, `tests/test_shape_catalog_view.py`, `tests/test_shape_editor_fullscreen.py`, `tests/test_shape_editor_security.py`, `tests/test_nesting_mode_architecture.py`, `tests/test_macro_engine_ia_teste_optimized.py`, `config.py`, `.github/workflows/release.yml`, `docs/PROJETO_ATOM_JOBMANAGER.md` |
 | Sex, 30/10/2026 | 12:20 | Antigravity | Feedback Visual de Nesting com Barra de Progresso Indeterminada e Bloqueio de Botões (Fase 6.5): (1) Adição de barra de progresso indeterminada (`ttk.Progressbar`, modo `indeterminate`) e rótulo de status dinâmico na parte inferior de `SessionView` (`ui/session_view.py`), com inicialização oculta sem consumo de espaço; (2) Métodos `show_progress()` e `hide_progress()` em `SessionView` controlando ciclo de vida, animação contínua, status transitório (`Calculando...`) e desabilitação atômica de botões (`[Gerar]`, `[Em espera]`, `[Refazer]`) prevenindo cliques duplos e concorrência; (3) Integração assíncrona na thread `_worker` e `_poll_nest_worker` em `MainWindow` (`ui/main_window.py`) com medição de tempo CAM via `time.perf_counter()`, exibição de tempo na status bar (ex: `concluído em 87 ms`) e tratamento resiliente de erros/retornos antecipados; (4) Nova suíte com 5 testes unitários dedicados em `tests/test_session_view_progress.py` (340/341 testes passando em todo o projeto, 100% de sucesso). | `ui/session_view.py`, `ui/main_window.py`, `tests/test_session_view_progress.py`, `docs/PROJETO_ATOM_JOBMANAGER.md` |
 | Sex, 30/10/2026 | 12:47 | Antigravity | Exclusão Múltipla de Moldes na SessionView via Tecla Delete e Menu de Contexto: (1) Suporte a exclusão em lote na grade de moldes da sessão (`tree_shapes` em `ui/session_view.py`), coletando todos os itens selecionados e removendo a restrição legada a um único índice (`sel[0]`); (2) Diálogo de confirmação dinâmico com mensagem personalizada no singular para 1 molde e plural com contagem para múltiplos moldes ($N > 1$); (3) Preservação de seleção múltipla (feita via Shift ou Ctrl) ao clicar com botão direito do mouse para abrir o menu de contexto, adaptando o rótulo do comando para `🗑️ Remover N Moldes da Sessão`; (4) Reatribuição automática de sequência contínua 1..N sem buracos, sincronização atômica com banco de dados/memória e limpeza do pré-visualizador CAD; (5) Retorno de `"break"` nos eventos `<Delete>` e `<BackSpace>` impedindo propagação e priorização de foco da `SessionView` em `MainWindow.on_global_delete_key`; (6) Nova suíte com 5 testes unitários dedicados em `tests/test_session_shapes_multidelete.py` (345 testes aprovados em todo o projeto, 100% de sucesso). | `ui/session_view.py`, `ui/main_window.py`, `tests/test_session_shapes_multidelete.py`, `docs/PROJETO_ATOM_JOBMANAGER.md` |
+| Sex, 30/10/2026 | 15:15 | Antigravity | Otimização Multi-Sheet, Progresso Determinado e Teste de Estresse 10k (Fases 6.6 & 6.6.1): (1) Instrumentação de `nest_multi_sheet` (`cad/nesting_engine.py`) com parâmetro `progress_callback(sheet_idx, max_sheets)` a cada nova chapa; (2) Feedback visual determinado na `SessionView` (`ui/session_view.py`) via `update_progress_text` exibindo "Calculando chapa {current} de {total}..." com normalização 0 para 1 e despacho thread-safe via `self.after(0, ...)` em `MainWindow.on_auto_nest`; (3) Proteções no `NfpBackend` (`cad/nesting_backend.py`) com `MAX_TRIES_PER_PIECE` (30/50 em FastNest) forçando fechamento de chapa em caso de estouro e timeout de chapa (`SHEET_TIMEOUT_SEC = 5.0 s`); (4) Nova ferramenta `tools/bench_multi_sheet.py` comprovando aninhamento de 1600 peças (16 tamanhos) em apenas 0.242 s (26 chapas); (5) Teste de estresse extremo `tools/bench_10k_pieces.py` com 10.000 peças (20 tamanhos) concluído em 1.51 s (154 chapas), pico de RAM de 358 MB (< 2 GB) e zero MemoryError; (6) Nova suíte com 4 testes unitários em `tests/test_multisheet_progress.py` (349 testes aprovados em todo o projeto, 100% de sucesso). | `cad/nesting_engine.py`, `cad/nesting_backend.py`, `ui/session_view.py`, `ui/main_window.py`, `tools/bench_multi_sheet.py`, `tools/bench_10k_pieces.py`, `tests/test_multisheet_progress.py`, `docs/PROJETO_ATOM_JOBMANAGER.md` |
 
 
 **Commits recentes (automático):**
@@ -1977,6 +2009,7 @@ Local: `/home/dola/Documentos/clone do job/antigo/arquivos pos instalacao/Common
 <!-- AUTO:gitlog:start -->
 | Commit | Data | Autor | Mensagem |
 |---|---|---|---|
+| `5b1c06d` | 2026-10-30 | Doletabgi | fix(ui): permitir exclusao multipla de moldes na SessionView via tecla Delete e menu |
 | `5612822` | 2026-10-30 | Doletabgi | chore(release): lancamento da versao v1.4.0 |
 | `85a2392` | 2026-10-30 | Doletabgi | feat(ui): implementar feedback visual de nesting com barra de progresso indeterminada e bloqueio de botoes (Fase 6.5) |
 | `093bb38` | 2026-10-30 | Doletabgi | docs: definir finalidade do PROJETO_ATOM_JOBMANAGER como injecao de contexto universal para IA |
@@ -1991,7 +2024,6 @@ Local: `/home/dola/Documentos/clone do job/antigo/arquivos pos instalacao/Common
 | `2d2e403` | 2026-10-27 | Doletabgi | fix(ui): remover opcoes de margem 20mm e 30mm da selecao rapida |
 | `a1f3eba` | 2026-10-26 | Doletabgi | feat(materiais): adicionar importação em lote de lista de materiais (CSV/TSV/JSON) |
 | `3963ee5` | 2026-10-26 | david guimaraes | Update README to remove ATOM Cutting Simulator section |
-| `7dc964b` | 2026-10-26 | Doletabgi | feat(version): implementar sistema de versionamento SemVer (MAJOR.MINOR.PATCH) |
 <!-- AUTO:gitlog:end -->
 
 ---

@@ -1975,6 +1975,21 @@ class SessionView(tk.Frame):
         if self.on_nest_cb:
             self.on_nest_cb()
 
+    def update_progress_text(self, current: int, total: int):
+        """Atualiza o texto da barra de progresso para: Calculando chapa {current} de {total}..."""
+        display_current = current + 1 if current == 0 else current
+        text = f"Calculando chapa {display_current} de {total}..."
+        if hasattr(self, "lbl_progress") and self.lbl_progress.winfo_exists():
+            self.lbl_progress.config(text=text)
+        if hasattr(self, "frame_progress") and self.frame_progress.winfo_exists():
+            if not self.frame_progress.winfo_ismapped():
+                self.frame_progress.pack(fill="x", pady=(4, 2))
+        if hasattr(self, "progress_bar") and self.progress_bar.winfo_exists():
+            try:
+                self.progress_bar.start(10)
+            except Exception:
+                pass
+
     def show_progress(self, text: str = "Calculando encaixe... Por favor aguarde."):
         """Exibe a barra de progresso indeterminada e desabilita botões de ação para evitar concorrência."""
         if hasattr(self, "lbl_status_val") and self.lbl_status_val.winfo_exists():

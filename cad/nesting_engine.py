@@ -1047,7 +1047,8 @@ def nest_multi_sheet(
     db=None,
     margins: dict = None,
     layers: int = 2,
-    max_sheets: int = 200
+    max_sheets: int = 200,
+    progress_callback=None
 ) -> dict:
     """
     Orquestrador de Nesting em Múltiplas Placas (lay0000, lay0001, ...) até encaixar
@@ -1059,6 +1060,7 @@ def nest_multi_sheet(
     - Proteções: parada imediata se peça for maior que a placa útil ou se nenhuma peça couber, sem laço infinito.
     - Limite de segurança de max_sheets (padrão 200) com aviso.
     - Ordem de prioridade: coluna 'sequence' (# CONFIRMAR NO WINDOWS: ordem pela coluna Sequência).
+    - Feedback de progresso via progress_callback(sheet_idx, max_sheets) a cada nova placa.
     """
     if not available_shapes:
         return {
@@ -1156,6 +1158,12 @@ def nest_multi_sheet(
         if sheet_idx >= max_sheets:
             warning_msg = f"Limite de segurança de {max_sheets} placas atingido."
             break
+
+        if progress_callback is not None:
+            try:
+                progress_callback(sheet_idx, max_sheets)
+            except Exception:
+                pass
 
         # Monta lista de formas com demanda restante para esta rodada na ordem estrita de sequência
         round_shapes = []
