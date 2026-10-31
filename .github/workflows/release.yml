@@ -9,7 +9,7 @@ on:
       tag_name:
         description: 'Tag de versão SemVer (ex: v1.0.0)'
         required: false
-        default: 'v1.5.6'
+        default: 'v1.5.7'
 
 permissions:
   contents: write
@@ -183,7 +183,14 @@ jobs:
 
             ---
 
-            ### 🛠️ Recursos Incluídos Nesta Versão (v1.5.6):
+            ### 🛠️ Recursos Incluídos Nesta Versão (v1.5.7):
+            - **Novo: clicar na miniatura do molde seleciona todas as peças daquele número na placa**:
+              - Antes o clique selecionava apenas a primeira peça do tamanho; agora seleciona todas as peças do molde presentes na placa atual.
+              - Mensagem na barra de status informa quantas peças foram selecionadas (ou avisa que o molde não está nesta placa).
+              - A seleção em bloco funciona direto com o Bump (setas ou mouse), F1–F4, Delete e arrasto em grupo.
+              - Contadores e seleção usam a mesma regra de correspondência, então o número exibido e as peças selecionadas nunca divergem.
+              - **379 testes automatizados** (378 passando, 1 skip, 0 falhas).
+            - **Correções anteriores (mantidas)**: contadores por placa, bump interativo com mouse, cache geométrico, placa sempre visível e rendimento real.
             - **Correção: contadores da barra lateral do Layout Editor por placa**:
               - Em sessões com várias placas o contador somava todas as placas e mostrava `50/50` em cada molde, escondendo o progresso da placa aberta. Agora exibe **peças desta placa / total pedido** (ex.: `18/50`).
               - A barra lateral não era redesenhada ao trocar de placa (ficava com os textos da placa anterior); a troca passou a invalidar o cache de fundo.

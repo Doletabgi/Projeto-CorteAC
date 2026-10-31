@@ -4,7 +4,7 @@
 > **Regra de ouro:** o que está marcado `[CONFIRMADO]` veio do relatório, do código ou do usuário. O que está `[NÃO CONFIRMADO]` é suposição e não deve virar "fato" sem validação. O que está `[PREENCHER]` a IA deve completar lendo o código real.
 
 <!-- AUTO:header:start -->
-**Última sincronização com o código:** 2026-10-30 21:13 (HEAD ao gerar: `840db6a`; 109 arquivos Python, ~54496 linhas)
+**Última sincronização com o código:** 2026-10-30 21:31 (HEAD ao gerar: `7d96cb5`; 110 arquivos Python, ~54685 linhas)
 <!-- AUTO:header:end -->
 **Versão deste documento:** 1
 
@@ -137,6 +137,7 @@ tests/test_layers_pairs_nesting.py                   # Testes unitários para va
 tests/test_layout_editor_bump.py                     # tests/test_layout_editor_bump.py
 tests/test_layout_editor_fill.py                     # JobManager 2000 (Python Edition)
 tests/test_layout_editor_shortcuts.py                # Testes Automatizados para Atalhos do LayoutEditorView:
+tests/test_layout_editor_sidebar_selection.py        # tests/test_layout_editor_sidebar_selection.py
 tests/test_layout_editor_trim.py                     # Testes Automatizados para a Funcionalidade de Refilar Layout (Corte Automático CAM):
 tests/test_layout_editor_visual_regression.py        # tests/test_layout_editor_visual_regression.py
 tests/test_layout_print_legend.py                    # Testes unitários automatizados para a Legenda de Moldes na Impressão A4 (LayoutPrintDialog).
@@ -344,6 +345,10 @@ ui/units.py                                          # ui/units.py - Formataçã
 - `class DummyMouseEvent` (linha 38, 1 métodos)
 - `class TestLayoutEditorShortcuts` (linha 46, 69 métodos)
 
+### `tests/test_layout_editor_sidebar_selection.py`
+- `class DummyMouseEvent` (linha 21, 1 métodos)
+- `class TestSidebarSelection` (linha 29, 12 métodos)
+
 ### `tests/test_layout_editor_trim.py`
 - `class TestLayoutEditorTrim` (linha 16, 9 métodos)
 
@@ -537,7 +542,7 @@ ui/units.py                                          # ui/units.py - Formataçã
 - `class ImportMaterialsDialog` (linha 18, 7 métodos): Diálogo autêntico Windows XP para importação de lista de materiais.
 
 ### `ui/layout_editor_view.py`
-- `class LayoutEditorView` (linha 222, 145 métodos)
+- `class LayoutEditorView` (linha 222, 146 métodos)
 - funções: `_shade_color`, `_contour_key`, `rotate_piece_in_place`
 
 ### `ui/layout_print_dialog.py`
@@ -2311,6 +2316,38 @@ placa vazia mostra `0/6` (antes exibia `6/6` nas duas). Suíte: **374 testes + 1
 
 ---
 
+
+## 8.19. Seleção de todas as peças do molde pela barra lateral (v1.5.7) `[CONFIRMADO]`
+
+Pedido do operador: ao clicar na miniatura de um molde na barra lateral do Layout Editor,
+selecionar automaticamente **todas as peças daquele número presentes na placa atual**.
+
+### 1. Antes / depois
+
+| Antes | Depois |
+|---|---|
+| O clique selecionava apenas a **primeira** peça encontrada daquele tamanho (`break` no laço) | Seleciona **todas** as peças do molde na placa atual |
+| A regra de correspondência do clique era diferente da usada nos contadores | Regra única `_piece_matches_target()` compartilhada por contadores e seleção |
+| Sem retorno ao operador | Barra de status: `N peças do molde <nome> selecionadas nesta placa` (ou `nenhuma peça nesta placa`) |
+
+### 2. Implementação
+
+- `_piece_matches_target(piece, target)`: correspondência por `target_id`, `name` e `size`
+  (com trava de tamanho), usada nos contadores da barra lateral **e** na seleção.
+- `on_sidebar_click`: monta `selected_indices` com todos os índices correspondentes,
+  define `selected_index` e mostra a mensagem; nenhuma peça encontrada limpa a seleção.
+- Como a seleção passa a ter várias peças, os comandos existentes funcionam em bloco:
+  **Bump** (setas/mouse), F1–F4, setas, Delete, arrasto em grupo.
+
+### 3. Testes
+
+`tests/test_layout_editor_sidebar_selection.py` (5 testes): seleciona as 3 peças do molde,
+troca a seleção ao clicar em outro molde, molde sem peças não quebra, mensagem de status
+com a quantidade e bump em bloco a partir da seleção da miniatura.
+Suíte total: **379 testes + 1 skip**.
+
+---
+
 ## 9. Pendências e arquivos faltantes
 
 ### 9.1 Tarefas abertas
@@ -2440,6 +2477,7 @@ Local: `/home/dola/Documentos/clone do job/antigo/arquivos pos instalacao/Common
 | Sex, 30/10/2026 | 12:20 | Antigravity | Feedback Visual de Nesting com Barra de Progresso Indeterminada e Bloqueio de Botões (Fase 6.5): (1) Adição de barra de progresso indeterminada (`ttk.Progressbar`, modo `indeterminate`) e rótulo de status dinâmico na parte inferior de `SessionView` (`ui/session_view.py`), com inicialização oculta sem consumo de espaço; (2) Métodos `show_progress()` e `hide_progress()` em `SessionView` controlando ciclo de vida, animação contínua, status transitório (`Calculando...`) e desabilitação atômica de botões (`[Gerar]`, `[Em espera]`, `[Refazer]`) prevenindo cliques duplos e concorrência; (3) Integração assíncrona na thread `_worker` e `_poll_nest_worker` em `MainWindow` (`ui/main_window.py`) com medição de tempo CAM via `time.perf_counter()`, exibição de tempo na status bar (ex: `concluído em 87 ms`) e tratamento resiliente de erros/retornos antecipados; (4) Nova suíte com 5 testes unitários dedicados em `tests/test_session_view_progress.py` (340/341 testes passando em todo o projeto, 100% de sucesso). | `ui/session_view.py`, `ui/main_window.py`, `tests/test_session_view_progress.py`, `docs/PROJETO_ATOM_JOBMANAGER.md` |
 | Sex, 30/10/2026 | 12:47 | Antigravity | Exclusão Múltipla de Moldes na SessionView via Tecla Delete e Menu de Contexto: (1) Suporte a exclusão em lote na grade de moldes da sessão (`tree_shapes` em `ui/session_view.py`), coletando todos os itens selecionados e removendo a restrição legada a um único índice (`sel[0]`); (2) Diálogo de confirmação dinâmico com mensagem personalizada no singular para 1 molde e plural com contagem para múltiplos moldes ($N > 1$); (3) Preservação de seleção múltipla (feita via Shift ou Ctrl) ao clicar com botão direito do mouse para abrir o menu de contexto, adaptando o rótulo do comando para `🗑️ Remover N Moldes da Sessão`; (4) Reatribuição automática de sequência contínua 1..N sem buracos, sincronização atômica com banco de dados/memória e limpeza do pré-visualizador CAD; (5) Retorno de `"break"` nos eventos `<Delete>` e `<BackSpace>` impedindo propagação e priorização de foco da `SessionView` em `MainWindow.on_global_delete_key`; (6) Nova suíte com 5 testes unitários dedicados em `tests/test_session_shapes_multidelete.py` (345 testes aprovados em todo o projeto, 100% de sucesso). | `ui/session_view.py`, `ui/main_window.py`, `tests/test_session_shapes_multidelete.py`, `docs/PROJETO_ATOM_JOBMANAGER.md` |
 | Sex, 30/10/2026 | 15:15 | Antigravity | Otimização Multi-Sheet, Progresso Determinado e Teste de Estresse 10k (Fases 6.6 & 6.6.1): (1) Instrumentação de `nest_multi_sheet` (`cad/nesting_engine.py`) com parâmetro `progress_callback(sheet_idx, max_sheets)` a cada nova chapa; (2) Feedback visual determinado na `SessionView` (`ui/session_view.py`) via `update_progress_text` exibindo "Calculando chapa {current} de {total}..." com normalização 0 para 1 e despacho thread-safe via `self.after(0, ...)` em `MainWindow.on_auto_nest`; (3) Proteções no `NfpBackend` (`cad/nesting_backend.py`) com `MAX_TRIES_PER_PIECE` (30/50 em FastNest) forçando fechamento de chapa em caso de estouro e timeout de chapa (`SHEET_TIMEOUT_SEC = 5.0 s`); (4) Nova ferramenta `tools/bench_multi_sheet.py` comprovando aninhamento de 1600 peças (16 tamanhos) em apenas 0.242 s (26 chapas); (5) Teste de estresse extremo `tools/bench_10k_pieces.py` com 10.000 peças (20 tamanhos) concluído em 1.51 s (154 chapas), pico de RAM de 358 MB (< 2 GB) e zero MemoryError; (6) Nova suíte com 4 testes unitários em `tests/test_multisheet_progress.py` (349 testes aprovados em todo o projeto, 100% de sucesso). | `cad/nesting_engine.py`, `cad/nesting_backend.py`, `ui/session_view.py`, `ui/main_window.py`, `tools/bench_multi_sheet.py`, `tools/bench_10k_pieces.py`, `tests/test_multisheet_progress.py`, `docs/PROJETO_ATOM_JOBMANAGER.md` |
+| Sex, 30/10/2026 | 21:45 | DeepSeek | Seleção de todas as peças do molde pela barra lateral (v1.5.7): clicar na miniatura do molde no Layout Editor agora seleciona TODAS as peças daquele número na placa atual (antes selecionava só a primeira encontrada). Nova regra única `_piece_matches_target()` compartilhada pelos contadores e pela seleção (evita divergência entre o número exibido e as peças selecionadas); mensagem de status informa a quantidade (`N peças do molde X selecionadas nesta placa`) e limpa a seleção quando o molde não está na placa. Seleção múltipla integra com Bump (setas/mouse), F1-F4, Delete e arrasto em grupo. Novo `tests/test_layout_editor_sidebar_selection.py` (5 testes). 379 testes + 1 skip. | `ui/layout_editor_view.py`, `tests/test_layout_editor_sidebar_selection.py`, `docs/PROJETO_ATOM_JOBMANAGER.md`, `config.py`, `.github/workflows/release.yml` |
 | Sex, 30/10/2026 | 21:20 | DeepSeek | Correção dos contadores da barra lateral do Layout Editor (v1.5.6): (1) em sessões multi-placa o contador somava TODAS as placas (`total_session_pieces/total_pieces_demanded`), exibindo `50/50` em toda placa e escondendo o progresso real; agora mostra as peças DESTA placa sobre o total pedido (ex.: `18/50`); (2) a barra lateral (miniaturas + contadores) é desenhada dentro do bloco de fundo cacheado e não era redesenhada ao trocar de placa — `switch_to_layout()` passou a invalidar `_last_bg_sig`; (3) teste `test_layout_editor_sidebar_counters` atualizado (placa cheia `6/6`, placa vazia `0/6`). 374 testes + 1 skip. | `ui/layout_editor_view.py`, `tests/test_multisheet_nesting.py`, `docs/PROJETO_ATOM_JOBMANAGER.md`, `config.py`, `.github/workflows/release.yml` |
 | Sex, 30/10/2026 | 20:05 | DeepSeek | Auditoria do Layout Editor e Bump Magnético Interativo com Mouse (v1.5.5): (1) corrigido rendimento FALSO na barra de status (`if total_p >= 200 and yd < 80: yd = 83.02` e valores inventados quando vazio) — agora exibe o rendimento real; (2) setas passam a executar BUMP magnético (antes nudge fixo de 5 mm, divergente do original) e `Ctrl+Setas` faz ajuste fino de 0,5 mm; (3) novo `bump_selection_vector(dx, dy)` como núcleo único (setas + mouse): direção livre, primeiro contato por varredura + busca binária, gap da sessão, SpatialGrid das peças não selecionadas, validação final, undo atômico e seleção múltipla em bloco; (4) bump interativo com mouse com os 3 gatilhos do Layout.exe — botão do meio com seleção (sem seleção continua pan), duplo-clique + arrasto (<300 ms) e Ctrl+Shift + arrasto — com linha elástica em item de canvas, cursor `circle` (equivalente ao ID 149), `Esc` para cancelar e limiar de 3 px; (5) `LAYOUT_EDITOR_RE.md` atualizado (Bump Interativo: AUSENTE → IMPLEMENTADO; setas: DIVERGENTE → IGUAL) e checklist 2.1-2.3 marcado; (6) novo `tests/test_layout_editor_bump.py` com 13 testes (horizontal, vertical, 45°, 30°, 3 gatilhos, arrasto curto, Esc, linha elástica, côncavo na diagonal, bloco, já encostada, undo, pan). Desempenho do bump: 4-5 ms com 300 peças. Suíte: 374 testes + 1 skip. | `ui/layout_editor_view.py`, `tests/test_layout_editor_bump.py`, `docs/fases/LAYOUT_EDITOR_RE.md`, `docs/PROJETO_ATOM_JOBMANAGER.md`, `config.py`, `.github/workflows/release.yml` |
 | Sex, 30/10/2026 | 19:15 | DeepSeek | Correção do cache de transformação com identidade reciclada (v1.5.4): `_CONTOUR_HASH_CACHE` era indexado por `id(contorno)` sem validar o conteúdo; com a reciclagem de endereços pelo CPython, `transform_contour` podia devolver a geometria de OUTRO molde (peças deslocadas/deformadas, colisões falsas e risco de posicionamento sobre o polígono errado). Detectado pelo fuzz `test_05` falhando de forma intermitente na suíte completa. Correção: entrada do cache passa a guardar `(hash, tamanho, amostra de 3 vértices)` e é validada a cada consulta (O(1)); reciclagem vira cache miss. Novos testes `TestTransformCacheIdentity` (falham no código antigo, passam no novo, cobrindo offset 0 e offset + rotação 180°). 361 testes + 1 skip em 3 execuções consecutivas. | `cad/geometry.py`, `tests/test_nfp.py`, `docs/PROJETO_ATOM_JOBMANAGER.md`, `config.py`, `.github/workflows/release.yml` |
@@ -2458,6 +2496,7 @@ Local: `/home/dola/Documentos/clone do job/antigo/arquivos pos instalacao/Common
 <!-- AUTO:gitlog:start -->
 | Commit | Data | Autor | Mensagem |
 |---|---|---|---|
+| `7d96cb5` | 2026-10-30 | Doletabgi | fix(ui): contadores da barra lateral por placa no Layout Editor (v1.5.6) |
 | `840db6a` | 2026-10-30 | Doletabgi | feat(ui): bump magnetico interativo com mouse e auditoria do editor (v1.5.5) |
 | `c78190d` | 2026-10-30 | Doletabgi | fix(cad): cache de transformacao validava identidade reciclada (v1.5.4) |
 | `d4dbdc6` | 2026-10-30 | Doletabgi | fix(ui): leitura continua do encaixe no editor (v1.5.3) |
@@ -2472,7 +2511,6 @@ Local: `/home/dola/Documentos/clone do job/antigo/arquivos pos instalacao/Common
 | `5612822` | 2026-10-30 | Doletabgi | chore(release): lancamento da versao v1.4.0 |
 | `85a2392` | 2026-10-30 | Doletabgi | feat(ui): implementar feedback visual de nesting com barra de progresso indeterminada e bloqueio de botoes (Fase 6.5) |
 | `093bb38` | 2026-10-30 | Doletabgi | docs: definir finalidade do PROJETO_ATOM_JOBMANAGER como injecao de contexto universal para IA |
-| `35b3a62` | 2026-10-30 | Doletabgi | docs: oficializar regra de centralizacao total no PROJETO_ATOM_JOBMANAGER |
 <!-- AUTO:gitlog:end -->
 
 ---

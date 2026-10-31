@@ -1051,19 +1051,10 @@ class LayoutEditorView(tk.Frame):
             t_nm = str(target.get("name", "")).strip()
 
             for p_tid, p_sz, p_nm in placed_info:
-                # Se ambos têm tamanho definido e são diferentes, não pode ser o mesmo molde
-                if p_sz and t_sz and p_sz != t_sz:
-                    continue
-
-                if p_tid and t_id and p_tid == t_id:
+                if self._piece_matches_target(
+                    {"target_id": p_tid, "size": p_sz, "name": p_nm}, target
+                ):
                     placed_cnt += 1
-                    continue
-                if p_nm and t_nm and p_nm == t_nm:
-                    placed_cnt += 1
-                    continue
-                if p_sz and t_sz and p_sz == t_sz and (not p_nm or not t_nm or p_nm == t_nm):
-                    placed_cnt += 1
-                    continue
 
             # Contagem total da sessão somando as outras placas da sessão
             total_session_pieces = placed_cnt
@@ -1178,6 +1169,30 @@ class LayoutEditorView(tk.Frame):
                 tags=("sidebar_element", f"sidebar_target_{i}", "sidebar_ui")
             )
 
+    def _piece_matches_target(self, piece, target):
+        """
+        Regra única de correspondência peça <-> molde da barra lateral.
+
+        Usada tanto pelos CONTADORES quanto pela SELEÇÃO por clique na miniatura,
+        para que o número exibido e as peças selecionadas nunca divirjam.
+        """
+        t_id = str(target.get("id", "")).strip()
+        t_sz = str(target.get("size", "")).strip()
+        t_nm = str(target.get("name", "")).strip()
+        p_tid = str(piece.get("target_id", "")).strip()
+        p_sz = str(piece.get("size", "")).strip()
+        p_nm = str(piece.get("name", "")).strip()
+
+        if p_sz and t_sz and p_sz != t_sz:
+            return False
+        if p_tid and t_id and p_tid == t_id:
+            return True
+        if p_nm and t_nm and p_nm == t_nm:
+            return True
+        if p_sz and t_sz and p_sz == t_sz and (not p_nm or not t_nm or p_nm == t_nm):
+            return True
+        return False
+
     def on_sidebar_click(self, event):
         """Trata cliques na barra lateral: seleciona o molde na grade e destaca peças na mesa."""
         y_start, item_h, col_width, num_cols = self._get_sidebar_grid_layout()
@@ -1197,24 +1212,26 @@ class LayoutEditorView(tk.Frame):
             self.active_target_index = clicked_idx
             target = self.sidebar_targets[clicked_idx]
 
-            target_size_str = str(target.get("size", "")).strip()
-            target_name = target.get("name", "")
+            # Seleciona TODAS as peças deste molde presentes na placa atual
+            # (antes selecionava apenas a primeira encontrada).
+            matching = [i for i, p in enumerate(self.placed_pieces)
+                        if self._piece_matches_target(p, target)]
+            self.selected_indices = matching
+            self.selected_index = matching[0] if matching else None
+            self._drag_outline_state = None
+            self._drag_colliding_others = set()
 
-            found_idx = -1
-            for p_idx, p in enumerate(self.placed_pieces):
-                p_sz = str(p.get("size", "")).strip()
-                p_nm = str(p.get("name", "")).strip()
-
-                if p_sz and target_size_str and p_sz == target_size_str:
-                    found_idx = p_idx
-                    break
-                if p_nm and target_name and p_nm == target_name:
-                    found_idx = p_idx
-                    break
-
-            self.selected_index = found_idx
             self.redraw()
             self.update_status()
+            nome = target.get("name") or target.get("size") or "molde"
+            if matching:
+                qtd = len(matching)
+                texto = (f"{qtd} peça{'s' if qtd > 1 else ''} do molde {nome} "
+                         f"selecionada{'s' if qtd > 1 else ''} nesta placa")
+            else:
+                texto = f"Molde {nome}: nenhuma peça nesta placa"
+            if hasattr(self, "lbl_stat_pos") and self.lbl_stat_pos.winfo_exists():
+                self.lbl_stat_pos.config(text=texto, fg="#1e40af")
 
     def on_canvas_double_click(self, event):
         """Duplo clique na barra lateral adiciona uma nova peça; duplo clique na divisória reseta."""
