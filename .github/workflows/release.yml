@@ -9,7 +9,7 @@ on:
       tag_name:
         description: 'Tag de versão SemVer (ex: v1.0.0)'
         required: false
-        default: 'v1.5.8'
+        default: 'v1.5.9'
 
 permissions:
   contents: write
@@ -183,7 +183,13 @@ jobs:
 
             ---
 
-            ### 🛠️ Recursos Incluídos Nesta Versão (v1.5.8):
+            ### 🛠️ Recursos Incluídos Nesta Versão (v1.5.9):
+            - **Nome da ferramenta ao passar o mouse nos ícones do Layout Editor (tooltips)**:
+              - Tooltip flutuante no padrão Win32 (fundo amarelo claro) com o nome e o atalho de cada botão, exibido após 450 ms e fechado ao sair/clicar.
+              - Cobre todos os ícones da barra, além de `✂ Refilar` e `▶ Simular`; a dica na barra de status continua funcionando em paralelo.
+              - As setas da barra agora executam o **Bump magnético** (igual às setas do teclado), e o texto do zoom foi corrigido para `Ctrl+roda` (Ctrl+clique virou seleção).
+              - **387 testes automatizados** (386 passando, 1 skip, 0 falhas).
+            - **Novidades da v1.5.8 (mantidas)**: painel `Sel:` e Ctrl+clique para somar/remover peças.
             - **Novo painel `Sel:` na barra de status (ao lado do `Id:`)**:
               - Mostra em tempo real quantas peças estão selecionadas, independentemente da origem (clique, Shift, Ctrl, retângulo, Ctrl+A, miniatura do molde ou Bump).
             - **Ctrl+clique agora soma/remove peças da seleção**:

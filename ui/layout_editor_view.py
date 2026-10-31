@@ -17,6 +17,7 @@ from pathlib import Path
 
 from config import THEME
 from ui.units import format_m, format_dim_mm, format_dim_m
+from ui.tooltip import ToolTip
 from cad.geometry import transform_contour, point_in_polygon, rotate_point, polygon_bbox, polygons_collide, polygon_area, SpatialGrid, bbox_overlap
 from cad.colors import get_color_for_size, get_contrast_text_color
 from ui.layout_print_dialog import LayoutPrintDialog
@@ -504,7 +505,7 @@ class LayoutEditorView(tk.Frame):
 
         # Grupo 4: Zoom e Enquadramento (Eye/Full View, Zoom)
         self.create_tb_btn(tb_row, "btn_zoom_fit", "Exibir Layout Completo", self.reset_view)
-        self.btn_zoom = self.create_tb_btn(tb_row, "btn_zoom", "Zoom (+20% ao clicar, Ctrl+Clique no canvas, Botão direito reduz)", self.zoom_in)
+        self.btn_zoom = self.create_tb_btn(tb_row, "btn_zoom", "Zoom (+20%): clique aqui, Ctrl+roda no canvas; botão direito reduz", self.zoom_in)
         self.btn_zoom.bind("<Button-3>", lambda e: self.zoom_out())
 
         self.create_tb_sep(tb_row)
@@ -517,10 +518,10 @@ class LayoutEditorView(tk.Frame):
         self.create_tb_sep(tb_row)
 
         # Grupo 6: Deslocamento Fino (Bump Direcional 10 mm)
-        self.create_tb_btn(tb_row, "btn_bump_left", "Deslocar Selecionada para Esquerda (10mm)", lambda: self.nudge_selected(-10, 0))
-        self.create_tb_btn(tb_row, "btn_bump_right", "Deslocar Selecionada para Direita (10mm)", lambda: self.nudge_selected(10, 0))
-        self.create_tb_btn(tb_row, "btn_bump_up", "Deslocar Selecionada para Cima (10mm)", lambda: self.nudge_selected(0, 10))
-        self.create_tb_btn(tb_row, "btn_bump_down", "Deslocar Selecionada para Baixo (10mm)", lambda: self.nudge_selected(0, -10))
+        self.create_tb_btn(tb_row, "btn_bump_left", "Bump magnético: empurra a seleção para a ESQUERDA até encostar (seta ←)", lambda: self.bump_selection_vector(-1, 0))
+        self.create_tb_btn(tb_row, "btn_bump_right", "Bump magnético: empurra a seleção para a DIREITA até encostar (seta →)", lambda: self.bump_selection_vector(1, 0))
+        self.create_tb_btn(tb_row, "btn_bump_up", "Bump magnético: empurra a seleção para CIMA até encostar (seta ↑)", lambda: self.bump_selection_vector(0, 1))
+        self.create_tb_btn(tb_row, "btn_bump_down", "Bump magnético: empurra a seleção para BAIXO até encostar (seta ↓)", lambda: self.bump_selection_vector(0, -1))
 
         self.create_tb_sep(tb_row)
 
@@ -551,6 +552,7 @@ class LayoutEditorView(tk.Frame):
                 self.lbl_stat_pos.config(text=self._last_status_pos_text)
         self.btn_trim.bind("<Enter>", _on_enter_trim)
         self.btn_trim.bind("<Leave>", _on_leave_trim)
+        self.btn_trim._tooltip = ToolTip(self.btn_trim, tip_trim)
 
         # Grupo 8: Simulação de Corte CAM do Layout
         self.btn_sim = tk.Button(
@@ -579,6 +581,7 @@ class LayoutEditorView(tk.Frame):
                 self.lbl_stat_pos.config(text=self._last_status_pos_text)
         self.btn_sim.bind("<Enter>", _on_enter_sim)
         self.btn_sim.bind("<Leave>", _on_leave_sim)
+        self.btn_sim._tooltip = ToolTip(self.btn_sim, "▶ Simular Corte CAM no Layout (Esc para parar)")
 
         # -------------------------------------------------------------
         # 4. Área de Trabalho Principal (Canvas ocupa todo o espaço, sem sidebar)
@@ -847,6 +850,7 @@ class LayoutEditorView(tk.Frame):
                     self.lbl_stat_pos.config(text=self._last_status_pos_text)
             btn.bind("<Enter>", _on_enter)
             btn.bind("<Leave>", _on_leave)
+            btn._tooltip = ToolTip(btn, tooltip)
         return btn
 
     def create_tb_sep(self, parent):
