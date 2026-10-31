@@ -14,6 +14,7 @@ from cad.geometry import (
 )
 from cad.colors import get_color_for_size
 from cad.macro_engine import nest_ia_teste_engine, DEFAULT_IA_TESTE_MACRO
+from cad.layers_rule import pecas_na_mesa
 from config import ATOM_MACHINE
 
 def parse_sequence_num(val):
@@ -218,7 +219,7 @@ def parse_coupling_angles(coupling_str):
         return [0.0, 180.0]
     return list(dict.fromkeys(angles))
 
-def dieproc_nest_pieces(available_shapes, bed_width_mm, bed_height_mm, target_count=16, dieproc_params=None, is_roll=False, margins=None, layers=None):
+def dieproc_nest_pieces(available_shapes, bed_width_mm, bed_height_mm, target_count=None, dieproc_params=None, is_roll=False, margins=None, layers=None):
     """
     Motor de referência para corte contínuo de sintéticos (ATOM DieProc dp98).
     Projetado para chapas e placas sintéticas (flashnestsheet).
@@ -293,12 +294,15 @@ def dieproc_nest_pieces(available_shapes, bed_width_mm, bed_height_mm, target_co
                 s_layers = max(1, int(s_layers))
             except (ValueError, TypeError):
                 s_layers = 2
-            qty = math.ceil((int(s.get("pairs", 24)) * 2) / s_layers)
+            qty = pecas_na_mesa(s.get("pairs", 24), s_layers)
         for _ in range(qty):
             shape_queue.append(s)
 
     if not shape_queue:
         shape_queue = list(sorted_shapes)
+
+    if target_count is None or target_count <= 0:
+        target_count = len(shape_queue)
 
     idx = 1
 
@@ -412,7 +416,7 @@ def dieproc_nest_pieces(available_shapes, bed_width_mm, bed_height_mm, target_co
             sheet_timeout_sec = 0.0
         t_sheet_start = time.perf_counter()
 
-        while queue_idx < len(shape_queue) and cur_row_y < bed_height_mm - m_top and len(placed) < target_count:
+        while queue_idx < target_count and cur_row_y < bed_height_mm - m_top and len(placed) < target_count:
             if cancel_check is not None and cancel_check():
                 break
             if sheet_timeout_sec > 0 and (time.perf_counter() - t_sheet_start) > sheet_timeout_sec:
@@ -421,12 +425,12 @@ def dieproc_nest_pieces(available_shapes, bed_width_mm, bed_height_mm, target_co
             is_odd_row = (row_idx % 2 == 1)
 
             # Preenchimento horizontal da linha com encosto milimétrico contorno a contorno
-            while queue_idx < len(shape_queue) and (len(placed) + len(row_pieces)) < target_count:
+            while queue_idx < target_count and (len(placed) + len(row_pieces)) < target_count:
                 if cancel_check is not None and cancel_check():
                     break
                 if sheet_timeout_sec > 0 and (time.perf_counter() - t_sheet_start) > sheet_timeout_sec:
                     break
-                shape = shape_queue[queue_idx]
+                shape = shape_queue[queue_idx % len(shape_queue)]
                 piece_in_row_idx = len(row_pieces)
 
                 if is_alternating:
@@ -559,7 +563,7 @@ def dieproc_nest_pieces(available_shapes, bed_width_mm, bed_height_mm, target_co
         return placed
 
 
-def nest_synthetic_engine(available_shapes, bed_width_mm, bed_height_mm, target_count=16, gap_mm=1.0, is_roll=False, margins=None, layers=None):
+def nest_synthetic_engine(available_shapes, bed_width_mm, bed_height_mm, target_count=None, gap_mm=1.0, is_roll=False, margins=None, layers=None, params="stdNOTFill"):
     """
     Motor 'Sint': Otimização para corte contínuo de materiais sintéticos em rolos ou chapas.
     Características:
@@ -584,13 +588,16 @@ def nest_synthetic_engine(available_shapes, bed_width_mm, bed_height_mm, target_
                 s_layers = max(1, int(s_layers))
             except (ValueError, TypeError):
                 s_layers = 2
-            qty = math.ceil((int(s_item.get("pairs", 24)) * 2) / s_layers)
+            qty = pecas_na_mesa(s_item.get("pairs", 24), s_layers)
         for _ in range(qty):
             shape_queue.append(s_item)
     if not shape_queue:
         shape_queue = list(sorted_shapes)
 
-    max_pieces = target_count if (target_count and target_count > 0) else len(shape_queue)
+    if params == "stdFill":
+        max_pieces = 9999
+    else:
+        max_pieces = target_count if (target_count and target_count > 0) else len(shape_queue)
     m_left = float(margins.get("left", 10.0)) if margins else 10.0
     m_right = float(margins.get("right", 10.0)) if margins else 10.0
     m_top = float(margins.get("top", 10.0)) if margins else 10.0
@@ -707,7 +714,7 @@ def nest_synthetic_engine(available_shapes, bed_width_mm, bed_height_mm, target_
 
     return placed
 
-def nest_tape_engine(available_shapes, bed_width_mm, bed_height_mm, target_count=16, gap_mm=1.0, margins=None, layers=None):
+def nest_tape_engine(available_shapes, bed_width_mm, bed_height_mm, target_count=None, gap_mm=1.0, margins=None, layers=None, params="stdNOTFill"):
     """
     Motor 'Tape A': Otimização linear para fitas, tiras estreitas, debruns, vivos e correias.
     Características:
@@ -732,13 +739,16 @@ def nest_tape_engine(available_shapes, bed_width_mm, bed_height_mm, target_count
                 s_layers = max(1, int(s_layers))
             except (ValueError, TypeError):
                 s_layers = 2
-            qty = math.ceil((int(s.get("pairs", 24)) * 2) / s_layers)
+            qty = pecas_na_mesa(s.get("pairs", 24), s_layers)
         for _ in range(qty):
             shape_queue.append(s)
     if not shape_queue:
         shape_queue = list(sorted_shapes)
 
-    max_pieces = target_count if (target_count and target_count > 0) else len(shape_queue)
+    if params == "stdFill":
+        max_pieces = 9999
+    else:
+        max_pieces = target_count if (target_count and target_count > 0) else len(shape_queue)
 
     m_left = float(margins.get("left", 10.0)) if margins else 10.0
     m_right = float(margins.get("right", 10.0)) if margins else 10.0
@@ -816,7 +826,7 @@ def nest_tape_engine(available_shapes, bed_width_mm, bed_height_mm, target_count
 
     return placed
 
-def auto_nest_pieces(available_shapes, bed_width_mm, bed_height_mm, target_count=16, strategy="flashnestsheet", params="stdNOTFill", gap_mm=1.0, dieproc_params=None, db=None, margins=None, layers=None):
+def auto_nest_pieces(available_shapes, bed_width_mm, bed_height_mm, target_count=None, strategy="flashnestsheet", params="stdNOTFill", gap_mm=1.0, dieproc_params=None, db=None, margins=None, layers=None):
     """
     Ponto de entrada público do aninhamento de chapa.
     Delega ao backend configurado (CORTEAC_BACKEND="python" por padrão).
@@ -853,7 +863,7 @@ def auto_nest_pieces(available_shapes, bed_width_mm, bed_height_mm, target_count
         layers=layers,
     )
 
-def _auto_nest_pieces_core(available_shapes, bed_width_mm, bed_height_mm, target_count=16, strategy="flashnestsheet", params="stdNOTFill", gap_mm=1.0, dieproc_params=None, db=None, margins=None, layers=None):
+def _auto_nest_pieces_core(available_shapes, bed_width_mm, bed_height_mm, target_count=None, strategy="flashnestsheet", params="stdNOTFill", gap_mm=1.0, dieproc_params=None, db=None, margins=None, layers=None):
     """
     Algoritmo de aninhamento automático 2D de referência (código legado padrão).
     """
@@ -888,7 +898,8 @@ def _auto_nest_pieces_core(available_shapes, bed_width_mm, bed_height_mm, target
             gap_mm=gap_mm,
             is_roll=False,
             margins=margins,
-            layers=layers
+            layers=layers,
+            params=params
         )
 
     # 2. Estratégia Tape A (Tiras e Fitas)
@@ -900,7 +911,8 @@ def _auto_nest_pieces_core(available_shapes, bed_width_mm, bed_height_mm, target
             target_count=target_count,
             gap_mm=gap_mm,
             margins=margins,
-            layers=layers
+            layers=layers,
+            params=params
         )
 
     # Ordena os moldes pela sequência de geração configurada
@@ -917,7 +929,7 @@ def _auto_nest_pieces_core(available_shapes, bed_width_mm, bed_height_mm, target
                 s_layers = max(1, int(s_layers))
             except (ValueError, TypeError):
                 s_layers = 2
-            qty = math.ceil((int(s.get("pairs", 24)) * 2) / s_layers)
+            qty = pecas_na_mesa(s.get("pairs", 24), s_layers)
         for _ in range(qty):
             shape_queue.append(s)
 
@@ -926,7 +938,7 @@ def _auto_nest_pieces_core(available_shapes, bed_width_mm, bed_height_mm, target
 
     # Quantidade máxima a posicionar
     if params == "stdFill":
-        max_pieces = 120
+        max_pieces = 9999
     else:
         max_pieces = target_count if (target_count and target_count > 0) else len(shape_queue)
 
@@ -1205,7 +1217,10 @@ def nest_multi_sheet(
             s_layers = max(1, int(s_layers))
         except (ValueError, TypeError):
             s_layers = l_val
-        req_pieces = math.ceil((req_p * 2) / s_layers)
+        if "target_pieces" in s and s["target_pieces"] is not None:
+            req_pieces = max(0, int(s["target_pieces"]))
+        else:
+            req_pieces = pecas_na_mesa(req_p, s_layers)
         total_pieces_demanded += req_pieces
         demands.append({
             "shape": s,
@@ -1355,6 +1370,7 @@ def nest_multi_sheet(
         for p_idx, p in enumerate(valid_placed_round):
             p_clean = dict(p)
             p_clean["id"] = p_idx + 1
+            p_clean["placement_index"] = p.get("placement_index", p_idx + 1)
             plate_pieces.append(p_clean)
 
         # Rendimento e tempo da placa individual
@@ -1382,7 +1398,8 @@ def nest_multi_sheet(
             "num_dies": len(set(p.get("name") for p in plate_pieces)),
             "used_area_m2": used_m2,
             "cutting_time_sec": est_time,
-            "status": "closed"
+            "status": "closed",
+            "layers": l_val
         }
         layouts.append(layout_entry)
         sheet_idx += 1

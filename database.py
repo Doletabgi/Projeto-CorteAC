@@ -124,6 +124,28 @@ class DatabaseManager:
                         conn.commit()
                 except Exception:
                     pass
+
+                # Migração transparente idempotente para MySQL (colunas desacopladas NULL em sessions, shapes e articles)
+                try:
+                    cursor.execute("ALTER TABLE sessions MODIFY COLUMN order_id INT NULL DEFAULT NULL")
+                except Exception:
+                    pass
+                try:
+                    cursor.execute("ALTER TABLE sessions MODIFY COLUMN material_id VARCHAR(50) NULL DEFAULT NULL")
+                except Exception:
+                    pass
+                try:
+                    cursor.execute("ALTER TABLE shapes MODIFY COLUMN article_id INT NULL DEFAULT NULL")
+                except Exception:
+                    pass
+                try:
+                    cursor.execute("ALTER TABLE articles MODIFY COLUMN material_id VARCHAR(50) NULL DEFAULT NULL")
+                except Exception:
+                    pass
+                try:
+                    conn.commit()
+                except Exception:
+                    pass
             else:
                 # Backend SQLite (reserva / testes)
                 cursor.execute("""
@@ -251,6 +273,120 @@ class DatabaseManager:
                     cursor.execute("ALTER TABLE sessions ADD COLUMN margin_bottom REAL DEFAULT 10.0")
                 if "nesting_mode" not in s_cols:
                     cursor.execute("ALTER TABLE sessions ADD COLUMN nesting_mode TEXT DEFAULT 'custom'")
+                if "layers" not in s_cols:
+                    cursor.execute("ALTER TABLE sessions ADD COLUMN layers INTEGER DEFAULT NULL")
+
+                # Migração transparente SQLite: Desacoplamento seguro de pedidos/artigos/materiais (remover NOT NULL legados)
+                try:
+                    # 1. sessions: verificar se order_id ou material_id são NOT NULL
+                    cursor.execute("PRAGMA table_info(sessions)")
+                    s_raw_info = cursor.fetchall()
+                    needs_sessions_migration = any(
+                        (col[1] == "order_id" and col[3] == 1) or (col[1] == "material_id" and col[3] == 1)
+                        for col in s_raw_info
+                    )
+                    if needs_sessions_migration:
+                        cursor.execute("PRAGMA foreign_keys = OFF")
+                        s_curr_cols = [col[1] for col in s_raw_info]
+                        cursor.execute("""
+                        CREATE TABLE sessions_migration_tmp (
+                            id INTEGER PRIMARY KEY AUTOINCREMENT,
+                            code TEXT UNIQUE NOT NULL,
+                            order_id INTEGER,
+                            material_id TEXT NULL,
+                            status TEXT NOT NULL DEFAULT 'Planejado',
+                            yield_percent REAL DEFAULT 0.0,
+                            cutting_time_sec REAL DEFAULT 0.0,
+                            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                            name TEXT DEFAULT '',
+                            job TEXT DEFAULT 'ProduçãoNova',
+                            placed_pieces_json TEXT DEFAULT '[]',
+                            strategy TEXT DEFAULT 'flashnestsheet',
+                            params TEXT DEFAULT 'stdNOTFill',
+                            machine TEXT DEFAULT 'ATOM FlashCut Flex 3020',
+                            shapes_json TEXT DEFAULT '[]',
+                            gap_mm REAL DEFAULT 1.0,
+                            margin_left REAL DEFAULT 10.0,
+                            margin_right REAL DEFAULT 10.0,
+                            margin_top REAL DEFAULT 10.0,
+                            margin_bottom REAL DEFAULT 10.0,
+                            nesting_mode TEXT DEFAULT 'custom',
+                            layers INTEGER DEFAULT NULL,
+                            FOREIGN KEY (order_id) REFERENCES orders(id) ON DELETE SET NULL,
+                            FOREIGN KEY (material_id) REFERENCES materials(id) ON DELETE SET NULL
+                        )
+                        """)
+                        cursor.execute("PRAGMA table_info(sessions_migration_tmp)")
+                        new_s_cols = [col[1] for col in cursor.fetchall()]
+                        common_s = [c for c in s_curr_cols if c in new_s_cols]
+                        c_str = ", ".join(common_s)
+                        cursor.execute(f"INSERT INTO sessions_migration_tmp ({c_str}) SELECT {c_str} FROM sessions")
+                        cursor.execute("DROP TABLE sessions")
+                        cursor.execute("ALTER TABLE sessions_migration_tmp RENAME TO sessions")
+                        cursor.execute("PRAGMA foreign_keys = ON")
+                        conn.commit()
+
+                    # 2. shapes: verificar se article_id é NOT NULL
+                    cursor.execute("PRAGMA table_info(shapes)")
+                    sh_raw_info = cursor.fetchall()
+                    needs_shapes_migration = any(col[1] == "article_id" and col[3] == 1 for col in sh_raw_info)
+                    if needs_shapes_migration:
+                        cursor.execute("PRAGMA foreign_keys = OFF")
+                        sh_curr_cols = [col[1] for col in sh_raw_info]
+                        cursor.execute("""
+                        CREATE TABLE shapes_migration_tmp (
+                            id INTEGER PRIMARY KEY AUTOINCREMENT,
+                            article_id INTEGER,
+                            name TEXT NOT NULL,
+                            color TEXT NOT NULL,
+                            contour_json TEXT NOT NULL,
+                            holes_json TEXT DEFAULT '[]',
+                            stitching_json TEXT DEFAULT '[]',
+                            folder TEXT DEFAULT '',
+                            size TEXT DEFAULT '41',
+                            FOREIGN KEY (article_id) REFERENCES articles(id) ON DELETE SET NULL
+                        )
+                        """)
+                        cursor.execute("PRAGMA table_info(shapes_migration_tmp)")
+                        new_sh_cols = [col[1] for col in cursor.fetchall()]
+                        common_sh = [c for c in sh_curr_cols if c in new_sh_cols]
+                        sh_str = ", ".join(common_sh)
+                        cursor.execute(f"INSERT INTO shapes_migration_tmp ({sh_str}) SELECT {sh_str} FROM shapes")
+                        cursor.execute("DROP TABLE shapes")
+                        cursor.execute("ALTER TABLE shapes_migration_tmp RENAME TO shapes")
+                        cursor.execute("CREATE INDEX IF NOT EXISTS idx_shapes_article_size_name ON shapes(article_id, size, name)")
+                        cursor.execute("PRAGMA foreign_keys = ON")
+                        conn.commit()
+
+                    # 3. articles: verificar se material_id é NOT NULL
+                    cursor.execute("PRAGMA table_info(articles)")
+                    art_raw_info = cursor.fetchall()
+                    needs_articles_migration = any(col[1] == "material_id" and col[3] == 1 for col in art_raw_info)
+                    if needs_articles_migration:
+                        cursor.execute("PRAGMA foreign_keys = OFF")
+                        art_curr_cols = [col[1] for col in art_raw_info]
+                        cursor.execute("""
+                        CREATE TABLE articles_migration_tmp (
+                            id INTEGER PRIMARY KEY AUTOINCREMENT,
+                            order_id INTEGER NOT NULL,
+                            name TEXT NOT NULL,
+                            pairs_count INTEGER NOT NULL DEFAULT 1,
+                            material_id TEXT NULL,
+                            FOREIGN KEY (order_id) REFERENCES orders(id) ON DELETE CASCADE,
+                            FOREIGN KEY (material_id) REFERENCES materials(id) ON DELETE SET NULL
+                        )
+                        """)
+                        cursor.execute("PRAGMA table_info(articles_migration_tmp)")
+                        new_art_cols = [col[1] for col in cursor.fetchall()]
+                        common_art = [c for c in art_curr_cols if c in new_art_cols]
+                        art_str = ", ".join(common_art)
+                        cursor.execute(f"INSERT INTO articles_migration_tmp ({art_str}) SELECT {art_str} FROM articles")
+                        cursor.execute("DROP TABLE articles")
+                        cursor.execute("ALTER TABLE articles_migration_tmp RENAME TO articles")
+                        cursor.execute("PRAGMA foreign_keys = ON")
+                        conn.commit()
+                except Exception as e:
+                    print(f"[AVISO] Falha durante migração de constraints no SQLite: {e}")
 
                 cursor.execute("PRAGMA table_info(orders)")
                 o_cols = [c[1] for c in cursor.fetchall()]
@@ -322,6 +458,8 @@ class DatabaseManager:
                     yield_pct REAL DEFAULT 0.0,
                     num_items INTEGER DEFAULT 0,
                     num_dies INTEGER DEFAULT 0,
+                    margin_bottom REAL DEFAULT 10.0,
+                    layers INTEGER NULL DEFAULT NULL,
                     version INTEGER DEFAULT 1,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -367,6 +505,8 @@ class DatabaseManager:
                     cursor.execute("ALTER TABLE layouts ADD COLUMN height_mm REAL DEFAULT 0.0")
                 if "yield_pct" not in l_cols:
                     cursor.execute("ALTER TABLE layouts ADD COLUMN yield_pct REAL DEFAULT 0.0")
+                if "yield_percent" not in l_cols:
+                    cursor.execute("ALTER TABLE layouts ADD COLUMN yield_percent REAL DEFAULT 0.0")
                 if "version" not in l_cols:
                     cursor.execute("ALTER TABLE layouts ADD COLUMN version INTEGER DEFAULT 1")
                 if "created_at" not in l_cols:
@@ -391,6 +531,8 @@ class DatabaseManager:
                     cursor.execute("ALTER TABLE layouts ADD COLUMN margin_top REAL DEFAULT 10.0")
                 if "margin_bottom" not in l_cols:
                     cursor.execute("ALTER TABLE layouts ADD COLUMN margin_bottom REAL DEFAULT 10.0")
+                if "layers" not in l_cols:
+                    cursor.execute("ALTER TABLE layouts ADD COLUMN layers INTEGER NULL DEFAULT NULL")
 
                 # Migração idempotente de colunas da tabela layout_pieces (SQLite)
                 cursor.execute("PRAGMA table_info(layout_pieces)")
@@ -420,6 +562,10 @@ class DatabaseManager:
                     cursor.execute("ALTER TABLE sessions ADD COLUMN gap_mm DOUBLE DEFAULT 1.0")
                 except Exception:
                     pass
+                try:
+                    cursor.execute("ALTER TABLE sessions ADD COLUMN layers INT NULL DEFAULT NULL")
+                except Exception:
+                    pass
                 for m_col in ("margin_left", "margin_right", "margin_top", "margin_bottom"):
                     try:
                         cursor.execute(f"ALTER TABLE sessions ADD COLUMN {m_col} DOUBLE DEFAULT 10.0")
@@ -433,7 +579,8 @@ class DatabaseManager:
                     "margin_right DOUBLE DEFAULT 10.0",
                     "margin_top DOUBLE DEFAULT 10.0",
                     "margin_bottom DOUBLE DEFAULT 10.0",
-                    "status VARCHAR(50) DEFAULT 'closed'"
+                    "status VARCHAR(50) DEFAULT 'closed'",
+                    "layers INT NULL DEFAULT NULL"
                 ):
                     try:
                         cursor.execute(f"ALTER TABLE layouts ADD COLUMN {col_def}")
@@ -712,11 +859,25 @@ class DatabaseManager:
     def delete_order(self, order_id):
         with self.get_connection() as conn:
             cursor = conn.cursor()
-            cursor.execute("UPDATE sessions SET order_id = NULL WHERE order_id = ?", (order_id,))
+            try:
+                cursor.execute("UPDATE sessions SET order_id = NULL WHERE order_id = ?", (order_id,))
+            except Exception:
+                try:
+                    cursor.execute("SELECT id FROM orders WHERE id != ? ORDER BY id ASC LIMIT 1", (order_id,))
+                    other = cursor.fetchone()
+                    if other:
+                        oid = other[0] if isinstance(other, (tuple, list)) else other["id"]
+                        cursor.execute("UPDATE sessions SET order_id = ? WHERE order_id = ?", (oid, order_id))
+                except Exception:
+                    pass
+
             cursor.execute("SELECT id FROM articles WHERE order_id = ?", (order_id,))
             art_ids = [r[0] if isinstance(r, (tuple, list)) else r["id"] for r in cursor.fetchall()]
             for aid in art_ids:
-                cursor.execute("UPDATE shapes SET article_id = NULL WHERE article_id = ?", (aid,))
+                try:
+                    cursor.execute("UPDATE shapes SET article_id = NULL WHERE article_id = ?", (aid,))
+                except Exception:
+                    pass
             cursor.execute("DELETE FROM articles WHERE order_id = ?", (order_id,))
             cursor.execute("DELETE FROM orders WHERE id = ?", (order_id,))
             conn.commit()
@@ -724,7 +885,10 @@ class DatabaseManager:
     def delete_article(self, article_id):
         with self.get_connection() as conn:
             cursor = conn.cursor()
-            cursor.execute("UPDATE shapes SET article_id = NULL WHERE article_id = ?", (article_id,))
+            try:
+                cursor.execute("UPDATE shapes SET article_id = NULL WHERE article_id = ?", (article_id,))
+            except Exception:
+                pass
             cursor.execute("DELETE FROM articles WHERE id = ?", (article_id,))
             conn.commit()
 
@@ -1153,6 +1317,9 @@ class DatabaseManager:
                 d["margin_top"] = float(d.get("margin_top", 10.0) if d.get("margin_top") is not None else 10.0)
                 d["margin_bottom"] = float(d.get("margin_bottom", 10.0) if d.get("margin_bottom") is not None else 10.0)
                 d["nesting_mode"] = d.get("nesting_mode") or "custom"
+                d["layers"] = int(d["layers"]) if d.get("layers") is not None else None
+                if d.get("material_id") and not d.get("material"):
+                    d["material"] = self.get_material(d["material_id"])
 
                 for idx, s in enumerate(d["shapes"], start=1):
                     s_sz = str(s.get("size") or s.get("name") or "41")
@@ -1186,6 +1353,14 @@ class DatabaseManager:
             d["margin_top"] = float(d.get("margin_top", 10.0) if d.get("margin_top") is not None else 10.0)
             d["margin_bottom"] = float(d.get("margin_bottom", 10.0) if d.get("margin_bottom") is not None else 10.0)
             d["nesting_mode"] = d.get("nesting_mode") or "custom"
+            d["layers"] = int(d["layers"]) if d.get("layers") is not None else None
+            if d.get("material_id") and not d.get("material"):
+                d["material"] = self.get_material(d["material_id"])
+            if "shapes" not in d or not d["shapes"]:
+                try:
+                    d["shapes"] = json.loads(d.get("shapes_json") or "[]")
+                except Exception:
+                    d["shapes"] = []
             d["placed_pieces"] = json.loads(d.get("placed_pieces_json") or "[]")
             for p in d["placed_pieces"]:
                 p_sz = p.get("size", "41")
@@ -1247,7 +1422,8 @@ class DatabaseManager:
         margin_right: float = 10.0,
         margin_top: float = 10.0,
         margin_bottom: float = 10.0,
-        nesting_mode: str = "auto"
+        nesting_mode: str = "auto",
+        layers: Optional[int] = None
     ) -> int:
         with self.get_connection() as conn:
             cursor = conn.cursor()
@@ -1301,30 +1477,34 @@ class DatabaseManager:
                 code = f"SESS-{session_id:03d}-{int(time.time()) % 10000}"
 
             # 5. Gravação da sessão
+            layers_val = int(layers) if layers is not None else None
             if conn.backend == "mysql":
                 cursor.execute("""
-                INSERT INTO sessions (id, code, order_id, material_id, name, job, status, yield_percent, cutting_time_sec, placed_pieces_json, strategy, params, machine, shapes_json, gap_mm, margin_left, margin_right, margin_top, margin_bottom, nesting_mode)
-                VALUES (?, ?, ?, ?, ?, ?, ?, 0.0, 0.0, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                INSERT INTO sessions (id, code, order_id, material_id, name, job, status, yield_percent, cutting_time_sec, placed_pieces_json, strategy, params, machine, shapes_json, gap_mm, margin_left, margin_right, margin_top, margin_bottom, nesting_mode, layers)
+                VALUES (?, ?, ?, ?, ?, ?, ?, 0.0, 0.0, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ON DUPLICATE KEY UPDATE
                     code = VALUES(code), name = VALUES(name), job = VALUES(job), status = VALUES(status),
                     material_id = VALUES(material_id), placed_pieces_json = VALUES(placed_pieces_json),
                     strategy = VALUES(strategy), params = VALUES(params), machine = VALUES(machine), shapes_json = VALUES(shapes_json),
                     gap_mm = VALUES(gap_mm), margin_left = VALUES(margin_left), margin_right = VALUES(margin_right),
                     margin_top = VALUES(margin_top), margin_bottom = VALUES(margin_bottom),
-                    nesting_mode = VALUES(nesting_mode)
+                    nesting_mode = VALUES(nesting_mode),
+                    layers = VALUES(layers)
                 """, (
                     session_id, code, valid_order_id, valid_mat_id, name, job, status,
                     json.dumps(placed_pieces or []), strategy, params, machine, json.dumps(shapes or []), float(gap_mm),
-                    float(margin_left), float(margin_right), float(margin_top), float(margin_bottom), str(nesting_mode)
+                    float(margin_left), float(margin_right), float(margin_top), float(margin_bottom), str(nesting_mode),
+                    layers_val
                 ))
             else:
                 cursor.execute("""
-                REPLACE INTO sessions (id, code, order_id, material_id, name, job, status, yield_percent, cutting_time_sec, placed_pieces_json, strategy, params, machine, shapes_json, gap_mm, margin_left, margin_right, margin_top, margin_bottom, nesting_mode)
-                VALUES (?, ?, ?, ?, ?, ?, ?, 0.0, 0.0, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                REPLACE INTO sessions (id, code, order_id, material_id, name, job, status, yield_percent, cutting_time_sec, placed_pieces_json, strategy, params, machine, shapes_json, gap_mm, margin_left, margin_right, margin_top, margin_bottom, nesting_mode, layers)
+                VALUES (?, ?, ?, ?, ?, ?, ?, 0.0, 0.0, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """, (
                     session_id, code, valid_order_id, valid_mat_id, name, job, status,
                     json.dumps(placed_pieces or []), strategy, params, machine, json.dumps(shapes or []), float(gap_mm),
-                    float(margin_left), float(margin_right), float(margin_top), float(margin_bottom), str(nesting_mode)
+                    float(margin_left), float(margin_right), float(margin_top), float(margin_bottom), str(nesting_mode),
+                    layers_val
                 ))
 
             # 6. Atualiza o contador permanente de último número de sessão
@@ -1342,7 +1522,7 @@ class DatabaseManager:
             conn.commit()
             return session_id
 
-    def update_session(self, session_id, name=None, status=None, placed_pieces=None, yield_pct=None, time_sec=None, material_id=_SENTINEL, strategy=None, params=None, machine=None, shapes=None, job=None, clear_material=False, gap_mm=None, margin_left=None, margin_right=None, margin_top=None, margin_bottom=None, nesting_mode=None):
+    def update_session(self, session_id, name=None, status=None, placed_pieces=None, yield_pct=None, time_sec=None, material_id=_SENTINEL, strategy=None, params=None, machine=None, shapes=None, job=None, clear_material=False, gap_mm=None, margin_left=None, margin_right=None, margin_top=None, margin_bottom=None, nesting_mode=None, layers=None):
         with self.get_connection() as conn:
             cursor = conn.cursor()
             updates = []
@@ -1400,6 +1580,9 @@ class DatabaseManager:
             if nesting_mode is not None:
                 updates.append("nesting_mode = ?")
                 values.append(str(nesting_mode))
+            if layers is not None:
+                updates.append("layers = ?")
+                values.append(int(layers))
             if updates:
                 values.append(session_id)
                 cursor.execute(f"UPDATE sessions SET {', '.join(updates)} WHERE id = ?", values)
@@ -1484,9 +1667,12 @@ class DatabaseManager:
             return presets
 
     def get_dieproc_preset(self, name):
+        if not name:
+            return None
+        clean_name = str(name).split(";")[0].strip()
         with self.get_connection() as conn:
             cursor = conn.cursor()
-            cursor.execute("SELECT * FROM dieproc_presets WHERE name = ?", (name,))
+            cursor.execute("SELECT * FROM dieproc_presets WHERE name = ?", (clean_name,))
             row = cursor.fetchone()
             if row:
                 return dict(row)
@@ -1814,6 +2000,18 @@ class DatabaseManager:
         """
         with self.get_connection() as conn:
             cursor = conn.cursor()
+            # Resolução resiliente das camadas da sessão para herança
+            sess_layers = None
+            try:
+                cursor.execute("SELECT layers FROM sessions WHERE id = ?", (session_id,))
+                s_lrow = cursor.fetchone()
+                if s_lrow:
+                    s_ldict = dict(s_lrow)
+                    if s_ldict.get("layers") is not None:
+                        sess_layers = int(s_ldict["layers"])
+            except Exception:
+                pass
+
             try:
                 cursor.execute(
                     "SELECT * FROM layouts WHERE session_id = ? ORDER BY layout_index ASC, id ASC",
@@ -1867,6 +2065,8 @@ class DatabaseManager:
                 d["margin_top"] = float(d.get("margin_top", 10.0) if d.get("margin_top") is not None else 10.0)
                 d["margin_bottom"] = float(d.get("margin_bottom", 10.0) if d.get("margin_bottom") is not None else 10.0)
                 d["status"] = d.get("status") or "closed"
+                ly_layers = d.get("layers")
+                d["layers"] = int(ly_layers) if ly_layers is not None else sess_layers
                 layouts.append(d)
 
             if not layouts:
@@ -1893,6 +2093,7 @@ class DatabaseManager:
                             "margin_bottom": float(s_dict.get("margin_bottom", 10.0)),
                             "yield_percent": float(s_dict.get("yield_percent", 0.0)),
                             "yield_pct": float(s_dict.get("yield_percent", 0.0)),
+                            "layers": int(s_dict["layers"]) if s_dict.get("layers") is not None else None,
                             "status": "closed"
                         })
 
@@ -1933,6 +2134,7 @@ class DatabaseManager:
                 m_b = float(ly.get("margin_bottom", 10.0))
                 gap = float(ly.get("gap_mm", 1.0))
                 status = str(ly.get("status", "closed"))
+                ly_layers = int(ly["layers"]) if ly.get("layers") is not None else None
 
                 items_cnt = len(pieces) if pieces else int(ly.get("num_items") or 0)
                 dies_cnt = len(set(p.get("name") for p in pieces)) if pieces else int(ly.get("num_dies") or 0)
@@ -1943,14 +2145,14 @@ class DatabaseManager:
                     session_id, layout_index, name, code, width_mm, height_mm, ris_w, ris_l,
                     gap_mm, area_mm2, yield_percent, yield_pct, num_items, num_dies,
                     margin_left, margin_right, margin_top, margin_bottom, status,
-                    placed_pieces_json, version, created_at, updated_at, created_by, updated_by
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, {now_sql}, {now_sql}, ?, ?)
+                    layers, placed_pieces_json, version, created_at, updated_at, created_by, updated_by
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, {now_sql}, {now_sql}, ?, ?)
                 """
                 cursor.execute(sql_ins, (
                     session_id, l_idx, l_name, l_code, w, h, w, h,
                     gap, area_m2 * 1_000_000.0, yield_pct, yield_pct, items_cnt, dies_cnt,
                     m_l, m_r, m_t, m_b, status,
-                    json.dumps(pieces), operator_info, operator_info
+                    ly_layers, json.dumps(pieces), operator_info, operator_info
                 ))
                 layout_id = cursor.lastrowid
 

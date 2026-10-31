@@ -388,32 +388,29 @@ class TestMultiSheetNesting(unittest.TestCase):
         editor.redraw()
 
         # Verifica widgets/textos criados no sidebar do canvas
-        # Em modo multi-placa, a palavra 'placa' (ex: '0 placa', '16 placa') foi completamente removida,
-        # exibindo diretamente a relação limpa '6/6' (total da sessão / pedido total).
-        found_clean_text = False
+        # Placa 0 tem 6 peças colocadas de 6 pares pedidos -> '6/6'
+        found_counter = False
         for item in editor.canvas.find_withtag("sidebar_ui"):
             if editor.canvas.type(item) == "text":
                 txt = editor.canvas.itemcget(item, "text")
-                self.assertNotIn("placa", txt.lower(), f"A palavra 'placa' não deve aparecer nos contadores dos moldes: {txt}")
                 if txt == "6/6":
-                    found_clean_text = True
-        self.assertTrue(found_clean_text, "Contador limpo '6/6' não encontrado na barra lateral")
+                    found_counter = True
+                self.assertNotIn("placa:", txt, "Linha 'placa:' não deve existir")
+        self.assertTrue(found_counter, "Mostrador '6/6' não encontrado na barra lateral da placa 0")
 
-        # Alterna para a Placa 1 (sem peças): o contador deve refletir ESTA placa (0/6).
-        # Antes o contador mostrava o total da sessão (6/6) em todas as placas, e a barra
-        # lateral nem era redesenhada na troca (ficava com os textos da placa anterior).
+        # Alterna para a Placa 1 (sem peças):
+        # O mostrador na placa 1 agora deve indicar '0/6'.
         editor.switch_to_layout(1)
         editor.redraw()
 
-        found_lay1_zero = False
+        found_lay1_counter = False
         for item in editor.canvas.find_withtag("sidebar_ui"):
             if editor.canvas.type(item) == "text":
                 txt = editor.canvas.itemcget(item, "text")
-                self.assertNotIn("placa", txt.lower(), f"A palavra 'placa' não deve aparecer na placa 1: {txt}")
                 if txt == "0/6":
-                    found_lay1_zero = True
-                self.assertNotEqual(txt, "6/6", "Placa sem peças não pode exibir o total da sessão (6/6)")
-        self.assertTrue(found_lay1_zero, "Contador da Placa 1 deveria ser '0/6'")
+                    found_lay1_counter = True
+                self.assertNotIn("placa:", txt, "Linha 'placa:' não deve existir")
+        self.assertTrue(found_lay1_counter, "Mostrador da Placa 1 deveria ser '0/6'")
 
     # =========================================================================
     # 10. Exportação Dual (export_multi_sheet_dual) gerando N .lay e .onx

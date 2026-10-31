@@ -24,10 +24,11 @@ class DualLayoutExporter:
         placed_pieces: List[Dict[str, Any]],
         material: Dict[str, Any],
         file_path: Union[str, Path],
-        session_id: Optional[int] = 1
+        session_id: Optional[int] = 1,
+        layers: Optional[int] = None
     ) -> str:
         """
-        Gera e grava arquivo .lay compatível com ATOM FlashCut (508584LAYOUT.v3508584).
+        Gera e grava arquivo .lay compatível com ATOM FlashCut ($$LAYOUT.v3$$).
         """
         p = Path(file_path)
         if not p.suffix.lower() == ".lay":
@@ -37,7 +38,8 @@ class DualLayoutExporter:
             placed_pieces=placed_pieces,
             material=material,
             session_id=session_id,
-            filename=p.name
+            filename=p.name,
+            layers=layers
         )
 
         p.parent.mkdir(parents=True, exist_ok=True)
@@ -77,7 +79,8 @@ class DualLayoutExporter:
         base_path: Union[str, Path],
         margins_mm: Union[float, Tuple[float, float, float, float]] = 15.0,
         session_id: Optional[int] = 1,
-        options: Optional[Dict[str, Any]] = None
+        options: Optional[Dict[str, Any]] = None,
+        layers: Optional[int] = None
     ) -> Dict[str, Any]:
         """
         Exporta SIMULTANEAMENTE para ambas as máquinas de corte:
@@ -97,7 +100,8 @@ class DualLayoutExporter:
             placed_pieces=placed_pieces,
             material=material,
             file_path=lay_file,
-            session_id=session_id
+            session_id=session_id,
+            layers=layers
         )
 
         onx_res = cls.export_comelz_onx(

@@ -23,7 +23,15 @@ from ui.macro_panel import MacroPanel
 from ui.debug_panel import DebugPanel
 from cad.lay_parser import parse_lay, export_layout_from_pieces, validate_layout_placement
 from cad.dual_exporter import DualLayoutExporter
-from cad.layers_rule import calc_resto
+from cad.layers_rule import (
+    calc_resto,
+    calc_resto_efetivo,
+    resolve_session_layers,
+    pecas_na_mesa,
+    parse_session_params,
+    encode_session_params,
+    is_separar_sobras_enabled,
+)
 from ui.sort_utils import natural_sort_key, size_sort_key, shape_area_sort_key, clean_session_display_name, resto_sort_key
 
 RECOMMENDED_COMBINATIONS = [
@@ -295,14 +303,32 @@ class SessionView(tk.Frame):
             font=("Segoe UI", 9),
             height=8
         )
-        init_p = self.session_data.get("params") or "ALTERNADO"
+        init_raw = self.session_data.get("params") or "ALTERNADO"
+        init_p, init_opts = parse_session_params(init_raw)
         available_p = list(self.cb_params["values"])
         if init_p == "GAP 2" or (available_p and init_p not in available_p):
             init_p = available_p[0] if available_p else "ALTERNADO"
-            self.session_data["params"] = init_p
+            self.session_data["params"] = encode_session_params(init_p, init_opts)
         self.cb_params.set(init_p)
         self.cb_params.pack(fill="x", pady=(0, 4))
         self.cb_params.bind("<<ComboboxSelected>>", self.on_params_selected)
+
+        # Checkbox: Separar sobras de 4 camadas em 2 camadas
+        self.var_separar_sobras = tk.BooleanVar()
+        self.var_separar_sobras.set(is_separar_sobras_enabled(self.session_data))
+        self.chk_separar_sobras = tk.Checkbutton(
+            col_left,
+            text="Separar sobras de 4 camadas em 2 camadas",
+            variable=self.var_separar_sobras,
+            command=self.on_separar_sobras_toggled,
+            bg=THEME["bg_card"],
+            fg=THEME["text_main"],
+            activebackground=THEME["bg_card"],
+            activeforeground=THEME["text_main"],
+            selectcolor=THEME["bg_card"],
+            font=("Segoe UI", 9)
+        )
+        self.chk_separar_sobras.pack(anchor="w", pady=(0, 4))
 
         # Coluna 2 (Direita): Códigos materiais e Máquina de corte
         col_right = tk.Frame(grid_params, bg=THEME["bg_card"])
@@ -1289,12 +1315,12 @@ class SessionView(tk.Frame):
         self.session_data["used_area_m2"] = 0.0
         self.session_data["status"] = "Stand by"
 
-        layers = int(self.session_data.get("layers", 1)) if self.session_data else 1
         if self.session_data.get("shapes"):
             for s in self.session_data["shapes"]:
                 req_p = int(s.get("pairs", 0))
                 s["rest"] = req_p
-                s["resto"] = calc_resto(req_p, layers)
+                if "resto" in s:
+                    del s["resto"]
 
         if self.db and sess_id:
             self.db.delete_session_layouts(sess_id)
@@ -1643,17 +1669,42 @@ class SessionView(tk.Frame):
             self.on_strategy_change_cb(strat)
 
     def on_params_selected(self, event=None):
-        params = self.cb_params.get()
-        self.session_data["params"] = params
+        preset = self.cb_params.get()
+        _, opts = parse_session_params(self.session_data.get("params"))
+        if hasattr(self, "var_separar_sobras"):
+            opts["separar_sobras"] = "1" if self.var_separar_sobras.get() else "0"
+        encoded = encode_session_params(preset, opts)
+        self.session_data["params"] = encoded
         self.active_dieproc_params = None
         if self.db:
-            p = self.db.get_dieproc_preset(params)
+            p = self.db.get_dieproc_preset(preset)
             if p:
                 self.active_dieproc_params = p
         self.highlight_guide_matching()
         self._on_decision_changed("Parâmetros")
         if self.on_strategy_change_cb:
-            self.on_strategy_change_cb(self.get_strategy(), params)
+            self.on_strategy_change_cb(self.get_strategy(), encoded)
+
+    def on_separar_sobras_toggled(self):
+        val = self.var_separar_sobras.get()
+        cur_preset, opts = parse_session_params(self.session_data.get("params"))
+        opts["separar_sobras"] = "1" if val else "0"
+        encoded = encode_session_params(cur_preset, opts)
+        self.session_data["params"] = encoded
+        if self.db and self.session_data.get("id"):
+            try:
+                self.db.update_session(self.session_data["id"], params=encoded)
+            except Exception:
+                pass
+        self._on_decision_changed("Separar Sobras")
+        self.refresh_shapes_resto_column()
+
+    def is_separar_sobras_active(self) -> bool:
+        if hasattr(self, "var_separar_sobras"):
+            val = self.var_separar_sobras.get()
+            layers = self.get_session_layers()
+            return bool(val and layers == 4)
+        return is_separar_sobras_enabled(self.session_data)
 
     def _on_macro_changed_from_panel(self, macro_name: str):
         self._on_decision_changed("Macro")
@@ -2133,7 +2184,11 @@ class SessionView(tk.Frame):
         return self.cb_strategy.get() if hasattr(self, "cb_strategy") else "flashnestsheet"
 
     def get_params(self):
-        return self.cb_params.get() if hasattr(self, "cb_params") else "stdNOTFill"
+        preset = self.cb_params.get() if hasattr(self, "cb_params") else "stdNOTFill"
+        opts = {}
+        if hasattr(self, "var_separar_sobras"):
+            opts["separar_sobras"] = "1" if self.var_separar_sobras.get() else "0"
+        return encode_session_params(preset, opts)
 
     def get_machine(self):
         if hasattr(self, "cb_machine"):
@@ -2171,17 +2226,20 @@ class SessionView(tk.Frame):
             self.update_strategy_description(strat)
         if hasattr(self, "cb_params"):
             self.refresh_params_list()
-            cur_p = session_data.get("params") or "ALTERNADO"
+            cur_raw = session_data.get("params") or "ALTERNADO"
+            cur_p, cur_opts = parse_session_params(cur_raw)
             available_p = list(self.cb_params["values"])
             if cur_p == "GAP 2" or (available_p and cur_p not in available_p):
                 cur_p = available_p[0] if available_p else "ALTERNADO"
-                session_data["params"] = cur_p
+                session_data["params"] = encode_session_params(cur_p, cur_opts)
                 if self.db and session_data.get("id"):
                     try:
-                        self.db.update_session(session_data["id"], params=cur_p)
+                        self.db.update_session(session_data["id"], params=session_data["params"])
                     except Exception:
                         pass
             self.cb_params.set(cur_p)
+            if hasattr(self, "var_separar_sobras"):
+                self.var_separar_sobras.set(is_separar_sobras_enabled(session_data))
         self.highlight_guide_matching()
         if hasattr(self, "cb_machine"):
             self.cb_machine.set(session_data.get("machine") or "ATOM FlashCut Flex 3020")
@@ -2907,6 +2965,12 @@ class SessionView(tk.Frame):
 
         if hasattr(self, "session_data") and self.session_data:
             self.session_data["material"] = mat_dict
+            self.session_data["layers"] = layers
+            if getattr(self, "db", None) and self.session_data.get("id"):
+                try:
+                    self.db.update_session(self.session_data["id"], layers=layers)
+                except Exception:
+                    pass
             layouts_cnt = len(self.session_data.get("placed_pieces", []))
             yield_pct = self.session_data.get("yield_percent", 0.0)
             est_sec = self.session_data.get("cutting_time_sec", 0.0)
@@ -2918,42 +2982,34 @@ class SessionView(tk.Frame):
         self.refresh_shapes_resto_column()
 
     def get_session_layers(self) -> int:
-        """Retorna o número de camadas de corte do material da sessão.
-        Lê da tabela de Materiais ou dos dados da sessão. Se indefinido ou <= 0, retorna 0."""
+        """Retorna o número de camadas de corte do material da sessão via resolve_session_layers."""
+        grid_row = None
         if hasattr(self, "tree_mat"):
             items = self.tree_mat.get_children()
             if items:
-                vals = self.tree_mat.item(items[0], "values")
-                if len(vals) >= 7:
-                    try:
-                        v = str(vals[6]).strip()
-                        if v:
-                            return max(0, int(v))
-                    except (ValueError, TypeError):
-                        pass
-        if hasattr(self, "session_data") and isinstance(self.session_data, dict):
-            mat = self.session_data.get("material")
-            if isinstance(mat, dict):
-                try:
-                    v = mat.get("layers")
-                    if v is not None and str(v).strip():
-                        return max(0, int(v))
-                except (ValueError, TypeError):
-                    pass
-        return 0
+                grid_row = self.tree_mat.item(items[0], "values")
+        sess = getattr(self, "session_data", None)
+        mat = None
+        if isinstance(sess, dict):
+            mat = sess.get("material")
+        ly = None
+        if isinstance(sess, dict) and sess.get("layouts"):
+            ly = sess.get("layouts")[0]
+        return resolve_session_layers(session=sess, material=mat, grid_material_row=grid_row, layout=ly, default=2)
 
     def refresh_shapes_resto_column(self):
         """Recalcula e atualiza a coluna Resto de todas as linhas de moldes na grade."""
         if not hasattr(self, "tree_shapes") or not hasattr(self, "shapes_list"):
             return
         layers = self.get_session_layers()
+        separar = self.is_separar_sobras_active()
         for idx, s in enumerate(self.shapes_list):
             row_id = str(idx)
             try:
                 p = int(s.get("pairs", 16))
             except Exception:
                 p = 16
-            r_val = calc_resto(p, layers)
+            r_val = calc_resto_efetivo(p, layers, separar=separar)
             try:
                 self.tree_shapes.set(row_id, "resto", str(r_val))
             except Exception:
@@ -2989,6 +3045,7 @@ class SessionView(tk.Frame):
 
         self.tree_shapes.delete(*self.tree_shapes.get_children())
         layers = self.get_session_layers()
+        separar = self.is_separar_sobras_active()
         for idx, s in enumerate(self.shapes_list, start=1):
             s_id = str(s.get("id", idx))
             percurso = str(s.get("folder") or "Externo")
@@ -2998,7 +3055,7 @@ class SessionView(tk.Frame):
             tamanho = f"{color_badge} {s_size}"
             molde_nome = str(s.get("name", f"Shape #{idx}"))
             pares = str(s.get("pairs", 16))
-            resto = str(calc_resto(s.get("pairs", 16), layers))
+            resto = str(calc_resto_efetivo(s.get("pairs", 16), layers, separar=separar))
             seq = str(s.get("sequence", idx))
             self.tree_shapes.insert(
                 "", "end", iid=str(idx - 1),
@@ -3108,7 +3165,8 @@ class SessionView(tk.Frame):
                 self.tree_shapes.set(row_id, col_key, str(val_int))
                 if is_pairs:
                     layers = self.get_session_layers()
-                    r_val = calc_resto(val_int, layers)
+                    separar = self.is_separar_sobras_active()
+                    r_val = calc_resto_efetivo(val_int, layers, separar=separar)
                     self.tree_shapes.set(row_id, "resto", str(r_val))
             except Exception:
                 pass
@@ -3242,6 +3300,21 @@ class SessionView(tk.Frame):
                         self.tree_shapes.focus(row_id)
             return "break"
 
+        def on_entry_change(event=None):
+            if not is_pairs:
+                return
+            val_str = entry.get().strip()
+            cleaned = "".join(ch for ch in val_str if ch.isdigit())
+            if cleaned:
+                try:
+                    val_int = int(cleaned)
+                    layers = self.get_session_layers()
+                    separar = self.is_separar_sobras_active()
+                    r_val = calc_resto_efetivo(val_int, layers, separar=separar)
+                    self.tree_shapes.set(row_id, "resto", str(r_val))
+                except Exception:
+                    pass
+
         def adjust_number(delta):
             val_str = entry.get().strip()
             cleaned = "".join(ch for ch in val_str if ch.isdigit())
@@ -3253,6 +3326,7 @@ class SessionView(tk.Frame):
             entry.delete(0, "end")
             entry.insert(0, str(new_val))
             entry.select_range(0, "end")
+            on_entry_change()
             return "break"
 
         def on_focus_out(event=None):
@@ -3281,6 +3355,7 @@ class SessionView(tk.Frame):
         entry.bind("<ISO_Left_Tab>", move_prev_col)
         entry.bind("<Escape>", cancel_edit)
         entry.bind("<FocusOut>", on_focus_out)
+        entry.bind("<KeyRelease>", on_entry_change)
 
         # Teclas de ajuste rápido (incremento/decremento com Ctrl/Alt)
         entry.bind("<Control-Up>", lambda e: adjust_number(+1))
@@ -3548,7 +3623,8 @@ class SessionView(tk.Frame):
             self.shapes_list.sort(key=lambda s: int(s.get("pairs", 0)), reverse=desc)
         elif col == "resto":
             layers = self.get_session_layers()
-            self.shapes_list.sort(key=lambda s: resto_sort_key(calc_resto(s.get("pairs", 16), layers)), reverse=desc)
+            separar = self.is_separar_sobras_active()
+            self.shapes_list.sort(key=lambda s: resto_sort_key(calc_resto_efetivo(s.get("pairs", 16), layers, separar=separar)), reverse=desc)
         elif col == "area":
             self.shapes_list.sort(key=lambda s: shape_area_sort_key(s), reverse=desc)
         elif col == "percurso":

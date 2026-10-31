@@ -124,6 +124,7 @@ class LayoutData:
     quality_zones: List[QualityZone] = field(default_factory=list)
     yield_percent: float = 0.0
     session_id: Optional[int] = None
+    layers: Optional[int] = None
     raw_lines: List[str] = field(default_factory=list)
 
     def calculate_yield(self) -> float:
@@ -253,6 +254,17 @@ def parse_lay(source: Any, db=None) -> LayoutData:
                 current_tg.targ_right = _parse_int(vals[1]) if len(vals) > 1 else 0
             continue
 
+        # Suporte a linhas de comentário (ex: '; layers=4' ou '# layers=4')
+        if line.startswith(";") or line.startswith("#"):
+            comm = line.lstrip(";# ").strip()
+            if "=" in comm:
+                ck, cv = comm.split("=", 1)
+                if ck.strip().lower() == "layers":
+                    parsed_l = _parse_int(cv)
+                    if parsed_l >= 1:
+                        layout.layers = parsed_l
+            continue
+
         # Chaves de metadados gerais
         if "=" in line:
             key, val = line.split("=", 1)
@@ -263,6 +275,10 @@ def parse_lay(source: Any, db=None) -> LayoutData:
                 layout.desc = val
             elif key == "gap":
                 layout.gap = _parse_float(val)
+            elif key == "layers":
+                parsed_l = _parse_int(val)
+                if parsed_l >= 1:
+                    layout.layers = parsed_l
             elif key == "codR":
                 layout.cod_r = val
             elif key == "hide":
@@ -279,6 +295,14 @@ def parse_lay(source: Any, db=None) -> LayoutData:
                 layout.area = _parse_float(val)
             elif key == "no_dies":
                 layout.no_dies = _parse_int(val)
+
+    if layout.layers is None and layout.desc:
+        m_desc = re.search(r"(\d+)\s*(?:layer|camada)", layout.desc, re.IGNORECASE)
+        if m_desc:
+            try:
+                layout.layers = int(m_desc.group(1))
+            except ValueError:
+                pass
 
     # 4. Parsing das Peças Posicionadas (I ...)
     while idx < len(lines):
@@ -411,6 +435,9 @@ def generate_lay_content(
     # Metadados
     out.append(f"desc={layout_data.desc}")
     out.append(f"gap={layout_data.gap:.6f}")
+    if layout_data.layers is not None and layout_data.layers >= 1:
+        # # CONFIRMAR NO WINDOWS: campo de camadas por layout compatível
+        out.append(f"layers={layout_data.layers}")
     out.append(f"codR={layout_data.cod_r}")
     if layout_data.hide_path:
         out.append(f"hide={layout_data.hide_path}")
@@ -527,7 +554,8 @@ def export_layout_from_pieces(
     material: Dict[str, Any],
     session_id: Optional[int] = 1,
     filename: str = "l0000.lay",
-    path: str = "\\\\lab-inf\\NSDATAV1\\Compiti\\JobManager"
+    path: str = "\\\\lab-inf\\NSDATAV1\\Compiti\\JobManager",
+    layers: Optional[int] = None
 ) -> str:
     """
     Exporta uma lista de peças posicionadas (do LayoutEditorView ou SessionView)
@@ -538,6 +566,8 @@ def export_layout_from_pieces(
     3º Costuras e rasgos internos (CUTS/CPOINTS)
     4º Contorno externo (TOOL_KNIFE_DOWN - sempre por último).
     """
+    if layers is None and isinstance(material, dict):
+        layers = material.get("layers")
     ris_w = float(material.get("width_mm", 1350.0))
     ris_l = float(material.get("height_mm", 2553.38))
     gap = float(material.get("gap_mm", 1.0))
@@ -650,7 +680,8 @@ def export_layout_from_pieces(
         target_dies=target_dies,
         num_of_items=len(items),
         items=items,
-        session_id=session_id
+        session_id=session_id,
+        layers=layers
     )
     layout.calculate_yield()
     return generate_lay_content(layout)

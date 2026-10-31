@@ -19,6 +19,7 @@ import time
 from typing import Any, Dict, List, Optional, Protocol, Tuple
 
 from cad.colors import get_color_for_size
+from cad.layers_rule import pecas_na_mesa
 from cad.geometry import (
     SpatialGrid,
     clear_transform_cache,
@@ -83,7 +84,7 @@ class NestingBackend(Protocol):
         available_shapes: list,
         bed_width_mm: float,
         bed_height_mm: float,
-        target_count: int = 16,
+        target_count: Optional[int] = None,
         strategy: str = "flashnestsheet",
         params: Any = "stdNOTFill",
         gap_mm: float = 1.0,
@@ -102,7 +103,7 @@ class PythonBackend:
         available_shapes: list,
         bed_width_mm: float,
         bed_height_mm: float,
-        target_count: int = 16,
+        target_count: Optional[int] = None,
         strategy: str = "flashnestsheet",
         params: Any = "stdNOTFill",
         gap_mm: float = 1.0,
@@ -189,7 +190,7 @@ class NfpBackend:
         available_shapes: list,
         bed_width_mm: float,
         bed_height_mm: float,
-        target_count: int = 16,
+        target_count: Optional[int] = None,
         strategy: str = "flashnestsheet",
         params: Any = "stdNOTFill",
         gap_mm: float = 1.0,
@@ -401,14 +402,17 @@ class NfpBackend:
                     s_layers = max(1, int(s_layers))
                 except (ValueError, TypeError):
                     s_layers = 2
-                qty = math.ceil((int(s.get("pairs", 24)) * 2) / s_layers)
+                qty = pecas_na_mesa(s.get("pairs", 24), s_layers)
             for _ in range(qty):
                 shape_queue.append(s)
 
         if not shape_queue:
             shape_queue = list(sorted_shapes)
 
-        max_pieces = target_count if (target_count and target_count > 0) else len(shape_queue)
+        if params == "stdFill":
+            max_pieces = 9999
+        else:
+            max_pieces = target_count if (target_count and target_count > 0) else len(shape_queue)
 
         sample_poly = transform_contour(shape_queue[0]["contour"], 0.0, 0.0, effective_angles[0])
         s_min_x, s_min_y, s_max_x, s_max_y = polygon_bbox(sample_poly)
@@ -443,7 +447,7 @@ class NfpBackend:
         shape_tries = 0
         cancel_check = dieproc_params.get("cancel_check") if isinstance(dieproc_params, dict) else None
 
-        while queue_idx < len(shape_queue) and cur_row_y < bed_height_mm - m_top and len(placed) < max_pieces:
+        while queue_idx < max_pieces and cur_row_y < bed_height_mm - m_top and len(placed) < max_pieces:
             if cancel_check is not None and cancel_check():
                 break
             if time.perf_counter() - t_sheet_start > timeout_sec:
@@ -454,14 +458,14 @@ class NfpBackend:
             is_odd_row = (row_idx % 2 == 1)
 
             # Preenchimento horizontal da linha com encosto milimétrico acelerado por NFP
-            while queue_idx < len(shape_queue) and (len(placed) + len(row_pieces)) < max_pieces:
+            while queue_idx < max_pieces and (len(placed) + len(row_pieces)) < max_pieces:
                 if cancel_check is not None and cancel_check():
                     break
                 if time.perf_counter() - t_sheet_start > timeout_sec:
                     logger.warning("Timeout de chapa atingido (%.2fs) durante preenchimento de linha.", timeout_sec)
                     break
 
-                shape = shape_queue[queue_idx]
+                shape = shape_queue[queue_idx % len(shape_queue)]
                 piece_in_row_idx = len(row_pieces)
 
                 if is_alternating:

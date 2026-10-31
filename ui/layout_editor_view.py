@@ -34,6 +34,14 @@ from cad.fill_engine import (
     fill_user_pieces,
 )
 from ui.fill_user_dialog import FillUserDialog
+from cad.layers_rule import (
+    resolve_session_layers,
+    resolve_layout_layers,
+    is_layers_defined,
+    pecas_na_mesa,
+    calc_resto_efetivo,
+    is_separar_sobras_enabled,
+)
 
 
 # -------------------------------------------------------------
@@ -240,6 +248,7 @@ class LayoutEditorView(tk.Frame):
         self.layout_version = kwargs.get("layout_version", 1)
         self.load_sample = load_sample
         self.session_id = kwargs.get("session_id", 1)
+        self.session = kwargs.get("session", None)
 
         # Estado do material e camadas associados à sessão
         self.material = kwargs.get("material", None)
@@ -1037,13 +1046,27 @@ class LayoutEditorView(tk.Frame):
 
         y_start, item_h, col_width, num_cols = self._get_sidebar_grid_layout()
 
-        # Pré-processa tuplas de peças uma única vez (evita dict lookups e strip repetidos)
-        placed_info = [
-            (str(p.get("target_id", "")).strip(),
-             str(p.get("size", "")).strip(),
-             str(p.get("name", "")).strip())
-            for p in self.placed_pieces
-        ]
+        # Resolução canônica das camadas de corte (layers) da sessão e da placa atual
+        sess = getattr(self, "session", None)
+        mat = getattr(self, "material", None)
+        cur_ly = None
+        if getattr(self, "layouts", None) and 0 <= getattr(self, "current_layout_index", 0) < len(self.layouts):
+            cur_ly = self.layouts[self.current_layout_index]
+        session_layers = resolve_session_layers(
+            session=sess,
+            material=mat,
+            grid_material_row=None,
+            layout=cur_ly,
+            default=getattr(self, "material_layers", 2)
+        )
+        cur_ly_layers = resolve_layout_layers(
+            layout=cur_ly,
+            session=sess,
+            material=mat,
+            default=session_layers
+        )
+
+        is_multisheet = bool(getattr(self, "layouts", None) and len(self.layouts) > 1)
 
         for i, target in enumerate(self.sidebar_targets):
             col_idx = i % num_cols
@@ -1054,72 +1077,54 @@ class LayoutEditorView(tk.Frame):
             if col_cx + 36 > cw:
                 continue
 
-            # 1. Contagem de peças colocadas na mesa
-            placed_cnt = 0
-            t_id = str(target.get("id", "")).strip()
-            t_sz = str(target.get("size", "")).strip()
-            t_nm = str(target.get("name", "")).strip()
+            # 1. Contagem canônica de peças da placa atual
+            placed_cnt = self.count_pieces_for_target(self.placed_pieces, target)
 
-            for p_tid, p_sz, p_nm in placed_info:
-                if self._piece_matches_target(
-                    {"target_id": p_tid, "size": p_sz, "name": p_nm}, target
-                ):
-                    placed_cnt += 1
-
-            # Contagem total da sessão somando as outras placas da sessão
+            # 2. Contagem total física da sessão somando todas as placas com seus respectivos enfestos
+            # Pares produzidos na sessão = soma(peças_no_layout × layers_do_layout) // 2
+            total_physical_pieces = placed_cnt * cur_ly_layers
             total_session_pieces = placed_cnt
-            if getattr(self, "layouts", None) and len(self.layouts) > 1:
+            layer_counts = {cur_ly_layers: placed_cnt}
+            if is_multisheet:
+                cur_idx = getattr(self, "current_layout_index", 0)
                 for l_idx, ly in enumerate(self.layouts):
-                    if l_idx == getattr(self, "current_layout_index", 0):
+                    if l_idx == cur_idx:
                         continue
                     ly_pieces = ly.get("pieces") or ly.get("placed_pieces") or []
-                    for p in ly_pieces:
-                        p_tid = str(p.get("target_id", "")).strip()
-                        p_sz = str(p.get("size", "")).strip()
-                        p_nm = str(p.get("name", "")).strip()
-                        if p_sz and t_sz and p_sz != t_sz:
-                            continue
-                        if p_tid and t_id and p_tid == t_id:
-                            total_session_pieces += 1
-                            continue
-                        if p_nm and t_nm and p_nm == t_nm:
-                            total_session_pieces += 1
-                            continue
-                        if p_sz and t_sz and p_sz == t_sz and (not p_nm or not t_nm or p_nm == t_nm):
-                            total_session_pieces += 1
-                            continue
+                    ly_cnt = self.count_pieces_for_target(ly_pieces, target)
+                    ly_l = resolve_layout_layers(
+                        layout=ly,
+                        session=sess,
+                        material=mat,
+                        default=session_layers
+                    )
+                    total_physical_pieces += ly_cnt * ly_l
+                    total_session_pieces += ly_cnt
+                    layer_counts[ly_l] = layer_counts.get(ly_l, 0) + ly_cnt
 
             req_cnt = int(target.get("pairs", target.get("required", 0)))
-            
-            # Resolução das camadas de corte do material para converter peças em pares
-            layers = 2
-            if hasattr(self, "material_layers") and self.material_layers:
-                layers = self.material_layers
-            elif hasattr(self, "material") and isinstance(self.material, dict) and "layers" in self.material:
-                layers = self.material.get("layers", 2)
-            try:
-                layers = max(1, int(layers))
-            except (ValueError, TypeError):
-                layers = 2
 
-            # Quantidade de pares produzidos na mesa e saldo restante
-            placed_pairs = (placed_cnt * layers) // 2
-            resto_cnt = max(0, req_cnt - placed_pairs)
-            total_pieces_demanded = math.ceil((req_cnt * 2) / layers) if req_cnt > 0 else 0
-            has_deficit = (total_session_pieces < total_pieces_demanded) if total_pieces_demanded > 0 else False
+            # Quantidade de pares produzidos na sessão
+            # 1 par = 2 peças físicas
+            pares_produzidos = total_physical_pieces // 2
+
+            # Cores: vermelho (#dc2626) SOMENTE com déficit real na SESSÃO inteira
+            # pares_produzidos < req_cnt. Nunca avaliar só a placa atual.
+            # Preto (#000000) em todos os outros casos.
+            has_deficit = (pares_produzidos < req_cnt) if req_cnt > 0 else False
             stat_color = "#dc2626" if has_deficit else "#000000"
 
             # Destaque de seleção do molde ativo
             is_active = (i == self.active_target_index)
             if is_active:
                 self.canvas.create_rectangle(
-                    col_cx - 36, item_y + 1, col_cx + 36, item_y + 65,
+                    col_cx - 36, item_y + 1, col_cx + 36, item_y + 64,
                     outline="#3b82f6",
                     dash=(2, 2),
                     width=1.5
                 )
 
-            # 2. Miniatura do contorno do molde (Thumbnail)
+            # Miniatura do contorno do molde (Thumbnail)
             thumb_cx = col_cx
             thumb_cy = item_y + 18
 
@@ -1151,7 +1156,7 @@ class LayoutEditorView(tk.Frame):
                     tags=("sidebar_element", f"sidebar_target_{i}", "sidebar_ui")
                 )
 
-            # 3. Linha 1: Nome do Molde (ex: 323_PalAcb_36a)
+            # Linha: Nome do Molde (ex: 323_PalAcb_36a)
             name_raw = target.get("name", "Molde")
             name_disp = name_raw[:14] + ".." if len(name_raw) > 16 else name_raw
             self.canvas.create_text(
@@ -1162,15 +1167,10 @@ class LayoutEditorView(tk.Frame):
                 tags=("sidebar_element", f"sidebar_target_{i}", "sidebar_ui")
             )
 
-            # 4. Linha 2: Contadores de Produção
-            # Em sessão multi-placa o contador mostra as peças DESTA placa sobre o
-            # total pedido (ex.: 18/50). Antes exibia o total da sessão (50/50 em
-            # todas as placas), escondendo o progresso real de cada placa.
-            if getattr(self, "layouts", None) and len(self.layouts) > 1:
-                stat_disp = f"{placed_cnt}/{total_pieces_demanded}"
-            else:
-                stat_disp = f"{placed_cnt}/{req_cnt} {resto_cnt}/{req_cnt}"
-
+            # Mostrador simplificado: texto único {n}/{m}
+            # n = quantidade de PEÇAS DESENHADAS do molde na PLACA ATUAL (layout aberto)
+            # m = PARES PEDIDOS do molde
+            stat_disp = f"{placed_cnt}/{req_cnt}"
             self.canvas.create_text(
                 col_cx, item_y + 52,
                 text=stat_disp,
@@ -1179,29 +1179,87 @@ class LayoutEditorView(tk.Frame):
                 tags=("sidebar_element", f"sidebar_target_{i}", "sidebar_ui")
             )
 
-    def _piece_matches_target(self, piece, target):
+            # Tooltip contextual do target na barra lateral
+            layer_parts = [
+                f"{cnt} pç a {l} camadas"
+                for l, cnt in sorted(layer_counts.items(), key=lambda x: x[0], reverse=True)
+                if cnt > 0
+            ]
+            sess_layers_str = " + ".join(layer_parts) if layer_parts else "0 pç"
+            is_sep = is_separar_sobras_enabled(sess)
+            resto_efetivo = calc_resto_efetivo(req_cnt, session_layers, separar=is_sep)
+
+            tip_text = (
+                f"Molde: {target.get('name')} | Tam: {target.get('size')} | "
+                f"Nesta placa: {placed_cnt} pç | "
+                f"Na sessão: {sess_layers_str} | "
+                f"Pares: {pares_produzidos}/{req_cnt} | "
+                f"Resto: {resto_efetivo} | "
+                f"Enfesto placa: {cur_ly_layers} cam."
+            )
+            tag_name = f"sidebar_target_{i}"
+            self.canvas.tag_bind(tag_name, "<Enter>", lambda e, t=tip_text: self._on_sidebar_target_enter(t))
+            self.canvas.tag_bind(tag_name, "<Leave>", lambda e: self._on_sidebar_target_leave())
+
+    def count_pieces_for_target(self, pieces, target) -> int:
+        """
+        Conta quantas peças da coleção correspondem ao molde target especificado.
+        Utiliza _piece_matches_target como regra canônica.
+        """
+        if not pieces or not target:
+            return 0
+        return sum(1 for p in pieces if self._piece_matches_target(p, target))
+
+    def _piece_matches_target(self, piece, target) -> bool:
         """
         Regra única de correspondência peça <-> molde da barra lateral.
 
         Usada tanto pelos CONTADORES quanto pela SELEÇÃO por clique na miniatura,
         para que o número exibido e as peças selecionadas nunca divirjam.
         """
-        t_id = str(target.get("id", "")).strip()
-        t_sz = str(target.get("size", "")).strip()
-        t_nm = str(target.get("name", "")).strip()
-        p_tid = str(piece.get("target_id", "")).strip()
-        p_sz = str(piece.get("size", "")).strip()
-        p_nm = str(piece.get("name", "")).strip()
+        if not piece or not target:
+            return False
 
+        t_id = str(target.get("id") or "").strip()
+        t_sz = str(target.get("size") or "").strip()
+        t_nm = str(target.get("name") or "").strip()
+
+        shp = piece.get("shape") if isinstance(piece.get("shape"), dict) else {}
+        p_tid = str(piece.get("target_id") or piece.get("shape_id") or shp.get("id") or "").strip()
+        p_sz = str(piece.get("size") or shp.get("size") or "").strip()
+        p_nm = str(piece.get("name") or shp.get("name") or "").strip()
+
+        # Rejeição imediata se tamanhos divergirem
         if p_sz and t_sz and p_sz != t_sz:
             return False
+
+        # Correspondência por ID do molde
         if p_tid and t_id and p_tid == t_id:
             return True
+
+        # Se ambos possuem ID explícito diferente, não correspondem
+        if p_tid and t_id and p_tid != t_id:
+            return False
+
+        # Correspondência por nome idêntico
         if p_nm and t_nm and p_nm == t_nm:
             return True
+
+        # Correspondência por tamanho idêntico
         if p_sz and t_sz and p_sz == t_sz and (not p_nm or not t_nm or p_nm == t_nm):
             return True
+
         return False
+
+    def _on_sidebar_target_enter(self, tip_text: str):
+        if hasattr(self, "lbl_stat_pos") and self.lbl_stat_pos.winfo_exists():
+            self._prev_status_text = self.lbl_stat_pos.cget("text")
+            self.lbl_stat_pos.config(text=tip_text, fg="#1e40af")
+
+    def _on_sidebar_target_leave(self):
+        if hasattr(self, "lbl_stat_pos") and self.lbl_stat_pos.winfo_exists():
+            prev = getattr(self, "_prev_status_text", "")
+            self.lbl_stat_pos.config(text=prev, fg="#000000")
 
     def on_sidebar_click(self, event):
         """Trata cliques na barra lateral: seleciona o molde na grade e destaca peças na mesa."""
@@ -1501,6 +1559,14 @@ class LayoutEditorView(tk.Frame):
                 self._redraw()
             return
         self.layouts = [dict(l) for l in layouts]
+        sess_layers = resolve_session_layers(
+            session=getattr(self, "session", None),
+            material=getattr(self, "material", None),
+            default=getattr(self, "material_layers", 2)
+        )
+        for ly in self.layouts:
+            if ly.get("layers") is None:
+                ly["layers"] = sess_layers
         self.layout_undo_stacks = {}
         # Nova sessão/placa: descarta geometria e colisões da anterior
         self.clear_piece_cache()
@@ -1600,12 +1666,44 @@ class LayoutEditorView(tk.Frame):
         return "break"
 
     def update_title_and_status(self):
-        """Atualiza a barra de título e a barra de status com o indicador de layout ativo."""
+        """Atualiza a barra de título e a barra de status com o indicador de layout ativo e enfesto."""
         tot_lays = max(1, len(self.layouts)) if getattr(self, "layouts", None) else 1
         cur_idx = getattr(self, "current_layout_index", 0)
         cur_lay_num = cur_idx + 1
         name_str = getattr(self, "layout_name", f"lay{cur_idx:04d}")
-        indicator = f"Layout {cur_lay_num}/{tot_lays} ({name_str})"
+
+        cur_ly = None
+        if getattr(self, "layouts", None) and 0 <= cur_idx < len(self.layouts):
+            cur_ly = self.layouts[cur_idx]
+
+        is_def = is_layers_defined(
+            session=getattr(self, "session", None),
+            material=getattr(self, "material", None),
+            layout=cur_ly
+        )
+        ly_layers = resolve_layout_layers(
+            layout=cur_ly,
+            session=getattr(self, "session", None),
+            material=getattr(self, "material", None),
+            default=getattr(self, "material_layers", 2)
+        )
+
+        if is_def:
+            enf_str = f"enfesto de {ly_layers} camadas"
+        else:
+            enf_str = f"enfesto de ? (assumindo {ly_layers})"
+            if hasattr(self, "lbl_stat_pos") and self.lbl_stat_pos.winfo_exists():
+                self.lbl_stat_pos.config(text=f"Aviso: Camadas não definidas, assumindo {ly_layers}.")
+
+        sess_l = resolve_session_layers(getattr(self, "session", None), default=4)
+        is_sobra_plate = bool(
+            cur_ly and (
+                cur_ly.get("is_sobras") or
+                (sess_l == 4 and ly_layers == 2 and (getattr(self, "layouts", None) and len(self.layouts) > 1))
+            )
+        )
+        sobras_tag = " (sobras)" if is_sobra_plate else ""
+        indicator = f"Layout {cur_lay_num}/{tot_lays} ({name_str}{sobras_tag}, {enf_str})"
         col_count = len(getattr(self, "_cached_colliding_indices", None) or ())
         if col_count:
             indicator += f"  ⚠ {col_count} peça(s) sobrepostas (contorno vermelho)"
@@ -1893,7 +1991,7 @@ class LayoutEditorView(tk.Frame):
             round(x1, 1), round(y1, 1), round(x2, 1), round(y2, 1),
             round(scale, 4), bool(self.show_grid),
             round(self.sheet_width, 1), round(self.sheet_height, 1),
-            cw, ch, div_x
+            cw, ch, div_x, getattr(self, "current_layout_index", 0)
         )
         bg_changed = (getattr(self, "_last_bg_sig", None) != bg_sig)
         if not bg_changed and not self.canvas.find_withtag("sheet_bed"):
@@ -1944,6 +2042,33 @@ class LayoutEditorView(tk.Frame):
                     font=("Segoe UI", 8, "bold"),
                     tags=("sheet_label", "bg_element")
                 )
+
+            # Rótulo discreto de enfesto na área de desenho: "Enfesto: 4 camadas"
+            cur_idx_bg = getattr(self, "current_layout_index", 0)
+            cur_ly_bg = None
+            if getattr(self, "layouts", None) and 0 <= cur_idx_bg < len(self.layouts):
+                cur_ly_bg = self.layouts[cur_idx_bg]
+            is_def_bg = is_layers_defined(
+                session=getattr(self, "session", None),
+                material=getattr(self, "material", None),
+                layout=cur_ly_bg
+            )
+            ly_layers_bg = resolve_layout_layers(
+                layout=cur_ly_bg,
+                session=getattr(self, "session", None),
+                material=getattr(self, "material", None),
+                default=getattr(self, "material_layers", 2)
+            )
+            enf_canvas_text = f"Enfesto: {ly_layers_bg} camadas" if is_def_bg else f"Enfesto: ? (assumindo {ly_layers_bg})"
+            self.canvas.create_text(
+                x2,
+                max(10.0, y1 - 10.0),
+                text=enf_canvas_text,
+                fill="#475569",
+                font=("Segoe UI", 8),
+                anchor="e",
+                tags=("enfesto_label", "bg_element")
+            )
 
             # 3. Grade Milimétrica Sutil e Marcações de 10 em 10 cm (com números e traços)
             if self.show_grid:
@@ -4819,6 +4944,15 @@ class LayoutEditorView(tk.Frame):
                 "id": getattr(self, "material_id", "884412")
             }
 
+            cur_idx_exp = getattr(self, "current_layout_index", 0)
+            cur_ly_exp = self.layouts[cur_idx_exp] if (getattr(self, "layouts", None) and 0 <= cur_idx_exp < len(self.layouts)) else None
+            exp_layers = resolve_layout_layers(
+                layout=cur_ly_exp,
+                session=getattr(self, "session", None),
+                material=getattr(self, "material", None),
+                default=getattr(self, "material_layers", 2)
+            )
+
             p = Path(filepath)
             # Determina o modo pela extensão ou seleção
             is_dual = (target_format == "dual") or (p.suffix.lower() not in (".lay", ".onx")) or (";" in str(p))
@@ -4828,7 +4962,8 @@ class LayoutEditorView(tk.Frame):
                     self.placed_pieces,
                     material,
                     base_path=p,
-                    session_id=getattr(self, "session_id", 1)
+                    session_id=getattr(self, "session_id", 1),
+                    layers=exp_layers
                 )
                 msg = (
                     f"Dupla Saída gerada com sucesso!\n\n"
@@ -4849,7 +4984,8 @@ class LayoutEditorView(tk.Frame):
                     self.placed_pieces,
                     material,
                     file_path=p,
-                    session_id=getattr(self, "session_id", 1)
+                    session_id=getattr(self, "session_id", 1),
+                    layers=exp_layers
                 )
                 msg = f"Layout ATOM (.lay) exportado com sucesso:\n{saved}\nTotal de peças: {len(self.placed_pieces)}"
 
@@ -5532,6 +5668,17 @@ class LayoutEditorView(tk.Frame):
             mat_desc = getattr(self, "material_name", "SINT-LOGAM-PRETO")
             mat_layers = getattr(self, "material_layers", 2)
 
+        cur_idx_print = getattr(self, "current_layout_index", 0)
+        cur_ly_print = None
+        if getattr(self, "layouts", None) and 0 <= cur_idx_print < len(self.layouts):
+            cur_ly_print = self.layouts[cur_idx_print]
+        ly_layers_print = resolve_layout_layers(
+            layout=cur_ly_print,
+            session=getattr(self, "session", None),
+            material=mat,
+            default=mat_layers or 2
+        )
+
         layout_data = {
             "layout_name": getattr(self, "layout_name", "10001.lay"),
             "sheet_w_mm": self.sheet_width,
@@ -5547,12 +5694,14 @@ class LayoutEditorView(tk.Frame):
             "placed_pieces": self.placed_pieces if self.placed_pieces else None,
             "material_code": mat_code,
             "material_desc": mat_desc,
-            "material_layers": mat_layers,
+            "material_layers": ly_layers_print,
+            "layers": ly_layers_print,
+            "layout": cur_ly_print,
             "material": mat,
             "material_name": getattr(self, "material_cod_r", None) if not mat else None,
             "session_shapes": getattr(self, "session_shapes", []),
             "layouts": getattr(self, "layouts", []),
-            "current_layout_index": getattr(self, "current_layout_index", 0),
+            "current_layout_index": cur_idx_print,
         }
 
         dlg = LayoutPrintDialog(self, layout_data=layout_data)

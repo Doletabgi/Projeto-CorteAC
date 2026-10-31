@@ -63,33 +63,33 @@ class TestLayersPairsNesting(unittest.TestCase):
         self.assertEqual(len(pieces), 40)
 
     def test_sidebar_counter_formula_layers_4(self):
-        """Verifica a lógica de exibição de contadores com 4 camadas (ex: 10/20 0/20)."""
+        """Verifica a lógica de exibição de contadores com 4 camadas em PARES (ex: 20/20 0/20)."""
         layers = 4
         req_pairs = 20
 
-        # Caso 1: 10 peças colocadas no layout geram 20 pares -> 10/20 0/20
+        # Caso 1: 10 peças colocadas no layout geram 20 pares -> 20/20 0/20
         placed_pieces = 10
         placed_pairs = (placed_pieces * layers) // 2
         resto = max(0, req_pairs - placed_pairs)
-        disp = f"{placed_pieces}/{req_pairs} {resto}/{req_pairs}"
-        self.assertEqual(disp, "10/20 0/20")
+        disp = f"{placed_pairs}/{req_pairs} {resto}/{req_pairs}"
+        self.assertEqual(disp, "20/20 0/20")
 
-        # Caso 2: 5 peças colocadas no layout geram 10 pares -> 5/20 10/20
+        # Caso 2: 5 peças colocadas no layout geram 10 pares -> 10/20 10/20
         placed_pieces = 5
         placed_pairs = (placed_pieces * layers) // 2
         resto = max(0, req_pairs - placed_pairs)
-        disp = f"{placed_pieces}/{req_pairs} {resto}/{req_pairs}"
-        self.assertEqual(disp, "5/20 10/20")
+        disp = f"{placed_pairs}/{req_pairs} {resto}/{req_pairs}"
+        self.assertEqual(disp, "10/20 10/20")
 
         # Caso 3: 0 peças colocadas -> 0/20 20/20
         placed_pieces = 0
         placed_pairs = (placed_pieces * layers) // 2
         resto = max(0, req_pairs - placed_pairs)
-        disp = f"{placed_pieces}/{req_pairs} {resto}/{req_pairs}"
+        disp = f"{placed_pairs}/{req_pairs} {resto}/{req_pairs}"
         self.assertEqual(disp, "0/20 20/20")
 
     def test_sidebar_counter_formula_layers_2(self):
-        """Verifica a lógica de exibição de contadores com 2 camadas (ex: 20/20 0/20)."""
+        """Verifica a lógica de exibição de contadores com 2 camadas em PARES (ex: 20/20 0/20)."""
         layers = 2
         req_pairs = 20
 
@@ -97,34 +97,34 @@ class TestLayersPairsNesting(unittest.TestCase):
         placed_pieces = 20
         placed_pairs = (placed_pieces * layers) // 2
         resto = max(0, req_pairs - placed_pairs)
-        disp = f"{placed_pieces}/{req_pairs} {resto}/{req_pairs}"
+        disp = f"{placed_pairs}/{req_pairs} {resto}/{req_pairs}"
         self.assertEqual(disp, "20/20 0/20")
 
         # Caso 2: 10 peças colocadas no layout geram 10 pares -> 10/20 10/20
         placed_pieces = 10
         placed_pairs = (placed_pieces * layers) // 2
         resto = max(0, req_pairs - placed_pairs)
-        disp = f"{placed_pieces}/{req_pairs} {resto}/{req_pairs}"
+        disp = f"{placed_pairs}/{req_pairs} {resto}/{req_pairs}"
         self.assertEqual(disp, "10/20 10/20")
 
         # Caso 3: 0 peças colocadas -> 0/20 20/20
         placed_pieces = 0
         placed_pairs = (placed_pieces * layers) // 2
         resto = max(0, req_pairs - placed_pairs)
-        disp = f"{placed_pieces}/{req_pairs} {resto}/{req_pairs}"
+        disp = f"{placed_pairs}/{req_pairs} {resto}/{req_pairs}"
         self.assertEqual(disp, "0/20 20/20")
 
     def test_sidebar_counter_formula_layers_1(self):
-        """Verifica a lógica de exibição de contadores com 1 camada (ex: 40/20 0/20)."""
+        """Verifica a lógica de exibição de contadores com 1 camada em PARES (ex: 20/20 0/20)."""
         layers = 1
         req_pairs = 20
 
-        # Com 1 camada, 40 peças colocadas no layout geram 20 pares -> 40/20 0/20
+        # Com 1 camada, 40 peças colocadas no layout geram 20 pares -> 20/20 0/20
         placed_pieces = 40
         placed_pairs = (placed_pieces * layers) // 2
         resto = max(0, req_pairs - placed_pairs)
-        disp = f"{placed_pieces}/{req_pairs} {resto}/{req_pairs}"
-        self.assertEqual(disp, "40/20 0/20")
+        disp = f"{placed_pairs}/{req_pairs} {resto}/{req_pairs}"
+        self.assertEqual(disp, "20/20 0/20")
 
 
 if __name__ == "__main__":

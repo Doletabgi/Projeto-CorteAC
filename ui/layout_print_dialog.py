@@ -19,6 +19,7 @@ from PIL import Image, ImageDraw, ImageFont
 from config import THEME
 from ui.units import format_m, format_dim_mm
 from cad.colors import get_color_for_size
+from cad.layers_rule import calc_resto, calc_resto_efetivo, resolve_layout_layers, is_separar_sobras_enabled
 
 
 def get_company_logo_path(create_parent=False):
@@ -250,6 +251,21 @@ def extract_molde_base_name(raw_name: str, raw_size: str = "") -> str:
     return name.strip() or str(raw_name).strip()
 
 
+def format_shape_id_tag(s_id) -> str:
+    """
+    Formata o identificador do molde para a legenda:
+    Retorna '  #{s_id}' se presente (evitando duplicar #), ou '' se ausente.
+    """
+    if s_id is None:
+        return ""
+    sid_str = str(s_id).strip()
+    if not sid_str:
+        return ""
+    if sid_str.startswith("#"):
+        return f"  {sid_str}"
+    return f"  #{sid_str}"
+
+
 class LayoutPrintDialog(tk.Toplevel):
     """
     Janela modal de Visualização de Impressão (Print Preview) do Layout Editor.
@@ -383,7 +399,18 @@ class LayoutPrintDialog(tk.Toplevel):
         self.session_shapes = self.layout_data.get("session_shapes") or self.layout_data.get("shapes") or []
         self.layouts = self.layout_data.get("layouts", [])
         self.current_layout_index = self.layout_data.get("current_layout_index", 0)
-        self.material_layers = int(mat_layers) if mat_layers is not None else 2
+
+        cur_layout = self.layout_data.get("layout")
+        if not cur_layout and self.layouts and 0 <= self.current_layout_index < len(self.layouts):
+            cur_layout = self.layouts[self.current_layout_index]
+
+        self.layout_layers = resolve_layout_layers(
+            layout=cur_layout,
+            session=self.layout_data.get("session"),
+            material=mat_obj if isinstance(mat_obj, dict) else None,
+            default=mat_layers or 2
+        )
+        self.material_layers = self.layout_layers
 
         # Orientação da folha (retrato ou paisagem)
         self.orientation = self.layout_data.get("orientation", "portrait")
@@ -622,10 +649,12 @@ class LayoutPrintDialog(tk.Toplevel):
                 else:
                     n = 0
 
-                if k in session_m and session_m[k] > 0:
+                if k in session_m:
                     m = session_m[k]
-                elif is_multi_plate and k in multi_plate_totals and multi_plate_totals[k] > 0:
+                elif is_multi_plate and k in multi_plate_totals:
                     m = multi_plate_totals[k]
+                elif session_m:
+                    m = 0
                 else:
                     m = n
 
@@ -639,7 +668,11 @@ class LayoutPrintDialog(tk.Toplevel):
                     if has_other_placed:
                         continue
 
-                is_error = (n > m)
+                # A sobra legítima NÃO é erro: destacar em vermelho SOMENTE se n exceder m + sobra legítima
+                is_sep = is_separar_sobras_enabled(getattr(self, "session", None))
+                resto = calc_resto_efetivo(m, layers, separar=is_sep)
+                max_allowed = m + abs(resto)
+                is_error = (n > max_allowed) if m > 0 else False
                 size_list.append({
                     "size": sz,
                     "n": n,
@@ -924,8 +957,8 @@ class LayoutPrintDialog(tk.Toplevel):
             )
             meta_y += line_h
 
-        # Linha inferior de metadados: Shapes, Instances e Gap
-        col_w = (margin_right - margin_left) // 3
+        # Linha inferior de metadados: Shapes, Instances, Gap e Enfesto
+        col_w = (margin_right - margin_left) // 4
         self.canvas.create_text(
             margin_left, meta_y,
             text=f"Shapes: {self.shapes_count}",
@@ -939,6 +972,12 @@ class LayoutPrintDialog(tk.Toplevel):
         self.canvas.create_text(
             margin_left + col_w * 2, meta_y,
             text=f"Gap: {self.gap_str}",
+            anchor="nw", font=f_mono, fill="#000000"
+        )
+        cam_suffix = "camada" if self.layout_layers == 1 else "camadas"
+        self.canvas.create_text(
+            margin_left + col_w * 3, meta_y,
+            text=f"Enfesto: {self.layout_layers} {cam_suffix}",
             anchor="nw", font=f_mono, fill="#000000"
         )
 
@@ -992,8 +1031,9 @@ class LayoutPrintDialog(tk.Toplevel):
                 m_name = row.get("molde_name", "")
                 s_id = row.get("shape_id")
                 w_est = _measure_name(m_name)
-                if s_id is not None and str(s_id).strip():
-                    w_est += _measure_sub(f"  #{str(s_id).strip()}")
+                sid_txt = format_shape_id_tag(s_id)
+                if sid_txt:
+                    w_est += _measure_sub(sid_txt)
                 if w_est > max_left_w:
                     max_left_w = w_est
 
@@ -1015,11 +1055,12 @@ class LayoutPrintDialog(tk.Toplevel):
                 )
 
                 # ShapeId ao lado em fonte menor e cinza escuro
-                if s_id is not None and str(s_id).strip():
+                sid_txt = format_shape_id_tag(s_id)
+                if sid_txt:
                     name_w = _measure_name(m_name)
                     self.canvas.create_text(
                         margin_left + name_w + int(4 * self.zoom), row_start_y + int(1.5 * self.zoom),
-                        text=f"  #{str(s_id).strip()}", anchor="nw",
+                        text=sid_txt, anchor="nw",
                         font=f_legend_sub, fill="#555555",
                         tags="print_legend_shape_id"
                     )
@@ -1031,7 +1072,11 @@ class LayoutPrintDialog(tk.Toplevel):
                     sz_str = str(s_item["size"])
                     n_val = s_item["n"]
                     m_val = s_item["m"]
-                    tokens.append((f"{sz_str}: {n_val}/{m_val}", bool(s_item.get("is_error", n_val > m_val))))
+                    if m_val == 0:
+                        tok_str = f"{sz_str}: {n_val}"
+                    else:
+                        tok_str = f"{sz_str}: {n_val}/{m_val}"
+                    tokens.append((tok_str, bool(s_item.get("is_error", False))))
 
                 # Quebra de linha entre tamanhos (nunca no meio de um token)
                 lines_of_tokens = []
@@ -1325,10 +1370,12 @@ class LayoutPrintDialog(tk.Toplevel):
             draw.text((m_left, meta_y), l_txt, fill="black", font=f_mono)
             meta_y += line_h
 
-        col_w = (m_right - m_left) // 3
+        col_w = (m_right - m_left) // 4
+        cam_suffix = "camada" if self.layout_layers == 1 else "camadas"
         draw.text((m_left, meta_y), f"Shapes: {self.shapes_count}", fill="black", font=f_mono)
         draw.text((m_left + col_w, meta_y), f"Instances: {self.instances_count}", fill="black", font=f_mono)
         draw.text((m_left + col_w * 2, meta_y), f"Gap: {self.gap_str}", fill="black", font=f_mono)
+        draw.text((m_left + col_w * 3, meta_y), f"Enfesto: {self.layout_layers} {cam_suffix}", fill="black", font=f_mono)
 
         # =====================================================================
         # 2.5. Tabela de Legenda por Molde no Pillow (com ShapeId e n/m)
@@ -1356,8 +1403,9 @@ class LayoutPrintDialog(tk.Toplevel):
                 m_name = row.get("molde_name", "")
                 s_id = row.get("shape_id")
                 w_est = _measure_pillow(m_name, f_mono_bold)
-                if s_id is not None and str(s_id).strip():
-                    w_est += _measure_pillow(f"  #{str(s_id).strip()}", f_legend_sub)
+                sid_txt = format_shape_id_tag(s_id)
+                if sid_txt:
+                    w_est += _measure_pillow(sid_txt, f_legend_sub)
                 if w_est > max_left_w:
                     max_left_w = w_est
 
@@ -1376,11 +1424,12 @@ class LayoutPrintDialog(tk.Toplevel):
                 draw.text((m_left, row_start_y), m_name, fill="black", font=f_mono_bold)
 
                 # ShapeId ao lado em fonte menor e cinza escuro
-                if s_id is not None and str(s_id).strip():
+                sid_txt = format_shape_id_tag(s_id)
+                if sid_txt:
                     name_w = _measure_pillow(m_name, f_mono_bold)
                     draw.text(
                         (m_left + name_w + int(4 * scale), row_start_y + int(1.5 * scale)),
-                        f"  #{str(s_id).strip()}", fill="#555555", font=f_legend_sub
+                        sid_txt, fill="#555555", font=f_legend_sub
                     )
 
                 # Coluna Direita: Lista por tamanho
@@ -1390,7 +1439,11 @@ class LayoutPrintDialog(tk.Toplevel):
                     sz_str = str(s_item["size"])
                     n_val = s_item["n"]
                     m_val = s_item["m"]
-                    tokens.append((f"{sz_str}: {n_val}/{m_val}", bool(s_item.get("is_error", n_val > m_val))))
+                    if m_val == 0:
+                        tok_str = f"{sz_str}: {n_val}"
+                    else:
+                        tok_str = f"{sz_str}: {n_val}/{m_val}"
+                    tokens.append((tok_str, bool(s_item.get("is_error", False))))
 
                 lines_of_tokens = []
                 cur_line = []

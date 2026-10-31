@@ -24,6 +24,7 @@ from cad.geometry import (
 from cad.nfp import contact_placement_x
 from cad.colors import get_color_for_size
 from cad.ai_learner import ShapeFeatureExtractor, NestingAIBrain
+from cad.layers_rule import pecas_na_mesa
 
 
 _DX_SEP_CACHE: Dict[Tuple[int, float, int, float, float], float] = {}
@@ -665,7 +666,7 @@ class OmniNestMacroEngine:
                     l_val = max(1, int(l_val))
                 except (ValueError, TypeError):
                     l_val = 2
-                qty = math.ceil((int(s.get("pairs", 24)) * 2) / l_val)
+                qty = pecas_na_mesa(s.get("pairs", 24), l_val)
             for _ in range(qty):
                 shape_queue.append(s)
 

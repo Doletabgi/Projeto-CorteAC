@@ -12,6 +12,7 @@ import tkinter as tk
 from tkinter import ttk, messagebox, filedialog, simpledialog
 import math
 import datetime
+from typing import Optional
 from pathlib import Path
 
 
@@ -23,7 +24,15 @@ from cad.colors import get_color_for_size
 from cad.exporter import export_gcode, export_xml_report
 from cad.die_parser import parse_die_file, save_die_file
 from cad.geometry import polygon_area, polygon_bbox
-from cad.layers_rule import calc_resto
+from cad.layers_rule import (
+    calc_resto,
+    calc_resto_efetivo,
+    resolve_session_layers,
+    is_layers_defined,
+    pecas_na_mesa,
+    is_separar_sobras_enabled,
+)
+from cad.layers_split import separar_sobras_camadas
 from ui.cad_canvas import CADCanvas
 from ui.order_view import OrderView
 from ui.session_view import SessionView
@@ -35,6 +44,7 @@ from ui.options_dialog import OptionsDialog
 from ui.params_dialog import NestingParamsDialog
 from ui.dieproc_dialog import DieProcDialog
 from ui.sort_utils import natural_sort_key, size_sort_key, clean_session_display_name
+from ui.tooltip import ToolTip
 
 def get_assets_dir():
     if getattr(sys, 'frozen', False):
@@ -70,6 +80,8 @@ class MainWindow(tk.Tk):
         self.bind("<Control-P>", self.handle_ctrl_p)
         self.bind("<Control-t>", self.handle_ctrl_t)
         self.bind("<Control-T>", self.handle_ctrl_t)
+        self.bind("<Control-n>", lambda e: self.on_new_session())
+        self.bind("<Control-N>", lambda e: self.on_new_session())
 
         # Carrega Ícones Nativos Extraídos do Sistema Original
         self.load_icons()
@@ -141,7 +153,8 @@ class MainWindow(tk.Tk):
             "shed": "iconShed.png",
             "mat_base": "iconMatBase.png",
             "app_icon": "app_icon.png",
-            "layout_icon": "layout/layout_icon.png"
+            "layout_icon": "layout/layout_icon.png",
+            "btn_new": "layout/btn_new.png"
         }
         for k, v in icon_files.items():
             p = assets_dir / v
@@ -330,6 +343,30 @@ class MainWindow(tk.Tk):
 
         self.config(menu=menubar)
 
+    def bind_tooltip(self, widget, text: str, status_desc: Optional[str] = None):
+        """Associa um ToolTip flutuante ao widget e atualiza a barra de status ao passar o mouse."""
+        widget._tooltip = ToolTip(widget, text)
+        status_text = status_desc or text
+
+        def on_enter(e):
+            lbl = getattr(self, "lbl_status_msg", None)
+            if lbl:
+                cur_text = lbl.cget("text")
+                if not getattr(self, "_is_hover_status", False):
+                    self._prev_status_msg = cur_text
+                self._is_hover_status = True
+                lbl.config(text=status_text)
+
+        def on_leave(e):
+            lbl = getattr(self, "lbl_status_msg", None)
+            if lbl:
+                self._is_hover_status = False
+                prev = getattr(self, "_prev_status_msg", "Job Manager está pronto")
+                lbl.config(text=prev)
+
+        widget.bind("<Enter>", on_enter, add="+")
+        widget.bind("<Leave>", on_leave, add="+")
+
     # =========================================================================
     # 2. Toolbar Superior (como no print clássico do Windows XP)
     # =========================================================================
@@ -337,57 +374,87 @@ class MainWindow(tk.Tk):
         tbar = tk.Frame(self, bg=THEME["bg_surface"], height=32, padx=4, pady=2, relief="raised", borderwidth=1)
         tbar.pack(side="top", fill="x")
 
-        # Botões padrão: Recortar, Copiar, Colar, Detalhes com ícones autênticos
+        # Botão Nova Sessão (Ctrl+N)
+        btn_new_kw = {"image": self.icons["btn_new"]} if self.icons.get("btn_new") else {"text": "➕"}
+        self.btn_tb_new_session = tk.Button(
+            tbar, **btn_new_kw, bg=THEME["bg_surface"], relief="raised", bd=1, width=22, height=22,
+            command=self.on_new_session
+        )
+        self.btn_tb_new_session.pack(side="left", padx=1)
+        self.bind_tooltip(self.btn_tb_new_session, "Nova Sessão (Ctrl+N)", "Cria uma nova sessão de produção em branco (Ctrl+N)")
+
+        # Botões padrão: Recortar, Copiar, Colar com ícones autênticos
         btn_cut_kw = {"image": self.icons["cut"]} if self.icons.get("cut") else {"text": "✂️"}
-        tk.Button(tbar, **btn_cut_kw, bg=THEME["bg_surface"], relief="raised", bd=1, width=22, height=22).pack(side="left", padx=1)
+        self.btn_tb_cut = tk.Button(tbar, **btn_cut_kw, bg=THEME["bg_surface"], relief="raised", bd=1, width=22, height=22)
+        self.btn_tb_cut.pack(side="left", padx=1)
+        self.bind_tooltip(self.btn_tb_cut, "Recortar (Ctrl+X)", "Recorta a seleção e copia para a área de transferência")
 
         btn_copy_kw = {"image": self.icons["copy"]} if self.icons.get("copy") else {"text": "📄"}
-        tk.Button(tbar, **btn_copy_kw, bg=THEME["bg_surface"], relief="raised", bd=1, width=22, height=22).pack(side="left", padx=1)
+        self.btn_tb_copy = tk.Button(tbar, **btn_copy_kw, bg=THEME["bg_surface"], relief="raised", bd=1, width=22, height=22)
+        self.btn_tb_copy.pack(side="left", padx=1)
+        self.bind_tooltip(self.btn_tb_copy, "Copiar (Ctrl+C)", "Copia a seleção para a área de transferência")
 
         btn_paste_kw = {"image": self.icons["paste"]} if self.icons.get("paste") else {"text": "📋"}
-        tk.Button(tbar, **btn_paste_kw, bg=THEME["bg_surface"], relief="raised", bd=1, width=22, height=22).pack(side="left", padx=1)
+        self.btn_tb_paste = tk.Button(tbar, **btn_paste_kw, bg=THEME["bg_surface"], relief="raised", bd=1, width=22, height=22)
+        self.btn_tb_paste.pack(side="left", padx=1)
+        self.bind_tooltip(self.btn_tb_paste, "Colar (Ctrl+V)", "Cola o conteúdo da área de transferência")
 
         # Divisor
         tk.Frame(tbar, bg=THEME["border"], width=1, height=20, relief="sunken", bd=1).pack(side="left", padx=4)
 
         btn_details_kw = {"image": self.icons["details"]} if self.icons.get("details") else {"text": "📑"}
-        tk.Button(tbar, **btn_details_kw, bg=THEME["bg_surface"], relief="raised", bd=1, width=22, height=22, command=self.show_session_window).pack(side="left", padx=1)
+        self.btn_tb_details = tk.Button(tbar, **btn_details_kw, bg=THEME["bg_surface"], relief="raised", bd=1, width=22, height=22, command=self.show_session_window)
+        self.btn_tb_details.pack(side="left", padx=1)
+        self.bind_tooltip(self.btn_tb_details, "Detalhes da Sessão", "Abre os detalhes e parâmetros da sessão selecionada")
 
         btn_lay_kw = {"image": self.icons["layout_icon"]} if self.icons.get("layout_icon") else {"text": "🧩"}
-        tk.Button(tbar, **btn_lay_kw, bg=THEME["bg_surface"], relief="raised", bd=1, width=22, height=22, command=self.show_layout_editor).pack(side="left", padx=1)
+        self.btn_tb_lay = tk.Button(tbar, **btn_lay_kw, bg=THEME["bg_surface"], relief="raised", bd=1, width=22, height=22, command=self.show_layout_editor)
+        self.btn_tb_lay.pack(side="left", padx=1)
+        self.bind_tooltip(self.btn_tb_lay, "Editor de Layout", "Abre o Editor de Layout (CAD/CAM)")
 
         btn_shed_kw = {"image": self.icons["shed"]} if self.icons.get("shed") else {"text": "📐"}
-        tk.Button(tbar, **btn_shed_kw, bg=THEME["bg_surface"], relief="raised", bd=1, width=22, height=22, command=self.show_shape_editor).pack(side="left", padx=1)
+        self.btn_tb_shed = tk.Button(tbar, **btn_shed_kw, bg=THEME["bg_surface"], relief="raised", bd=1, width=22, height=22, command=self.show_shape_editor)
+        self.btn_tb_shed.pack(side="left", padx=1)
+        self.bind_tooltip(self.btn_tb_shed, "Editor de Moldes (Shape Editor)", "Abre o Editor de Moldes vetorial")
 
         self.btn_shape_catalog = tk.Button(
             tbar, text="▦ Catálogo", bg=THEME["bg_surface"], fg=THEME["text_main"],
             relief="raised", bd=1, padx=4, font=("Segoe UI", 8), command=self.show_shape_catalog
         )
         self.btn_shape_catalog.pack(side="left", padx=1)
+        self.bind_tooltip(self.btn_shape_catalog, "Catálogo de Moldes", "Abre a grade matricial do catálogo geral de moldes e tamanhos")
 
-        tk.Button(
+        self.btn_tb_import_die = tk.Button(
             tbar, text="📂 Importar .die", bg=THEME["bg_surface"], fg=THEME["text_main"],
             relief="raised", bd=1, padx=4, font=("Segoe UI", 8), command=self.on_import_die
-        ).pack(side="left", padx=2)
+        )
+        self.btn_tb_import_die.pack(side="left", padx=2)
+        self.bind_tooltip(self.btn_tb_import_die, "Importar Shape (.die)", "Importa moldes externos no formato ATOM .die")
 
         # Divisor
         tk.Frame(tbar, bg=THEME["border"], width=1, height=20, relief="sunken", bd=1).pack(side="left", padx=6)
 
         # Ações diretas úteis
-        tk.Button(
+        self.btn_tb_params = tk.Button(
             tbar, text="⚙️ Parâmetros", bg=THEME["bg_surface"], fg=THEME["text_main"],
             relief="raised", bd=2, padx=6, font=("Segoe UI", 8), command=self.open_params_dialog
-        ).pack(side="left", padx=2)
+        )
+        self.btn_tb_params.pack(side="left", padx=2)
+        self.bind_tooltip(self.btn_tb_params, "Parâmetros de Encaixe", "Configura opções e parâmetros de auto-nesting")
 
-        tk.Button(
+        self.btn_tb_auto_nest = tk.Button(
             tbar, text="⚡ Auto-Nest", bg=THEME["bg_surface"], fg=THEME["text_main"],
             relief="raised", bd=2, padx=8, font=("Segoe UI", 8, "bold"), command=self.on_auto_nest
-        ).pack(side="left", padx=2)
+        )
+        self.btn_tb_auto_nest.pack(side="left", padx=2)
+        self.bind_tooltip(self.btn_tb_auto_nest, "Auto-Nest (Encaixe Automático)", "Executa o algoritmo de encaixe automático de peças")
 
-        tk.Button(
+        self.btn_tb_export_gcode = tk.Button(
             tbar, text="💾 Exportar G-Code", bg=THEME["bg_surface"], fg="#000080",
             relief="raised", bd=2, padx=8, font=("Segoe UI", 8), command=self.on_export_gcode
-        ).pack(side="left", padx=2)
+        )
+        self.btn_tb_export_gcode.pack(side="left", padx=2)
+        self.bind_tooltip(self.btn_tb_export_gcode, "Exportar G-Code", "Exporta arquivo de código de corte para a máquina ATOM")
 
     # =========================================================================
     # 3. Main Split Layout: Esquerda (Árvore + Grid) | Direita (Área MDI Cinza)
@@ -413,6 +480,7 @@ class MainWindow(tk.Tk):
             command=lambda: self.switch_tree_mode("jobs")
         )
         self.btn_mode_jobs.pack(side="left", padx=1)
+        self.bind_tooltip(self.btn_mode_jobs, "Ambiente de Produção (Jobs)", "Exibe a árvore de pastas e sessões de produção")
 
         btn_shp_kw = {"image": self.icons["btn_moldes"]} if self.icons.get("btn_moldes") else {"text": "🟩"}
         self.btn_mode_shapes = tk.Button(
@@ -421,6 +489,7 @@ class MainWindow(tk.Tk):
             command=lambda: self.switch_tree_mode("shapes")
         )
         self.btn_mode_shapes.pack(side="left", padx=1)
+        self.bind_tooltip(self.btn_mode_shapes, "Banco de Moldes (Shapes)", "Exibe o banco de dados e arquivos de moldes da produção")
 
         btn_mat_kw = {"image": self.icons["btn_mat"]} if self.icons.get("btn_mat") else {"text": "📚"}
         self.btn_mode_materials = tk.Button(
@@ -430,6 +499,7 @@ class MainWindow(tk.Tk):
         )
         self.btn_mode_materials.pack(side="left", padx=1)
         self.btn_mode_materials.bind("<Button-3>", self.show_materials_button_menu)
+        self.bind_tooltip(self.btn_mode_materials, "Materiais e Estoque", "Exibe o catálogo de materiais, estoques e espessuras")
 
         # Divisão vertical esquerda: Árvore no topo e Grid embaixo
         v_paned = tk.PanedWindow(left_box, orient="vertical", bg=THEME["bg_surface"], sashwidth=4, sashrelief="raised")
@@ -443,6 +513,8 @@ class MainWindow(tk.Tk):
         self.tree_main.pack(fill="both", expand=True)
         self.tree_main.bind("<<TreeviewSelect>>", self.on_tree_selected)
         self.tree_main.bind("<Double-1>", self.on_tree_double_click)
+        self.tree_main.bind("<Return>", self.on_tree_key_return)
+        self.tree_main.bind("<KP_Enter>", self.on_tree_key_return)
         self.tree_main.bind("<Button-3>", self.show_tree_context_menu)
         self.tree_main.bind("<ButtonPress-1>", self.on_tree_drag_start, add="+")
         self.tree_main.bind("<B1-Motion>", self.on_tree_drag_motion, add="+")
@@ -1060,6 +1132,14 @@ class MainWindow(tk.Tk):
 
         for sid, v in list(self.open_sessions.items()):
             if v == window:
+                if self.db and hasattr(v, "get_session_layers"):
+                    try:
+                        v_layers = v.get_session_layers()
+                        if getattr(v, "session_data", None):
+                            v.session_data["layers"] = v_layers
+                        self.db.update_session(sid, layers=v_layers)
+                    except Exception:
+                        pass
                 del self.open_sessions[sid]
                 break
 
@@ -1186,6 +1266,18 @@ class MainWindow(tk.Tk):
                     self.current_session["margin_bottom"] = m_bottom
                 except Exception:
                     pass
+            layers_val = self.current_session.get("layers")
+            sess_view = self.open_sessions.get(self.current_session.get("id")) or getattr(self, "session_view", None)
+            if sess_view and hasattr(sess_view, "get_session_layers"):
+                try:
+                    layers_val = sess_view.get_session_layers()
+                    self.current_session["layers"] = layers_val
+                except Exception:
+                    pass
+            elif self.current_material and self.current_material.get("layers"):
+                layers_val = self.current_material.get("layers")
+                self.current_session["layers"] = layers_val
+
             try:
                 self.db.update_session(
                     self.current_session["id"],
@@ -1196,7 +1288,8 @@ class MainWindow(tk.Tk):
                     margin_left=m_left,
                     margin_right=m_right,
                     margin_top=m_top,
-                    margin_bottom=m_bottom
+                    margin_bottom=m_bottom,
+                    layers=layers_val
                 )
             except Exception:
                 pass
@@ -1431,6 +1524,31 @@ class MainWindow(tk.Tk):
 
         if active_sess:
             sess_mat = active_sess.get("material") or self.current_material
+            grid_row = None
+            if getattr(self, "session_view", None) and hasattr(self.session_view, "tree_mat"):
+                m_items = self.session_view.tree_mat.get_children()
+                if m_items:
+                    grid_row = self.session_view.tree_mat.item(m_items[0], "values")
+
+            cur_ly = sess_layouts[0] if sess_layouts else None
+            layers_val = resolve_session_layers(
+                session=active_sess,
+                material=sess_mat,
+                grid_material_row=grid_row,
+                layout=cur_ly,
+                default=getattr(self.layout_editor_view, "material_layers", 2)
+            )
+            if not is_layers_defined(
+                session=active_sess,
+                material=sess_mat,
+                grid_material_row=grid_row,
+                layout=cur_ly
+            ):
+                self.lbl_status_msg.config(text="Aviso: Camadas não definidas, assumindo 2.")
+
+            self.layout_editor_view.session = active_sess
+            self.layout_editor_view.material_layers = layers_val
+
             if sess_mat:
                 if hasattr(self.layout_editor_view, "set_material"):
                     self.layout_editor_view.set_material(sess_mat)
@@ -1438,6 +1556,7 @@ class MainWindow(tk.Tk):
                     w = float(sess_mat.get("width_mm", 1350.0))
                     h = float(sess_mat.get("height_mm", 2553.38))
                     self.layout_editor_view.set_sheet_size(w, h)
+                self.layout_editor_view.material_layers = layers_val
 
             if hasattr(self.layout_editor_view, "set_margins"):
                 self.layout_editor_view.set_margins(
@@ -2155,13 +2274,37 @@ class MainWindow(tk.Tk):
         if hasattr(self, "layout_editor_view") and self.layout_editor_view:
             self.layout_editor_view.open_layout_dialog()
 
+    def _ensure_separated_sobras_before_export(self):
+        """Reexecuta a separação de sobras de forma idempotente antes de despachar ou exportar."""
+        if self.current_session and self.current_session.get("layouts"):
+            layouts = self.current_session.get("layouts", [])
+            sess_shapes = getattr(self, "current_shapes", None) or self.current_session.get("shapes", [])
+            new_lays, split_msg = separar_sobras_camadas(
+                layouts=layouts,
+                session=self.current_session,
+                shapes=sess_shapes,
+                params=self.current_session.get("params")
+            )
+            if split_msg:
+                self.current_session["layouts"] = new_lays
+                if hasattr(self, "layout_editor_view") and self.layout_editor_view:
+                    self.layout_editor_view.set_session_layouts(new_lays)
+                if self.db and self.current_session.get("id"):
+                    try:
+                        self.db.save_session_layouts(self.current_session["id"], new_lays)
+                    except Exception:
+                        pass
+                self.lbl_status_msg.config(text=f"Ajuste pré-exportação: {split_msg}")
+
     def on_export_lay_file(self):
         """Exporta o layout atual para arquivo .lay compatível com fn98/dp98 e mesa ATOM CNC."""
+        self._ensure_separated_sobras_before_export()
         if hasattr(self, "layout_editor_view") and self.layout_editor_view:
             self.layout_editor_view.export_layout_dialog(target_format="lay")
 
     def on_export_dual_file(self):
         """Exporta o layout atual simultaneamente para ATOM (.lay) e Comelz (.onx)."""
+        self._ensure_separated_sobras_before_export()
         if hasattr(self, "layout_editor_view") and self.layout_editor_view:
             self.layout_editor_view.export_layout_dialog(target_format="dual")
 
@@ -2196,16 +2339,10 @@ class MainWindow(tk.Tk):
         now_date = datetime.datetime.now().strftime("%d/%m/%Y")
         tk.Label(p3, text=now_date, bg=THEME["bg_surface"], fg=THEME["text_main"], font=("Segoe UI", 8)).pack()
 
-        # Painéis 4, 5, 6: 3 LEDs ovais roxos separados (Dongle de segurança ATOM)
-        for _ in range(3):
-            p_led = tk.Frame(sbar, relief="sunken", bd=1, bg=THEME["bg_surface"], padx=4, pady=1)
-            p_led.pack(side="left", padx=1)
-            tk.Label(p_led, text="⬭", bg=THEME["bg_surface"], fg="#a21caf", font=("Segoe UI", 8, "bold")).pack()
-
-        # Painel 7: Mensagem do sistema
-        p7 = tk.Frame(sbar, relief="sunken", bd=1, bg=THEME["bg_surface"], padx=8, pady=1)
-        p7.pack(side="left", fill="x", expand=True, padx=1)
-        self.lbl_status_msg = tk.Label(p7, text="Job Manager está pronto", bg=THEME["bg_surface"], fg=THEME["text_main"], font=("Segoe UI", 8), anchor="w")
+        # Painel 4: Mensagem do sistema
+        p4 = tk.Frame(sbar, relief="sunken", bd=1, bg=THEME["bg_surface"], padx=8, pady=1)
+        p4.pack(side="left", fill="x", expand=True, padx=1)
+        self.lbl_status_msg = tk.Label(p4, text="Job Manager está pronto", bg=THEME["bg_surface"], fg=THEME["text_main"], font=("Segoe UI", 8), anchor="w")
         self.lbl_status_msg.pack(fill="x")
 
         # Painel 8: Espaçador rebaixado no final da barra
@@ -2483,6 +2620,9 @@ class MainWindow(tk.Tk):
 
     def dismiss_popup_menus(self, event=None):
         """Fecha qualquer menu de contexto ativo ao clicar fora ou teclar Escape."""
+        if event and hasattr(event, "widget") and isinstance(event.widget, tk.Menu):
+            return
+
         if event and hasattr(event, "x_root") and hasattr(event, "y_root"):
             # Se for clique com botão 3 disparado logo ao abrir menu, não desfaz imediatamente
             if getattr(event, "num", None) == 3 and (time.time() - getattr(self, "_last_popup_time", 0)) < 0.08:
@@ -2733,7 +2873,7 @@ class MainWindow(tk.Tk):
                     self.tree_menu.add_separator()
                     self.tree_menu.add_command(label=f"📁 Criar Subpasta em '{disp_name}'...", command=lambda f=folder_path: self.on_create_job_subfolder(f))
                     self.tree_menu.add_command(label="📁 Criar Produção na Raiz...", command=lambda: self.on_create_production(parent_folder=""))
-                    self.tree_menu.add_command(label=f"Criar sessão em '{disp_name}'", command=self.on_new_session)
+                    self.tree_menu.add_command(label=f"Criar sessão em '{disp_name}'", command=lambda f=folder_path: self.on_new_session(target_job=f))
                     self.tree_menu.add_command(label="Criar pedido", command=self.on_create_order)
                     self.tree_menu.add_separator()
                     self.tree_menu.add_command(label="Explodir", state="disabled")
@@ -2775,7 +2915,6 @@ class MainWindow(tk.Tk):
                     self.tree_menu.add_separator()
                     self.tree_menu.add_command(label="Renomear", command=self.on_rename_tree_item)
                     self.tree_menu.add_command(label="Excluir Artigo", command=self.on_delete_tree_item)
-                    self.tree_menu.add_command(label="Excluir", command=self.on_delete_tree_item)
 
                 else:  # root_production ou outros
                     self.tree_menu.add_command(label="Abrir", state="disabled")
@@ -3619,6 +3758,9 @@ class MainWindow(tk.Tk):
                         return
                     except (ValueError, TypeError):
                         pass
+                elif vals[0] == "job_folder":
+                    self.on_new_session(target_job=str(vals[1]))
+                    return
                 elif vals[0] == "shape":
                     try:
                         self.show_shape_editor(int(vals[1]))
@@ -4078,10 +4220,17 @@ class MainWindow(tk.Tk):
             confirm_msg = f"Deseja realmente excluir o artigo '{orders_to_del[0][2]}'?" if num == 1 else f"Deseja realmente excluir os {num} artigos selecionados?"
             if not messagebox.askyesno("Excluir Artigo" if num == 1 else "Excluir Artigos", confirm_msg, parent=self):
                 return
-            for iid, o_id, o_name in orders_to_del:
-                self.db.delete_order(o_id)
+            try:
+                for iid, o_id, o_name in orders_to_del:
+                    self.db.delete_order(o_id)
+            except Exception as e:
+                messagebox.showerror("Erro ao Excluir", f"Falha ao excluir artigo no banco de dados: {e}", parent=self)
+                return
             del_ids = {o_id for _, o_id, _ in orders_to_del}
             self.orders = [o for o in self.orders if o.get("id") not in del_ids]
+            for s in self.sessions:
+                if s.get("order_id") in del_ids:
+                    s["order_id"] = None
             if self.current_order and self.current_order.get("id") in del_ids:
                 self.current_order = self.orders[0] if self.orders else None
                 if getattr(self, "active_child", None) == getattr(self, "order_view", None):
@@ -4379,7 +4528,7 @@ class MainWindow(tk.Tk):
             node_type = vals[0]
             if node_type == "job_folder":
                 folder_name = vals[1] if len(vals) >= 2 else ""
-                self.lbl_status_msg.config(text=f"Pasta de produção selecionada: '{folder_name}'")
+                self.lbl_status_msg.config(text=f"Pasta de produção: '{folder_name}' - Duplo clique com botão esquerdo para criar sessão.")
             elif node_type == "root_production":
                 self.lbl_status_msg.config(text="Ambiente de Produção (Raiz)")
             elif node_type == "session" and len(vals) >= 2:
@@ -4407,7 +4556,11 @@ class MainWindow(tk.Tk):
             elif node_type == "root_materials":
                 self.lbl_status_msg.config(text="Estoque de material (Raiz)")
 
-    def on_tree_double_click(self, event):
+    def on_tree_key_return(self, event=None):
+        """Aciona a ação padrão (equivalente ao duplo clique) no item selecionado da árvore."""
+        self.on_tree_double_click(event)
+
+    def on_tree_double_click(self, event=None):
         sel = self.tree_main.selection()
         if not sel:
             return
@@ -4439,7 +4592,9 @@ class MainWindow(tk.Tk):
         if self.current_mode == "jobs":
             if item_vals and len(item_vals) >= 2:
                 if item_vals[0] == "job_folder":
-                    self.tree_main.item(sel[0], open=not self.tree_main.item(sel[0], "open"))
+                    folder_path = str(item_vals[1])
+                    self.tree_main.item(sel[0], open=True)
+                    self.on_new_session(target_job=folder_path)
                     return
                 elif item_vals[0] == "session":
                     try:
@@ -4649,32 +4804,42 @@ class MainWindow(tk.Tk):
             s_size = str(s.get("size", "41"))
             s["color"] = get_color_for_size(s_size, idx)
 
-        mat_layers = 2
-        # 1. Prioridade: Leitura direta da tabela da aba Materiais (se o operador editou na sessão)
+        grid_row = None
         if getattr(self, "session_view", None) and hasattr(self.session_view, "tree_mat"):
             m_items = self.session_view.tree_mat.get_children()
             if m_items:
-                r_vals = self.session_view.tree_mat.item(m_items[0], "values")
-                if len(r_vals) >= 7 and r_vals[6]:
-                    try:
-                        mat_layers = max(1, int(r_vals[6]))
-                    except (ValueError, TypeError):
-                        pass
-        elif getattr(self, "layout_editor_view", None) and hasattr(self.layout_editor_view, "material_layers") and self.layout_editor_view.material_layers:
-            mat_layers = max(1, int(self.layout_editor_view.material_layers))
-        elif self.current_material and "layers" in self.current_material:
-            try:
-                mat_layers = max(1, int(self.current_material["layers"]))
-            except (ValueError, TypeError):
-                mat_layers = 2
+                grid_row = self.session_view.tree_mat.item(m_items[0], "values")
+
+        mat_layers = resolve_session_layers(
+            session=self.current_session,
+            material=self.current_material,
+            grid_material_row=grid_row,
+            layout=(self.current_session.get("layouts", [{}])[0] if self.current_session and self.current_session.get("layouts") else None),
+            default=getattr(self.layout_editor_view, "material_layers", 2) if hasattr(self, "layout_editor_view") else 2
+        )
+        if not is_layers_defined(
+            session=self.current_session,
+            material=self.current_material,
+            grid_material_row=grid_row,
+            layout=(self.current_session.get("layouts", [{}])[0] if self.current_session and self.current_session.get("layouts") else None)
+        ):
+            self.lbl_status_msg.config(text="Aviso: Camadas não definidas, assumindo 2.")
+
         if self.current_material:
             self.current_material["layers"] = mat_layers
+        if self.current_session:
+            self.current_session["layers"] = mat_layers
+            if self.db and self.current_session.get("id"):
+                try:
+                    self.db.update_session(self.current_session["id"], layers=mat_layers)
+                except Exception:
+                    pass
 
         # 1 par de calçados = 2 peças físicas a cortar (pé esquerdo + pé direito)
         # Com 'mat_layers' camadas de material, cada corte gera 'mat_layers' peças físicas.
         # Quantidade de peças necessárias no layout (.lay) = ceil((pares * 2) / mat_layers).
         # Ex: para 2 camadas, ceil((20 * 2) / 2) = 20 peças de cada número no layout.
-        target_count = sum(math.ceil((int(s.get("pairs", 24)) * 2) / mat_layers) for s in sess_shapes)
+        target_count = sum(pecas_na_mesa(s.get("pairs", 24), mat_layers) for s in sess_shapes)
         target_count = max(1, target_count)
 
         mat_w = self.current_material["width_mm"]
@@ -4813,6 +4978,20 @@ class MainWindow(tk.Tk):
                 self.lbl_status_msg.config(text=f"Auto-Nest: {warn}")
                 return
 
+            # Separação automática das sobras de 4 camadas em layout extra de 2 camadas
+            split_summary = None
+            if self.current_session and layouts:
+                sess_shapes = getattr(self, "current_shapes", None) or self.current_session.get("shapes", [])
+                layouts, split_summary = separar_sobras_camadas(
+                    layouts=layouts,
+                    session=self.current_session,
+                    shapes=sess_shapes,
+                    params=params
+                )
+                if split_summary:
+                    self.lbl_status_msg.config(text=split_summary)
+                    print(f"[SOBRAS] {split_summary}")
+
             first_layout = layouts[0]
             pieces = first_layout.get("pieces", [])
             self.canvas.set_pieces(pieces)
@@ -4841,14 +5020,13 @@ class MainWindow(tk.Tk):
 
             # Atualiza o saldo restante de pares (resto / rest) nos moldes da sessão considerando TODAS as placas
             if hasattr(self, "current_shapes") and self.current_shapes:
-                all_placed = []
-                for ly in layouts:
-                    all_placed.extend(ly.get("pieces", []))
-
                 for s in self.current_shapes:
-                    cnt_placed = sum(1 for p in all_placed if piece_matches_shape(p, s))
-                    s_layers = max(1, int(s.get("layers") or layers))
-                    pairs_cut = (cnt_placed * s_layers) // 2
+                    total_phys = 0
+                    for ly in layouts:
+                        ly_l = ly.get("layers", layers)
+                        cnt = sum(1 for p in ly.get("pieces", []) if piece_matches_shape(p, s))
+                        total_phys += cnt * ly_l
+                    pairs_cut = total_phys // 2
                     req_p = int(s.get("pairs", 0))
                     rem = max(0, req_p - pairs_cut)
                     s["rest"] = rem
@@ -4872,6 +5050,7 @@ class MainWindow(tk.Tk):
                 self.current_session["margin_right"] = m_right
                 self.current_session["margin_top"] = m_top
                 self.current_session["margin_bottom"] = m_bottom
+                self.current_session["layers"] = layers
                 self.db.update_session(
                     self.current_session["id"],
                     status="Nested",
@@ -4882,7 +5061,8 @@ class MainWindow(tk.Tk):
                     margin_left=m_left,
                     margin_right=m_right,
                     margin_top=m_top,
-                    margin_bottom=m_bottom
+                    margin_bottom=m_bottom,
+                    layers=layers
                 )
                 if self.current_mode == "jobs":
                     self.switch_tree_mode("jobs")
@@ -4952,11 +5132,12 @@ class MainWindow(tk.Tk):
 
             # Restaura saldo original de pares (rest / resto) nos moldes
             layers = int(self.current_session.get("layers", 1))
+            is_sep = is_separar_sobras_enabled(self.current_session)
             if hasattr(self, "current_shapes") and self.current_shapes:
                 for shp in self.current_shapes:
                     req_p = int(shp.get("pairs", 0))
                     shp["rest"] = req_p
-                    shp["resto"] = calc_resto(req_p, layers)
+                    shp["resto"] = calc_resto_efetivo(req_p, layers, separar=is_sep)
                 if self.db and sess_id:
                     self.db.update_session_shapes(sess_id, self.current_shapes)
 
@@ -4964,7 +5145,7 @@ class MainWindow(tk.Tk):
                 for shp in self.current_session["shapes"]:
                     req_p = int(shp.get("pairs", 0))
                     shp["rest"] = req_p
-                    shp["resto"] = calc_resto(req_p, layers)
+                    shp["resto"] = calc_resto_efetivo(req_p, layers, separar=is_sep)
 
             # Deleta todos os layouts e peças do banco de dados para esta sessão
             if self.db and sess_id:
@@ -5055,7 +5236,7 @@ class MainWindow(tk.Tk):
                 return True
         return False
 
-    def on_new_session(self):
+    def on_new_session(self, target_job: Optional[str] = None):
         """
         Cria uma nova sessão em branco numerando sequencialmente (#1, #2, #3...),
         garantindo unicidade estrita (números apagados nunca são reutilizados).
@@ -5068,23 +5249,26 @@ class MainWindow(tk.Tk):
         sess_name = f"Sessão #{next_id}"
 
         # Determina a pasta de produção (job) para a nova sessão
-        sel = self.tree_main.selection()
-        sess_job = None
-        if sel:
-            vals = self.tree_main.item(sel[0], "values")
-            if vals and len(vals) >= 2 and vals[0] == "job_folder":
-                sess_job = str(vals[1])
-            elif vals and len(vals) >= 2 and vals[0] == "session":
-                s_obj = next((s for s in self.sessions if s["id"] == int(vals[1])), None)
-                if s_obj and s_obj.get("job"):
-                    sess_job = s_obj["job"]
+        if target_job:
+            sess_job = target_job
+        else:
+            sel = self.tree_main.selection()
+            sess_job = None
+            if sel:
+                vals = self.tree_main.item(sel[0], "values")
+                if vals and len(vals) >= 2 and vals[0] == "job_folder":
+                    sess_job = str(vals[1])
+                elif vals and len(vals) >= 2 and vals[0] == "session":
+                    s_obj = next((s for s in self.sessions if s["id"] == int(vals[1])), None)
+                    if s_obj and s_obj.get("job"):
+                        sess_job = s_obj["job"]
 
-        if not sess_job and self.current_session and self.current_session.get("job"):
-            sess_job = self.current_session["job"]
+            if not sess_job and self.current_session and self.current_session.get("job"):
+                sess_job = self.current_session["job"]
 
-        if not sess_job:
-            folders = self.db.get_job_folders()
-            sess_job = folders[0] if folders else "ProduçãoNova"
+            if not sess_job:
+                folders = self.db.get_job_folders()
+                sess_job = folders[0] if folders else "ProduçãoNova"
 
         # Garante que a pasta de produção existe no banco
         self.db.create_job_folder(sess_job)
