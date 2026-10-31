@@ -9,7 +9,7 @@ on:
       tag_name:
         description: 'Tag de versão SemVer (ex: v1.0.0)'
         required: false
-        default: 'v1.5.5'
+        default: 'v1.5.6'
 
 permissions:
   contents: write
@@ -183,7 +183,12 @@ jobs:
 
             ---
 
-            ### 🛠️ Recursos Incluídos Nesta Versão (v1.5.5):
+            ### 🛠️ Recursos Incluídos Nesta Versão (v1.5.6):
+            - **Correção: contadores da barra lateral do Layout Editor por placa**:
+              - Em sessões com várias placas o contador somava todas as placas e mostrava `50/50` em cada molde, escondendo o progresso da placa aberta. Agora exibe **peças desta placa / total pedido** (ex.: `18/50`).
+              - A barra lateral não era redesenhada ao trocar de placa (ficava com os textos da placa anterior); a troca passou a invalidar o cache de fundo.
+              - **374 testes automatizados** (373 passando, 1 skip, 0 falhas).
+            - **Novidades da v1.5.5 (mantidas)**: Bump Magnético Interativo com Mouse nos 3 gatilhos, setas com bump, `Ctrl+Setas` fino de 0,5 mm e rendimento real na barra de status.
             - **Novo: Bump Magnético Interativo com o Mouse (paridade com o Layout.exe)**:
               - Três gatilhos: **botão do meio com peça selecionada** (sem seleção continua Pan), **duplo-clique + arrasto** (< 300 ms) e **Ctrl+Shift + arrasto**.
               - Direção livre: a peça desliza em linha reta até encostar em outra peça (contorno real, respeitando o gap da sessão) ou na margem da placa, com linha elástica do centro da seleção até o mouse.

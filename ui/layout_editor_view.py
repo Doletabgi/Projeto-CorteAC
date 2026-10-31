@@ -1162,8 +1162,11 @@ class LayoutEditorView(tk.Frame):
             )
 
             # 4. Linha 2: Contadores de Produção
+            # Em sessão multi-placa o contador mostra as peças DESTA placa sobre o
+            # total pedido (ex.: 18/50). Antes exibia o total da sessão (50/50 em
+            # todas as placas), escondendo o progresso real de cada placa.
             if getattr(self, "layouts", None) and len(self.layouts) > 1:
-                stat_disp = f"{total_session_pieces}/{total_pieces_demanded}"
+                stat_disp = f"{placed_cnt}/{total_pieces_demanded}"
             else:
                 stat_disp = f"{placed_cnt}/{req_cnt} {resto_cnt}/{req_cnt}"
 
@@ -1500,6 +1503,9 @@ class LayoutEditorView(tk.Frame):
 
         self.current_layout_index = index
         self.clear_piece_cache()
+        # A barra lateral (miniaturas + contadores) é desenhada junto com o fundo;
+        # sem invalidar a assinatura ela ficaria com os contadores da placa anterior.
+        self._last_bg_sig = None
         ly = self.layouts[index]
         self.placed_pieces = copy.deepcopy(ly.get("pieces") or ly.get("placed_pieces") or [])
         for p in self.placed_pieces:

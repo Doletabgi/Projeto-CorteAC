@@ -399,18 +399,21 @@ class TestMultiSheetNesting(unittest.TestCase):
                     found_clean_text = True
         self.assertTrue(found_clean_text, "Contador limpo '6/6' não encontrado na barra lateral")
 
-        # Alterna para Placa 1 (0 peças nesta placa, mas total da sessão segue 6/6)
+        # Alterna para a Placa 1 (sem peças): o contador deve refletir ESTA placa (0/6).
+        # Antes o contador mostrava o total da sessão (6/6) em todas as placas, e a barra
+        # lateral nem era redesenhada na troca (ficava com os textos da placa anterior).
         editor.switch_to_layout(1)
         editor.redraw()
 
-        found_clean_lay1 = False
+        found_lay1_zero = False
         for item in editor.canvas.find_withtag("sidebar_ui"):
             if editor.canvas.type(item) == "text":
                 txt = editor.canvas.itemcget(item, "text")
                 self.assertNotIn("placa", txt.lower(), f"A palavra 'placa' não deve aparecer na placa 1: {txt}")
-                if txt == "6/6":
-                    found_clean_lay1 = True
-        self.assertTrue(found_clean_lay1, "Contador limpo '6/6' não encontrado na Placa 1")
+                if txt == "0/6":
+                    found_lay1_zero = True
+                self.assertNotEqual(txt, "6/6", "Placa sem peças não pode exibir o total da sessão (6/6)")
+        self.assertTrue(found_lay1_zero, "Contador da Placa 1 deveria ser '0/6'")
 
     # =========================================================================
     # 10. Exportação Dual (export_multi_sheet_dual) gerando N .lay e .onx
