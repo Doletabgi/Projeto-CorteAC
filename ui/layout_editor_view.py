@@ -784,6 +784,12 @@ class LayoutEditorView(tk.Frame):
         self.lbl_stat_x = tk.Label(self.x_panel, text="X: 718.32", bg=THEME["bg_surface"], fg=THEME["text_main"], font=("Segoe UI", 8), padx=4)
         self.lbl_stat_x.pack(side="left")
 
+        # Painel 2b: Quantidade de peças selecionadas (Sel: 0) — ao lado do Id
+        self.sel_panel = tk.Frame(self.status_bar, relief="sunken", bd=1, bg=THEME["bg_surface"])
+        self.sel_panel.pack(side="right", padx=2, pady=1)
+        self.lbl_stat_sel = tk.Label(self.sel_panel, text="Sel: 0", bg=THEME["bg_surface"], fg=THEME["text_main"], font=("Segoe UI", 8), padx=4)
+        self.lbl_stat_sel.pack(side="left")
+
         # Painel 2: Id da Peça (Id: 204)
         self.id_panel = tk.Frame(self.status_bar, relief="sunken", bd=1, bg=THEME["bg_surface"])
         self.id_panel.pack(side="right", padx=2, pady=1)
@@ -2410,13 +2416,9 @@ class LayoutEditorView(tk.Frame):
             self.on_sidebar_click(event)
             return
 
-        # 3. Atalho: CTRL + clique do mouse de ação para Zoom de +20%
+        # 3. Atalho: CTRL + clique = adicionar/remover peça da seleção (toggle)
         if bool(event.state & 0x0004):
-            self.is_dragging_piece = False
-            self._pre_drag_pieces = None
-            self.is_panning = False
-            self.zoom_in(event.x, event.y)
-            return "break"
+            return self.on_ctrl_canvas_click(event)
 
         # 4. Clique na mesa CAD (seleção e arrasto de peças / rubberband)
         wx, wy = self.screen_to_world(event.x, event.y)
@@ -3941,11 +3943,46 @@ class LayoutEditorView(tk.Frame):
             self.lbl_stat_pos.config(text="Visualização restaurada: Layout Completo (100%).")
 
     def on_ctrl_canvas_click(self, event):
-        """Atalho: CTRL + clique do mouse de ação aplica zoom de +20% centrado no cursor."""
+        """
+        Ctrl+clique na mesa CAD: ADICIONA a peça à seleção ou REMOVE se já estiver
+        selecionada (toggle), como o Shift+clique.
+
+        O zoom de +20% que antes ocupava este atalho continua disponível em
+        Ctrl+roda do mouse, nos botões de zoom e em Ctrl+Plus/Ctrl+Minus.
+        """
         self.is_dragging_piece = False
         self._pre_drag_pieces = None
+        self._drag_indices = []
         self.is_panning = False
-        self.zoom_in(event.x, event.y)
+        if getattr(self, "sim_running", False):
+            self.stop_simulation()
+        # Clique na barra lateral/divisória mantém o tratamento normal
+        if hasattr(self, "sidebar_div_x") and event.x > self.sidebar_div_x:
+            self.on_sidebar_click(event)
+            return "break"
+
+        wx, wy = self.screen_to_world(event.x, event.y)
+        hit_idx = -1
+        for idx in reversed(range(len(self.placed_pieces))):
+            p = self.placed_pieces[idx]
+            poly = transform_contour(p["contour"], p["x"], p["y"], p["rotation"])
+            if point_in_polygon(wx, wy, poly):
+                hit_idx = idx
+                break
+
+        if hit_idx < 0:
+            return "break"
+
+        sel = list(self.get_selected_indices() or [])
+        if hit_idx in sel:
+            sel.remove(hit_idx)
+        else:
+            sel.append(hit_idx)
+        self.selected_indices = sel
+        self.selected_index = sel[-1] if sel else None
+        self._drag_outline_state = None
+        self.redraw()
+        self.update_status()
         return "break"
 
     def _on_ctrl_press(self, event=None):
@@ -4563,6 +4600,16 @@ class LayoutEditorView(tk.Frame):
 
         if hasattr(self, "lbl_stat_yield"):
             self.lbl_stat_yield.config(text=f"{yd:.2f}%")
+
+        if hasattr(self, "lbl_stat_sel"):
+            try:
+                qtd_sel = len(self.get_selected_indices() or [])
+            except Exception:
+                qtd_sel = 0
+            self.lbl_stat_sel.config(
+                text=f"Sel: {qtd_sel}",
+                fg="#1e40af" if qtd_sel else THEME["text_main"],
+            )
 
         p_target = None
         if self.selected_index is not None and 0 <= self.selected_index < len(self.placed_pieces):

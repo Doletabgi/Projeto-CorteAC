@@ -481,26 +481,44 @@ class TestLayoutEditorShortcuts(unittest.TestCase):
                 self.y = y
                 self.state = state
 
+        # 4. CTRL + clique NÃO faz mais zoom: agora ADICIONA/REMOVE a peça da seleção.
+        #    (o zoom de +20% continua em Ctrl+roda, nos botões e em Ctrl+Plus/Ctrl+Minus)
+        from cad.geometry import point_in_polygon
+
+        zoom_antes = self.view.zoom_factor
         cur_x, cur_y = 300, 250
-        wx_before, wy_before = self.view.screen_to_world(cur_x, cur_y)
         res = self.view.on_ctrl_canvas_click(MockCtrlClickEvent(cur_x, cur_y))
         self.assertEqual(res, "break")
-        self.assertAlmostEqual(self.view.zoom_factor, 1.20, places=4)
+        self.assertAlmostEqual(self.view.zoom_factor, zoom_antes, places=4)
 
-        # O ponto do mundo CAD sob o cursor permanece perfeitamente ancorado sem desvio (drift = 0)
-        if self.view.canvas.winfo_width() > 10:
-            cur_x_after, cur_y_after = self.view.world_to_screen(wx_before, wy_before)
-            self.assertAlmostEqual(cur_x_after, cur_x, places=2)
-            self.assertAlmostEqual(cur_y_after, cur_y, places=2)
+        # Encontra uma peça cujo centro do bbox esteja realmente dentro do contorno
+        alvo = None
+        alvo_screen = None
+        for i, p in enumerate(self.view.placed_pieces):
+            poly = transform_contour(p["contour"], p["x"], p["y"], p.get("rotation", 0))
+            bb = polygon_bbox(poly)
+            cxw, cyw = (bb[0] + bb[2]) / 2.0, (bb[1] + bb[3]) / 2.0
+            if point_in_polygon(cxw, cyw, poly):
+                alvo = i
+                alvo_screen = self.view.world_to_screen(cxw, cyw)
+                break
+        self.assertIsNotNone(alvo, "Nenhuma peça clicável no layout de amostra")
 
-        # Segundo CTRL + clique consecutivo amplia mais 20% (1.44)
-        res2 = self.view.on_ctrl_canvas_click(MockCtrlClickEvent(cur_x, cur_y))
-        self.assertEqual(res2, "break")
-        self.assertAlmostEqual(self.view.zoom_factor, 1.44, places=4)
+        self.view.selected_indices = []
+        self.view.selected_index = None
+        self.view.on_ctrl_canvas_click(MockCtrlClickEvent(int(alvo_screen[0]), int(alvo_screen[1])))
+        self.assertIn(alvo, self.view.get_selected_indices())
+        self.assertIn("Sel: 1", self.view.lbl_stat_sel.cget("text"))
+
+        # Segundo Ctrl+clique na MESMA peça remove da seleção
+        self.view.on_ctrl_canvas_click(MockCtrlClickEvent(int(alvo_screen[0]), int(alvo_screen[1])))
+        self.assertNotIn(alvo, self.view.get_selected_indices())
+        self.assertIn("Sel: 0", self.view.lbl_stat_sel.cget("text"))
 
         # 5. Redução de zoom (zoom_out) reduz 20%
+        self.view.zoom_factor = 1.44
         self.view.zoom_out()
-        self.assertAlmostEqual(self.view.zoom_factor, 1.20, places=4)
+        self.assertAlmostEqual(self.view.zoom_factor, 1.2, places=4)
         self.view.zoom_out()
         self.assertAlmostEqual(self.view.zoom_factor, 1.0, places=4)
 

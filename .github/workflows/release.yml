@@ -9,7 +9,7 @@ on:
       tag_name:
         description: 'Tag de versão SemVer (ex: v1.0.0)'
         required: false
-        default: 'v1.5.7'
+        default: 'v1.5.8'
 
 permissions:
   contents: write
@@ -183,7 +183,14 @@ jobs:
 
             ---
 
-            ### 🛠️ Recursos Incluídos Nesta Versão (v1.5.7):
+            ### 🛠️ Recursos Incluídos Nesta Versão (v1.5.8):
+            - **Novo painel `Sel:` na barra de status (ao lado do `Id:`)**:
+              - Mostra em tempo real quantas peças estão selecionadas, independentemente da origem (clique, Shift, Ctrl, retângulo, Ctrl+A, miniatura do molde ou Bump).
+            - **Ctrl+clique agora soma/remove peças da seleção**:
+              - Um clique com Ctrl sobre a peça adiciona à seleção; clicar de novo na mesma peça remove (toggle), como o Shift+clique.
+              - O zoom de +20% que usava Ctrl+clique passou a ficar em **Ctrl+roda do mouse**, nos botões de zoom e em Ctrl+Plus/Ctrl+Minus.
+              - **382 testes automatizados** (381 passando, 1 skip, 0 falhas).
+            - **Novidades da v1.5.7 (mantidas)**: clique na miniatura seleciona todas as peças do molde na placa e contadores por placa.
             - **Novo: clicar na miniatura do molde seleciona todas as peças daquele número na placa**:
               - Antes o clique selecionava apenas a primeira peça do tamanho; agora seleciona todas as peças do molde presentes na placa atual.
               - Mensagem na barra de status informa quantas peças foram selecionadas (ou avisa que o molde não está nesta placa).

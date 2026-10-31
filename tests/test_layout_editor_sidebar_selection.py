@@ -148,6 +148,67 @@ class TestSidebarSelection(unittest.TestCase):
         self.assertIn("2", txt)
         self.assertIn("selecionadas", txt)
 
+    def _screen_center(self, idx):
+        from cad.geometry import polygon_bbox, transform_contour
+        p = self.view.placed_pieces[idx]
+        bb = polygon_bbox(transform_contour(p["contour"], p["x"], p["y"], p.get("rotation", 0)))
+        return self.view.world_to_screen((bb[0] + bb[2]) / 2.0, (bb[1] + bb[3]) / 2.0)
+
+    def test_ctrl_clique_adiciona_e_remove_pecas_da_selecao(self):
+        self._setup_targets(["41"])
+        self.view.placed_pieces = [
+            self._piece(0, "41", 100, 100),
+            self._piece(1, "41", 300, 100),
+            self._piece(2, "41", 500, 100),
+        ]
+        self.view.redraw()
+        self.view.selected_indices = []
+        self.view.update_status()
+        self.assertIn("Sel: 0", self.view.lbl_stat_sel.cget("text"))
+
+        # Ctrl+clique adiciona
+        x0, y0 = self._screen_center(0)
+        self.view.on_ctrl_canvas_click(DummyMouseEvent(int(x0), int(y0), state=4))
+        self.assertEqual(self.view.selected_indices, [0])
+        self.assertIn("Sel: 1", self.view.lbl_stat_sel.cget("text"))
+
+        x1, y1 = self._screen_center(1)
+        self.view.on_ctrl_canvas_click(DummyMouseEvent(int(x1), int(y1), state=4))
+        self.assertEqual(sorted(self.view.selected_indices), [0, 1])
+        self.assertIn("Sel: 2", self.view.lbl_stat_sel.cget("text"))
+
+        # Ctrl+clique na peça já selecionada remove
+        self.view.on_ctrl_canvas_click(DummyMouseEvent(int(x0), int(y0), state=4))
+        self.assertEqual(self.view.selected_indices, [1])
+        self.assertIn("Sel: 1", self.view.lbl_stat_sel.cget("text"))
+
+    def test_ctrl_clique_no_vazio_preserva_selecao(self):
+        self._setup_targets(["41"])
+        self.view.placed_pieces = [self._piece(0, "41", 100, 100)]
+        self.view.redraw()
+        self.view.selected_indices = [0]
+        self.view.update_status()
+        # ponto longe de qualquer peça (canto superior esquerdo da mesa)
+        self.view.on_ctrl_canvas_click(DummyMouseEvent(60, 40, state=4))
+        self.assertEqual(self.view.selected_indices, [0])
+
+    def test_painel_sel_reflete_selecao_por_miniatura(self):
+        self._setup_targets(["41", "42"])
+        self.view.placed_pieces = [
+            self._piece(0, "41", 100, 100),
+            self._piece(1, "41", 200, 100),
+            self._piece(2, "41", 300, 100),
+            self._piece(3, "42", 100, 300),
+        ]
+        self.view.redraw()
+        idx_41 = next(i for i, t in enumerate(self.view.sidebar_targets) if t["size"] == "41")
+        self._click_target(idx_41)
+        self.assertIn("Sel: 3", self.view.lbl_stat_sel.cget("text"))
+
+        idx_42 = next(i for i, t in enumerate(self.view.sidebar_targets) if t["size"] == "42")
+        self._click_target(idx_42)
+        self.assertIn("Sel: 1", self.view.lbl_stat_sel.cget("text"))
+
     def test_selecao_do_molde_permite_bump(self):
         self._setup_targets(["41", "42"])
         self.view.placed_pieces = [

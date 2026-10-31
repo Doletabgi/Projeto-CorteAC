@@ -4,7 +4,7 @@
 > **Regra de ouro:** o que está marcado `[CONFIRMADO]` veio do relatório, do código ou do usuário. O que está `[NÃO CONFIRMADO]` é suposição e não deve virar "fato" sem validação. O que está `[PREENCHER]` a IA deve completar lendo o código real.
 
 <!-- AUTO:header:start -->
-**Última sincronização com o código:** 2026-10-30 21:31 (HEAD ao gerar: `7d96cb5`; 110 arquivos Python, ~54685 linhas)
+**Última sincronização com o código:** 2026-10-30 21:58 (HEAD ao gerar: `af874be`; 110 arquivos Python, ~54811 linhas)
 <!-- AUTO:header:end -->
 **Versão deste documento:** 1
 
@@ -347,7 +347,7 @@ ui/units.py                                          # ui/units.py - Formataçã
 
 ### `tests/test_layout_editor_sidebar_selection.py`
 - `class DummyMouseEvent` (linha 21, 1 métodos)
-- `class TestSidebarSelection` (linha 29, 12 métodos)
+- `class TestSidebarSelection` (linha 29, 16 métodos)
 
 ### `tests/test_layout_editor_trim.py`
 - `class TestLayoutEditorTrim` (linha 16, 9 métodos)
@@ -2348,6 +2348,40 @@ Suíte total: **379 testes + 1 skip**.
 
 ---
 
+
+## 8.20. Contador de seleção e Ctrl+clique para somar/remover peças (v1.5.8) `[CONFIRMADO]`
+
+Pedido do operador: um quadro na barra de status, ao lado do `Id:`, mostrando **quantas peças
+estão selecionadas**, e liberar o **Ctrl+clique** para adicionar/remover peças da seleção.
+
+### 1. Novo painel `Sel:`
+
+- Novo painel `sel_panel` / `lbl_stat_sel` na barra de status, posicionado imediatamente ao lado
+  do painel `Id:` (`Sel: N`).
+- Atualizado em `update_status()`, portanto reflete qualquer origem de seleção:
+  clique simples, Shift+clique, Ctrl+clique, retângulo elástico, `Ctrl+A`, clique na miniatura
+  do molde e Bump. Fica em azul quando há peças selecionadas e na cor normal quando zerado.
+
+### 2. Ctrl+clique = adicionar/remover da seleção
+
+- `on_ctrl_canvas_click` (binding `<Control-Button-1>`) passou a fazer **toggle** da peça sob o
+  cursor: adiciona se não estiver selecionada, remove se estiver (mesma semântica do
+  Shift+clique). Clique no vazio preserva a seleção; clique na barra lateral continua
+  selecionando o molde.
+- **Mudança de atalho documentada**: o zoom de +20% que ocupava `Ctrl+clique` deixou de existir
+  nesse gesto. O zoom continua disponível em **Ctrl+roda do mouse**, nos botões de zoom
+  (`btn_zoom`, `btn_zoom_fit`) e em `Ctrl+Plus` / `Ctrl+Minus`.
+- O teste `test_zoom_20_percent_tool_and_ctrl_click` foi atualizado para o novo contrato
+  (Ctrl+clique não altera o zoom; botões/zoom_out continuam validados).
+
+### 3. Testes
+
+`tests/test_layout_editor_sidebar_selection.py` ganhou 3 testes:
+`test_ctrl_clique_adiciona_e_remove_pecas_da_selecao`, `test_ctrl_clique_no_vazio_preserva_selecao`
+e `test_painel_sel_reflete_selecao_por_miniatura`. Suíte: **382 testes + 1 skip**.
+
+---
+
 ## 9. Pendências e arquivos faltantes
 
 ### 9.1 Tarefas abertas
@@ -2477,6 +2511,7 @@ Local: `/home/dola/Documentos/clone do job/antigo/arquivos pos instalacao/Common
 | Sex, 30/10/2026 | 12:20 | Antigravity | Feedback Visual de Nesting com Barra de Progresso Indeterminada e Bloqueio de Botões (Fase 6.5): (1) Adição de barra de progresso indeterminada (`ttk.Progressbar`, modo `indeterminate`) e rótulo de status dinâmico na parte inferior de `SessionView` (`ui/session_view.py`), com inicialização oculta sem consumo de espaço; (2) Métodos `show_progress()` e `hide_progress()` em `SessionView` controlando ciclo de vida, animação contínua, status transitório (`Calculando...`) e desabilitação atômica de botões (`[Gerar]`, `[Em espera]`, `[Refazer]`) prevenindo cliques duplos e concorrência; (3) Integração assíncrona na thread `_worker` e `_poll_nest_worker` em `MainWindow` (`ui/main_window.py`) com medição de tempo CAM via `time.perf_counter()`, exibição de tempo na status bar (ex: `concluído em 87 ms`) e tratamento resiliente de erros/retornos antecipados; (4) Nova suíte com 5 testes unitários dedicados em `tests/test_session_view_progress.py` (340/341 testes passando em todo o projeto, 100% de sucesso). | `ui/session_view.py`, `ui/main_window.py`, `tests/test_session_view_progress.py`, `docs/PROJETO_ATOM_JOBMANAGER.md` |
 | Sex, 30/10/2026 | 12:47 | Antigravity | Exclusão Múltipla de Moldes na SessionView via Tecla Delete e Menu de Contexto: (1) Suporte a exclusão em lote na grade de moldes da sessão (`tree_shapes` em `ui/session_view.py`), coletando todos os itens selecionados e removendo a restrição legada a um único índice (`sel[0]`); (2) Diálogo de confirmação dinâmico com mensagem personalizada no singular para 1 molde e plural com contagem para múltiplos moldes ($N > 1$); (3) Preservação de seleção múltipla (feita via Shift ou Ctrl) ao clicar com botão direito do mouse para abrir o menu de contexto, adaptando o rótulo do comando para `🗑️ Remover N Moldes da Sessão`; (4) Reatribuição automática de sequência contínua 1..N sem buracos, sincronização atômica com banco de dados/memória e limpeza do pré-visualizador CAD; (5) Retorno de `"break"` nos eventos `<Delete>` e `<BackSpace>` impedindo propagação e priorização de foco da `SessionView` em `MainWindow.on_global_delete_key`; (6) Nova suíte com 5 testes unitários dedicados em `tests/test_session_shapes_multidelete.py` (345 testes aprovados em todo o projeto, 100% de sucesso). | `ui/session_view.py`, `ui/main_window.py`, `tests/test_session_shapes_multidelete.py`, `docs/PROJETO_ATOM_JOBMANAGER.md` |
 | Sex, 30/10/2026 | 15:15 | Antigravity | Otimização Multi-Sheet, Progresso Determinado e Teste de Estresse 10k (Fases 6.6 & 6.6.1): (1) Instrumentação de `nest_multi_sheet` (`cad/nesting_engine.py`) com parâmetro `progress_callback(sheet_idx, max_sheets)` a cada nova chapa; (2) Feedback visual determinado na `SessionView` (`ui/session_view.py`) via `update_progress_text` exibindo "Calculando chapa {current} de {total}..." com normalização 0 para 1 e despacho thread-safe via `self.after(0, ...)` em `MainWindow.on_auto_nest`; (3) Proteções no `NfpBackend` (`cad/nesting_backend.py`) com `MAX_TRIES_PER_PIECE` (30/50 em FastNest) forçando fechamento de chapa em caso de estouro e timeout de chapa (`SHEET_TIMEOUT_SEC = 5.0 s`); (4) Nova ferramenta `tools/bench_multi_sheet.py` comprovando aninhamento de 1600 peças (16 tamanhos) em apenas 0.242 s (26 chapas); (5) Teste de estresse extremo `tools/bench_10k_pieces.py` com 10.000 peças (20 tamanhos) concluído em 1.51 s (154 chapas), pico de RAM de 358 MB (< 2 GB) e zero MemoryError; (6) Nova suíte com 4 testes unitários em `tests/test_multisheet_progress.py` (349 testes aprovados em todo o projeto, 100% de sucesso). | `cad/nesting_engine.py`, `cad/nesting_backend.py`, `ui/session_view.py`, `ui/main_window.py`, `tools/bench_multi_sheet.py`, `tools/bench_10k_pieces.py`, `tests/test_multisheet_progress.py`, `docs/PROJETO_ATOM_JOBMANAGER.md` |
+| Sex, 30/10/2026 | 22:05 | DeepSeek | Contador de seleção e Ctrl+clique para somar/remover peças (v1.5.8): (1) novo painel `Sel: N` na barra de status, ao lado do `Id:`, atualizado por `update_status()` e refletindo qualquer origem de seleção (clique, Shift, Ctrl, retângulo, Ctrl+A, miniatura do molde, Bump); (2) `Ctrl+clique` (`<Control-Button-1>`) deixou de fazer zoom e passou a ADICIONAR a peça à seleção ou REMOVER se já selecionada (toggle, como Shift+clique), preservando a seleção em clique no vazio; o zoom de +20% permanece em Ctrl+roda, botões de zoom e Ctrl+Plus/Minus; (3) teste `test_zoom_20_percent_tool_and_ctrl_click` atualizado e 3 testes novos em `test_layout_editor_sidebar_selection.py`. 382 testes + 1 skip. | `ui/layout_editor_view.py`, `tests/test_layout_editor_shortcuts.py`, `tests/test_layout_editor_sidebar_selection.py`, `docs/PROJETO_ATOM_JOBMANAGER.md`, `config.py`, `.github/workflows/release.yml` |
 | Sex, 30/10/2026 | 21:45 | DeepSeek | Seleção de todas as peças do molde pela barra lateral (v1.5.7): clicar na miniatura do molde no Layout Editor agora seleciona TODAS as peças daquele número na placa atual (antes selecionava só a primeira encontrada). Nova regra única `_piece_matches_target()` compartilhada pelos contadores e pela seleção (evita divergência entre o número exibido e as peças selecionadas); mensagem de status informa a quantidade (`N peças do molde X selecionadas nesta placa`) e limpa a seleção quando o molde não está na placa. Seleção múltipla integra com Bump (setas/mouse), F1-F4, Delete e arrasto em grupo. Novo `tests/test_layout_editor_sidebar_selection.py` (5 testes). 379 testes + 1 skip. | `ui/layout_editor_view.py`, `tests/test_layout_editor_sidebar_selection.py`, `docs/PROJETO_ATOM_JOBMANAGER.md`, `config.py`, `.github/workflows/release.yml` |
 | Sex, 30/10/2026 | 21:20 | DeepSeek | Correção dos contadores da barra lateral do Layout Editor (v1.5.6): (1) em sessões multi-placa o contador somava TODAS as placas (`total_session_pieces/total_pieces_demanded`), exibindo `50/50` em toda placa e escondendo o progresso real; agora mostra as peças DESTA placa sobre o total pedido (ex.: `18/50`); (2) a barra lateral (miniaturas + contadores) é desenhada dentro do bloco de fundo cacheado e não era redesenhada ao trocar de placa — `switch_to_layout()` passou a invalidar `_last_bg_sig`; (3) teste `test_layout_editor_sidebar_counters` atualizado (placa cheia `6/6`, placa vazia `0/6`). 374 testes + 1 skip. | `ui/layout_editor_view.py`, `tests/test_multisheet_nesting.py`, `docs/PROJETO_ATOM_JOBMANAGER.md`, `config.py`, `.github/workflows/release.yml` |
 | Sex, 30/10/2026 | 20:05 | DeepSeek | Auditoria do Layout Editor e Bump Magnético Interativo com Mouse (v1.5.5): (1) corrigido rendimento FALSO na barra de status (`if total_p >= 200 and yd < 80: yd = 83.02` e valores inventados quando vazio) — agora exibe o rendimento real; (2) setas passam a executar BUMP magnético (antes nudge fixo de 5 mm, divergente do original) e `Ctrl+Setas` faz ajuste fino de 0,5 mm; (3) novo `bump_selection_vector(dx, dy)` como núcleo único (setas + mouse): direção livre, primeiro contato por varredura + busca binária, gap da sessão, SpatialGrid das peças não selecionadas, validação final, undo atômico e seleção múltipla em bloco; (4) bump interativo com mouse com os 3 gatilhos do Layout.exe — botão do meio com seleção (sem seleção continua pan), duplo-clique + arrasto (<300 ms) e Ctrl+Shift + arrasto — com linha elástica em item de canvas, cursor `circle` (equivalente ao ID 149), `Esc` para cancelar e limiar de 3 px; (5) `LAYOUT_EDITOR_RE.md` atualizado (Bump Interativo: AUSENTE → IMPLEMENTADO; setas: DIVERGENTE → IGUAL) e checklist 2.1-2.3 marcado; (6) novo `tests/test_layout_editor_bump.py` com 13 testes (horizontal, vertical, 45°, 30°, 3 gatilhos, arrasto curto, Esc, linha elástica, côncavo na diagonal, bloco, já encostada, undo, pan). Desempenho do bump: 4-5 ms com 300 peças. Suíte: 374 testes + 1 skip. | `ui/layout_editor_view.py`, `tests/test_layout_editor_bump.py`, `docs/fases/LAYOUT_EDITOR_RE.md`, `docs/PROJETO_ATOM_JOBMANAGER.md`, `config.py`, `.github/workflows/release.yml` |
@@ -2496,6 +2531,7 @@ Local: `/home/dola/Documentos/clone do job/antigo/arquivos pos instalacao/Common
 <!-- AUTO:gitlog:start -->
 | Commit | Data | Autor | Mensagem |
 |---|---|---|---|
+| `af874be` | 2026-10-30 | Doletabgi | feat(ui): clique na miniatura seleciona todas as pecas do molde na placa (v1.5.7) |
 | `7d96cb5` | 2026-10-30 | Doletabgi | fix(ui): contadores da barra lateral por placa no Layout Editor (v1.5.6) |
 | `840db6a` | 2026-10-30 | Doletabgi | feat(ui): bump magnetico interativo com mouse e auditoria do editor (v1.5.5) |
 | `c78190d` | 2026-10-30 | Doletabgi | fix(cad): cache de transformacao validava identidade reciclada (v1.5.4) |
@@ -2510,7 +2546,6 @@ Local: `/home/dola/Documentos/clone do job/antigo/arquivos pos instalacao/Common
 | `5b1c06d` | 2026-10-30 | Doletabgi | fix(ui): permitir exclusao multipla de moldes na SessionView via tecla Delete e menu |
 | `5612822` | 2026-10-30 | Doletabgi | chore(release): lancamento da versao v1.4.0 |
 | `85a2392` | 2026-10-30 | Doletabgi | feat(ui): implementar feedback visual de nesting com barra de progresso indeterminada e bloqueio de botoes (Fase 6.5) |
-| `093bb38` | 2026-10-30 | Doletabgi | docs: definir finalidade do PROJETO_ATOM_JOBMANAGER como injecao de contexto universal para IA |
 <!-- AUTO:gitlog:end -->
 
 ---
