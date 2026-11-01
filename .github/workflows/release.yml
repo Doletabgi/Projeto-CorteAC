@@ -9,7 +9,7 @@ on:
       tag_name:
         description: 'Tag de versão SemVer (ex: v1.0.0)'
         required: false
-        default: 'v1.6.0'
+        default: 'v1.6.1'
 
 permissions:
   contents: write
@@ -183,7 +183,18 @@ jobs:
 
             ---
 
-            ### 🛠️ Recursos Incluídos Nesta Versão (v1.6.0):
+            ### 🛠️ Recursos Incluídos Nesta Versão (v1.6.1):
+            - **Desacoplamento entre Zoom e Seleção de Peças no Canvas CAD (Layout Editor)**:
+              - `Ctrl + Clique`: Exclusivo para Zoom In (+20%) centrado no cursor (em peças ou no vazio), compatível com o cursor mira `crosshair`.
+              - `Shift + Clique`: Atalho dedicado para alternar (adicionar/remover) peças da seleção múltipla (`selected_indices` e `Sel: N`).
+              - `Clique simples`: Seleciona peça única e desmarca as outras (ou desmarca tudo se clicado no vazio).
+              - `Arrasto no vazio (Rubberband)`: Seleção elástica em lote.
+              - Correção na sincronização de escala em `zoom_at` (`redraw` executado mesmo com `cw <= 10`).
+            - **Refile Automático e Batch Autonest**:
+              - Checkbox 'Refile automático' nas sessões de corte para aparar sobras laterais e verticais com margem configurável.
+              - Diálogo de aninhamento automático em lote (*Batch Autonest*).
+
+            ### 📦 Recursos da Versão Anterior (v1.6.0 mantidos):
             - **Correção da Exclusão de Artigo e Integridade de Banco de Dados**:
               - Resolução definitiva da restrição `NOT NULL constraint failed: sessions.order_id` ao clicar em `Excluir Artigo`.
               - Migração transparente e automática no `init_db()` (SQLite e MySQL) removendo constraints `NOT NULL` de `order_id`, `material_id` e `article_id` sem perda de dados.

@@ -481,15 +481,19 @@ class TestLayoutEditorShortcuts(unittest.TestCase):
                 self.y = y
                 self.state = state
 
-        # 4. CTRL + clique NÃO faz mais zoom: agora ADICIONA/REMOVE a peça da seleção.
-        #    (o zoom de +20% continua em Ctrl+roda, nos botões e em Ctrl+Plus/Ctrl+Minus)
-        from cad.geometry import point_in_polygon
-
+        # CTRL + clique no canvas CAD aplica zoom de +20% centrado no cursor (em vazio ou peça)
         zoom_antes = self.view.zoom_factor
-        cur_x, cur_y = 300, 250
+        cur_x, cur_y = 100, 100
         res = self.view.on_ctrl_canvas_click(MockCtrlClickEvent(cur_x, cur_y))
         self.assertEqual(res, "break")
-        self.assertAlmostEqual(self.view.zoom_factor, zoom_antes, places=4)
+        self.assertAlmostEqual(self.view.zoom_factor, zoom_antes * 1.20, places=4)
+
+        # Clique na barra lateral/catálogo com Ctrl não altera zoom da mesa
+        zoom_sidebar_test = self.view.zoom_factor
+        self.view.on_ctrl_canvas_click(MockCtrlClickEvent(300, 250))
+        self.assertAlmostEqual(self.view.zoom_factor, zoom_sidebar_test, places=4)
+
+        from cad.geometry import point_in_polygon
 
         # Encontra uma peça cujo centro do bbox esteja realmente dentro do contorno
         alvo = None
@@ -504,14 +508,24 @@ class TestLayoutEditorShortcuts(unittest.TestCase):
                 break
         self.assertIsNotNone(alvo, "Nenhuma peça clicável no layout de amostra")
 
+        # Ctrl+clique sobre a peça NÃO altera a seleção de peças: aplica zoom de +20%
         self.view.selected_indices = []
         self.view.selected_index = None
-        self.view.on_ctrl_canvas_click(MockCtrlClickEvent(int(alvo_screen[0]), int(alvo_screen[1])))
+        zoom_pre = self.view.zoom_factor
+        res = self.view.on_ctrl_canvas_click(MockCtrlClickEvent(int(alvo_screen[0]), int(alvo_screen[1])))
+        self.assertEqual(res, "break")
+        self.assertAlmostEqual(self.view.zoom_factor, zoom_pre * 1.20, places=4)
+        self.assertEqual(self.view.get_selected_indices(), [])
+
+        # Para seleção múltipla, utiliza-se o atalho canônico Shift+clique
+        alvo_screen = self.view.world_to_screen(cxw, cyw)
+        dummy_shift_click = DummyMouseEvent(x=int(alvo_screen[0]), y=int(alvo_screen[1]), state=0x0001)
+        self.view.on_canvas_click(dummy_shift_click)
         self.assertIn(alvo, self.view.get_selected_indices())
         self.assertIn("Sel: 1", self.view.lbl_stat_sel.cget("text"))
 
-        # Segundo Ctrl+clique na MESMA peça remove da seleção
-        self.view.on_ctrl_canvas_click(MockCtrlClickEvent(int(alvo_screen[0]), int(alvo_screen[1])))
+        # Segundo Shift+clique na MESMA peça remove da seleção
+        self.view.on_canvas_click(dummy_shift_click)
         self.assertNotIn(alvo, self.view.get_selected_indices())
         self.assertIn("Sel: 0", self.view.lbl_stat_sel.cget("text"))
 

@@ -154,7 +154,7 @@ class TestSidebarSelection(unittest.TestCase):
         bb = polygon_bbox(transform_contour(p["contour"], p["x"], p["y"], p.get("rotation", 0)))
         return self.view.world_to_screen((bb[0] + bb[2]) / 2.0, (bb[1] + bb[3]) / 2.0)
 
-    def test_ctrl_clique_adiciona_e_remove_pecas_da_selecao(self):
+    def test_shift_clique_adiciona_e_remove_pecas_da_selecao(self):
         self._setup_targets(["41"])
         self.view.placed_pieces = [
             self._piece(0, "41", 100, 100),
@@ -166,31 +166,33 @@ class TestSidebarSelection(unittest.TestCase):
         self.view.update_status()
         self.assertIn("Sel: 0", self.view.lbl_stat_sel.cget("text"))
 
-        # Ctrl+clique adiciona
+        # Shift+clique adiciona
         x0, y0 = self._screen_center(0)
-        self.view.on_ctrl_canvas_click(DummyMouseEvent(int(x0), int(y0), state=4))
+        self.view.on_canvas_click(DummyMouseEvent(int(x0), int(y0), state=1))
         self.assertEqual(self.view.selected_indices, [0])
         self.assertIn("Sel: 1", self.view.lbl_stat_sel.cget("text"))
 
         x1, y1 = self._screen_center(1)
-        self.view.on_ctrl_canvas_click(DummyMouseEvent(int(x1), int(y1), state=4))
+        self.view.on_canvas_click(DummyMouseEvent(int(x1), int(y1), state=1))
         self.assertEqual(sorted(self.view.selected_indices), [0, 1])
         self.assertIn("Sel: 2", self.view.lbl_stat_sel.cget("text"))
 
-        # Ctrl+clique na peça já selecionada remove
-        self.view.on_ctrl_canvas_click(DummyMouseEvent(int(x0), int(y0), state=4))
+        # Shift+clique na peça já selecionada remove
+        self.view.on_canvas_click(DummyMouseEvent(int(x0), int(y0), state=1))
         self.assertEqual(self.view.selected_indices, [1])
         self.assertIn("Sel: 1", self.view.lbl_stat_sel.cget("text"))
 
-    def test_ctrl_clique_no_vazio_preserva_selecao(self):
+    def test_ctrl_clique_faz_zoom_e_preserva_selecao(self):
         self._setup_targets(["41"])
         self.view.placed_pieces = [self._piece(0, "41", 100, 100)]
         self.view.redraw()
         self.view.selected_indices = [0]
         self.view.update_status()
-        # ponto longe de qualquer peça (canto superior esquerdo da mesa)
+        zoom_antes = self.view.zoom_factor
+        # ponto na mesa CAD aplica zoom in e preserva seleção
         self.view.on_ctrl_canvas_click(DummyMouseEvent(60, 40, state=4))
         self.assertEqual(self.view.selected_indices, [0])
+        self.assertAlmostEqual(self.view.zoom_factor, zoom_antes * 1.20, places=4)
 
     def test_painel_sel_reflete_selecao_por_miniatura(self):
         self._setup_targets(["41", "42"])

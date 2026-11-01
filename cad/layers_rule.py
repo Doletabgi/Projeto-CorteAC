@@ -15,7 +15,11 @@ __all__ = [
     "parse_session_params",
     "encode_session_params",
     "is_separar_sobras_enabled",
+    "is_refile_auto_enabled",
+    "trim_layout_dict",
+    "calculate_layout_trim_bounds",
 ]
+
 
 
 def resolve_layout_layers(
@@ -349,4 +353,37 @@ def is_separar_sobras_enabled(
 
     # Padrão: LIGADO para 4 camadas
     return True
+
+
+def is_refile_auto_enabled(session_or_params: Any = None) -> bool:
+    """Verifica se o refile automático de layout pós-nesting está habilitado nos parâmetros.
+
+    Regras:
+    - Lê a opção 'refile_auto' dos parâmetros da sessão ('params').
+    - Retorna True se o valor for '1', 'true', 'yes', 'on', 'sim'.
+    - Padrão: False (desligado).
+    """
+    if session_or_params is None:
+        return False
+
+    raw_params = None
+    if isinstance(session_or_params, dict):
+        raw_params = session_or_params.get("params")
+    elif isinstance(session_or_params, str):
+        raw_params = session_or_params
+
+    if not raw_params:
+        return False
+
+    _, opts = parse_session_params(raw_params)
+    val = opts.get("refile_auto")
+    if val is not None:
+        return str(val).strip().lower() in ("1", "true", "yes", "on", "sim")
+
+    return False
+
+
+# Reexportação utilitária de refile para conveniência
+from cad.trim_engine import calculate_layout_trim_bounds, trim_layout_dict
+
 

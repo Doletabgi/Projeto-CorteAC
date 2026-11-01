@@ -17,6 +17,7 @@ from pathlib import Path
 
 
 import copy
+import re
 from config import THEME, APP_NAME, APP_VERSION, ATOM_MACHINE, EXPORTS_DIR
 from database import DatabaseManager
 from cad.nesting_engine import auto_nest_pieces, calculate_yield, calculate_atom_cutting_time, nest_multi_sheet, piece_matches_shape, sort_shapes_by_sequence
@@ -31,7 +32,10 @@ from cad.layers_rule import (
     is_layers_defined,
     pecas_na_mesa,
     is_separar_sobras_enabled,
+    is_refile_auto_enabled,
+    trim_layout_dict,
 )
+
 from cad.layers_split import separar_sobras_camadas
 from ui.cad_canvas import CADCanvas
 from ui.order_view import OrderView
@@ -45,6 +49,7 @@ from ui.params_dialog import NestingParamsDialog
 from ui.dieproc_dialog import DieProcDialog
 from ui.sort_utils import natural_sort_key, size_sort_key, clean_session_display_name
 from ui.tooltip import ToolTip
+from ui.batch_nest_dialog import BatchAutoNestDialog, BatchProgressDialog
 
 def get_assets_dir():
     if getattr(sys, 'frozen', False):
@@ -120,6 +125,11 @@ class MainWindow(tk.Tk):
         self.app_settings = self.db.get_all_settings()
         self._window_layout_mode = "maximized" if self.app_settings.get("start_maximized", "1") == "1" else "windowed"
         self.bind_all("<F5>", lambda e: self.on_refresh_f5())
+
+        # Seleção e cálculo em lote (Batch Auto-Nest)
+        self.batch_checked_sessions = set()
+        self._batch_in_progress = False
+        self._cancel_batch = False
 
         # Estilos TTK
         self.setup_styles()
@@ -509,8 +519,34 @@ class MainWindow(tk.Tk):
         tree_frame = tk.Frame(v_paned, bg=THEME["bg_surface"], relief="sunken", bd=2)
         v_paned.add(tree_frame, minsize=170)
 
+        # Barra compacta de seleção em massa (Modo Produção/Jobs)
+        self.batch_bar = tk.Frame(tree_frame, bg=THEME["bg_surface"], relief="groove", bd=1, padx=2, pady=2)
+        self.batch_bar.pack(fill="x", side="top")
+
+        self.lbl_batch_status = tk.Label(
+            self.batch_bar, text="☐ 0 marcadas", font=("Segoe UI", 8),
+            bg=THEME["bg_surface"], fg=THEME["text_muted"]
+        )
+        self.lbl_batch_status.pack(side="left", padx=4)
+
+        self.btn_batch_none = tk.Button(
+            self.batch_bar, text="Desmarcar", font=("Segoe UI", 7),
+            bg=THEME["bg_surface"], fg=THEME["text_main"], relief="raised", bd=1,
+            padx=4, pady=0, command=self.deselect_all_batch_sessions
+        )
+        self.btn_batch_none.pack(side="right", padx=1)
+
+        self.btn_batch_all = tk.Button(
+            self.batch_bar, text="Marcar Todas", font=("Segoe UI", 7),
+            bg=THEME["bg_surface"], fg=THEME["text_main"], relief="raised", bd=1,
+            padx=4, pady=0, command=self.select_all_batch_sessions
+        )
+        self.btn_batch_all.pack(side="right", padx=1)
+
         self.tree_main = ttk.Treeview(tree_frame, show="tree", selectmode="extended")
         self.tree_main.pack(fill="both", expand=True)
+        self.tree_main.bind("<ButtonPress-1>", self.on_tree_click_checkbox, add="+")
+        self.tree_main.bind("<space>", self.on_tree_space_toggle)
         self.tree_main.bind("<<TreeviewSelect>>", self.on_tree_selected)
         self.tree_main.bind("<Double-1>", self.on_tree_double_click)
         self.tree_main.bind("<Return>", self.on_tree_key_return)
@@ -2286,7 +2322,11 @@ class MainWindow(tk.Tk):
                 params=self.current_session.get("params")
             )
             if split_msg:
+                if is_refile_auto_enabled(self.current_session.get("params")):
+                    for ly in new_lays:
+                        trim_layout_dict(ly, gap_mm=1.0)
                 self.current_session["layouts"] = new_lays
+
                 if hasattr(self, "layout_editor_view") and self.layout_editor_view:
                     self.layout_editor_view.set_session_layouts(new_lays)
                 if self.db and self.current_session.get("id"):
@@ -2410,6 +2450,22 @@ class MainWindow(tk.Tk):
             # MODO 1: Produção (Prints 1 e media_1791842155312.png)
             # -------------------------------------------------------------
             self.btn_mode_jobs.config(relief="sunken", bg=THEME["bg_hover"])
+            has_batch = hasattr(self, "batch_bar")
+            if has_batch:
+                try:
+                    if not self.batch_bar.winfo_ismapped():
+                        if hasattr(self, "tree_main") and self.tree_main.winfo_manager() == "pack":
+                            self.batch_bar.pack(fill="x", side="top", before=self.tree_main)
+                        else:
+                            self.batch_bar.pack(fill="x", side="top")
+                except Exception:
+                    pass
+
+                # Mantém apenas sessões válidas no conjunto de marcadas
+                if not hasattr(self, "batch_checked_sessions") or self.batch_checked_sessions is None:
+                    self.batch_checked_sessions = set()
+                valid_ids = {s["id"] for s in self.sessions if isinstance(s, dict) and "id" in s}
+                self.batch_checked_sessions = {s_id for s_id in self.batch_checked_sessions if s_id in valid_ids}
 
             # Configura colunas do Grid: SessId | Produção | Nome sessão | Status
             self.grid_lower["columns"] = ("sess_id", "prod", "nome", "status")
@@ -2451,7 +2507,8 @@ class MainWindow(tk.Tk):
                 for part in parts:
                     curr_path = f"{curr_path}/{part}" if curr_path else part
                     if curr_path not in folder_nodes:
-                        fn_id = self.tree_main.insert(curr_parent, "end", text=f" {part}", open=True, values=("job_folder", curr_path), **img_folder)
+                        txt_f = f" ☐ {part}" if has_batch else f" {part}"
+                        fn_id = self.tree_main.insert(curr_parent, "end", text=txt_f, open=True, values=("job_folder", curr_path), **img_folder)
                         folder_nodes[curr_path] = fn_id
                     curr_parent = folder_nodes[curr_path]
                 return curr_parent
@@ -2478,11 +2535,15 @@ class MainWindow(tk.Tk):
                 # Assegura que o nó da pasta (e eventuais ancestrais) existe
                 parent_node = get_or_create_job_node(s_job)
 
-                # Formatação do rótulo na árvore
+                # Formatação do rótulo na árvore com caixa de seleção
                 disp_name = clean_session_display_name(s_name)
                 if not disp_name or disp_name == f"(#{s_id})":
                     disp_name = f"Sessão #{s_id}"
-                node_text = f" {disp_name}"
+                if has_batch:
+                    box = "☑" if s_id in getattr(self, "batch_checked_sessions", set()) else "☐"
+                    node_text = f" {box} {disp_name}"
+                else:
+                    node_text = f" {disp_name}"
 
                 item_id = self.tree_main.insert(parent_node, "end", text=node_text, values=("session", s_id), **img_sess)
                 if self.current_session and self.current_session.get("id") == s_id:
@@ -2490,6 +2551,10 @@ class MainWindow(tk.Tk):
 
                 # Alimenta grid inferior: SessId preserva o ID original e Name exibe o nome limpo
                 self.grid_lower.insert("", "end", values=(str(s_id), s_job, disp_name, s_status))
+
+            # Atualiza visuais dos checkboxes (pastas tri-state)
+            if has_batch and hasattr(self, "update_batch_tree_visuals"):
+                self.update_batch_tree_visuals()
 
             # Seleciona o item da sessão ativa ou primeira pasta ou raiz
             if selected_sess_item:
@@ -2500,6 +2565,8 @@ class MainWindow(tk.Tk):
                 self.tree_main.selection_set(root)
 
         elif mode == "shapes":
+            if hasattr(self, "batch_bar"):
+                self.batch_bar.pack_forget()
             # -------------------------------------------------------------
             # MODO 2: Moldes (Print 2 com suporte completo a Pastas)
             # -------------------------------------------------------------
@@ -2559,6 +2626,8 @@ class MainWindow(tk.Tk):
             self.tree_main.selection_set(root)
 
         elif mode == "materials":
+            if hasattr(self, "batch_bar"):
+                self.batch_bar.pack_forget()
             # -------------------------------------------------------------
             # MODO 3: Estoque de material (Print 3)
             # -------------------------------------------------------------
@@ -2871,6 +2940,9 @@ class MainWindow(tk.Tk):
                     disp_name = folder_path.split("/")[-1]
                     self.tree_menu.add_command(label="Abrir", command=self.on_tree_menu_open)
                     self.tree_menu.add_separator()
+                    self.tree_menu.add_command(label="☑ Marcar todas da pasta", command=lambda f=folder_path: self.set_folder_batch_selection(f, True))
+                    self.tree_menu.add_command(label="☐ Desmarcar todas da pasta", command=lambda f=folder_path: self.set_folder_batch_selection(f, False))
+                    self.tree_menu.add_separator()
                     self.tree_menu.add_command(label=f"📁 Criar Subpasta em '{disp_name}'...", command=lambda f=folder_path: self.on_create_job_subfolder(f))
                     self.tree_menu.add_command(label="📁 Criar Produção na Raiz...", command=lambda: self.on_create_production(parent_folder=""))
                     self.tree_menu.add_command(label=f"Criar sessão em '{disp_name}'", command=lambda f=folder_path: self.on_new_session(target_job=f))
@@ -2889,7 +2961,11 @@ class MainWindow(tk.Tk):
 
                 elif node_type == "session":
                     sess_id = int(vals[1])
+                    is_chk = sess_id in self.batch_checked_sessions
+                    lbl_chk = "☐ Desmarcar esta sessão" if is_chk else "☑ Marcar esta sessão"
                     self.tree_menu.add_command(label="Abrir", command=self.on_tree_menu_open)
+                    self.tree_menu.add_separator()
+                    self.tree_menu.add_command(label=lbl_chk, command=lambda s=sess_id: self.toggle_session_batch_selection(s))
                     self.tree_menu.add_separator()
                     self.tree_menu.add_command(label="Criar sessão", command=self.on_new_session)
                     self.tree_menu.add_command(label="Criar pedido", command=self.on_create_order)
@@ -2918,6 +2994,9 @@ class MainWindow(tk.Tk):
 
                 else:  # root_production ou outros
                     self.tree_menu.add_command(label="Abrir", state="disabled")
+                    self.tree_menu.add_separator()
+                    self.tree_menu.add_command(label="☑ Marcar todas as sessões", command=self.select_all_batch_sessions)
+                    self.tree_menu.add_command(label="☐ Desmarcar todas as sessões", command=self.deselect_all_batch_sessions)
                     self.tree_menu.add_separator()
                     self.tree_menu.add_command(label="📁 Criar Produção...", command=lambda: self.on_create_production(parent_folder=""))
                     self.tree_menu.add_command(label="📁 Criar Subpasta de Produção...", command=self.on_create_job_subfolder_menu_action)
@@ -4648,16 +4727,552 @@ class MainWindow(tk.Tk):
                 except (ValueError, TypeError):
                     pass
             self.show_session_window()
-        elif self.current_mode == "jobs":
-            vals = self.grid_lower.item(sel[0], "values")
-            if vals and len(vals) >= 1:
+
+    # -------------------------------------------------------------------------
+    # Métodos de Seleção em Massa de Sessões e Pastas (Batch Checkboxes)
+    # -------------------------------------------------------------------------
+    def on_tree_click_checkbox(self, event):
+        """Alterna a caixa de seleção ao clicar no ícone ou caractere de caixa [☐]/[☑]."""
+        if self.current_mode != "jobs":
+            return None
+
+        iid = self.tree_main.identify_row(event.y)
+        if not iid:
+            return None
+
+        elem = self.tree_main.identify_element(event.x, event.y)
+        if elem == "Treeitem.indicator":
+            return None
+
+        bbox = self.tree_main.bbox(iid, "#0")
+        if not bbox:
+            return None
+
+        bx, by, bw, bh = bbox
+        offset = event.x - bx
+
+        # A área do ícone + caractere de caixa de seleção fica entre 0 e 52 pixels
+        if 0 <= offset <= 52:
+            self.toggle_batch_node(iid)
+            return "break"
+        return None
+
+    def on_tree_space_toggle(self, event=None):
+        """Alterna as caixas de seleção dos nós selecionados ao teclar Espaço."""
+        if self.current_mode != "jobs":
+            return None
+        sel = self.tree_main.selection()
+        if not sel:
+            return None
+        for item_id in sel:
+            self.toggle_batch_node(item_id)
+        return "break"
+
+    def _get_tree_session_ids(self, item_id):
+        """Retorna recursivamente todos os IDs de sessão sob o nó da árvore."""
+        sids = []
+        vals = self.tree_main.item(item_id, "values")
+        if vals and len(vals) >= 2 and vals[0] == "session":
+            try:
+                sids.append(int(vals[1]))
+            except Exception:
+                pass
+        for child in self.tree_main.get_children(item_id):
+            sids.extend(self._get_tree_session_ids(child))
+        return sids
+
+    def _find_tree_node_by_value(self, item_id, target_type, target_val):
+        """Localiza recursivamente nós com o tipo e valor especificados."""
+        matched = []
+        vals = self.tree_main.item(item_id, "values")
+        if vals and len(vals) >= 2 and vals[0] == target_type and str(vals[1]).strip().strip("/") == str(target_val).strip().strip("/"):
+            matched.append(item_id)
+        for child in self.tree_main.get_children(item_id):
+            matched.extend(self._find_tree_node_by_value(child, target_type, target_val))
+        return matched
+
+    def toggle_batch_node(self, item_id):
+        """Alterna a seleção de uma sessão, pasta ou raiz."""
+        if self.current_mode != "jobs":
+            return
+        vals = self.tree_main.item(item_id, "values")
+        if not vals:
+            return
+        node_type = vals[0]
+        if node_type == "session":
+            try:
+                sess_id = int(vals[1])
+                if sess_id in self.batch_checked_sessions:
+                    self.batch_checked_sessions.remove(sess_id)
+                else:
+                    self.batch_checked_sessions.add(sess_id)
+            except Exception:
+                pass
+        elif node_type == "job_folder":
+            child_sids = self._get_tree_session_ids(item_id)
+            if not child_sids:
+                return
+            all_checked = all(sid in self.batch_checked_sessions for sid in child_sids)
+            if all_checked:
+                for sid in child_sids:
+                    self.batch_checked_sessions.discard(sid)
+            else:
+                for sid in child_sids:
+                    self.batch_checked_sessions.add(sid)
+        elif node_type == "root_production":
+            all_sids = [s["id"] for s in self.sessions if isinstance(s, dict) and "id" in s]
+            if not all_sids:
+                return
+            all_checked = all(sid in self.batch_checked_sessions for sid in all_sids)
+            if all_checked:
+                self.batch_checked_sessions.clear()
+            else:
+                self.batch_checked_sessions = set(all_sids)
+
+        self.update_batch_tree_visuals()
+
+    def toggle_session_batch_selection(self, sess_id):
+        """Alterna a marcação de uma sessão individual."""
+        if sess_id in self.batch_checked_sessions:
+            self.batch_checked_sessions.remove(sess_id)
+        else:
+            self.batch_checked_sessions.add(sess_id)
+        self.update_batch_tree_visuals()
+
+    def set_folder_batch_selection(self, folder_path, is_checked):
+        """Marca ou desmarca todas as sessões sob uma pasta de produção."""
+        folder_clean = (folder_path or "").strip().strip("/")
+        matched_items = []
+        for root_item in self.tree_main.get_children(""):
+            matched_items.extend(self._find_tree_node_by_value(root_item, "job_folder", folder_clean))
+
+        affected_sids = set()
+        for nid in matched_items:
+            affected_sids.update(self._get_tree_session_ids(nid))
+
+        for s in self.sessions:
+            s_job = (s.get("job") or "").strip().strip("/")
+            if s_job == folder_clean or s_job.startswith(folder_clean + "/"):
+                if "id" in s:
+                    affected_sids.add(s["id"])
+
+        for sid in affected_sids:
+            if is_checked:
+                self.batch_checked_sessions.add(sid)
+            else:
+                self.batch_checked_sessions.discard(sid)
+
+        self.update_batch_tree_visuals()
+
+    def select_all_batch_sessions(self):
+        """Marca todas as sessões da árvore de produção."""
+        for s in self.sessions:
+            if isinstance(s, dict) and "id" in s:
+                self.batch_checked_sessions.add(s["id"])
+        self.update_batch_tree_visuals()
+
+    def deselect_all_batch_sessions(self):
+        """Desmarca todas as sessões."""
+        self.batch_checked_sessions.clear()
+        self.update_batch_tree_visuals()
+
+    def update_batch_tree_visuals(self):
+        """Atualiza os caracteres de caixa de seleção (☐, ▣, ☑) e contadores."""
+        if self.current_mode != "jobs":
+            return
+
+        def update_node(item_id):
+            vals = self.tree_main.item(item_id, "values")
+            if not vals:
+                return
+            ntype = vals[0]
+            txt = self.tree_main.item(item_id, "text")
+
+            # Atualiza filhos primeiro recursivamente
+            for c in self.tree_main.get_children(item_id):
+                update_node(c)
+
+            if ntype == "session":
                 try:
-                    sess_id = int(vals[0])
-                    self.switch_to_session(sess_id)
+                    s_id = int(vals[1])
+                except Exception:
                     return
-                except (ValueError, TypeError):
-                    pass
-            self.show_session_window()
+                box = "☑" if s_id in self.batch_checked_sessions else "☐"
+                clean_txt = re.sub(r"^\s*[☐▣☑]\s*", "", txt)
+                self.tree_main.item(item_id, text=f" {box} {clean_txt}")
+            elif ntype == "job_folder":
+                child_sids = self._get_tree_session_ids(item_id)
+                if not child_sids:
+                    box = "☐"
+                else:
+                    checked_count = sum(1 for sid in child_sids if sid in self.batch_checked_sessions)
+                    if checked_count == len(child_sids):
+                        box = "☑"
+                    elif checked_count > 0:
+                        box = "▣"
+                    else:
+                        box = "☐"
+                clean_txt = re.sub(r"^\s*[☐▣☑]\s*", "", txt)
+                self.tree_main.item(item_id, text=f" {box} {clean_txt}")
+
+        for root_item in self.tree_main.get_children(""):
+            update_node(root_item)
+
+        cnt = len(self.batch_checked_sessions)
+        if hasattr(self, "lbl_batch_status"):
+            self.lbl_batch_status.config(
+                text=f"☑ {cnt} marcada(s)" if cnt > 0 else "☐ 0 marcadas",
+                fg="#0055aa" if cnt > 0 else THEME["text_muted"],
+                font=("Segoe UI", 8, "bold" if cnt > 0 else "normal")
+            )
+        if hasattr(self, "btn_tb_auto_nest"):
+            if cnt > 0:
+                self.btn_tb_auto_nest.config(text=f"⚡ Auto-Nest ({cnt})")
+            else:
+                self.btn_tb_auto_nest.config(text="⚡ Auto-Nest")
+
+    # -------------------------------------------------------------------------
+    # Execução em Massa de Nesting (Batch Auto-Nest)
+    # -------------------------------------------------------------------------
+    def open_batch_auto_nest_dialog(self):
+        """Abre o diálogo de configuração e confirmação do cálculo em lote."""
+        if not self.batch_checked_sessions:
+            messagebox.showinfo(
+                "Nenhuma Sessão Marcada",
+                "Nenhuma sessão está marcada para cálculo em massa.\n\nMarque as caixas de seleção [☐] das sessões ou pastas que deseja calcular.",
+                parent=self
+            )
+            return
+
+        selected = []
+        for s in self.sessions:
+            if s.get("id") in self.batch_checked_sessions:
+                s_copy = copy.deepcopy(s)
+                if not s_copy.get("shapes"):
+                    s_copy["shapes"] = self.db.get_session_shapes(s_copy["id"])
+                if not s_copy.get("material") and s_copy.get("material_id"):
+                    s_copy["material"] = self.db.get_material(s_copy["material_id"])
+                if not s_copy.get("material") and self.current_material:
+                    s_copy["material"] = copy.deepcopy(self.current_material)
+                selected.append(s_copy)
+
+        if not selected:
+            messagebox.showwarning("Aviso", "Nenhuma das sessões marcadas foi encontrada.", parent=self)
+            return
+
+        initial_cfg = {
+            "strategy": self.session_view.get_strategy() if getattr(self, "session_view", None) else (self.current_session.get("strategy") if self.current_session else "flashnestsheet"),
+            "params": self.session_view.get_params() if getattr(self, "session_view", None) else (self.current_session.get("params") if self.current_session else "HighYield"),
+            "machine": self.session_view.get_machine() if getattr(self, "session_view", None) else (self.current_session.get("machine") if self.current_session else "ATOM FlashCut Flex 3020"),
+            "nesting_mode": self.session_view.get_nesting_mode() if getattr(self, "session_view", None) and hasattr(self.session_view, "get_nesting_mode") else (self.current_session.get("nesting_mode") if self.current_session else "auto"),
+            "gap_mm": 1.0,
+            "margin_mm": 10.0,
+            "refile_auto": True,
+            "separar_sobras": True
+        }
+        if self.current_material and self.current_material.get("gap_mm"):
+            try:
+                initial_cfg["gap_mm"] = float(self.current_material["gap_mm"])
+            except Exception:
+                pass
+
+        BatchAutoNestDialog(
+            parent=self,
+            selected_sessions=selected,
+            initial_config=initial_cfg,
+            on_start_batch=self.run_batch_auto_nest
+        )
+
+    def run_batch_auto_nest(self, sessions_to_run, config):
+        """Inicia a execução em thread do cálculo em massa de Auto-Nest."""
+        if not sessions_to_run:
+            return
+
+        self._batch_in_progress = True
+        self._cancel_batch = False
+        if hasattr(self, "btn_tb_auto_nest"):
+            self.btn_tb_auto_nest.config(state="disabled")
+
+        batch_q = queue.Queue()
+        progress_dlg = BatchProgressDialog(
+            parent=self,
+            total_sessions=len(sessions_to_run),
+            on_cancel=self.on_cancel_batch
+        )
+
+        worker_thread = threading.Thread(
+            target=self._batch_nest_worker,
+            args=(sessions_to_run, config, batch_q),
+            daemon=True
+        )
+        worker_thread.start()
+
+        self.after(100, lambda: self._poll_batch_worker(batch_q, progress_dlg, config))
+
+    def on_cancel_batch(self):
+        """Sinaliza cancelamento do processamento do lote."""
+        self._cancel_batch = True
+        self.lbl_status_msg.config(text="Cancelando cálculo em massa pelo operador...")
+
+    def _batch_nest_worker(self, sessions_to_run, config, q):
+        """Thread trabalhadora para processamento do lote de nesting."""
+        total = len(sessions_to_run)
+        strategy = config.get("strategy", "flashnestsheet")
+        params = config.get("params", "HighYield")
+        machine = config.get("machine", "ATOM FlashCut Flex 3020")
+        nesting_mode = config.get("nesting_mode", "auto")
+        gap = float(config.get("gap_mm", 1.0))
+        margins = config.get("margins", {"left": 10.0, "right": 10.0, "top": 10.0, "bottom": 10.0})
+
+        if nesting_mode in ("auto", "fast", "economic"):
+            os.environ["CORTEAC_BACKEND"] = "nfp"
+
+        processed_count = 0
+        for idx, sess in enumerate(sessions_to_run, 1):
+            if getattr(self, "_cancel_batch", False):
+                q.put(("BATCH_CANCELLED", processed_count, total))
+                return
+
+            sess_id = sess.get("id")
+            sess_name = sess.get("name") or f"Sessão #{sess_id}"
+            q.put(("SESSION_START", idx, total, sess_name))
+
+            shapes = sess.get("shapes") or []
+            if not shapes and self.db:
+                shapes = self.db.get_session_shapes(sess_id)
+            if not shapes:
+                q.put(("SESSION_SKIPPED", sess_id, sess_name, "Nenhum molde cadastrado na sessão"))
+                continue
+
+            mat = sess.get("material")
+            if not mat and sess.get("material_id") and self.db:
+                mat = self.db.get_material(sess.get("material_id"))
+            if not mat:
+                mat = self.current_material
+            if not mat:
+                q.put(("SESSION_SKIPPED", sess_id, sess_name, "Material não definido"))
+                continue
+
+            bed_w = float(mat.get("width_mm", 1380.0))
+            bed_h = float(mat.get("height_mm", 1080.0))
+
+            mat_layers = resolve_session_layers(
+                session=sess,
+                material=mat,
+                default=2
+            )
+
+            sorted_shapes, _ = sort_shapes_by_sequence(shapes)
+            for s_idx, s in enumerate(sorted_shapes, start=1):
+                s["color"] = get_color_for_size(str(s.get("size", "41")), s_idx)
+
+            dieproc_params = None
+            if self.db:
+                dieproc_params = self.db.get_dieproc_preset(config.get("raw_preset", params))
+
+            def _piece_prog(placed, tot):
+                q.put(("SESSION_PROGRESS", placed, tot))
+
+            try:
+                t0 = time.perf_counter()
+                nest_res = nest_multi_sheet(
+                    available_shapes=sorted_shapes,
+                    bed_width_mm=bed_w,
+                    bed_height_mm=bed_h,
+                    strategy=strategy,
+                    params=params,
+                    gap_mm=gap,
+                    dieproc_params=dieproc_params,
+                    db=self.db,
+                    margins=margins,
+                    layers=mat_layers,
+                    progress_callback=_piece_prog,
+                    cancel_check=lambda: getattr(self, "_cancel_batch", False)
+                )
+                elapsed_sec = time.perf_counter() - t0
+                if isinstance(nest_res, dict):
+                    nest_res["elapsed_sec"] = elapsed_sec
+
+                if nest_res.get("cancelled"):
+                    q.put(("SESSION_CANCELLED", sess_id, sess_name, nest_res, sorted_shapes, mat_layers))
+                    q.put(("BATCH_CANCELLED", processed_count, total))
+                    return
+
+                q.put(("SESSION_SUCCESS", sess_id, sess_name, nest_res, sorted_shapes, mat_layers))
+                processed_count += 1
+            except Exception as ex:
+                q.put(("SESSION_ERROR", sess_id, sess_name, str(ex)))
+
+        q.put(("BATCH_COMPLETE", processed_count, total))
+
+    def _poll_batch_worker(self, q, progress_dlg, config):
+        """Escuta a fila de eventos do lote na thread principal do Tkinter."""
+        try:
+            while True:
+                msg = q.get_nowait()
+                mtype = msg[0]
+
+                if mtype == "SESSION_START":
+                    idx, total, s_name = msg[1], msg[2], msg[3]
+                    if progress_dlg and progress_dlg.winfo_exists():
+                        progress_dlg.update_overall(idx, total, s_name)
+                    self.lbl_status_msg.config(text=f"Batch Auto-Nest: Processando [{idx}/{total}] '{s_name}'...")
+
+                elif mtype == "SESSION_PROGRESS":
+                    placed, tot = msg[1], msg[2]
+                    if progress_dlg and progress_dlg.winfo_exists():
+                        progress_dlg.update_session_progress(placed, tot)
+
+                elif mtype == "SESSION_SKIPPED":
+                    sid, s_name, reason = msg[1], msg[2], msg[3]
+                    if progress_dlg and progress_dlg.winfo_exists():
+                        progress_dlg.append_log(f"⚠️ Sessão #{sid} '{s_name}': {reason}")
+
+                elif mtype == "SESSION_ERROR":
+                    sid, s_name, err = msg[1], msg[2], msg[3]
+                    if progress_dlg and progress_dlg.winfo_exists():
+                        progress_dlg.append_log(f"❌ Sessão #{sid} '{s_name}': Erro ({err})")
+
+                elif mtype in ("SESSION_SUCCESS", "SESSION_CANCELLED"):
+                    sid, s_name, nest_res, sorted_shapes, mat_layers = msg[1], msg[2], msg[3], msg[4], msg[5]
+                    layouts = nest_res.get("layouts", [])
+                    if layouts:
+                        # Separação de sobras de 4 camadas em 2 camadas
+                        if config.get("separar_sobras", True):
+                            sess_obj = next((s for s in self.sessions if s.get("id") == sid), {"id": sid})
+                            layouts, split_summary = separar_sobras_camadas(
+                                layouts=layouts,
+                                session=sess_obj,
+                                shapes=sorted_shapes,
+                                params=config.get("params", "")
+                            )
+
+                        # Refile automático se habilitado
+                        auto_trimmed = False
+                        if config.get("refile_auto", True):
+                            sess_mat = None
+                            for s in self.sessions:
+                                if s.get("id") == sid:
+                                    sess_mat = s.get("material")
+                                    break
+                            def_w = float(sess_mat.get("width_mm") or 1350.0) if isinstance(sess_mat, dict) else 1350.0
+                            def_h = float(sess_mat.get("height_mm") or 2553.38) if isinstance(sess_mat, dict) else 2553.38
+                            for ly in layouts:
+                                orig_w = ly.get("width_mm") or def_w
+                                orig_h = ly.get("height_mm") or def_h
+                                trim_layout_dict(ly, original_w=orig_w, original_h=orig_h, gap_mm=1.0)
+                                auto_trimmed = True
+
+                        # Persiste layouts no banco
+                        try:
+                            self.db.save_session_layouts(sid, layouts)
+                        except Exception as e:
+                            print(f"[AVISO] Falha ao persistir layouts da sessão #{sid}: {e}")
+
+                        # Atualiza saldo restante nos moldes
+                        for sh in sorted_shapes:
+                            tot_p = 0
+                            for ly in layouts:
+                                ly_l = ly.get("layers", mat_layers)
+                                cnt = sum(1 for p in ly.get("pieces", []) if piece_matches_shape(p, sh))
+                                tot_p += cnt * ly_l
+                            pairs_cut = tot_p // 2
+                            req_p = int(sh.get("pairs", 0))
+                            rem = max(0, req_p - pairs_cut)
+                            sh["rest"] = rem
+                            sh["resto"] = rem
+
+                        try:
+                            self.db.update_session_shapes(sid, sorted_shapes)
+                        except Exception as e:
+                            print(f"[AVISO] Falha ao atualizar moldes da sessão #{sid}: {e}")
+
+                        avg_yield = sum(float(ly.get("yield_percent", 0.0)) for ly in layouts) / max(1, len(layouts))
+                        first_ly = layouts[0]
+                        pieces = first_ly.get("pieces", [])
+
+                        m_dict = config.get("margins", {})
+                        if config.get("save_to_db", True):
+                            self.db.update_session(
+                                sid,
+                                status="Nested",
+                                strategy=config.get("strategy"),
+                                params=config.get("params"),
+                                machine=config.get("machine"),
+                                gap_mm=config.get("gap_mm"),
+                                margin_left=float(m_dict.get("left", 10.0)),
+                                margin_right=float(m_dict.get("right", 10.0)),
+                                margin_top=float(m_dict.get("top", 10.0)),
+                                margin_bottom=float(m_dict.get("bottom", 10.0)),
+                                layers=mat_layers,
+                                yield_pct=round(avg_yield, 1)
+                            )
+
+                        for s in self.sessions:
+                            if s.get("id") == sid:
+                                s["status"] = "Nested"
+                                s["placed_pieces"] = pieces
+                                s["layouts"] = layouts
+                                s["yield_percent"] = round(avg_yield, 1)
+                                if config.get("save_to_db", True):
+                                    s["strategy"] = config.get("strategy")
+                                    s["params"] = config.get("params")
+                                    s["machine"] = config.get("machine")
+                                    s["gap_mm"] = config.get("gap_mm")
+                                    s["layers"] = mat_layers
+                                if auto_trimmed and first_ly.get("trim_cut_line"):
+                                    s["trim_cut_line"] = copy.deepcopy(first_ly["trim_cut_line"])
+                                    s["sheet_width"] = first_ly.get("width_mm")
+                                    s["sheet_height"] = first_ly.get("height_mm")
+                                break
+
+                        if self.current_session and self.current_session.get("id") == sid:
+                            self.current_session["status"] = "Nested"
+                            self.current_session["placed_pieces"] = pieces
+                            self.current_session["layouts"] = layouts
+                            self.current_session["yield_percent"] = round(avg_yield, 1)
+                            self.canvas.set_pieces(pieces)
+                            if getattr(self, "session_view", None):
+                                self.session_view.load_session(self.current_session)
+                            if hasattr(self, "layout_editor_view") and self.layout_editor_view:
+                                if hasattr(self.layout_editor_view, "set_session_layouts"):
+                                    self.layout_editor_view.set_session_layouts(layouts, initial_index=0)
+
+                        elapsed = nest_res.get("elapsed_sec", 0.0)
+                        if progress_dlg and progress_dlg.winfo_exists():
+                            progress_dlg.append_log(
+                                f"✓ Sessão #{sid} '{s_name}': {len(layouts)} placa(s), {avg_yield:.1f}% rendimento ({elapsed:.1f}s)"
+                            )
+                    else:
+                        if progress_dlg and progress_dlg.winfo_exists():
+                            progress_dlg.append_log(f"⚠️ Sessão #{sid} '{s_name}': Nenhuma placa gerada.")
+
+                elif mtype == "BATCH_CANCELLED":
+                    done, total = msg[1], msg[2]
+                    self._batch_in_progress = False
+                    if hasattr(self, "btn_tb_auto_nest"):
+                        self.btn_tb_auto_nest.config(state="normal")
+                    self.lbl_status_msg.config(text=f"Batch Auto-Nest cancelado: {done} de {total} processadas.")
+                    if progress_dlg and progress_dlg.winfo_exists():
+                        progress_dlg.mark_completed(f"Cancelado pelo operador. {done} de {total} sessões foram calculadas.")
+                    self.switch_tree_mode(self.current_mode)
+                    return
+
+                elif mtype == "BATCH_COMPLETE":
+                    done, total = msg[1], msg[2]
+                    self._batch_in_progress = False
+                    if hasattr(self, "btn_tb_auto_nest"):
+                        self.btn_tb_auto_nest.config(state="normal")
+                    self.lbl_status_msg.config(text=f"Batch Auto-Nest concluído: {done} de {total} sessões calculadas com sucesso.")
+                    if progress_dlg and progress_dlg.winfo_exists():
+                        progress_dlg.mark_completed(f"Sucesso! {done} de {total} sessões calculadas e salvas no banco de dados.")
+                    self.switch_tree_mode(self.current_mode)
+                    return
+
+        except queue.Empty:
+            pass
+
+        self.after(100, lambda: self._poll_batch_worker(q, progress_dlg, config))
 
     def on_session_standby(self):
         if self.current_session:
@@ -4676,8 +5291,13 @@ class MainWindow(tk.Tk):
         self.lbl_status_msg.config(text=f"Estratégia de corte alterada para '{strategy}'.")
 
     def on_auto_nest(self):
-        if getattr(self, "_nesting_in_progress", False):
+        if getattr(self, "_nesting_in_progress", False) or getattr(self, "_batch_in_progress", False):
             self.lbl_status_msg.config(text="Cálculo de Nesting já em andamento... aguarde.")
+            return
+
+        # SE HOUVER SESSÕES MARCADAS POR CAIXA DE SELEÇÃO: EXECUTA EM MASSA!
+        if getattr(self, "batch_checked_sessions", None) and len(self.batch_checked_sessions) > 0:
+            self.open_batch_auto_nest_dialog()
             return
 
         strategy = self.session_view.get_strategy() if getattr(self, "session_view", None) else "flashnestsheet"
@@ -4992,6 +5612,23 @@ class MainWindow(tk.Tk):
                     self.lbl_status_msg.config(text=split_summary)
                     print(f"[SOBRAS] {split_summary}")
 
+            # Refile automático dos layouts gerados se a opção estiver habilitada
+            auto_trimmed = False
+            is_refile = (
+                is_refile_auto_enabled(params) or
+                (getattr(self, "session_view", None) and getattr(self.session_view, "is_refile_auto_active", lambda: False)()) or
+                is_refile_auto_enabled(self.current_session)
+            )
+            if is_refile and layouts:
+                sess_mat = self.current_session.get("material") if isinstance(self.current_session, dict) else None
+                def_w = float(sess_mat.get("width_mm") or 1350.0) if isinstance(sess_mat, dict) else 1350.0
+                def_h = float(sess_mat.get("height_mm") or 2553.38) if isinstance(sess_mat, dict) else 2553.38
+                for ly in layouts:
+                    orig_w = ly.get("width_mm") or def_w
+                    orig_h = ly.get("height_mm") or def_h
+                    trim_layout_dict(ly, original_w=orig_w, original_h=orig_h, gap_mm=1.0)
+                    auto_trimmed = True
+
             first_layout = layouts[0]
             pieces = first_layout.get("pieces", [])
             self.canvas.set_pieces(pieces)
@@ -5000,11 +5637,22 @@ class MainWindow(tk.Tk):
             if self.current_session:
                 self.current_session["placed_pieces"] = pieces
                 self.current_session["layouts"] = layouts
+                if auto_trimmed and first_layout.get("trim_cut_line"):
+                    self.current_session["trim_cut_line"] = copy.deepcopy(first_layout["trim_cut_line"])
+                    self.current_session["sheet_width"] = first_layout.get("width_mm")
+                    self.current_session["sheet_height"] = first_layout.get("height_mm")
+                    self.current_session["yield_percent"] = first_layout.get("yield_percent")
                 for s in self.sessions:
                     if s.get("id") == self.current_session["id"]:
                         s["placed_pieces"] = pieces
                         s["layouts"] = layouts
+                        if auto_trimmed and first_layout.get("trim_cut_line"):
+                            s["trim_cut_line"] = copy.deepcopy(first_layout["trim_cut_line"])
+                            s["sheet_width"] = first_layout.get("width_mm")
+                            s["sheet_height"] = first_layout.get("height_mm")
+                            s["yield_percent"] = first_layout.get("yield_percent")
                         break
+
                 try:
                     self.db.save_session_layouts(self.current_session["id"], layouts)
                 except Exception as e:
@@ -5089,7 +5737,16 @@ class MainWindow(tk.Tk):
             if spans_compact:
                 msg_status += f" [{spans_compact}]"
 
+            if auto_trimmed:
+                if n_sheets == 1:
+                    h_cm = first_layout.get("height_mm", 0.0) / 10.0
+                    w_cm = first_layout.get("width_mm", 0.0) / 10.0
+                    msg_status += f" | ✂ Refile automático: {h_cm:.2f} X {w_cm:.2f} cm (Gap 1.0 mm)"
+                else:
+                    msg_status += f" | ✂ Refile automático aplicado em {n_sheets} placa(s) (Gap 1.0 mm)"
+
             missing_seq_warn = nest_result.get("missing_sequence_warning")
+
             if missing_seq_warn:
                 msg_status += f" Aviso: {missing_seq_warn}"
 

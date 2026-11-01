@@ -31,7 +31,9 @@ from cad.layers_rule import (
     parse_session_params,
     encode_session_params,
     is_separar_sobras_enabled,
+    is_refile_auto_enabled,
 )
+
 from ui.sort_utils import natural_sort_key, size_sort_key, shape_area_sort_key, clean_session_display_name, resto_sort_key
 
 RECOMMENDED_COMBINATIONS = [
@@ -313,11 +315,15 @@ class SessionView(tk.Frame):
         self.cb_params.pack(fill="x", pady=(0, 4))
         self.cb_params.bind("<<ComboboxSelected>>", self.on_params_selected)
 
-        # Checkbox: Separar sobras de 4 camadas em 2 camadas
+        # Container horizontal para checkboxes de parâmetros (lado a lado)
+        frame_checks = tk.Frame(col_left, bg=THEME["bg_card"])
+        frame_checks.pack(fill="x", pady=(0, 4))
+
+        # Checkbox 1: Separar sobras de 4 camadas em 2 camadas
         self.var_separar_sobras = tk.BooleanVar()
         self.var_separar_sobras.set(is_separar_sobras_enabled(self.session_data))
         self.chk_separar_sobras = tk.Checkbutton(
-            col_left,
+            frame_checks,
             text="Separar sobras de 4 camadas em 2 camadas",
             variable=self.var_separar_sobras,
             command=self.on_separar_sobras_toggled,
@@ -328,7 +334,25 @@ class SessionView(tk.Frame):
             selectcolor=THEME["bg_card"],
             font=("Segoe UI", 9)
         )
-        self.chk_separar_sobras.pack(anchor="w", pady=(0, 4))
+        self.chk_separar_sobras.pack(side="left", anchor="w")
+
+        # Checkbox 2: Refile automático (ao lado)
+        self.var_refile_auto = tk.BooleanVar()
+        self.var_refile_auto.set(is_refile_auto_enabled(self.session_data))
+        self.chk_refile_auto = tk.Checkbutton(
+            frame_checks,
+            text="Refile automático",
+            variable=self.var_refile_auto,
+            command=self.on_refile_auto_toggled,
+            bg=THEME["bg_card"],
+            fg=THEME["text_main"],
+            activebackground=THEME["bg_card"],
+            activeforeground=THEME["text_main"],
+            selectcolor=THEME["bg_card"],
+            font=("Segoe UI", 9)
+        )
+        self.chk_refile_auto.pack(side="left", anchor="w", padx=(14, 0))
+
 
         # Coluna 2 (Direita): Códigos materiais e Máquina de corte
         col_right = tk.Frame(grid_params, bg=THEME["bg_card"])
@@ -1135,7 +1159,9 @@ class SessionView(tk.Frame):
             "session_shapes": session_shapes_val,
             "layouts": layouts,
             "current_layout_index": target_layout_idx,
+            "trim_cut_line": (target_layout.get("trim_cut_line") if target_layout else None) or (self.session_data.get("trim_cut_line") if isinstance(self.session_data, dict) else None),
         }
+
         dlg = LayoutPrintDialog(self, layout_data=layout_data)
         dlg.focus_set()
 
@@ -1600,7 +1626,12 @@ class SessionView(tk.Frame):
                 cv.create_polygon(scr, fill=col, outline="#000000", width=1)
 
         # Linha de Corte de Refile (CAM) se configurada
-        trim_cut = self.session_data.get("trim_cut_line") if isinstance(self.session_data, dict) else None
+        trim_cut = None
+        if target_layout and isinstance(target_layout, dict) and target_layout.get("trim_cut_line"):
+            trim_cut = target_layout.get("trim_cut_line")
+        elif isinstance(self.session_data, dict):
+            trim_cut = self.session_data.get("trim_cut_line")
+
         if trim_cut and trim_cut.get("enabled", True):
             cut_y = float(trim_cut.get("y", sheet_h))
             sy_cut = y2 - cut_y * sc
@@ -1612,6 +1643,11 @@ class SessionView(tk.Frame):
                 fill="#dc2626",
                 font=("Segoe UI", 7, "bold")
             )
+            if trim_cut.get("has_cut_x") and float(trim_cut.get("x", sheet_w)) < float(trim_cut.get("orig_w", sheet_w)) - 0.5:
+                cut_x = float(trim_cut.get("x", sheet_w))
+                sx_cut = x1 + cut_x * sc
+                cv.create_line(sx_cut, y1 - 2, sx_cut, y2 + 2, fill="#dc2626", dash=(4, 2), width=2)
+
 
     def update_strategy_description(self, strategy):
         descs = {
@@ -1673,6 +1709,8 @@ class SessionView(tk.Frame):
         _, opts = parse_session_params(self.session_data.get("params"))
         if hasattr(self, "var_separar_sobras"):
             opts["separar_sobras"] = "1" if self.var_separar_sobras.get() else "0"
+        if hasattr(self, "var_refile_auto"):
+            opts["refile_auto"] = "1" if self.var_refile_auto.get() else "0"
         encoded = encode_session_params(preset, opts)
         self.session_data["params"] = encoded
         self.active_dieproc_params = None
@@ -1705,6 +1743,25 @@ class SessionView(tk.Frame):
             layers = self.get_session_layers()
             return bool(val and layers == 4)
         return is_separar_sobras_enabled(self.session_data)
+
+    def on_refile_auto_toggled(self):
+        val = self.var_refile_auto.get()
+        cur_preset, opts = parse_session_params(self.session_data.get("params"))
+        opts["refile_auto"] = "1" if val else "0"
+        encoded = encode_session_params(cur_preset, opts)
+        self.session_data["params"] = encoded
+        if self.db and self.session_data.get("id"):
+            try:
+                self.db.update_session(self.session_data["id"], params=encoded)
+            except Exception:
+                pass
+        self._on_decision_changed("Refile Automático")
+
+    def is_refile_auto_active(self) -> bool:
+        if hasattr(self, "var_refile_auto"):
+            return bool(self.var_refile_auto.get())
+        return is_refile_auto_enabled(self.session_data)
+
 
     def _on_macro_changed_from_panel(self, macro_name: str):
         self._on_decision_changed("Macro")
@@ -2188,6 +2245,8 @@ class SessionView(tk.Frame):
         opts = {}
         if hasattr(self, "var_separar_sobras"):
             opts["separar_sobras"] = "1" if self.var_separar_sobras.get() else "0"
+        if hasattr(self, "var_refile_auto"):
+            opts["refile_auto"] = "1" if self.var_refile_auto.get() else "0"
         return encode_session_params(preset, opts)
 
     def get_machine(self):
@@ -2240,6 +2299,9 @@ class SessionView(tk.Frame):
             self.cb_params.set(cur_p)
             if hasattr(self, "var_separar_sobras"):
                 self.var_separar_sobras.set(is_separar_sobras_enabled(session_data))
+            if hasattr(self, "var_refile_auto"):
+                self.var_refile_auto.set(is_refile_auto_enabled(session_data))
+
         self.highlight_guide_matching()
         if hasattr(self, "cb_machine"):
             self.cb_machine.set(session_data.get("machine") or "ATOM FlashCut Flex 3020")

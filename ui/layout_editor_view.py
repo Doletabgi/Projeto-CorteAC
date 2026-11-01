@@ -514,7 +514,7 @@ class LayoutEditorView(tk.Frame):
 
         # Grupo 4: Zoom e Enquadramento (Eye/Full View, Zoom)
         self.create_tb_btn(tb_row, "btn_zoom_fit", "Exibir Layout Completo", self.reset_view)
-        self.btn_zoom = self.create_tb_btn(tb_row, "btn_zoom", "Zoom (+20%): clique aqui, Ctrl+roda no canvas; botão direito reduz", self.zoom_in)
+        self.btn_zoom = self.create_tb_btn(tb_row, "btn_zoom", "Zoom (+20%): clique aqui ou Ctrl+clique / Ctrl+roda no canvas; botão direito reduz", self.zoom_in)
         self.btn_zoom.bind("<Button-3>", lambda e: self.zoom_out())
 
         self.create_tb_sep(tb_row)
@@ -1587,6 +1587,11 @@ class LayoutEditorView(tk.Frame):
             self.layouts[cur_idx]["placed_pieces"] = copy.deepcopy(self.placed_pieces)
             self.layouts[cur_idx]["width_mm"] = self.sheet_width
             self.layouts[cur_idx]["height_mm"] = self.sheet_height
+            self.layouts[cur_idx]["trim_cut_line"] = copy.deepcopy(getattr(self, "trim_cut_line", None))
+            if getattr(self, "original_sheet_width", None) is not None:
+                self.layouts[cur_idx]["original_sheet_width"] = self.original_sheet_width
+            if getattr(self, "original_sheet_height", None) is not None:
+                self.layouts[cur_idx]["original_sheet_height"] = self.original_sheet_height
             self.layout_undo_stacks[cur_idx] = list(self.undo_stack)
             if self.is_modified:
                 try:
@@ -1606,11 +1611,21 @@ class LayoutEditorView(tk.Frame):
                 p["contour"] = self._resolve_piece_contour(p)
         self.sheet_width = float(ly.get("width_mm", self.sheet_width))
         self.sheet_height = float(ly.get("height_mm", self.sheet_height))
+        self.trim_cut_line = copy.deepcopy(ly.get("trim_cut_line", None))
+        if ly.get("original_sheet_width") is not None:
+            self.original_sheet_width = float(ly["original_sheet_width"])
+        elif not hasattr(self, "original_sheet_width") or self.original_sheet_width is None:
+            self.original_sheet_width = self.sheet_width
+        if ly.get("original_sheet_height") is not None:
+            self.original_sheet_height = float(ly["original_sheet_height"])
+        elif not hasattr(self, "original_sheet_height") or self.original_sheet_height is None:
+            self.original_sheet_height = self.sheet_height
         self.margin_left = float(ly.get("margin_left", self.margin_left))
         self.margin_right = float(ly.get("margin_right", self.margin_right))
         self.margin_top = float(ly.get("margin_top", self.margin_top))
         self.margin_bottom = float(ly.get("margin_bottom", self.margin_bottom))
         self.layout_name = ly.get("name") or f"lay{index:04d}"
+
 
         # Isola o histórico de desfazer para a placa atual
         self.undo_stack = list(self.layout_undo_stacks.get(index, []))
@@ -2545,8 +2560,8 @@ class LayoutEditorView(tk.Frame):
             self.on_sidebar_click(event)
             return
 
-        # 3. Atalho: CTRL + clique = adicionar/remover peça da seleção (toggle)
-        if bool(event.state & 0x0004):
+        # 3. Atalho: CTRL + clique = Zoom In (+20%) centrado sob o cursor
+        if bool(event.state & 0x0004) and not bool(event.state & 0x0001):
             return self.on_ctrl_canvas_click(event)
 
         # 4. Clique na mesa CAD (seleção e arrasto de peças / rubberband)
@@ -2566,7 +2581,8 @@ class LayoutEditorView(tk.Frame):
             try:
                 now_ms = time.time() * 1000.0
                 segundo_clique = (
-                    self._last_piece_press_idx == hit_idx
+                    not is_shift
+                    and self._last_piece_press_idx == hit_idx
                     and (now_ms - self._last_piece_press_ms) < BUMP_DOUBLE_CLICK_MS
                 )
                 self._last_piece_press_idx = hit_idx
@@ -4025,6 +4041,7 @@ class LayoutEditorView(tk.Frame):
         ch = self.canvas.winfo_height()
         if cw <= 10 or ch <= 10:
             self.zoom_factor = new_zoom
+            self.redraw()
             return
 
         if center_x is None or center_y is None:
@@ -4073,11 +4090,11 @@ class LayoutEditorView(tk.Frame):
 
     def on_ctrl_canvas_click(self, event):
         """
-        Ctrl+clique na mesa CAD: ADICIONA a peça à seleção ou REMOVE se já estiver
-        selecionada (toggle), como o Shift+clique.
+        Atalho: CTRL + clique na mesa CAD aplica Zoom In (+20%) centrado exatamente
+        sob o cursor do mouse (seja sobre uma peça ou em área vazia).
 
-        O zoom de +20% que antes ocupava este atalho continua disponível em
-        Ctrl+roda do mouse, nos botões de zoom e em Ctrl+Plus/Ctrl+Minus.
+        A seleção múltipla de peças (adicionar/remover da seleção) é realizada
+        de forma limpa e dedicada via Shift+clique ou caixa de seleção (rubberband).
         """
         self.is_dragging_piece = False
         self._pre_drag_pieces = None
@@ -4086,32 +4103,11 @@ class LayoutEditorView(tk.Frame):
         if getattr(self, "sim_running", False):
             self.stop_simulation()
         # Clique na barra lateral/divisória mantém o tratamento normal
-        if hasattr(self, "sidebar_div_x") and event.x > self.sidebar_div_x:
+        if getattr(self, "sidebar_div_x", 0) > 0 and event.x > self.sidebar_div_x:
             self.on_sidebar_click(event)
             return "break"
 
-        wx, wy = self.screen_to_world(event.x, event.y)
-        hit_idx = -1
-        for idx in reversed(range(len(self.placed_pieces))):
-            p = self.placed_pieces[idx]
-            poly = transform_contour(p["contour"], p["x"], p["y"], p["rotation"])
-            if point_in_polygon(wx, wy, poly):
-                hit_idx = idx
-                break
-
-        if hit_idx < 0:
-            return "break"
-
-        sel = list(self.get_selected_indices() or [])
-        if hit_idx in sel:
-            sel.remove(hit_idx)
-        else:
-            sel.append(hit_idx)
-        self.selected_indices = sel
-        self.selected_index = sel[-1] if sel else None
-        self._drag_outline_state = None
-        self.redraw()
-        self.update_status()
+        self.zoom_in(event.x, event.y)
         return "break"
 
     def _on_ctrl_press(self, event=None):
