@@ -1410,7 +1410,7 @@ class DatabaseManager:
         name: str = "Nova Sessão",
         job: str = "ProduçãoNova",
         order_id: Optional[int] = None,
-        material_id: str = "MAT_VAQ_01",
+        material_id: Optional[str] = None,
         status: str = "Stand by",
         placed_pieces: Optional[List[Dict[str, Any]]] = None,
         strategy: str = "flashnestsheet",
@@ -1457,18 +1457,21 @@ class DatabaseManager:
 
             # 3. Resiliência de chave estrangeira: material_id
             valid_mat_id = material_id
-            cursor.execute("SELECT id FROM materials WHERE id = ?", (valid_mat_id,))
-            if not cursor.fetchone():
-                cursor.execute("SELECT id FROM materials ORDER BY id ASC LIMIT 1")
-                row_mat = cursor.fetchone()
-                if row_mat:
-                    valid_mat_id = row_mat[0] if isinstance(row_mat, (tuple, list)) else row_mat["id"]
-                else:
-                    valid_mat_id = "MAT_VAQ_01"
-                    cursor.execute("""
-                        INSERT INTO materials (id, name, type, width_mm, height_mm, area_m2, thickness_mm, layers, gap_mm)
-                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-                    """, ("MAT_VAQ_01", "Vaqueta Bovino Preto 1.4mm", "como placa", 1380.0, 1080.0, 1.4904, 1.4, 2, 1.0))
+            if valid_mat_id is not None and str(valid_mat_id).strip():
+                cursor.execute("SELECT id FROM materials WHERE id = ?", (valid_mat_id,))
+                if not cursor.fetchone():
+                    cursor.execute("SELECT id FROM materials ORDER BY id ASC LIMIT 1")
+                    row_mat = cursor.fetchone()
+                    if row_mat:
+                        valid_mat_id = row_mat[0] if isinstance(row_mat, (tuple, list)) else row_mat["id"]
+                    else:
+                        valid_mat_id = "MAT_VAQ_01"
+                        cursor.execute("""
+                            INSERT INTO materials (id, name, type, width_mm, height_mm, area_m2, thickness_mm, layers, gap_mm)
+                            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        """, ("MAT_VAQ_01", "Vaqueta Bovino Preto 1.4mm", "como placa", 1380.0, 1080.0, 1.4904, 1.4, 2, 1.0))
+            else:
+                valid_mat_id = None
 
             # 4. Garante unicidade do code SESS-xxx
             code = f"SESS-{session_id:03d}"

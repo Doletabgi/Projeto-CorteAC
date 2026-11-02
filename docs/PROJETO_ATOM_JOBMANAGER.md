@@ -4,7 +4,7 @@
 > **Regra de ouro:** o que está marcado `[CONFIRMADO]` veio do relatório, do código ou do usuário. O que está `[NÃO CONFIRMADO]` é suposição e não deve virar "fato" sem validação. O que está `[PREENCHER]` a IA deve completar lendo o código real.
 
 <!-- AUTO:header:start -->
-**Última sincronização com o código:** 2026-11-01 11:50 (HEAD ao gerar: `5563fe0`; 123 arquivos Python, ~60753 linhas)
+**Última sincronização com o código:** 2026-11-01 21:21 (HEAD ao gerar: `014fc95`; 123 arquivos Python, ~60780 linhas)
 <!-- AUTO:header:end -->
 **Versão deste documento:** 1
 
@@ -346,7 +346,7 @@ ui/units.py                                          # ui/units.py - Formataçã
 - `class TestCompanyLogoPrint` (linha 20, 6 métodos)
 
 ### `tests/test_create_session_left_click.py`
-- `class TestCreateSessionLeftClick` (linha 14, 12 métodos)
+- `class TestCreateSessionLeftClick` (linha 14, 13 métodos)
 
 ### `tests/test_db_layer.py`
 - `class TestDBLayer` (linha 30, 15 métodos)
@@ -1569,10 +1569,10 @@ A ordem de corte do `.lay` para a mesa **não pode** ser aleatória:
 | Delete | `ui/layout_editor_view.py:734` | `self.bind_all("<Delete>", lambda e: self.delete_selected())` |
 | Delete | `ui/main_window.py:292` | `edit_menu.add_command(label="Excluir", accelerator="Del", command=self.on_global` |
 | Delete | `ui/main_window.py:682` | `self.bind_all("<Delete>", self.on_global_delete_key, add="+")` |
-| Delete | `ui/main_window.py:2796` | `accelerator="Del",` |
-| Delete | `ui/main_window.py:2815` | `accelerator="Del",` |
-| Delete | `ui/main_window.py:3045` | `accelerator="Del",` |
-| Delete | `ui/main_window.py:3064` | `accelerator="Del",` |
+| Delete | `ui/main_window.py:2798` | `accelerator="Del",` |
+| Delete | `ui/main_window.py:2817` | `accelerator="Del",` |
+| Delete | `ui/main_window.py:3047` | `accelerator="Del",` |
+| Delete | `ui/main_window.py:3066` | `accelerator="Del",` |
 | Delete | `ui/session_view.py:703` | `self.tree_shapes.bind("<Delete>", lambda e: self._on_tree_shapes_delete())` |
 | Delete | `ui/session_view.py:862` | `w.bind("<Delete>", self.remove_session_material)` |
 | Delete | `ui/session_view.py:863` | `w.bind("<Key-Delete>", self.remove_session_material)` |
@@ -1592,7 +1592,7 @@ A ordem de corte do `.lay` para a mesa **não pode** ser aleatória:
 | Escape | `ui/layout_print_dialog.py:784` | `self.bind("<Escape>", self.on_escape)` |
 | Escape | `ui/main_window.py:81` | `self.bind("<Escape>", self.exit_fullscreen)` |
 | Escape | `ui/main_window.py:681` | `self.bind_all("<Escape>", self.dismiss_popup_menus, add="+")` |
-| Escape | `ui/main_window.py:3339` | `dialog.bind("<Escape>", lambda e: dialog.destroy())` |
+| Escape | `ui/main_window.py:3341` | `dialog.bind("<Escape>", lambda e: dialog.destroy())` |
 | Escape | `ui/material_codes_view.py:510` | `dlg.bind("<Escape>", lambda e: dlg.destroy())` |
 | Escape | `ui/options_dialog.py:40` | `self.bind("<Escape>", lambda e: self.on_cancel())` |
 | Escape | `ui/session_view.py:2867` | `entry.bind("<Escape>", cancel)` |
@@ -1636,7 +1636,7 @@ A ordem de corte do `.lay` para a mesa **não pode** ser aleatória:
 | Return | `ui/fill_user_dialog.py:154` | `self.bind("<Return>", lambda e: self.on_ok())` |
 | Return | `ui/import_materials_dialog.py:84` | `self.ent_filepath.bind("<Return>", lambda e: self.load_file_from_path(self.ent_f` |
 | Return | `ui/main_window.py:552` | `self.tree_main.bind("<Return>", self.on_tree_key_return)` |
-| Return | `ui/main_window.py:3338` | `dialog.bind("<Return>", lambda e: save())` |
+| Return | `ui/main_window.py:3340` | `dialog.bind("<Return>", lambda e: save())` |
 | Return | `ui/material_codes_view.py:212` | `self.tree.bind("<Return>", lambda e: self.open_edit_selected_dialog())` |
 | Return | `ui/material_codes_view.py:509` | `dlg.bind("<Return>", lambda e: save_action())` |
 | Return | `ui/session_view.py:421` | `self.entry_gap.bind("<Return>", self._on_gap_entry_change)` |
@@ -2619,6 +2619,28 @@ Versão estável v1.6.1 trazendo a resolução definitiva do conflito entre ferr
 
 ---
 
+## 8.24. Criação de Novas Sessões 100% em Branco sem Material Associado (v1.6.2) `[CONFIRMADO]`
+
+Versão estável v1.6.2 atendendo à solicitação do operador de fábrica para que sessões de corte criadas comecem completamente limpas, sem injetar materiais legados ou pré-definidos (`MAT_VAQ_01`).
+
+### 1. Desvinculação de Material Padrão na Criação de Sessões (`database.py`, `ui/main_window.py`)
+
+- **Diagnóstico da Causa Raiz:** O método `create_session` em `database.py` definia `material_id: str = "MAT_VAQ_01"` como valor padrão e aplicava fallback incondicional para o primeiro material cadastrado se o valor fosse nulo. Em conjunto, `on_new_session` em `ui/main_window.py` atribuía explicitamente `self.current_material["id"]` ou `"MAT_VAQ_01"`. Como resultado, qualquer nova sessão vinha sempre pré-populada com uma placa/material na aba Materiais (`tree_mat`).
+- **Suporte Canônico a Material Nulo:**
+  - Assinatura de `create_session` atualizada para `material_id: Optional[str] = None`.
+  - A resiliência de chave estrangeira só busca fallback caso um identificador seja fornecido explicitamente (`if valid_mat_id is not None and str(valid_mat_id).strip():`). Se for `None`, a sessão é gravada com `material_id = NULL` no banco de dados.
+  - Em `MainWindow.on_new_session()`, o `mat_id` é definido estritamente como `None`.
+  - O estado em memória `self.current_material` é zerado (`None`), e a mesa CAD em segundo plano recebe `self.canvas.set_material(None)`.
+  - Ao carregar a nova sessão na `SessionView`, a grade de materiais (`tree_mat`) fica completamente vazia e o combobox `cb_mat_code` exibe `(unspecified)`.
+  - Sincronização em tempo real de `self.current_material` e `self.canvas.set_material` durante a troca ativa de sessões (`switch_to_session` e `show_session_window`).
+
+### 2. Testes Automatizados e Homologação
+
+- Novo teste unitário dedicado: `tests/test_create_session_left_click.py::TestCreateSessionLeftClick::test_new_session_starts_blank_without_material`.
+- Validação das suítes de persistência e banco de dados: 21 testes em `test_create_session_left_click.py` e `test_db_layer.py` aprovados com 100% de sucesso.
+
+---
+
 ## 9. Pendências e arquivos faltantes
 
 ### 9.1 Tarefas abertas
@@ -2764,6 +2786,7 @@ Local: `/home/dola/Documentos/clone do job/antigo/arquivos pos instalacao/Common
 | Sex, 30/10/2026 | 16:40 | DeepSeek | Correção do travamento do Encaixe com contornos reais (Fase 6.8): diagnóstico medido mostrando que contornos de 130–190 vértices geram 147 partes convexas e 24.108 polígonos NFP por par (~186 ms por par, 1,47 M de somas de Minkowski por placa); (1) guard `count_convex_parts` no `NfpBackend` delegando contornos complexos (> `CORTEAC_NFP_MAX_PARTS`, padrão 12) ao motor SAT, ~25× mais rápido e mais denso nesses moldes; (2) orçamento global `max_total_sec` (120 s / `CORTEAC_NEST_TOTAL_TIMEOUT`) com parada limpa preservando placas; (3) timeout por placa também no `dieproc_nest_pieces`; (4) progresso honesto por estimativa de densidade em vez de anunciar `max_sheets`; (5) correção de thread safety removendo chamada Tk (`self.after`) da thread de cálculo via `_nest_progress` + `_poll_nest_worker`; (6) chaves de controle (`cancel_check`, `sheet_timeout_sec`, `max_tries_per_piece`, `deterministic`) deixaram de ser confundidas com preset DieProc. Sessão #156 (1.500 peças): de 65–200 placas × 5 s (5–17 min travado) para **8 placas em 37 s**, 1.500/1.500 peças, 0 colisões e 0 invasões de margem; 355 testes + 1 skip (1 teste de UI instável com `grab failed` passa isolado). | `cad/nesting_backend.py`, `cad/nesting_engine.py`, `ui/main_window.py`, `ui/session_view.py`, `tests/test_multisheet_progress.py`, `docs/PROJETO_ATOM_JOBMANAGER.md` |
 | Sáb, 31/10/2026 | 20:30 | Antigravity | Correção estrutural da exclusão de artigos/pedidos na árvore principal e remoção de duplicidade no menu de contexto: (1) Diagnóstico e eliminação da falha `sqlite3.IntegrityError: NOT NULL constraint failed: sessions.order_id` ao clicar em 'Excluir Artigo'; (2) Implementação de migração automática e transparente no `init_db()` para SQLite e MySQL inspecionando tabelas legadas com `PRAGMA table_info` e removendo as constraints `NOT NULL` de `sessions.order_id`, `sessions.material_id`, `shapes.article_id` e `articles.material_id` via reconstrução segura de tabela sem perda de dados; (3) Remoção da duplicidade no menu de contexto de pedidos (`ui/main_window.py`: mantida apenas uma opção clara `Excluir Artigo`); (4) Adição de tratamento com `try/except` e mensagem informativa `messagebox.showerror` em `on_delete_tree_item`, com atualização em memória das referências de sessões desvinculadas (`order_id = None`); (5) Criação de 4 novos testes unitários dedicados em `tests/test_delete_order.py` (447/448 testes passando em toda a suíte, 100% de sucesso). | `database.py`, `ui/main_window.py`, `tests/test_delete_order.py`, `docs/PROJETO_ATOM_JOBMANAGER.md` |
 | Dom, 01/11/2026 | 11:45 | Antigravity | Desacoplamento entre Zoom e Seleção de Peças com Mouse no Layout Editor e Refile Automático (v1.6.1): `Ctrl + Clique` exclusivo para Zoom In (+20%) centrado no cursor (em vazio e peças), cursor `crosshair` fiel ao zoom, `Shift + Clique` canônico para seleção múltipla (`selected_indices` e `Sel: N`), caixa elástica (*rubberband*) no vazio, redesenho sincronizado em `zoom_at` (`cw <= 10`), checkbox de Refile Automático nas sessões e Batch Autonest; 116 testes do editor de layout aprovados e 20 novos testes de refile/batch; recompilação dos binários standalone Linux (`corteac_linux`, `teste_dola_linux`, `dist/CorteAC`, `dist/teste_dola`, `dist/CorteAC-Linux-x64.tar.gz`). | `config.py`, `ui/layout_editor_view.py`, `cad/layers_rule.py`, `ui/session_view.py`, `ui/main_window.py`, `tests/test_layout_editor_shortcuts.py`, `tests/test_layout_editor_sidebar_selection.py`, `tests/test_auto_trim_checkbox.py`, `tests/test_batch_autonest.py`, `.github/workflows/release.yml`, `docs/PROJETO_ATOM_JOBMANAGER.md` |
+| Seg, 02/11/2026 | 00:20 | Antigravity | Criação de Novas Sessões 100% em Branco sem Material Associado (v1.6.2): desvinculação da injeção forçada de `MAT_VAQ_01` em `database.py:create_session` (`material_id: Optional[str] = None`) e `ui/main_window.py:on_new_session` (`material_id = None`, `self.current_material = None`, `canvas.set_material(None)`); a aba Materiais (`tree_mat`) inicia vazia e o seletor em `(unspecified)`; sincronização limpa de material na troca de sessões (`switch_to_session` e `show_session_window`); novo teste unitário `test_new_session_starts_blank_without_material`; 21 testes de sessão e banco passando (100%); atualização do workflow de release `.github/workflows/release.yml` e recompilação dos binários standalone Linux (`corteac_linux`, `teste_dola_linux`, `dist/CorteAC`, `dist/teste_dola`, `dist/CorteAC-Linux-x64.tar.gz`). | `config.py`, `database.py`, `ui/main_window.py`, `tests/test_create_session_left_click.py`, `.github/workflows/release.yml`, `docs/PROJETO_ATOM_JOBMANAGER.md` |
 
 
 **Commits recentes (automático):**
@@ -2771,6 +2794,7 @@ Local: `/home/dola/Documentos/clone do job/antigo/arquivos pos instalacao/Common
 <!-- AUTO:gitlog:start -->
 | Commit | Data | Autor | Mensagem |
 |---|---|---|---|
+| `014fc95` | 2026-11-01 | Doletabgi | feat(release): desacoplamento de zoom e selecao de pecas, refile automatico e versao v1.6.1 |
 | `5563fe0` | 2026-10-31 | Doletabgi | feat(release): exclusao de artigos, criacao por clique, tooltips e versao v1.6.0 |
 | `f510f60` | 2026-10-30 | Doletabgi | feat(ui): tooltips com o nome da ferramenta na barra do Layout Editor (v1.5.9) |
 | `29223ea` | 2026-10-30 | Doletabgi | feat(ui): contador Sel na barra de status e Ctrl+clique para selecao (v1.5.8) |
@@ -2785,7 +2809,6 @@ Local: `/home/dola/Documentos/clone do job/antigo/arquivos pos instalacao/Common
 | `ed24d46` | 2026-10-30 | Doletabgi | feat(cli): flag --version para conferir o build instalado |
 | `d4e6bc7` | 2026-10-30 | Doletabgi | perf(nesting): motores 4x-23x mais rapidos, medidas em metros e v1.5.0 |
 | `cdea200` | 2026-10-30 | Doletabgi | feat(nesting): validacao de dimensoes max 10m e cancelamento de nesting imediato (Fase 6.7) |
-| `d03f25d` | 2026-10-30 | Doletabgi | feat(cad): otimizacao multi-sheet, progresso determinado e teste de estresse 10k pecas (Fase 6.6 e 6.6.1) |
 <!-- AUTO:gitlog:end -->
 
 ---

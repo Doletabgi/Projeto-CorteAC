@@ -9,7 +9,7 @@ on:
       tag_name:
         description: 'Tag de versão SemVer (ex: v1.0.0)'
         required: false
-        default: 'v1.6.1'
+        default: 'v1.6.2'
 
 permissions:
   contents: write
@@ -183,7 +183,13 @@ jobs:
 
             ---
 
-            ### 🛠️ Recursos Incluídos Nesta Versão (v1.6.1):
+            ### 🛠️ Recursos Incluídos Nesta Versão (v1.6.2):
+            - **Sessões Novas Criadas 100% em Branco (Sem Material Padrão Forçado)**:
+              - Ao criar uma nova sessão de corte (via botão 'Novo', menu de contexto de pastas, atalho `Ctrl+N` ou duplo clique), a sessão inicia completamente em branco sem nenhum material pré-selecionado (`material_id = None`, grade `tree_mat` vazia, seletor em `(unspecified)` e CAD canvas limpo).
+              - Elimina a atribuição automática e indesejada de materiais legados (ex: `MAT_VAQ_01`), permitindo ao operador selecionar ou cadastrar o material correto a partir do zero.
+              - Sincronização em tempo real de `current_material` e da visualização CAD ao alternar entre sessões.
+
+            ### 📦 Recursos da Versão Anterior (v1.6.1 mantidos):
             - **Desacoplamento entre Zoom e Seleção de Peças no Canvas CAD (Layout Editor)**:
               - `Ctrl + Clique`: Exclusivo para Zoom In (+20%) centrado no cursor (em peças ou no vazio), compatível com o cursor mira `crosshair`.
               - `Shift + Clique`: Atalho dedicado para alternar (adicionar/remover) peças da seleção múltipla (`selected_indices` e `Sel: N`).

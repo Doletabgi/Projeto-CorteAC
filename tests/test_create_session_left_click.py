@@ -156,6 +156,25 @@ class TestCreateSessionLeftClick(unittest.TestCase):
                 if isinstance(sub, tk.Label):
                     self.assertNotIn("⬭", sub.cget("text"))
 
+    def test_new_session_starts_blank_without_material(self):
+        """Testa que uma nova sessão criada começa completamente em branco sem material associado."""
+        self.win.on_new_session(target_job="JobEmBranco")
+        self.win.update()
+
+        sessions = self.win.db.get_sessions()
+        self.assertEqual(len(sessions), 1)
+        sess = sessions[0]
+        self.assertIsNone(sess.get("material_id"))
+        self.assertIsNone(sess.get("material"))
+
+        # Verifica na SessionView
+        view = self.win.session_view
+        self.assertIsNotNone(view)
+        # tree_mat deve estar vazio (sem itens)
+        self.assertEqual(len(view.tree_mat.get_children()), 0)
+        # cb_mat_code deve estar em (unspecified)
+        self.assertEqual(view.cb_mat_code.get(), "(unspecified)")
+
 
 if __name__ == "__main__":
     unittest.main()

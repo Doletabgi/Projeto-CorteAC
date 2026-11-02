@@ -872,6 +872,7 @@ class MainWindow(tk.Tk):
         view.load_session(sess_dict)
         self.session_view = view
         self.current_session = sess_dict
+        self.current_material = sess_dict.get("material")
         self.lbl_status_msg.config(text=f"Sessão #{sess_dict['id']} aberta na área de trabalho.")
         return view
 
@@ -1339,6 +1340,7 @@ class MainWindow(tk.Tk):
         self.save_current_session_state()
         self.current_session = target_sess
         self.canvas.clear_bed()
+        self.canvas.set_material(target_sess.get("material"))
         for p in target_sess.get("placed_pieces", []):
             self.canvas.placed_pieces.append(dict(p))
         self.canvas.redraw()
@@ -5946,8 +5948,8 @@ class MainWindow(tk.Tk):
         if def_params == "Padrao":
             def_params = "stdNOTFill"
 
-        # 3. Cria no banco de dados com mesa vazia (em branco)
-        mat_id = self.current_material["id"] if (self.current_material and "id" in self.current_material) else "MAT_VAQ_01"
+        # 3. Cria no banco de dados com mesa vazia (em branco sem material associado)
+        mat_id = None
         try:
             orders = self.db.get_orders()
             order_id = orders[0]["id"] if orders else None
@@ -5960,7 +5962,7 @@ class MainWindow(tk.Tk):
                 name=sess_name,
                 job=sess_job,
                 order_id=order_id,
-                material_id=mat_id,
+                material_id=None,
                 status="Stand by",
                 placed_pieces=[],
                 strategy=def_strat,
@@ -5975,13 +5977,15 @@ class MainWindow(tk.Tk):
                     "name": sess_name,
                     "job": sess_job,
                     "order_id": order_id,
-                    "material_id": mat_id,
+                    "material_id": None,
+                    "material": None,
                     "status": "Stand by",
                     "placed_pieces": [],
                     "shapes": [],
                     "strategy": def_strat,
                     "params": def_params
                 }
+            self.current_material = None
         except Exception as e:
             from tkinter import messagebox
             messagebox.showerror("Erro ao Criar Sessão", f"Não foi possível criar a sessão no banco de dados:\n{e}", parent=self)
@@ -5990,6 +5994,7 @@ class MainWindow(tk.Tk):
 
         # 4. Limpa completamente a mesa CAD (em branco)
         self.canvas.clear_bed()
+        self.canvas.set_material(None)
 
         # 5. SEMPRE alterna a visualização para modo Produção ('jobs')
         self.switch_tree_mode("jobs")
