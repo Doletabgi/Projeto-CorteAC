@@ -19,7 +19,14 @@ from PIL import Image, ImageDraw, ImageFont
 from config import THEME
 from ui.units import format_m, format_dim_mm
 from cad.colors import get_color_for_size
-from cad.layers_rule import calc_resto, calc_resto_efetivo, resolve_layout_layers, is_separar_sobras_enabled
+from cad.layers_rule import (
+    calc_resto,
+    calc_resto_efetivo,
+    resolve_layout_layers,
+    is_separar_sobras_enabled,
+    format_enfesto_operator_text,
+)
+from cad.geometry import polygon_area, transform_contour
 
 
 def get_company_logo_path(create_parent=False):
@@ -394,6 +401,33 @@ class LayoutPrintDialog(tk.Toplevel):
             self.shapes_count = 15
             self.instances_count = 40
             self.init_sample_pieces()
+        elif self.placed_pieces:
+            # Cálculo de aproveitamento exato com base na geometria poligonal real das peças
+            total_poly_area_mm2 = 0.0
+            unique_shape_names = set()
+            for p in self.placed_pieces:
+                cntr = p.get("contour") if isinstance(p, dict) else getattr(p, "contour", None)
+                if not cntr:
+                    shp = p.get("shape") if isinstance(p, dict) else getattr(p, "shape", None)
+                    if isinstance(shp, dict):
+                        cntr = shp.get("contour")
+                px = float(p.get("x", 0.0) if isinstance(p, dict) else getattr(p, "x", 0.0))
+                py = float(p.get("y", 0.0) if isinstance(p, dict) else getattr(p, "y", 0.0))
+                rot = float(p.get("rotation", p.get("angle", 0.0)) if isinstance(p, dict) else getattr(p, "rotation", 0.0))
+                p_nm = p.get("name") if isinstance(p, dict) else getattr(p, "name", "Molde")
+                unique_shape_names.add(p_nm)
+                if cntr and len(cntr) >= 3:
+                    poly = transform_contour(cntr, px, py, rot)
+                    total_poly_area_mm2 += polygon_area(poly)
+            if total_poly_area_mm2 > 0:
+                plate_area_mm2 = float(self.sheet_w_mm) * float(self.sheet_h_mm)
+                used_m2 = total_poly_area_mm2 / 1_000_000.0
+                mat_m2 = plate_area_mm2 / 1_000_000.0
+                self.used_area_str = f"{used_m2:.2f} sq.M."
+                self.mat_area_str = f"{mat_m2:.2f} sq.M."
+                self.yield_pct = round((used_m2 / max(1e-4, mat_m2)) * 100.0, 2)
+                self.instances_count = len(self.placed_pieces)
+                self.shapes_count = len(unique_shape_names)
 
         # Metadados de sessão e moldes para legenda
         self.session_shapes = self.layout_data.get("session_shapes") or self.layout_data.get("shapes") or []
@@ -411,6 +445,31 @@ class LayoutPrintDialog(tk.Toplevel):
             default=mat_layers or 2
         )
         self.material_layers = self.layout_layers
+
+        # Ponta de 2 camadas
+        self.tip_zone = self.layout_data.get("tip_zone")
+        if not self.tip_zone and cur_layout and isinstance(cur_layout, dict):
+            self.tip_zone = cur_layout.get("tip_zone")
+        self.layers_tip = self.layout_data.get("layers_tip") or (cur_layout.get("layers_tip") if isinstance(cur_layout, dict) else 2)
+        self.tip_mode = self.layout_data.get("tip_mode") or (cur_layout.get("tip_mode") if isinstance(cur_layout, dict) else "canto")
+
+        # Refile (CAM)
+        trim_cut = self.layout_data.get("trim_cut_line")
+        if not trim_cut and cur_layout and isinstance(cur_layout, dict):
+            trim_cut = cur_layout.get("trim_cut_line")
+        self.trim_cut_line = trim_cut
+
+        refile_parts = []
+        if trim_cut and trim_cut.get("enabled", True):
+            if trim_cut.get("has_cut_y", False):
+                refile_parts.append(f"Y={format_m(trim_cut.get('y', self.sheet_h_mm))} m")
+            if trim_cut.get("has_cut_x", False):
+                refile_parts.append(f"X={format_m(trim_cut.get('x', self.sheet_w_mm))} m")
+        self.refile_display_str = ("Refilado (" + ", ".join(refile_parts) + ")") if refile_parts else "Sem refile"
+
+        tot_lays = len(self.layouts) if self.layouts else 1
+        cur_lay_idx = self.current_layout_index + 1
+        self.placa_n_de_m = f"Placa {cur_lay_idx} de {tot_lays}"
 
         # Orientação da folha (retrato ou paisagem)
         self.orientation = self.layout_data.get("orientation", "portrait")
@@ -912,12 +971,12 @@ class LayoutPrintDialog(tk.Toplevel):
         if logo_photo:
             self.canvas.create_image(margin_left, logo_y, image=logo_photo, anchor="nw")
 
-        # Título centralizado e sublinhado: <layout_name>.lay
+        # Título centralizado e sublinhado: <layout_name>.lay (Placa N de M)
         title_x = px + page_w // 2
         title_y = margin_top + int(36 * self.zoom)
         t_id = self.canvas.create_text(
             title_x, title_y,
-            text=self.layout_name,
+            text=f"{self.layout_name} ({self.placa_n_de_m})",
             anchor="center", font=f_title, fill="#000000"
         )
         tb_box = self.canvas.bbox(t_id)
@@ -947,6 +1006,7 @@ class LayoutPrintDialog(tk.Toplevel):
             f"Dimensions:  {self.dimensions_str}",
             f"Material Area: {self.mat_area_str}",
             f"Used Area: {self.used_area_str} - Yield:  {self.yield_pct:.2f}%",
+            f"Refile: {self.refile_display_str}",
         ]
 
         for line_txt in lines:
@@ -975,9 +1035,12 @@ class LayoutPrintDialog(tk.Toplevel):
             anchor="nw", font=f_mono, fill="#000000"
         )
         cam_suffix = "camada" if self.layout_layers == 1 else "camadas"
+        enf_display = f"Enfesto: {self.layout_layers} {cam_suffix}"
+        if getattr(self, "tip_zone", None):
+            enf_display = f"Enfesto: {self.layout_layers} cam. (ponta 2c)"
         self.canvas.create_text(
             margin_left + col_w * 3, meta_y,
-            text=f"Enfesto: {self.layout_layers} {cam_suffix}",
+            text=enf_display,
             anchor="nw", font=f_mono, fill="#000000"
         )
 
@@ -1254,32 +1317,104 @@ class LayoutPrintDialog(tk.Toplevel):
                 )
 
         # Linha de Corte de Refile (CAM) se configurada
-        trim_cut = self.layout_data.get("trim_cut_line")
+        trim_cut = getattr(self, "trim_cut_line", None) or self.layout_data.get("trim_cut_line")
         if trim_cut and trim_cut.get("enabled", True):
-            cut_y = float(trim_cut.get("y", self.sheet_h_mm))
-            cut_sy = bed_y + (self.sheet_h_mm - cut_y) * bed_scale
-            self.canvas.create_line(
-                bed_x - 4, cut_sy, bed_x + bed_w + 4, cut_sy,
-                fill="#dc2626",
-                dash=(6, 3),
+            if trim_cut.get("has_cut_y", True):
+                cut_y = float(trim_cut.get("y", self.sheet_h_mm))
+                cut_sy = bed_y + (self.sheet_h_mm - cut_y) * bed_scale
+                self.canvas.create_line(
+                    bed_x - 4, cut_sy, bed_x + bed_w + 4, cut_sy,
+                    fill="#dc2626",
+                    dash=(6, 3),
+                    width=2,
+                    tags="print_trim_line"
+                )
+                self.canvas.create_text(
+                    bed_x + bed_w / 2, max(bed_y + 8, cut_sy - 8),
+                    text=f"✂ CORTE DE REFILE: {format_m(cut_y)} m",
+                    font=f_ruler,
+                    fill="#dc2626",
+                    tags="print_trim_text"
+                )
+            if trim_cut.get("has_cut_x", False):
+                cut_x = float(trim_cut.get("x", self.sheet_w_mm))
+                cut_sx = bed_x + cut_x * bed_scale
+                self.canvas.create_line(
+                    cut_sx, bed_y - 4, cut_sx, bed_y + bed_h + 4,
+                    fill="#dc2626",
+                    dash=(6, 3),
+                    width=2,
+                    tags="print_trim_line_x"
+                )
+                self.canvas.create_text(
+                    cut_sx, max(bed_y - 10, 10),
+                    text=f"✂ CORTE LATERAL: {format_m(cut_x)} m",
+                    font=f_ruler,
+                    fill="#dc2626",
+                    anchor="s",
+                    tags="print_trim_text_x"
+                )
+
+        # Ponta de 2 Camadas (Enfesto em Degrau)
+        if getattr(self, "tip_zone", None):
+            x0, y0, x1, y1 = self.tip_zone
+            min_zx = min(x0, x1)
+            max_zx = max(x0, x1)
+            min_zy = min(y0, y1)
+            max_zy = max(y0, y1)
+
+            sx0 = bed_x + min_zx * bed_scale
+            sx1 = bed_x + max_zx * bed_scale
+            sy0 = bed_y + (self.sheet_h_mm - max_zy) * bed_scale
+            sy1 = bed_y + (self.sheet_h_mm - min_zy) * bed_scale
+
+            self.canvas.create_rectangle(
+                sx0, sy0, sx1, sy1,
+                outline="#2563eb",
+                dash=(5, 3),
                 width=2,
-                tags="print_trim_line"
+                tags="print_tip_rect"
             )
             self.canvas.create_text(
-                bed_x + bed_w / 2, max(bed_y + 8, cut_sy - 8),
-                text=f"✂ CORTE DE REFILE: {format_m(cut_y)} m",
-                font=f_ruler,
-                fill="#dc2626",
-                tags="print_trim_text"
+                sx0 + 4, sy0 + 4,
+                text="2 camadas (ponta)",
+                anchor="nw",
+                font=("Segoe UI", max(6, int(7 * self.zoom)), "bold"),
+                fill="#2563eb",
+                tags="print_tip_lbl"
+            )
+            self.canvas.create_text(
+                bed_x + 6, bed_y + 6,
+                text="4 camadas",
+                anchor="nw",
+                font=("Segoe UI", max(6, int(7 * self.zoom)), "bold"),
+                fill="#059669",
+                tags="print_base_lbl"
+            )
+
+            cur_layout = self.layout_data.get("layout")
+            op_text = format_enfesto_operator_text(
+                layout=cur_layout or self.layout_data,
+                sheet_w=self.sheet_w_mm,
+                sheet_h=self.sheet_h_mm,
+                tip_mode=getattr(self, "tip_mode", "canto")
+            )
+            self.canvas.create_text(
+                bed_x, bed_y + bed_h + int(16 * self.zoom),
+                text=op_text,
+                anchor="nw",
+                font=("Segoe UI", max(7, int(8 * self.zoom)), "bold"),
+                fill="#1e3a8a",
+                tags="print_enfesto_op"
             )
 
         # =====================================================================
-        # 4. Rodapé da Página: Pages 1-1
+        # 4. Rodapé da Página: Placa N de M - Pages 1-1
         # =====================================================================
         footer_y = py + page_h - int(24 * self.zoom)
         self.canvas.create_text(
             margin_left, footer_y,
-            text="Pages 1-1", anchor="nw",
+            text=f"{self.placa_n_de_m} - Pages 1-1", anchor="nw",
             font=f_mono, fill="#000000"
         )
 
@@ -1343,11 +1478,12 @@ class LayoutPrintDialog(tk.Toplevel):
                 pass
 
         # Título
-        title_bbox = draw.textbbox((0, 0), self.layout_name, font=f_title)
+        full_title = f"{self.layout_name} ({self.placa_n_de_m})"
+        title_bbox = draw.textbbox((0, 0), full_title, font=f_title)
         tw = title_bbox[2] - title_bbox[0]
         tx = (pw - tw) // 2
         ty = m_top + int(36 * scale)
-        draw.text((tx, ty), self.layout_name, fill="black", font=f_title)
+        draw.text((tx, ty), full_title, fill="black", font=f_title)
         draw.line([tx - 4, ty + (title_bbox[3] - title_bbox[1]) + 2, tx + tw + 4, ty + (title_bbox[3] - title_bbox[1]) + 2], fill="black", width=int(1.5 * scale))
 
         # Data
@@ -1365,6 +1501,7 @@ class LayoutPrintDialog(tk.Toplevel):
             f"Dimensions:  {self.dimensions_str}",
             f"Material Area: {self.mat_area_str}",
             f"Used Area: {self.used_area_str} - Yield:  {self.yield_pct:.2f}%",
+            f"Refile: {self.refile_display_str}",
         ]
         for l_txt in lines:
             draw.text((m_left, meta_y), l_txt, fill="black", font=f_mono)
@@ -1375,7 +1512,10 @@ class LayoutPrintDialog(tk.Toplevel):
         draw.text((m_left, meta_y), f"Shapes: {self.shapes_count}", fill="black", font=f_mono)
         draw.text((m_left + col_w, meta_y), f"Instances: {self.instances_count}", fill="black", font=f_mono)
         draw.text((m_left + col_w * 2, meta_y), f"Gap: {self.gap_str}", fill="black", font=f_mono)
-        draw.text((m_left + col_w * 3, meta_y), f"Enfesto: {self.layout_layers} {cam_suffix}", fill="black", font=f_mono)
+        enf_pillow = f"Enfesto: {self.layout_layers} {cam_suffix}"
+        if getattr(self, "tip_zone", None):
+            enf_pillow = f"Enfesto: {self.layout_layers} cam. (ponta 2c)"
+        draw.text((m_left + col_w * 3, meta_y), enf_pillow, fill="black", font=f_mono)
 
         # =====================================================================
         # 2.5. Tabela de Legenda por Molde no Pillow (com ShapeId e n/m)
@@ -1579,16 +1719,45 @@ class LayoutPrintDialog(tk.Toplevel):
                 draw.polygon(poly_pts, fill=color, outline="black")
 
         # Linha de Corte de Refile (CAM) se configurada
-        trim_cut = self.layout_data.get("trim_cut_line")
+        trim_cut = getattr(self, "trim_cut_line", None) or self.layout_data.get("trim_cut_line")
         if trim_cut and trim_cut.get("enabled", True):
-            cut_y = float(trim_cut.get("y", self.sheet_h_mm))
-            cut_sy = bed_y + (self.sheet_h_mm - cut_y) * scale_bed
-            draw.line([(bed_x - int(4 * scale), cut_sy), (bed_x + bed_w + int(4 * scale), cut_sy)], fill="#dc2626", width=max(2, int(2 * scale)))
-            draw.text((bed_x + bed_w / 2 - int(50 * scale), max(bed_y + 4, cut_sy - int(12 * scale))), f"CORTE DE REFILE: {format_m(cut_y)} m", fill="#dc2626", font=f_ruler)
+            if trim_cut.get("has_cut_y", True):
+                cut_y = float(trim_cut.get("y", self.sheet_h_mm))
+                cut_sy = bed_y + (self.sheet_h_mm - cut_y) * scale_bed
+                draw.line([(bed_x - int(4 * scale), cut_sy), (bed_x + bed_w + int(4 * scale), cut_sy)], fill="#dc2626", width=max(2, int(2 * scale)))
+                draw.text((bed_x + bed_w / 2 - int(50 * scale), max(bed_y + 4, cut_sy - int(12 * scale))), f"CORTE DE REFILE: {format_m(cut_y)} m", fill="#dc2626", font=f_ruler)
+            if trim_cut.get("has_cut_x", False):
+                cut_x = float(trim_cut.get("x", self.sheet_w_mm))
+                cut_sx = bed_x + cut_x * scale_bed
+                draw.line([(cut_sx, bed_y - int(4 * scale)), (cut_sx, bed_y + bed_h + int(4 * scale))], fill="#dc2626", width=max(2, int(2 * scale)))
+                draw.text((cut_sx + int(4 * scale), max(bed_y - int(14 * scale), 4)), f"CORTE LATERAL: {format_m(cut_x)} m", fill="#dc2626", font=f_ruler)
+
+        # Ponta de 2 Camadas (Enfesto em Degrau)
+        if getattr(self, "tip_zone", None):
+            x0, y0, x1, y1 = self.tip_zone
+            min_zx, max_zx = min(x0, x1), max(x0, x1)
+            min_zy, max_zy = min(y0, y1), max(y0, y1)
+            sx0 = bed_x + min_zx * scale_bed
+            sx1 = bed_x + max_zx * scale_bed
+            sy0 = bed_y + (self.sheet_h_mm - max_zy) * scale_bed
+            sy1 = bed_y + (self.sheet_h_mm - min_zy) * scale_bed
+
+            draw.rectangle([sx0, sy0, sx1, sy1], outline="#2563eb", width=max(2, int(1.5 * scale)))
+            draw.text((sx0 + int(4 * scale), sy0 + int(4 * scale)), "2 camadas (ponta)", fill="#2563eb", font=f_small)
+            draw.text((bed_x + int(6 * scale), bed_y + int(6 * scale)), "4 camadas", fill="#059669", font=f_small)
+
+            cur_layout = self.layout_data.get("layout")
+            op_text = format_enfesto_operator_text(
+                layout=cur_layout or self.layout_data,
+                sheet_w=self.sheet_w_mm,
+                sheet_h=self.sheet_h_mm,
+                tip_mode=getattr(self, "tip_mode", "canto")
+            )
+            draw.text((bed_x, bed_y + bed_h + int(14 * scale)), op_text, fill="#1e3a8a", font=f_mono_bold)
 
         # Rodapé
         footer_y = ph - int(36 * scale)
-        draw.text((m_left, footer_y), "Pages 1-1", fill="black", font=f_mono)
+        draw.text((m_left, footer_y), f"{self.placa_n_de_m} - Pages 1-1", fill="black", font=f_mono)
 
         return im
 

@@ -25,7 +25,9 @@ class DualLayoutExporter:
         material: Dict[str, Any],
         file_path: Union[str, Path],
         session_id: Optional[int] = 1,
-        layers: Optional[int] = None
+        layers: Optional[int] = None,
+        tip_zone: Optional[Tuple[float, float, float, float]] = None,
+        layers_tip: Optional[int] = None
     ) -> str:
         """
         Gera e grava arquivo .lay compatível com ATOM FlashCut ($$LAYOUT.v3$$).
@@ -39,7 +41,9 @@ class DualLayoutExporter:
             material=material,
             session_id=session_id,
             filename=p.name,
-            layers=layers
+            layers=layers,
+            tip_zone=tip_zone,
+            layers_tip=layers_tip
         )
 
         p.parent.mkdir(parents=True, exist_ok=True)
@@ -80,7 +84,9 @@ class DualLayoutExporter:
         margins_mm: Union[float, Tuple[float, float, float, float]] = 15.0,
         session_id: Optional[int] = 1,
         options: Optional[Dict[str, Any]] = None,
-        layers: Optional[int] = None
+        layers: Optional[int] = None,
+        tip_zone: Optional[Tuple[float, float, float, float]] = None,
+        layers_tip: Optional[int] = None
     ) -> Dict[str, Any]:
         """
         Exporta SIMULTANEAMENTE para ambas as máquinas de corte:
@@ -101,7 +107,9 @@ class DualLayoutExporter:
             material=material,
             file_path=lay_file,
             session_id=session_id,
-            layers=layers
+            layers=layers,
+            tip_zone=tip_zone,
+            layers_tip=layers_tip
         )
 
         onx_res = cls.export_comelz_onx(
@@ -156,7 +164,10 @@ class DualLayoutExporter:
                 material=mat_copy,
                 base_path=base_path,
                 session_id=session_id,
-                options=options
+                options=options,
+                layers=ly.get("layers"),
+                tip_zone=ly.get("tip_zone"),
+                layers_tip=ly.get("layers_tip")
             )
             res["layout_index"] = l_idx
             res["layout_name"] = stem

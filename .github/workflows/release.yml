@@ -9,7 +9,7 @@ on:
       tag_name:
         description: 'Tag de versão SemVer (ex: v1.0.0)'
         required: false
-        default: 'v1.6.2'
+        default: 'v1.6.3'
 
 permissions:
   contents: write
@@ -183,7 +183,15 @@ jobs:
 
             ---
 
-            ### 🛠️ Recursos Incluídos Nesta Versão (v1.6.2):
+            ### 🛠️ Recursos Incluídos Nesta Versão (v1.6.3):
+            - **Contadores de Peças Dinâmicos e Reativos na Barra Lateral (Layout Editor)**:
+              - Os contadores de peças `{n}/{m}` da barra lateral agora atualizam em tempo real imediatamente após exclusão (via tecla `Delete`, toolbar ou `clear_all_pieces`), adição (duplo clique na miniatura ou toolbar), duplicação e `Ctrl+Z` (Undo).
+              - Desacoplamento da renderização da barra lateral de `bg_changed`, garantindo que toda alteração na chapa recalcule as quantidades e cores (vermelho `#dc2626` para déficit e preto `#000000` para cota atendida).
+              - Sincronização automática de `self.layouts[cur_idx]["pieces"]` em todas as mutações na mesa de corte.
+              - Reset automático das coordenadas residuais na barra de status (`Id: - | X: - | Y: - | Rot: -`) quando a chapa é esvaziada.
+              - Resolução correta de `target_id` ao importar arquivos de layout `.lay`.
+
+            ### 📦 Recursos da Versão Anterior (v1.6.2 mantidos):
             - **Sessões Novas Criadas 100% em Branco (Sem Material Padrão Forçado)**:
               - Ao criar uma nova sessão de corte (via botão 'Novo', menu de contexto de pastas, atalho `Ctrl+N` ou duplo clique), a sessão inicia completamente em branco sem nenhum material pré-selecionado (`material_id = None`, grade `tree_mat` vazia, seletor em `(unspecified)` e CAD canvas limpo).
               - Elimina a atribuição automática e indesejada de materiais legados (ex: `MAT_VAQ_01`), permitindo ao operador selecionar ou cadastrar o material correto a partir do zero.

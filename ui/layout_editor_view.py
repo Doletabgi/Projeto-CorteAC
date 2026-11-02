@@ -41,6 +41,8 @@ from cad.layers_rule import (
     pecas_na_mesa,
     calc_resto_efetivo,
     is_separar_sobras_enabled,
+    layers_for_piece,
+    format_enfesto_operator_text,
 )
 
 
@@ -262,6 +264,9 @@ class LayoutEditorView(tk.Frame):
         self.sheet_height = 1080.0  # mm
         self._custom_sheet_size = None
         self.trim_cut_line = None
+        self.tip_zone = None
+        self.layers_tip = None
+        self.tip_mode = "canto"
 
         # Margens de segurança da placa (mm)
         self.margin_left = float(kwargs.get("margin_left", 10.0))
@@ -1040,6 +1045,9 @@ class LayoutEditorView(tk.Frame):
         if not hasattr(self, "sidebar_targets") or self.sidebar_targets is None:
             self.update_sidebar_targets()
 
+        # Limpa elementos dinâmicos anteriores da barra lateral para atualização precisa
+        self.canvas.delete("sidebar_element")
+
         sidebar_w = cw - div_x
         if sidebar_w < 50:
             return
@@ -1082,25 +1090,39 @@ class LayoutEditorView(tk.Frame):
 
             # 2. Contagem total física da sessão somando todas as placas com seus respectivos enfestos
             # Pares produzidos na sessão = soma(peças_no_layout × layers_do_layout) // 2
-            total_physical_pieces = placed_cnt * cur_ly_layers
+            cur_ly_dict = dict(cur_ly) if cur_ly else {}
+            cur_ly_dict["tip_zone"] = getattr(self, "tip_zone", None)
+            cur_ly_dict["layers_tip"] = getattr(self, "layers_tip", None)
+            cur_ly_dict["layers"] = cur_ly_layers
+            total_physical_pieces = 0
+            layer_counts = {}
+            for p in self.placed_pieces:
+                if self._piece_matches_target(p, target):
+                    l = layers_for_piece(cur_ly_dict, p)
+                    total_physical_pieces += l
+                    layer_counts[l] = layer_counts.get(l, 0) + 1
+
             total_session_pieces = placed_cnt
-            layer_counts = {cur_ly_layers: placed_cnt}
             if is_multisheet:
                 cur_idx = getattr(self, "current_layout_index", 0)
                 for l_idx, ly in enumerate(self.layouts):
                     if l_idx == cur_idx:
                         continue
                     ly_pieces = ly.get("pieces") or ly.get("placed_pieces") or []
-                    ly_cnt = self.count_pieces_for_target(ly_pieces, target)
-                    ly_l = resolve_layout_layers(
-                        layout=ly,
-                        session=sess,
-                        material=mat,
-                        default=session_layers
-                    )
-                    total_physical_pieces += ly_cnt * ly_l
-                    total_session_pieces += ly_cnt
-                    layer_counts[ly_l] = layer_counts.get(ly_l, 0) + ly_cnt
+                    ly_dict = dict(ly)
+                    if ly_dict.get("layers") is None:
+                        ly_dict["layers"] = resolve_layout_layers(
+                            layout=ly,
+                            session=sess,
+                            material=mat,
+                            default=session_layers
+                        )
+                    for p in ly_pieces:
+                        if self._piece_matches_target(p, target):
+                            l = layers_for_piece(ly_dict, p)
+                            total_physical_pieces += l
+                            total_session_pieces += 1
+                            layer_counts[l] = layer_counts.get(l, 0) + 1
 
             req_cnt = int(target.get("pairs", target.get("required", 0)))
 
@@ -1121,7 +1143,8 @@ class LayoutEditorView(tk.Frame):
                     col_cx - 36, item_y + 1, col_cx + 36, item_y + 64,
                     outline="#3b82f6",
                     dash=(2, 2),
-                    width=1.5
+                    width=1.5,
+                    tags=("sidebar_element", f"sidebar_target_{i}", "sidebar_ui")
                 )
 
             # Miniatura do contorno do molde (Thumbnail)
@@ -1241,9 +1264,14 @@ class LayoutEditorView(tk.Frame):
         if p_tid and t_id and p_tid != t_id:
             return False
 
-        # Correspondência por nome idêntico
-        if p_nm and t_nm and p_nm == t_nm:
-            return True
+        # Correspondência por nome idêntico ou prefixo (ex.: sufixos de tamanho ou truncamento)
+        if p_nm and t_nm:
+            if p_nm == t_nm:
+                return True
+            p_clean = p_nm.rstrip(".").lower()
+            t_clean = t_nm.rstrip(".").lower()
+            if p_clean == t_clean or p_clean.startswith(t_clean) or t_clean.startswith(p_clean):
+                return True
 
         # Correspondência por tamanho idêntico
         if p_sz and t_sz and p_sz == t_sz and (not p_nm or not t_nm or p_nm == t_nm):
@@ -1384,6 +1412,8 @@ class LayoutEditorView(tk.Frame):
             "rotation": 0.0,
         })
         self.selected_index = len(self.placed_pieces) - 1
+        self._sync_current_layout_pieces()
+        self.set_modified(True)
         self.redraw()
         self.update_status()
 
@@ -1526,6 +1556,13 @@ class LayoutEditorView(tk.Frame):
 
         return list(CONTOUR_CON)
 
+    def _sync_current_layout_pieces(self):
+        """Sincroniza self.placed_pieces com o layout ativo na lista self.layouts."""
+        cur_idx = getattr(self, "current_layout_index", 0)
+        if getattr(self, "layouts", None) and 0 <= cur_idx < len(self.layouts):
+            self.layouts[cur_idx]["pieces"] = copy.deepcopy(self.placed_pieces)
+            self.layouts[cur_idx]["placed_pieces"] = copy.deepcopy(self.placed_pieces)
+
     def set_pieces(self, pieces):
         """Define a lista de peças colocadas no layout e atualiza a interface."""
         self.placed_pieces = list(pieces) if pieces else []
@@ -1588,6 +1625,9 @@ class LayoutEditorView(tk.Frame):
             self.layouts[cur_idx]["width_mm"] = self.sheet_width
             self.layouts[cur_idx]["height_mm"] = self.sheet_height
             self.layouts[cur_idx]["trim_cut_line"] = copy.deepcopy(getattr(self, "trim_cut_line", None))
+            self.layouts[cur_idx]["tip_zone"] = copy.deepcopy(getattr(self, "tip_zone", None))
+            self.layouts[cur_idx]["layers_tip"] = getattr(self, "layers_tip", None)
+            self.layouts[cur_idx]["tip_mode"] = getattr(self, "tip_mode", "canto")
             if getattr(self, "original_sheet_width", None) is not None:
                 self.layouts[cur_idx]["original_sheet_width"] = self.original_sheet_width
             if getattr(self, "original_sheet_height", None) is not None:
@@ -1612,6 +1652,9 @@ class LayoutEditorView(tk.Frame):
         self.sheet_width = float(ly.get("width_mm", self.sheet_width))
         self.sheet_height = float(ly.get("height_mm", self.sheet_height))
         self.trim_cut_line = copy.deepcopy(ly.get("trim_cut_line", None))
+        self.tip_zone = copy.deepcopy(ly.get("tip_zone", None))
+        self.layers_tip = ly.get("layers_tip", None)
+        self.tip_mode = ly.get("tip_mode", "canto")
         if ly.get("original_sheet_width") is not None:
             self.original_sheet_width = float(ly["original_sheet_width"])
         elif not hasattr(self, "original_sheet_width") or self.original_sheet_width is None:
@@ -1703,21 +1746,27 @@ class LayoutEditorView(tk.Frame):
             default=getattr(self, "material_layers", 2)
         )
 
-        if is_def:
-            enf_str = f"enfesto de {ly_layers} camadas"
+        has_tip = bool(getattr(self, "tip_zone", None) or (cur_ly and cur_ly.get("tip_zone")))
+        if has_tip:
+            tip_l = getattr(self, "layers_tip", None) or (cur_ly.get("layers_tip") if cur_ly else None) or 2
+            enf_str = f"enfesto em degrau: {ly_layers} camadas + ponta de {tip_l} camadas"
+            sobras_tag = " (ponta 2c)"
         else:
-            enf_str = f"enfesto de ? (assumindo {ly_layers})"
-            if hasattr(self, "lbl_stat_pos") and self.lbl_stat_pos.winfo_exists():
-                self.lbl_stat_pos.config(text=f"Aviso: Camadas não definidas, assumindo {ly_layers}.")
+            if is_def:
+                enf_str = f"enfesto de {ly_layers} camadas"
+            else:
+                enf_str = f"enfesto de ? (assumindo {ly_layers})"
+                if hasattr(self, "lbl_stat_pos") and self.lbl_stat_pos.winfo_exists():
+                    self.lbl_stat_pos.config(text=f"Aviso: Camadas não definidas, assumindo {ly_layers}.")
 
-        sess_l = resolve_session_layers(getattr(self, "session", None), default=4)
-        is_sobra_plate = bool(
-            cur_ly and (
-                cur_ly.get("is_sobras") or
-                (sess_l == 4 and ly_layers == 2 and (getattr(self, "layouts", None) and len(self.layouts) > 1))
+            sess_l = resolve_session_layers(getattr(self, "session", None), default=4)
+            is_sobra_plate = bool(
+                cur_ly and (
+                    cur_ly.get("is_sobras") or
+                    (sess_l == 4 and ly_layers == 2 and (getattr(self, "layouts", None) and len(self.layouts) > 1))
+                )
             )
-        )
-        sobras_tag = " (sobras)" if is_sobra_plate else ""
+            sobras_tag = " (sobras)" if is_sobra_plate else ""
         indicator = f"Layout {cur_lay_num}/{tot_lays} ({name_str}{sobras_tag}, {enf_str})"
         col_count = len(getattr(self, "_cached_colliding_indices", None) or ())
         if col_count:
@@ -2006,7 +2055,8 @@ class LayoutEditorView(tk.Frame):
             round(x1, 1), round(y1, 1), round(x2, 1), round(y2, 1),
             round(scale, 4), bool(self.show_grid),
             round(self.sheet_width, 1), round(self.sheet_height, 1),
-            cw, ch, div_x, getattr(self, "current_layout_index", 0)
+            cw, ch, div_x, getattr(self, "current_layout_index", 0),
+            str(getattr(self, "tip_zone", None))
         )
         bg_changed = (getattr(self, "_last_bg_sig", None) != bg_sig)
         if not bg_changed and not self.canvas.find_withtag("sheet_bed"):
@@ -2136,7 +2186,6 @@ class LayoutEditorView(tk.Frame):
                 self.canvas.create_line(div_x, 0, div_x, ch, fill=div_left_col, width=1, tags=("divider_line", "sidebar_ui", "bg_element"))
                 self.canvas.create_line(div_x + 1, 0, div_x + 1, ch, fill=div_right_col, width=1, tags=("divider_line", "sidebar_ui", "bg_element"))
                 self.canvas.create_line(div_x, 0, div_x, ch, fill="", width=11, tags=("divider_hitbox", "sidebar_ui", "bg_element"))
-                self.draw_sidebar(div_x, ch, cw)
         else:
             self.canvas.delete("piece_item")
             self.canvas.delete("zoom_badge")
@@ -2478,6 +2527,44 @@ class LayoutEditorView(tk.Frame):
                 tags=("trim_cut_badge_txt", "trim_item")
             )
 
+        # 6.5.1 Ponta de 2 Camadas (Enfesto em Degrau)
+        self.canvas.delete("tip_zone_item")
+        if getattr(self, "tip_zone", None):
+            tx0, ty0, tx1, ty1 = self.tip_zone
+            min_zx, max_zx = min(tx0, tx1), max(tx0, tx1)
+            min_zy, max_zy = min(ty0, ty1), max(ty0, ty1)
+
+            sx0, sy0 = self.world_to_screen(min_zx, min_zy)
+            sx1, sy1 = self.world_to_screen(max_zx, max_zy)
+            s_left = min(sx0, sx1)
+            s_right = max(sx0, sx1)
+            s_top = min(sy0, sy1)
+            s_bot = max(sy0, sy1)
+
+            self.canvas.create_rectangle(
+                s_left, s_top, s_right, s_bot,
+                outline="#2563eb",
+                dash=(6, 4),
+                width=2,
+                tags=("tip_zone_item", "tip_zone_rect")
+            )
+            self.canvas.create_text(
+                s_left + 6, s_top + 6,
+                text="2 camadas (ponta)",
+                anchor="nw",
+                font=("Segoe UI", 9, "bold"),
+                fill="#2563eb",
+                tags=("tip_zone_item", "tip_zone_lbl")
+            )
+            self.canvas.create_text(
+                x1 + 6, y1 + 6,
+                text="4 camadas",
+                anchor="nw",
+                font=("Segoe UI", 9, "bold"),
+                fill="#059669",
+                tags=("tip_zone_item", "base_layers_lbl")
+            )
+
         # 6.6 Cabeçote CNC se Simulação estiver Ativa
         if getattr(self, "sim_running", False):
             if hasattr(self, "_sim_path") and self._sim_path and hasattr(self, "_sim_path_idx"):
@@ -2489,8 +2576,9 @@ class LayoutEditorView(tk.Frame):
                     self.canvas.create_line(trail_pts, fill="#dc2626", width=2, tags=("sim_cut_trail", "sim_item"))
             self._draw_sim_head(self.sim_head_pos[0], self.sim_head_pos[1])
 
-        # Se fundo não mudou, garante que a sidebar fique acima das peças
-        if not bg_changed and div_x < cw:
+        # Redesenha a barra lateral para manter contadores e seleção sempre sincronizados com a chapa
+        if div_x < cw:
+            self.draw_sidebar(div_x, ch, cw)
             self.canvas.tag_raise("sidebar_ui")
 
         if colliding_indices and hasattr(self, "lbl_stat_left"):
@@ -2956,6 +3044,20 @@ class LayoutEditorView(tk.Frame):
                     self.canvas.itemconfig(f"piece_poly_{prev_j}", outline="#1e293b", width=1.2)
             self._drag_colliding_others = colliding_with
 
+        # Verificação se alguma peça arrastada cruza a fronteira da ponta de 2 camadas
+        crossing_tip = False
+        if getattr(self, "tip_zone", None):
+            tx0, ty0, tx1, ty1 = self.tip_zone
+            min_zx, max_zx = min(tx0, tx1), max(tx0, tx1)
+            min_zy, max_zy = min(ty0, ty1), max(ty0, ty1)
+            for didx in self._drag_indices:
+                bx0, by0, bx1, by1 = piece_bboxes[didx]
+                is_outside = (bx1 <= min_zx or bx0 >= max_zx or by1 <= min_zy or by0 >= max_zy)
+                is_inside = (bx0 >= min_zx and bx1 <= max_zx and by0 >= min_zy and by1 <= max_zy)
+                if not is_outside and not is_inside:
+                    crossing_tip = True
+                    break
+
         # Barra de status
         now = time.monotonic()
         if now - getattr(self, "_last_status_update_ts", 0.0) >= STATUS_MIN_INTERVAL_S:
@@ -2964,9 +3066,10 @@ class LayoutEditorView(tk.Frame):
             if hasattr(self, "lbl_stat_pos"):
                 pnm = primary_p.get("name", "Molde")
                 status_drag = " [COLISÃO]" if is_collision else ""
+                tip_warn = " ⚠️ [CRUZANDO LIMITE DA PONTA 2C]" if crossing_tip else ""
                 cnt = len(self._drag_indices)
                 tag_grp = f" ({cnt} peças)" if cnt > 1 else ""
-                self.lbl_stat_pos.config(text=f"x: {primary_p['x']:.2f} y: {primary_p['y']:.2f} - {pnm}{tag_grp}{status_drag}")
+                self.lbl_stat_pos.config(text=f"x: {primary_p['x']:.2f} y: {primary_p['y']:.2f} - {pnm}{tag_grp}{status_drag}{tip_warn}")
             if hasattr(self, "lbl_stat_x"):
                 self.lbl_stat_x.config(text=f"X: {primary_p['x']:.2f}")
             if hasattr(self, "lbl_stat_y"):
@@ -3323,6 +3426,7 @@ class LayoutEditorView(tk.Frame):
         self.push_undo()
         self.placed_pieces.extend(new_pieces)
         # A seleção original permanece na peça-alvo (as cópias geradas não são selecionadas)
+        self._sync_current_layout_pieces()
         self.set_modified(True)
         self.update_sidebar_targets()
         self.redraw()
@@ -3364,6 +3468,7 @@ class LayoutEditorView(tk.Frame):
         self.push_undo()
         self.placed_pieces.extend(new_pieces)
         # A seleção original permanece na peça-alvo (as cópias geradas não são selecionadas)
+        self._sync_current_layout_pieces()
         self.set_modified(True)
         self.update_sidebar_targets()
         self.redraw()
@@ -3405,6 +3510,7 @@ class LayoutEditorView(tk.Frame):
         self.push_undo()
         self.placed_pieces.extend(new_pieces)
         # A seleção original permanece na peça-alvo (as cópias geradas não são selecionadas)
+        self._sync_current_layout_pieces()
         self.set_modified(True)
         self.update_sidebar_targets()
         self.redraw()
@@ -3446,6 +3552,7 @@ class LayoutEditorView(tk.Frame):
 
         self.push_undo()
         self.placed_pieces.extend(new_pieces)
+        self._sync_current_layout_pieces()
         self.set_modified(True)
         self.update_sidebar_targets()
         self.redraw()
@@ -3488,6 +3595,7 @@ class LayoutEditorView(tk.Frame):
 
         self.push_undo()
         self.placed_pieces.extend(new_pieces)
+        self._sync_current_layout_pieces()
         self.set_modified(True)
         self.update_sidebar_targets()
         self.redraw()
@@ -3539,6 +3647,7 @@ class LayoutEditorView(tk.Frame):
 
         self.push_undo()
         self.placed_pieces.extend(new_pieces)
+        self._sync_current_layout_pieces()
         self.set_modified(True)
         self.update_sidebar_targets()
         self.redraw()
@@ -4021,6 +4130,7 @@ class LayoutEditorView(tk.Frame):
 
             if self.selected_index is not None and self.selected_index >= len(self.placed_pieces):
                 self.selected_index = len(self.placed_pieces) - 1
+            self._sync_current_layout_pieces()
             self.is_modified = (len(self.undo_stack) != getattr(self, "_saved_undo_index", -1))
             self._update_window_title()
             self.update_sheet_status()
@@ -4561,6 +4671,7 @@ class LayoutEditorView(tk.Frame):
                     self.placed_pieces.pop(idx)
             self.selected_indices = []
             self.selected_index = None
+            self._sync_current_layout_pieces()
             self.set_modified(True)
             self.redraw()
             self.update_status()
@@ -4579,6 +4690,7 @@ class LayoutEditorView(tk.Frame):
                 new_indices.append(len(self.placed_pieces) - 1)
             self.selected_indices = new_indices
             self.selected_index = new_indices[-1] if new_indices else None
+            self._sync_current_layout_pieces()
             self.set_modified(True)
             self.redraw()
             self.update_status()
@@ -4591,6 +4703,7 @@ class LayoutEditorView(tk.Frame):
             self.placed_pieces = []
             self.selected_indices = []
             self.selected_index = None
+            self._sync_current_layout_pieces()
             self.set_modified(True)
             self.redraw()
             self.update_status()
@@ -4757,6 +4870,15 @@ class LayoutEditorView(tk.Frame):
                 self.lbl_stat_y.config(text=f"Y: {py:.2f}")
             if hasattr(self, "lbl_stat_rot"):
                 self.lbl_stat_rot.config(text=f"Rot: {prot:.2f}")
+        else:
+            if hasattr(self, "lbl_stat_id"):
+                self.lbl_stat_id.config(text="Id: -")
+            if hasattr(self, "lbl_stat_x"):
+                self.lbl_stat_x.config(text="X: -")
+            if hasattr(self, "lbl_stat_y"):
+                self.lbl_stat_y.config(text="Y: -")
+            if hasattr(self, "lbl_stat_rot"):
+                self.lbl_stat_rot.config(text="Rot: -")
 
         warn = self.validate_placement_status()
         if warn:
@@ -4764,6 +4886,10 @@ class LayoutEditorView(tk.Frame):
                 self.lbl_stat_pos.config(text=warn, fg="#dc2626")
         elif p_target and hasattr(self, "lbl_stat_pos"):
             self.lbl_stat_pos.config(text=f"x: {px:.2f} y: {py:.2f} - {pnm} - <Pasted>", fg=THEME.get("text_main", "#000000"))
+        elif not self.placed_pieces and hasattr(self, "lbl_stat_pos"):
+            curr_txt = self.lbl_stat_pos.cget("text")
+            if "<Pasted>" in curr_txt or curr_txt.startswith("x:") or "COLISÃO" in curr_txt:
+                self.lbl_stat_pos.config(text="", fg=THEME.get("text_main", "#000000"))
 
     def open_layout_dialog(self, event=None):
         """Abre e importa um arquivo de layout .lay (ATOM $$LAYOUT.v3$$) ou .onx (Comelz)."""
@@ -4794,10 +4920,22 @@ class LayoutEditorView(tk.Frame):
             self.lbl_title.config(text=f"Layout Editor - [{self.layout_name}]")
 
         self.placed_pieces = []
+        cand_targets = getattr(self, "sidebar_targets", None) or getattr(self, "session_shapes", None) or []
         for it in lay.items:
+            tgt_id = None
+            p_sz = str(it.size or "").strip()
+            for cand in cand_targets:
+                c_nm = str(cand.get("name") or "").strip()
+                c_sz = str(cand.get("size") or "").strip()
+                if (c_nm == it.shape_name or (c_nm and it.shape_name and (c_nm.startswith(it.shape_name) or it.shape_name.startswith(c_nm)))) and (not c_sz or not p_sz or c_sz == p_sz):
+                    tgt_id = cand.get("id")
+                    break
+            if tgt_id is None:
+                tgt_id = it.tg_idx + 1
+
             self.placed_pieces.append({
                 "id": it.item_no,
-                "target_id": it.tg_idx + 1,
+                "target_id": tgt_id,
                 "name": it.shape_name,
                 "size": it.size or "41",
                 "color": it.color,
@@ -4953,13 +5091,18 @@ class LayoutEditorView(tk.Frame):
             # Determina o modo pela extensão ou seleção
             is_dual = (target_format == "dual") or (p.suffix.lower() not in (".lay", ".onx")) or (";" in str(p))
 
+            tip_z = getattr(self, "tip_zone", None)
+            l_tip = getattr(self, "layers_tip", None)
+
             if is_dual:
                 res = DualLayoutExporter.export_dual_layout(
                     self.placed_pieces,
                     material,
                     base_path=p,
                     session_id=getattr(self, "session_id", 1),
-                    layers=exp_layers
+                    layers=exp_layers,
+                    tip_zone=tip_z,
+                    layers_tip=l_tip
                 )
                 msg = (
                     f"Dupla Saída gerada com sucesso!\n\n"
@@ -4981,7 +5124,9 @@ class LayoutEditorView(tk.Frame):
                     material,
                     file_path=p,
                     session_id=getattr(self, "session_id", 1),
-                    layers=exp_layers
+                    layers=exp_layers,
+                    tip_zone=tip_z,
+                    layers_tip=l_tip
                 )
                 msg = f"Layout ATOM (.lay) exportado com sucesso:\n{saved}\nTotal de peças: {len(self.placed_pieces)}"
 
@@ -5304,6 +5449,10 @@ class LayoutEditorView(tk.Frame):
             self.layouts[cur_idx]["width_mm"] = self.sheet_width
             self.layouts[cur_idx]["height_mm"] = self.sheet_height
             self.layouts[cur_idx]["name"] = self.layout_name
+            self.layouts[cur_idx]["trim_cut_line"] = copy.deepcopy(getattr(self, "trim_cut_line", None))
+            self.layouts[cur_idx]["tip_zone"] = copy.deepcopy(getattr(self, "tip_zone", None))
+            self.layouts[cur_idx]["layers_tip"] = getattr(self, "layers_tip", None)
+            self.layouts[cur_idx]["tip_mode"] = getattr(self, "tip_mode", "canto")
             if self.db and getattr(self, "session_id", None) and len(self.layouts) > 1:
                 try:
                     self.db.save_session_layouts(self.session_id, self.layouts)
@@ -5329,6 +5478,9 @@ class LayoutEditorView(tk.Frame):
                     ris_l=self.sheet_height,
                     gap=1.0,
                     area=round(self.sheet_width * self.sheet_height / 1_000_000.0, 4),
+                    tip_zone=getattr(self, "tip_zone", None),
+                    layers_tip=getattr(self, "layers_tip", None),
+                    trim_cut_line=getattr(self, "trim_cut_line", None),
                     items=[
                         PlacedItem(
                             item_no=p.get("id", idx + 1),
@@ -5377,7 +5529,11 @@ class LayoutEditorView(tk.Frame):
                     content = export_layout_from_pieces(
                         self.placed_pieces,
                         material,
-                        filename=filepath.name
+                        filename=filepath.name,
+                        session_id=getattr(self, "session_id", 1),
+                        layers=getattr(self, "material_layers", 2),
+                        tip_zone=getattr(self, "tip_zone", None),
+                        layers_tip=getattr(self, "layers_tip", None)
                     )
                     with open(filepath, "w", encoding="latin1", newline="") as fp:
                         fp.write(content)
@@ -5622,11 +5778,33 @@ class LayoutEditorView(tk.Frame):
         mat_area = round((self.sheet_width * self.sheet_height) / 1_000_000.0, 2)
 
         num_pieces = len(self.placed_pieces)
-        if num_pieces > 0:
-            used_area = round(mat_area * (78.4 / 100.0), 2)
-            yield_pct = 78.4 if num_pieces >= 20 else round((num_pieces / 21) * 78.4, 2)
+        total_poly_area_mm2 = 0.0
+        unique_shape_names = set()
+        for p in self.placed_pieces:
+            cntr = p.get("contour") if isinstance(p, dict) else getattr(p, "contour", None)
+            if not cntr:
+                sid = p.get("shape_id") or p.get("name")
+                for s in getattr(self, "shapes", []):
+                    if s.get("id") == sid or s.get("name") == sid:
+                        cntr = s.get("contour")
+                        break
+            if cntr and len(cntr) >= 3:
+                a = 0.0
+                n = len(cntr)
+                for i in range(n):
+                    x1, y1 = cntr[i][0], cntr[i][1]
+                    x2, y2 = cntr[(i + 1) % n][0], cntr[(i + 1) % n][1]
+                    a += (x1 * y2 - x2 * y1)
+                total_poly_area_mm2 += abs(a) * 0.5
+            sname = p.get("name") or p.get("shape_name")
+            if sname:
+                unique_shape_names.add(sname)
+
+        if num_pieces > 0 and total_poly_area_mm2 > 0:
+            used_area = round(total_poly_area_mm2 / 1_000_000.0, 2)
+            yield_pct = round((total_poly_area_mm2 / (self.sheet_width * self.sheet_height)) * 100.0, 2) if (self.sheet_width * self.sheet_height) > 0 else 0.0
             instances = num_pieces
-            shapes = min(num_pieces, 15)
+            shapes = len(unique_shape_names) if unique_shape_names else min(num_pieces, 15)
         else:
             used_area = 0.11
             yield_pct = 83.02
@@ -5687,6 +5865,9 @@ class LayoutEditorView(tk.Frame):
             "instances_count": instances,
             "gap_str": f"{float(mat.get('gap', 1.0)):.2f} mm" if (mat and isinstance(mat, dict) and "gap" in mat) else "1.00 mm",
             "trim_cut_line": getattr(self, "trim_cut_line", None),
+            "tip_zone": getattr(self, "tip_zone", None),
+            "layers_tip": getattr(self, "layers_tip", None),
+            "tip_mode": getattr(self, "tip_mode", "canto"),
             "placed_pieces": self.placed_pieces if self.placed_pieces else None,
             "material_code": mat_code,
             "material_desc": mat_desc,

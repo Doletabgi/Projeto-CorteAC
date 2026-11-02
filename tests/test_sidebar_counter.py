@@ -509,6 +509,101 @@ class TestSidebarCounterAndLayers(unittest.TestCase):
                 res = calc_resto(p, c)
                 self.assertLessEqual(res, 0, f"calc_resto({p}, {c}) retornou {res} > 0")
 
+    # -------------------------------------------------------------------------
+    # Cenário 14: Contador da barra lateral atualiza dinamicamente ao deletar peças
+    # - 20 peças desenhadas -> 20/20 (preto).
+    # - delete_selected() de todas as peças -> 0/20 (vermelho déficit #dc2626).
+    # -------------------------------------------------------------------------
+    def test_cenario_14_delete_selected_updates_sidebar_counter(self):
+        editor = LayoutEditorView(self.root, is_subwindow=True)
+        editor.session_shapes = [
+            {"id": "s1", "name": "M41", "size": "41", "pairs": 20, "contour": self.box_shape}
+        ]
+        editor.material = {"layers": 2}
+        editor.material_layers = 2
+        editor.layouts = []
+        editor.placed_pieces = [
+            {"target_id": "s1", "name": "M41", "size": "41", "contour": self.box_shape, "x": 10.0, "y": 10.0, "rotation": 0.0}
+        ] * 20
+        editor.update_sidebar_targets()
+        editor.redraw()
+
+        # Antes de deletar: 20/20 em preto
+        texts_before = self._get_sidebar_texts(editor)
+        c_before = [t for t in texts_before if t["text"] == "20/20"]
+        self.assertEqual(len(c_before), 1, "Deveria ter '20/20' antes de deletar")
+        self.assertEqual(c_before[0]["fill"], "#000000")
+
+        # Deleta todas as peças selecionadas
+        editor.selected_indices = list(range(len(editor.placed_pieces)))
+        editor.delete_selected()
+
+        # Depois de deletar: 0/20 em vermelho (déficit)
+        self.assertEqual(len(editor.placed_pieces), 0)
+        texts_after = self._get_sidebar_texts(editor)
+        c_after = [t for t in texts_after if t["text"] == "0/20"]
+        self.assertEqual(len(c_after), 1, "Deveria atualizar dinamicamente para '0/20' após exclusão")
+        self.assertEqual(c_after[0]["fill"], "#dc2626", "0/20 deve ser vermelho (#dc2626) indicando déficit")
+
+    # -------------------------------------------------------------------------
+    # Cenário 15: Contador da barra lateral atualiza dinamicamente ao adicionar
+    # peças (duplo clique / add_piece_for_target) e ao desfazer (Ctrl+Z)
+    # -------------------------------------------------------------------------
+    def test_cenario_15_add_piece_updates_counter_and_undo(self):
+        editor = LayoutEditorView(self.root, is_subwindow=True)
+        editor.session_shapes = [
+            {"id": "s1", "name": "M41", "size": "41", "pairs": 20, "contour": self.box_shape}
+        ]
+        editor.material = {"layers": 2}
+        editor.material_layers = 2
+        editor.layouts = []
+        editor.placed_pieces = []
+        editor.update_sidebar_targets()
+        editor.redraw()
+
+        texts_0 = self._get_sidebar_texts(editor)
+        self.assertTrue(any(t["text"] == "0/20" for t in texts_0))
+
+        # Adiciona 1ª peça
+        editor.add_piece_for_target(editor.sidebar_targets[0])
+        self.assertEqual(len(editor.placed_pieces), 1)
+        texts_1 = self._get_sidebar_texts(editor)
+        self.assertTrue(any(t["text"] == "1/20" for t in texts_1), "Contador deve avançar para '1/20'")
+
+        # Adiciona 2ª peça
+        editor.add_piece_for_target(editor.sidebar_targets[0])
+        self.assertEqual(len(editor.placed_pieces), 2)
+        texts_2 = self._get_sidebar_texts(editor)
+        self.assertTrue(any(t["text"] == "2/20" for t in texts_2), "Contador deve avançar para '2/20'")
+
+        # Desfaz última adição com Ctrl+Z
+        editor.undo_action()
+        self.assertEqual(len(editor.placed_pieces), 1)
+        texts_undo = self._get_sidebar_texts(editor)
+        self.assertTrue(any(t["text"] == "1/20" for t in texts_undo), "Contador deve retornar para '1/20' após undo")
+
+    # -------------------------------------------------------------------------
+    # Cenário 16: Barra de status reseta coordenadas quando chapa é esvaziada
+    # -------------------------------------------------------------------------
+    def test_cenario_16_status_bar_reset_when_empty(self):
+        editor = LayoutEditorView(self.root, is_subwindow=True)
+        editor.placed_pieces = [
+            {"id": 10, "x": 123.45, "y": 678.90, "rotation": 45.0, "name": "M41", "contour": self.box_shape}
+        ]
+        editor.selected_indices = [0]
+        editor.redraw()
+        editor.update_status()
+
+        self.assertEqual(editor.lbl_stat_id.cget("text"), "Id: 10")
+        self.assertEqual(editor.lbl_stat_x.cget("text"), "X: 123.45")
+
+        # Exclui a peça restante
+        editor.delete_selected()
+        self.assertEqual(editor.lbl_stat_id.cget("text"), "Id: -")
+        self.assertEqual(editor.lbl_stat_x.cget("text"), "X: -")
+        self.assertEqual(editor.lbl_stat_y.cget("text"), "Y: -")
+        self.assertEqual(editor.lbl_stat_rot.cget("text"), "Rot: -")
+
 
 if __name__ == "__main__":
     unittest.main()

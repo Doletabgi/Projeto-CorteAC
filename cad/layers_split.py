@@ -22,7 +22,21 @@ from cad.layers_rule import (
     resolve_session_layers,
     resolve_layout_layers,
     is_separar_sobras_enabled,
+    is_refile_auto_enabled,
     parse_session_params,
+    encode_session_params,
+    layers_for_piece,
+    format_enfesto_operator_text,
+)
+from cad.geometry import (
+    transform_contour,
+    polygon_bbox,
+    polygon_area,
+    polygons_collide,
+)
+from cad.trim_engine import (
+    calculate_layout_trim_bounds,
+    trim_layout_dict,
 )
 from cad.nesting_engine import (
     piece_matches_shape,
@@ -33,6 +47,11 @@ from cad.nesting_engine import (
 )
 
 logger = logging.getLogger("layers_split")
+
+
+def log_sobras(msg: str):
+    """Emite log formatado com tag [SOBRAS] para rastreabilidade de nesting e auditoria."""
+    logger.info("[SOBRAS] %s", msg)
 
 
 def separar_sobras_camadas(
@@ -306,3 +325,642 @@ def separar_sobras_camadas(
     )
 
     return combined_layouts, summary_msg
+
+
+def _cluster_pieces_by_y(pieces: List[Dict[str, Any]]) -> List[List[Dict[str, Any]]]:
+    """Agrupa peças da chapa em linhas/faixas horizontais de Y (do fundo ao topo)."""
+    if not pieces:
+        return []
+
+    valid = []
+    for p in pieces:
+        if not p.get("bbox"):
+            cntr = p.get("contour") or (p.get("shape", {}).get("contour") if isinstance(p.get("shape"), dict) else [])
+            px = float(p.get("x", 0.0))
+            py = float(p.get("y", 0.0))
+            rot = float(p.get("rotation", p.get("angle", p.get("rot_deg", 0.0))))
+            if cntr and len(cntr) >= 3:
+                poly = transform_contour(cntr, px, py, rot)
+                p["poly"] = poly
+                p["bbox"] = polygon_bbox(poly)
+            else:
+                p["bbox"] = (px, py, px + 50.0, py + 50.0)
+        valid.append(p)
+
+    sorted_p = sorted(valid, key=lambda x: x["bbox"][1])
+    rows: List[List[Dict[str, Any]]] = []
+    for p in sorted_p:
+        pb = p["bbox"]
+        assigned = False
+        for r in rows:
+            r_min_y = min(it["bbox"][1] for it in r)
+            r_max_y = max(it["bbox"][3] for it in r)
+            ov_y = max(0.0, min(pb[3], r_max_y) - max(pb[1], r_min_y))
+            p_h = max(1.0, pb[3] - pb[1])
+            if ov_y / p_h >= 0.35:
+                r.append(p)
+                assigned = True
+                break
+        if not assigned:
+            rows.append([p])
+
+    rows.sort(key=lambda r: min(it["bbox"][1] for it in r))
+    return rows
+
+
+def _place_sobra_piece(
+    piece_dict: Dict[str, Any],
+    cand_x: float,
+    cand_y: float,
+    rot: float,
+    bed_w: float,
+    bed_h: float,
+    margins: Dict[str, float],
+    gap: float,
+    existing_items: List[Dict[str, Any]]
+) -> Optional[Dict[str, Any]]:
+    """Tenta posicionar uma peça de sobra nas coordenadas candidatas sem colisão e dentro dos limites."""
+    cntr = piece_dict.get("contour") or (piece_dict.get("shape", {}).get("contour") if isinstance(piece_dict.get("shape"), dict) else [])
+    if not cntr:
+        return None
+
+    poly0 = transform_contour(cntr, 0, 0, rot)
+    min_x, min_y, max_x, max_y = polygon_bbox(poly0)
+    w = max_x - min_x
+    h = max_y - min_y
+
+    px = cand_x - min_x
+    py = cand_y - min_y
+
+    c_poly = transform_contour(cntr, px, py, rot)
+    c_bbox = polygon_bbox(c_poly)
+
+    # Verifica limites da chapa com margens
+    if (c_bbox[0] < margins["left"] - 0.01 or
+        c_bbox[2] > bed_w - margins["right"] + 0.01 or
+        c_bbox[1] < margins["bottom"] - 0.01 or
+        c_bbox[3] > bed_h - margins["top"] + 0.01):
+        return None
+
+    # Verifica colisões com peças existentes
+    for other in existing_items:
+        o_poly = other.get("poly")
+        o_bbox = other.get("bbox")
+        if not o_poly:
+            o_cntr = other.get("contour") or (other.get("shape", {}).get("contour") if isinstance(other.get("shape"), dict) else [])
+            ox = float(other.get("x", 0.0))
+            oy = float(other.get("y", 0.0))
+            orot = float(other.get("rotation", other.get("angle", 0.0)))
+            o_poly = transform_contour(o_cntr, ox, oy, orot)
+            o_bbox = polygon_bbox(o_poly)
+            other["poly"] = o_poly
+            other["bbox"] = o_bbox
+
+        if polygons_collide(c_poly, o_poly, gap=gap, bbox_a=c_bbox, bbox_b=o_bbox):
+            return None
+
+    new_p = copy.deepcopy(piece_dict)
+    new_p["x"] = px
+    new_p["y"] = py
+    new_p["rotation"] = rot
+    new_p["poly"] = c_poly
+    new_p["bbox"] = c_bbox
+    new_p["is_tip"] = True
+    new_p["layers"] = 2
+    return new_p
+
+
+def _nest_sobras_on_last_sheet(
+    dest_layout: Dict[str, Any],
+    sobras_to_place: List[Dict[str, Any]],
+    bed_w: float,
+    bed_h: float,
+    gap_mm: float,
+    margins: Dict[str, float],
+    tip_mode: str = "canto",
+    folga_ponta: float = 15.0
+) -> Optional[Tuple[List[Dict[str, Any]], List[float]]]:
+    """
+    Posiciona as sobras na última placa de 4 camadas respeitando as regras do operador:
+    - Agrupa peças existentes em faixas Y.
+    - Aninha sobras à direita da última peça na última linha.
+    - Se não couber, tenta na penúltima linha.
+    - Se ainda não couber, abre no máximo 1 linha extra de altura.
+    - Se precisar de > 1 linha extra ou exceder a placa, retorna None (recorre ao Plano B).
+
+    Retorna:
+        (placed_sobras, tip_zone) ou None em caso de impossibilidade.
+    """
+    existing_pieces = dest_layout.get("pieces", [])
+    if not existing_pieces or not sobras_to_place:
+        return None
+
+    for p in existing_pieces:
+        if not p.get("poly") or not p.get("bbox"):
+            cntr = p.get("contour") or (p.get("shape", {}).get("contour") if isinstance(p.get("shape"), dict) else [])
+            px = float(p.get("x", 0.0))
+            py = float(p.get("y", 0.0))
+            rot = float(p.get("rotation", p.get("angle", 0.0)))
+            poly = transform_contour(cntr, px, py, rot)
+            p["poly"] = poly
+            p["bbox"] = polygon_bbox(poly)
+
+    rows = _cluster_pieces_by_y(existing_pieces)
+
+    placed_sobras: List[Dict[str, Any]] = []
+    current_board_items = list(existing_pieces)
+
+    placed_in_last_row: List[Dict[str, Any]] = []
+    placed_in_penult_row: List[Dict[str, Any]] = []
+    placed_in_extra_row: List[Dict[str, Any]] = []
+
+    last_row = rows[-1] if rows else []
+    penult_row = rows[-2] if len(rows) >= 2 else []
+
+    extra_rows_created = 0
+
+    for item in sobras_to_place:
+        p_dict = item["piece"]
+        orig_rot = float(p_dict.get("rotation", p_dict.get("angle", 0.0)))
+        rot_candidates = [orig_rot]
+        for alt_rot in (0.0, 180.0):
+            if alt_rot not in rot_candidates:
+                rot_candidates.append(alt_rot)
+
+        placed_piece = None
+
+        if tip_mode == "canto":
+            # 1. Tenta posicionar à direita na ÚLTIMA LINHA
+            if last_row:
+                items_in_last = last_row + placed_in_last_row
+                base_x = max(p["bbox"][2] for p in items_in_last)
+                target_x = base_x + (folga_ponta if not placed_in_last_row else gap_mm)
+                cand_y = min(p["bbox"][1] for p in last_row)
+
+                for rot in rot_candidates:
+                    for x_offset in (0.0, 2.0, 5.0, 10.0, 20.0):
+                        res = _place_sobra_piece(
+                            p_dict, target_x + x_offset, cand_y, rot,
+                            bed_w, bed_h, margins, gap_mm, current_board_items
+                        )
+                        if res:
+                            placed_piece = res
+                            placed_in_last_row.append(res)
+                            break
+                    if placed_piece:
+                        break
+
+            # 2. Se não coube na última linha, tenta na PENÚLTIMA LINHA
+            if not placed_piece and penult_row:
+                items_in_penult = penult_row + placed_in_penult_row
+                base_x = max(p["bbox"][2] for p in items_in_penult)
+                target_x = base_x + (folga_ponta if not placed_in_penult_row else gap_mm)
+                cand_y = min(p["bbox"][1] for p in penult_row)
+
+                for rot in rot_candidates:
+                    for x_offset in (0.0, 2.0, 5.0, 10.0, 20.0):
+                        res = _place_sobra_piece(
+                            p_dict, target_x + x_offset, cand_y, rot,
+                            bed_w, bed_h, margins, gap_mm, current_board_items
+                        )
+                        if res:
+                            placed_piece = res
+                            placed_in_penult_row.append(res)
+                            break
+                    if placed_piece:
+                        break
+
+        # 3. Se não coube (ou se tip_mode == 'faixa'), tenta abrir NO MÁXIMO 1 LINHA EXTRA
+        if not placed_piece:
+            if extra_rows_created == 0:
+                extra_rows_created = 1
+
+            if extra_rows_created <= 1:
+                all_placed_so_far = existing_pieces + placed_in_last_row + placed_in_penult_row
+                max_y_existing = max(p["bbox"][3] for p in all_placed_so_far)
+                extra_row_y = max_y_existing + gap_mm
+
+                if placed_in_extra_row:
+                    cand_x = max(p["bbox"][2] for p in placed_in_extra_row) + gap_mm
+                else:
+                    if tip_mode == "canto":
+                        if placed_in_last_row or placed_in_penult_row:
+                            cand_x = min(p["bbox"][0] for p in placed_in_last_row + placed_in_penult_row)
+                        elif last_row:
+                            cand_x = max(p["bbox"][2] for p in last_row) + folga_ponta
+                        else:
+                            cand_x = margins["left"]
+                    else:
+                        cand_x = margins["left"]
+
+                for rot in rot_candidates:
+                    for x_offset in (0.0, 2.0, 5.0, 10.0, 20.0):
+                        res = _place_sobra_piece(
+                            p_dict, cand_x + x_offset, extra_row_y, rot,
+                            bed_w, bed_h, margins, gap_mm, current_board_items
+                        )
+                        if res:
+                            placed_piece = res
+                            placed_in_extra_row.append(res)
+                            break
+                    if placed_piece:
+                        break
+
+        if not placed_piece:
+            logger.info(
+                "[SOBRAS] Molde '%s' não coube na ponta da última placa (exige mais de 1 linha extra ou excede dimensões).",
+                item.get("shape", {}).get("name")
+            )
+            return None
+
+        placed_sobras.append(placed_piece)
+        current_board_items.append(placed_piece)
+
+    if not placed_sobras:
+        return None
+
+    sobras_min_x = min(p["bbox"][0] for p in placed_sobras)
+    sobras_max_x = max(p["bbox"][2] for p in placed_sobras)
+    sobras_min_y = min(p["bbox"][1] for p in placed_sobras)
+    sobras_max_y = max(p["bbox"][3] for p in placed_sobras)
+
+    if tip_mode == "faixa":
+        x0 = 0.0
+        x1 = bed_w
+        y0 = max(0.0, sobras_min_y - gap_mm)
+        y1 = bed_h
+    else:
+        pieces_4_y = [p for p in existing_pieces if p["bbox"][1] <= sobras_max_y and p["bbox"][3] >= sobras_min_y]
+        if pieces_4_y:
+            max_x_4 = max(p["bbox"][2] for p in pieces_4_y)
+            x0 = max(max_x_4 + folga_ponta, (max_x_4 + sobras_min_x) / 2.0)
+            if x0 >= sobras_min_x:
+                x0 = (max_x_4 + sobras_min_x) / 2.0
+        else:
+            x0 = max(0.0, sobras_min_x - folga_ponta)
+
+        x1 = bed_w
+        y0 = max(0.0, sobras_min_y - gap_mm)
+        y1 = bed_h
+
+    tip_zone = [round(x0, 2), round(y0, 2), round(x1, 2), round(y1, 2)]
+    return placed_sobras, tip_zone
+
+
+def separar_sobras_em_ponta(
+    layouts: List[Dict[str, Any]],
+    session: Optional[Dict[str, Any]] = None,
+    shapes: Optional[List[Dict[str, Any]]] = None,
+    params: Optional[str] = None,
+    sheet_w: Optional[float] = None,
+    sheet_h: Optional[float] = None,
+    material: Optional[Dict[str, Any]] = None,
+    refile: Optional[bool] = None,
+    tip_mode: Optional[str] = None,
+    opts: Optional[Dict[str, Any]] = None,
+    **kwargs
+) -> Tuple[List[Dict[str, Any]], Optional[str]]:
+    """
+    Separa automaticamente sobras de 4 camadas em PONTA DE 2 CAMADAS no final da sessão (enfesto em degrau).
+
+    Regras do operador:
+    1. Enfesto em degrau: 2 folhas longas (placa inteira) + 2 folhas curtas (exceto a ponta).
+    2. Sobras de moldes ímpares (P % 2 == 1, 1 peça por molde) retiradas de onde o molde termina pela Sequência.
+    3. Placas de origem congeladas (não renestam; placas vazias são descartadas e reindexadas).
+    4. Destino: última placa de 4 camadas, aninhadas à direita da última linha ou penúltima linha ou 1 linha extra max.
+    5. Geometria da ponta: modo canto [x0, y0, x1, y1] ou modo faixa, com folga_ponta configurável.
+    6. Regra econômica: compara consumo Ponta vs Plano B. Se Ponta consome mais ou não cabe, recorre ao Plano B.
+    7. Integridade física estrita: sum(peças * layers_for_piece) = 2P. Rollback atômico em divergência.
+    8. Idempotência estrita: se já aplicada e consistente, preserva ajustes manuais.
+    """
+    if not layouts:
+        logger.info("[SOBRAS] Nenhum layout na sessão para separar sobras.")
+        return layouts, "[SOBRAS] Nenhum layout na sessão para separar sobras."
+
+    # 1. Validação de pré-requisitos: enfesto base deve ser 4 camadas
+    sess_layers = resolve_session_layers(session, material=material, default=4)
+    if sess_layers != 4:
+        msg = f"[SOBRAS] Sessão com {sess_layers} camadas: ponta de 2 camadas só se aplica a 4 camadas."
+        logger.info(msg)
+        return layouts, msg
+
+    # 2. Validação do parâmetro da sessão
+    session_params = params if params is not None else (session.get("params") if session else None)
+    if opts and "separar_sobras" in opts:
+        is_sep = str(opts["separar_sobras"]) in ("1", "true", "True")
+    else:
+        is_sep = is_separar_sobras_enabled(session_params, default_camadas=4)
+    if not is_sep:
+        msg = "[SOBRAS] Separação de sobras desmarcada nos parâmetros da sessão."
+        logger.info(msg)
+        return layouts, msg
+
+    if not shapes:
+        logger.info("[SOBRAS] Nenhum molde na sessão para separar sobras.")
+        return layouts, "[SOBRAS] Nenhum molde na sessão para separar sobras."
+
+    # 3. Ordenação estrita pela coluna Sequência
+    sorted_shapes, _ = sort_shapes_by_sequence(shapes)
+
+    # 4. Estado Desejado por molde
+    desired: Dict[Any, Dict[str, Any]] = {}
+    has_any_odd = False
+    for s in sorted_shapes:
+        p = max(0, int(s.get("pairs", 0)))
+        t_4 = p // 2
+        t_2 = p % 2
+        if t_2 > 0:
+            has_any_odd = True
+        s_key = s.get("id") or s.get("name")
+        desired[s_key] = {
+            "shape": s,
+            "pairs": p,
+            "target_4": t_4,
+            "target_2": t_2,
+        }
+
+    if not has_any_odd:
+        msg = "[SOBRAS] Todos os moldes têm pares pares (resto = 0). Nenhuma sobra a separar."
+        logger.info(msg)
+        return layouts, msg
+
+    # Preserva cópia íntegra para rollback atômico
+    original_layouts = copy.deepcopy(layouts)
+
+    # 5. Verifica se já está separado em ponta de forma consistente (idempotência)
+    last_ly = layouts[-1]
+    if last_ly.get("tip_zone") and last_ly.get("layers_tip") == 2:
+        counts_match = True
+        for k, info in desired.items():
+            shp = info["shape"]
+            req_p = info["pairs"]
+            expected_phys = 2 * req_p
+            actual_phys = sum(layers_for_piece(ly, p) for ly in layouts for p in ly.get("pieces", []) if piece_matches_shape(p, shp))
+            if actual_phys != expected_phys:
+                counts_match = False
+                break
+        if counts_match:
+            logger.info("[SOBRAS] Ponta de 2 camadas já aplicada e consistente. Layout preservado.")
+            return layouts, "[SOBRAS] Ponta de 2 camadas já aplicada e consistente."
+
+    # 6. Agrupamento de layouts: reverte eventual separação prévia para base 4 camadas limpa
+    clean_layouts = copy.deepcopy(layouts)
+    clean_layouts, _ = desfazer_separacao_sobras(clean_layouts, session=session, shapes=shapes)
+
+    layouts_4 = clean_layouts
+
+    # Contagem de peças por molde
+    curr_counts_4: Dict[Any, int] = {k: 0 for k in desired}
+    for ly in layouts_4:
+        for p in ly.get("pieces", []):
+            for k, info in desired.items():
+                if piece_matches_shape(p, info["shape"]):
+                    curr_counts_4[k] += 1
+                    break
+
+    # 7. Identificação de déficits manuais e coleta de sobras
+    manual_deficits: Dict[Any, int] = {}
+    sobras_to_place: List[Dict[str, Any]] = []
+
+    for k, info in desired.items():
+        shp = info["shape"]
+        t_4 = info["target_4"]
+        c_4 = curr_counts_4[k]
+
+        if c_4 < t_4:
+            deficit = t_4 - c_4
+            manual_deficits[k] = deficit
+            logger.info("Molde %s com déficit manual de %d peça(s) em 4 camadas", shp.get("name"), deficit)
+        elif c_4 > t_4:
+            excess = c_4 - t_4
+            for ly in reversed(layouts_4):
+                if excess <= 0:
+                    break
+                ly_pieces = ly.get("pieces", [])
+                matching_indices = [
+                    idx for idx, p in enumerate(ly_pieces)
+                    if piece_matches_shape(p, shp)
+                ]
+                if not matching_indices:
+                    continue
+
+                matching_indices.sort(
+                    key=lambda idx: (
+                        ly_pieces[idx].get("placement_index") if ly_pieces[idx].get("placement_index") is not None else idx
+                    ),
+                    reverse=True
+                )
+
+                take = min(excess, len(matching_indices))
+                indices_to_pop = sorted(matching_indices[:take], reverse=True)
+                for idx in indices_to_pop:
+                    p_removed = ly_pieces.pop(idx)
+                    sobras_to_place.append({
+                        "shape_key": k,
+                        "piece": p_removed,
+                        "shape": shp
+                    })
+                    excess -= 1
+                    curr_counts_4[k] -= 1
+
+    # 8. Elimina placas de 4 camadas vazias
+    layouts_4 = [ly for ly in layouts_4 if len(ly.get("pieces", [])) > 0]
+    if not layouts_4:
+        logger.info("[SOBRAS] Nenhuma placa de 4 camadas para receber a ponta. Recorrendo ao Plano B.")
+        return separar_sobras_camadas(original_layouts, session, shapes, params)
+
+    dest_layout = layouts_4[-1]
+
+    # Dimensões e parâmetros
+    mat = material if material is not None else (session.get("material") if isinstance(session, dict) and isinstance(session.get("material"), dict) else {})
+    bed_w = float(sheet_w or dest_layout.get("width_mm") or dest_layout.get("sheet_width_mm") or (mat.get("width_mm") if mat else 1350.0) or 1350.0)
+    bed_h = float(sheet_h or dest_layout.get("height_mm") or dest_layout.get("sheet_height_mm") or (mat.get("height_mm") if mat else 2553.38) or 2553.38)
+    if bed_w <= 0:
+        bed_w = 1350.0
+    if bed_h <= 0:
+        bed_h = 2553.38
+
+    m_left = float(session.get("margin_left", 10.0)) if isinstance(session, dict) else 10.0
+    m_right = float(session.get("margin_right", 10.0)) if isinstance(session, dict) else 10.0
+    m_top = float(session.get("margin_top", 10.0)) if isinstance(session, dict) else 10.0
+    m_bottom = float(session.get("margin_bottom", 10.0)) if isinstance(session, dict) else 10.0
+    margins = {"left": m_left, "right": m_right, "top": m_top, "bottom": m_bottom}
+    gap = float(session.get("gap_mm", 1.0)) if isinstance(session, dict) else 1.0
+
+    _, parsed_opts = parse_session_params(session_params)
+    effective_opts = dict(parsed_opts)
+    if opts:
+        effective_opts.update(opts)
+    effective_tip_mode = str(tip_mode or effective_opts.get("tip_mode", "canto")).strip().lower()
+    if effective_tip_mode not in ("canto", "faixa"):
+        effective_tip_mode = "canto"
+    try:
+        folga_ponta = float(effective_opts.get("folga_ponta", 15.0))
+    except (ValueError, TypeError):
+        folga_ponta = 15.0
+
+    # 9. Tenta posicionar as sobras na última placa
+    nest_res = _nest_sobras_on_last_sheet(
+        dest_layout, sobras_to_place, bed_w, bed_h, gap, margins,
+        tip_mode=effective_tip_mode, folga_ponta=folga_ponta
+    )
+
+    if not nest_res:
+        logger.info("[SOBRAS] Não foi possível posicionar sobras na ponta da última placa. Recorrendo ao Plano B.")
+        return separar_sobras_camadas(original_layouts, session, shapes, params)
+
+    placed_sobras, tip_zone = nest_res
+
+    # 10. Regra de Decisão Econômica (consumo de chapa / folha)
+    is_refile = refile if refile is not None else (
+        is_refile_auto_enabled(session_params) or
+        (isinstance(session, dict) and is_refile_auto_enabled(session))
+    )
+    if is_refile:
+        tw_ponta, th_ponta = calculate_layout_trim_bounds(dest_layout["pieces"] + placed_sobras, gap_mm=gap)
+        a_placa = (min(bed_w, tw_ponta) * min(bed_h, th_ponta)) / 1e6
+        x0, y0, x1, y1 = tip_zone
+        a_ponta = ((x1 - x0) * (y1 - y0)) / 1e6
+        c_ponta = 2.0 * a_placa + 2.0 * max(0.0, a_placa - a_ponta)
+
+        tw_4, th_4 = calculate_layout_trim_bounds(dest_layout["pieces"], gap_mm=gap)
+        a_placa4 = (min(bed_w, tw_4) * min(bed_h, th_4)) / 1e6
+        sobras_geom_area = sum(polygon_area(p["poly"]) for p in placed_sobras) / 1e6
+        a_placa2 = max(0.05, sobras_geom_area / 0.70)
+        c_planoB = 4.0 * a_placa4 + 2.0 * a_placa2
+
+        if c_ponta > c_planoB + 1e-4:
+            logger.info(
+                "[SOBRAS] Ponta consome mais material (%.4f m2) que Plano B (%.4f m2). Recorrendo ao Plano B.",
+                c_ponta, c_planoB
+            )
+            return separar_sobras_camadas(original_layouts, session, shapes, params)
+
+    # 11. Aplicação da Ponta no Destino
+    dest_layout["pieces"] = dest_layout["pieces"] + placed_sobras
+    dest_layout["tip_zone"] = tip_zone
+    dest_layout["layers_tip"] = 2
+    dest_layout["tip_mode"] = tip_mode
+
+    for p in dest_layout["pieces"]:
+        p_l = layers_for_piece(dest_layout, p)
+        p["layers"] = p_l
+        p["is_tip"] = (p_l == 2)
+
+    # 12. VERIFICAÇÃO FÍSICA ESTRITA POR MOLDE:
+    for k, info in desired.items():
+        shp = info["shape"]
+        req_p = info["pairs"]
+        expected_phys = 2 * req_p - manual_deficits.get(k, 0) * 4
+
+        actual_phys = 0
+        for ly in layouts_4:
+            for p in ly.get("pieces", []):
+                if piece_matches_shape(p, shp):
+                    actual_phys += layers_for_piece(ly, p)
+
+        if actual_phys != expected_phys:
+            logger.error(
+                "[SOBRAS] Divergência física no molde '%s': esperado %d peças físicas, obtido %d. Revertendo separação.",
+                shp.get("name"), expected_phys, actual_phys
+            )
+            return original_layouts, "[SOBRAS] Erro de conservação física: separação revertida."
+
+    # 13. Renumeração e Recálculo de Rendimento
+    plate_area_m2 = max(1e-4, (bed_w * bed_h) / 1e6)
+    for idx, ly in enumerate(layouts_4):
+        ly["layout_index"] = idx
+        name = f"lay{idx:04d}"
+        ly["name"] = name
+        ly["code"] = name
+        pieces = ly.get("pieces", [])
+        eff_pct, used_m2 = calculate_yield(pieces, plate_area_m2)
+        est_time, _ = calculate_atom_cutting_time(pieces)
+        ly["yield_percent"] = eff_pct
+        ly["yield_pct"] = eff_pct
+        ly["cutting_time_sec"] = est_time
+        ly["used_area_m2"] = used_m2
+
+    n_moldes_sobras = sum(1 for k in desired if desired[k]["target_2"] > 0)
+    dest_name = dest_layout.get("name", "lay0000")
+    mode_label = "canto" if tip_mode == "canto" else "faixa"
+    summary_msg = (
+        f"Ponta de 2 camadas aplicada na {dest_name} ({mode_label}): "
+        f"{n_moldes_sobras} molde(s) com sobras ({len(placed_sobras)} peça(s) a 2 camadas). "
+        f"Enfesto em degrau configurado."
+    )
+    logger.info("[SOBRAS] %s", summary_msg)
+    return layouts_4, summary_msg
+
+
+def desfazer_separacao_sobras(
+    layouts: List[Dict[str, Any]],
+    session: Optional[Dict[str, Any]] = None,
+    shapes: Optional[List[Dict[str, Any]]] = None,
+    **kwargs
+) -> Tuple[List[Dict[str, Any]], str]:
+    """
+    Reverte a separação de sobras (tanto ponta de 2 camadas quanto layouts extras de 2 camadas),
+    restaurando a sessão para o enfesto padrão de 4 camadas.
+    """
+    if not layouts:
+        return layouts, "[SOBRAS] Nenhum layout para reverter."
+
+    updated = copy.deepcopy(layouts)
+
+    # 1. Remove ponta de 2 camadas de qualquer layout
+    for ly in updated:
+        if ly.get("tip_zone") is not None or ly.get("layers_tip") is not None:
+            ly.pop("tip_zone", None)
+            ly.pop("layers_tip", None)
+            ly.pop("tip_mode", None)
+            ly["layers"] = 4
+            for p in ly.get("pieces", []):
+                p.pop("is_tip", None)
+                p["layers"] = 4
+
+    # 2. Reverte layouts extras de 2 camadas (Plano B)
+    lays_4 = [ly for ly in updated if ly.get("layers") != 2 and not ly.get("is_sobras")]
+    lays_2 = [ly for ly in updated if ly.get("layers") == 2 or ly.get("is_sobras")]
+
+    if lays_2:
+        if lays_4:
+            dest = lays_4[-1]
+            dest_pieces = dest.setdefault("pieces", [])
+            for ly2 in lays_2:
+                for p in ly2.get("pieces", []):
+                    p["layers"] = 4
+                    p.pop("is_sobras", None)
+                    p.pop("is_tip", None)
+                    dest_pieces.append(p)
+        updated = lays_4
+
+    if not updated:
+        updated = copy.deepcopy(layouts)
+
+    # 3. Renumera e recalcula
+    plate_w = float(updated[0].get("sheet_width_mm") or 1350.0)
+    plate_h = float(updated[0].get("sheet_height_mm") or 2553.38)
+    plate_area = max(1e-4, (plate_w * plate_h) / 1e6)
+
+    for idx, ly in enumerate(updated):
+        ly["layout_index"] = idx
+        ly["name"] = f"lay{idx:04d}"
+        ly["code"] = f"lay{idx:04d}"
+        ly["layers"] = 4
+        pieces = ly.get("pieces", [])
+        for p in pieces:
+            p["layers"] = 4
+            p.pop("is_tip", None)
+            p.pop("is_sobras", None)
+        eff_pct, used_m2 = calculate_yield(pieces, plate_area)
+        est_time, _ = calculate_atom_cutting_time(pieces)
+        ly["yield_percent"] = eff_pct
+        ly["yield_pct"] = eff_pct
+        ly["cutting_time_sec"] = est_time
+        ly["used_area_m2"] = used_m2
+
+    msg = "[SOBRAS] Separação de sobras revertida. Layouts restaurados para enfesto padrão de 4 camadas."
+    logger.info(msg)
+    return updated, msg
+

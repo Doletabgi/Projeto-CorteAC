@@ -460,6 +460,9 @@ class DatabaseManager:
                     num_dies INTEGER DEFAULT 0,
                     margin_bottom REAL DEFAULT 10.0,
                     layers INTEGER NULL DEFAULT NULL,
+                    trim_cut_line_json TEXT NULL,
+                    tip_zone_json TEXT NULL,
+                    layers_tip INTEGER NULL DEFAULT NULL,
                     version INTEGER DEFAULT 1,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -533,6 +536,12 @@ class DatabaseManager:
                     cursor.execute("ALTER TABLE layouts ADD COLUMN margin_bottom REAL DEFAULT 10.0")
                 if "layers" not in l_cols:
                     cursor.execute("ALTER TABLE layouts ADD COLUMN layers INTEGER NULL DEFAULT NULL")
+                if "trim_cut_line_json" not in l_cols:
+                    cursor.execute("ALTER TABLE layouts ADD COLUMN trim_cut_line_json TEXT NULL")
+                if "tip_zone_json" not in l_cols:
+                    cursor.execute("ALTER TABLE layouts ADD COLUMN tip_zone_json TEXT NULL")
+                if "layers_tip" not in l_cols:
+                    cursor.execute("ALTER TABLE layouts ADD COLUMN layers_tip INTEGER NULL DEFAULT NULL")
 
                 # Migração idempotente de colunas da tabela layout_pieces (SQLite)
                 cursor.execute("PRAGMA table_info(layout_pieces)")
@@ -580,7 +589,10 @@ class DatabaseManager:
                     "margin_top DOUBLE DEFAULT 10.0",
                     "margin_bottom DOUBLE DEFAULT 10.0",
                     "status VARCHAR(50) DEFAULT 'closed'",
-                    "layers INT NULL DEFAULT NULL"
+                    "layers INT NULL DEFAULT NULL",
+                    "trim_cut_line_json LONGTEXT NULL",
+                    "tip_zone_json VARCHAR(100) NULL",
+                    "layers_tip INT NULL DEFAULT NULL"
                 ):
                     try:
                         cursor.execute(f"ALTER TABLE layouts ADD COLUMN {col_def}")
@@ -1749,6 +1761,13 @@ class DatabaseManager:
                     yield_pct = layout_data.calculate_yield()
                     now_sql = "NOW()" if conn.backend == "mysql" else "CURRENT_TIMESTAMP"
 
+                    trim_cut_val = getattr(layout_data, "trim_cut_line", None)
+                    trim_cut_json = json.dumps(trim_cut_val) if trim_cut_val else None
+                    tip_zone_val = getattr(layout_data, "tip_zone", None)
+                    tip_zone_json = json.dumps(tip_zone_val) if tip_zone_val else None
+                    layers_val = getattr(layout_data, "layers", None)
+                    layers_tip_val = getattr(layout_data, "layers_tip", None)
+
                     target_lid = layout_id or getattr(layout_data, "id", None)
                     if target_lid:
                         # UPDATE em layout existente com controle otimista de versão
@@ -1773,7 +1792,11 @@ class DatabaseManager:
                                 yield_percent = ?,
                                 yield_pct = ?,
                                 num_items = ?,
-                                num_dies = ?
+                                num_dies = ?,
+                                layers = ?,
+                                trim_cut_line_json = ?,
+                                tip_zone_json = ?,
+                                layers_tip = ?
                             WHERE id = ? AND version = ?
                             """
                             cursor.execute(sql_upd, (
@@ -1794,6 +1817,10 @@ class DatabaseManager:
                                 float(yield_pct),
                                 len(layout_data.items),
                                 len(layout_data.target_dies),
+                                layers_val,
+                                trim_cut_json,
+                                tip_zone_json,
+                                layers_tip_val,
                                 target_lid,
                                 expected_version
                             ))
@@ -1822,7 +1849,11 @@ class DatabaseManager:
                                 yield_percent = ?,
                                 yield_pct = ?,
                                 num_items = ?,
-                                num_dies = ?
+                                num_dies = ?,
+                                layers = ?,
+                                trim_cut_line_json = ?,
+                                tip_zone_json = ?,
+                                layers_tip = ?
                             WHERE id = ?
                             """
                             cursor.execute(sql_upd, (
@@ -1843,6 +1874,10 @@ class DatabaseManager:
                                 float(yield_pct),
                                 len(layout_data.items),
                                 len(layout_data.target_dies),
+                                layers_val,
+                                trim_cut_json,
+                                tip_zone_json,
+                                layers_tip_val,
                                 target_lid
                             ))
                         actual_lid = target_lid
@@ -1853,8 +1888,9 @@ class DatabaseManager:
                         INSERT INTO layouts (
                             session_id, name, code, path, `desc`, material_code, material_name,
                             gap_mm, ris_w, width_mm, ris_l, height_mm, area_mm2, yield_percent, yield_pct,
-                            num_items, num_dies, version, created_at, updated_at, created_by, updated_by
-                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, {now_sql}, {now_sql}, ?, ?)
+                            num_items, num_dies, layers, trim_cut_line_json, tip_zone_json, layers_tip,
+                            version, created_at, updated_at, created_by, updated_by
+                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, {now_sql}, {now_sql}, ?, ?)
                         """
                         cursor.execute(sql_ins, (
                             session_id,
@@ -1874,6 +1910,10 @@ class DatabaseManager:
                             float(yield_pct),
                             len(layout_data.items),
                             len(layout_data.target_dies),
+                            layers_val,
+                            trim_cut_json,
+                            tip_zone_json,
+                            layers_tip_val,
                             operator_info,
                             operator_info
                         ))
@@ -1982,6 +2022,17 @@ class DatabaseManager:
             if not row:
                 return None
             res = dict(row)
+            tc_json = res.get("trim_cut_line_json")
+            res["trim_cut_line"] = json.loads(tc_json) if tc_json else None
+            tz_json = res.get("tip_zone_json")
+            if tz_json:
+                try:
+                    res["tip_zone"] = tuple(json.loads(tz_json))
+                except Exception:
+                    res["tip_zone"] = None
+            else:
+                res["tip_zone"] = None
+            res["layers_tip"] = int(res["layers_tip"]) if res.get("layers_tip") is not None else None
             cursor.execute("SELECT * FROM layout_pieces WHERE layout_id = ? ORDER BY item_index ASC", (layout_id,))
             res["pieces"] = [dict(p) for p in cursor.fetchall()]
             return res
@@ -2070,6 +2121,17 @@ class DatabaseManager:
                 d["status"] = d.get("status") or "closed"
                 ly_layers = d.get("layers")
                 d["layers"] = int(ly_layers) if ly_layers is not None else sess_layers
+                tc_json = d.get("trim_cut_line_json")
+                d["trim_cut_line"] = json.loads(tc_json) if tc_json else None
+                tz_json = d.get("tip_zone_json")
+                if tz_json:
+                    try:
+                        d["tip_zone"] = tuple(json.loads(tz_json))
+                    except Exception:
+                        d["tip_zone"] = None
+                else:
+                    d["tip_zone"] = None
+                d["layers_tip"] = int(d["layers_tip"]) if d.get("layers_tip") is not None else None
                 layouts.append(d)
 
             if not layouts:
@@ -2138,6 +2200,11 @@ class DatabaseManager:
                 gap = float(ly.get("gap_mm", 1.0))
                 status = str(ly.get("status", "closed"))
                 ly_layers = int(ly["layers"]) if ly.get("layers") is not None else None
+                trim_cut_val = ly.get("trim_cut_line")
+                trim_cut_json = json.dumps(trim_cut_val) if trim_cut_val else None
+                tip_zone_val = ly.get("tip_zone")
+                tip_zone_json = json.dumps(tip_zone_val) if tip_zone_val else None
+                layers_tip_val = int(ly["layers_tip"]) if ly.get("layers_tip") is not None else None
 
                 items_cnt = len(pieces) if pieces else int(ly.get("num_items") or 0)
                 dies_cnt = len(set(p.get("name") for p in pieces)) if pieces else int(ly.get("num_dies") or 0)
@@ -2148,14 +2215,16 @@ class DatabaseManager:
                     session_id, layout_index, name, code, width_mm, height_mm, ris_w, ris_l,
                     gap_mm, area_mm2, yield_percent, yield_pct, num_items, num_dies,
                     margin_left, margin_right, margin_top, margin_bottom, status,
-                    layers, placed_pieces_json, version, created_at, updated_at, created_by, updated_by
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, {now_sql}, {now_sql}, ?, ?)
+                    layers, trim_cut_line_json, tip_zone_json, layers_tip,
+                    placed_pieces_json, version, created_at, updated_at, created_by, updated_by
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, {now_sql}, {now_sql}, ?, ?)
                 """
                 cursor.execute(sql_ins, (
                     session_id, l_idx, l_name, l_code, w, h, w, h,
                     gap, area_m2 * 1_000_000.0, yield_pct, yield_pct, items_cnt, dies_cnt,
                     m_l, m_r, m_t, m_b, status,
-                    ly_layers, json.dumps(pieces), operator_info, operator_info
+                    ly_layers, trim_cut_json, tip_zone_json, layers_tip_val,
+                    json.dumps(pieces), operator_info, operator_info
                 ))
                 layout_id = cursor.lastrowid
 

@@ -125,6 +125,8 @@ class LayoutData:
     yield_percent: float = 0.0
     session_id: Optional[int] = None
     layers: Optional[int] = None
+    tip_zone: Optional[Tuple[float, float, float, float]] = None
+    layers_tip: Optional[int] = None
     raw_lines: List[str] = field(default_factory=list)
 
     def calculate_yield(self) -> float:
@@ -254,15 +256,27 @@ def parse_lay(source: Any, db=None) -> LayoutData:
                 current_tg.targ_right = _parse_int(vals[1]) if len(vals) > 1 else 0
             continue
 
-        # Suporte a linhas de comentário (ex: '; layers=4' ou '# layers=4')
+        # Suporte a linhas de comentário (ex: '; layers=4', '; tip_zone=x0,y0,x1,y1', '; layers_tip=2')
         if line.startswith(";") or line.startswith("#"):
             comm = line.lstrip(";# ").strip()
             if "=" in comm:
                 ck, cv = comm.split("=", 1)
-                if ck.strip().lower() == "layers":
+                ck_clean = ck.strip().lower()
+                if ck_clean == "layers":
                     parsed_l = _parse_int(cv)
                     if parsed_l >= 1:
                         layout.layers = parsed_l
+                elif ck_clean == "tip_zone":
+                    try:
+                        coords = [float(v.strip()) for v in cv.split(",") if v.strip()]
+                        if len(coords) == 4:
+                            layout.tip_zone = (coords[0], coords[1], coords[2], coords[3])
+                    except Exception:
+                        pass
+                elif ck_clean == "layers_tip":
+                    parsed_lt = _parse_int(cv)
+                    if parsed_lt >= 1:
+                        layout.layers_tip = parsed_lt
             continue
 
         # Chaves de metadados gerais
@@ -279,6 +293,17 @@ def parse_lay(source: Any, db=None) -> LayoutData:
                 parsed_l = _parse_int(val)
                 if parsed_l >= 1:
                     layout.layers = parsed_l
+            elif key == "tip_zone":
+                try:
+                    coords = [float(v.strip()) for v in val.split(",") if v.strip()]
+                    if len(coords) == 4:
+                        layout.tip_zone = (coords[0], coords[1], coords[2], coords[3])
+                except Exception:
+                    pass
+            elif key == "layers_tip":
+                parsed_lt = _parse_int(val)
+                if parsed_lt >= 1:
+                    layout.layers_tip = parsed_lt
             elif key == "codR":
                 layout.cod_r = val
             elif key == "hide":
@@ -438,6 +463,11 @@ def generate_lay_content(
     if layout_data.layers is not None and layout_data.layers >= 1:
         # # CONFIRMAR NO WINDOWS: campo de camadas por layout compatível
         out.append(f"layers={layout_data.layers}")
+    if layout_data.tip_zone:
+        tz = layout_data.tip_zone
+        out.append(f"tip_zone={tz[0]:.4f},{tz[1]:.4f},{tz[2]:.4f},{tz[3]:.4f}")
+    if layout_data.layers_tip is not None and layout_data.layers_tip >= 1:
+        out.append(f"layers_tip={layout_data.layers_tip}")
     out.append(f"codR={layout_data.cod_r}")
     if layout_data.hide_path:
         out.append(f"hide={layout_data.hide_path}")
@@ -555,7 +585,9 @@ def export_layout_from_pieces(
     session_id: Optional[int] = 1,
     filename: str = "l0000.lay",
     path: str = "\\\\lab-inf\\NSDATAV1\\Compiti\\JobManager",
-    layers: Optional[int] = None
+    layers: Optional[int] = None,
+    tip_zone: Optional[Tuple[float, float, float, float]] = None,
+    layers_tip: Optional[int] = None
 ) -> str:
     """
     Exporta uma lista de peças posicionadas (do LayoutEditorView ou SessionView)
@@ -568,6 +600,10 @@ def export_layout_from_pieces(
     """
     if layers is None and isinstance(material, dict):
         layers = material.get("layers")
+    if tip_zone is None and isinstance(material, dict):
+        tip_zone = material.get("tip_zone")
+    if layers_tip is None and isinstance(material, dict):
+        layers_tip = material.get("layers_tip")
     ris_w = float(material.get("width_mm", 1350.0))
     ris_l = float(material.get("height_mm", 2553.38))
     gap = float(material.get("gap_mm", 1.0))
@@ -681,7 +717,9 @@ def export_layout_from_pieces(
         num_of_items=len(items),
         items=items,
         session_id=session_id,
-        layers=layers
+        layers=layers,
+        tip_zone=tip_zone,
+        layers_tip=layers_tip
     )
     layout.calculate_yield()
     return generate_lay_content(layout)

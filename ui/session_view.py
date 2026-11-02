@@ -27,11 +27,19 @@ from cad.layers_rule import (
     calc_resto,
     calc_resto_efetivo,
     resolve_session_layers,
+    resolve_layout_layers,
     pecas_na_mesa,
     parse_session_params,
     encode_session_params,
     is_separar_sobras_enabled,
     is_refile_auto_enabled,
+    layers_for_piece,
+    format_enfesto_operator_text,
+)
+from cad.layers_split import (
+    separar_sobras_em_ponta,
+    desfazer_separacao_sobras,
+    log_sobras,
 )
 
 from ui.sort_utils import natural_sort_key, size_sort_key, shape_area_sort_key, clean_session_display_name, resto_sort_key
@@ -86,6 +94,155 @@ RECOMMENDED_COMBINATIONS = [
         "resultado": "Motor híbrido inteligente por macros declarativas com aprendizado por imitação e auto-tune UCB1."
     },
 ]
+
+
+class SobrasConfigDialog(tk.Toplevel):
+    """
+    Diálogo para configuração do modo de Ponta de 2 Camadas (Enfesto em Degrau)
+    e folga extra da ponta.
+    """
+    def __init__(self, parent, current_tip_mode="canto", current_folga=0.0, on_save_cb=None):
+        super().__init__(parent)
+        self.title("Configurar Ponta de 2 Camadas (Sobras)")
+        self.configure(bg=THEME["bg_card"])
+        self.resizable(False, False)
+        self.transient(parent)
+        self.grab_set()
+
+        self.on_save_cb = on_save_cb
+        self.tip_mode_var = tk.StringVar(value=current_tip_mode if current_tip_mode in ("canto", "faixa") else "canto")
+        self.folga_var = tk.DoubleVar(value=float(current_folga or 0.0))
+
+        self._build_ui()
+        self.geometry("490x350")
+        self.center_window()
+
+    def center_window(self):
+        self.update_idletasks()
+        w = self.winfo_width()
+        h = self.winfo_height()
+        parent = self.master
+        pw = parent.winfo_width()
+        ph = parent.winfo_height()
+        px = parent.winfo_rootx()
+        py = parent.winfo_rooty()
+        x = px + (pw - w) // 2
+        y = py + (ph - h) // 2
+        self.geometry(f"+{x}+{y}")
+
+    def _build_ui(self):
+        pad = tk.Frame(self, bg=THEME["bg_card"], padx=18, pady=16)
+        pad.pack(fill="both", expand=True)
+
+        tk.Label(
+            pad,
+            text="Configuração de Enfesto em Degrau (Ponta de 2 Camadas)",
+            font=("Segoe UI", 11, "bold"),
+            bg=THEME["bg_card"],
+            fg=THEME["text_main"],
+            anchor="w"
+        ).pack(fill="x", pady=(0, 6))
+
+        tk.Label(
+            pad,
+            text="Quando ativo em sessões de 4 camadas, as sobras dos moldes ímpares\n"
+                 "são agrupadas na ponta da última chapa com enfesto de 2 camadas.\n"
+                 "O operador estende 2 folhas longas e 2 curtas (degrau).",
+            font=("Segoe UI", 9),
+            bg=THEME["bg_card"],
+            fg=THEME["text_muted"],
+            justify="left",
+            anchor="w"
+        ).pack(fill="x", pady=(0, 12))
+
+        lbl_mode = tk.Label(
+            pad,
+            text="Modo de delimitação da ponta:",
+            font=("Segoe UI", 9, "bold"),
+            bg=THEME["bg_card"],
+            fg=THEME["text_main"],
+            anchor="w"
+        )
+        lbl_mode.pack(fill="x", pady=(0, 4))
+
+        frame_modes = tk.Frame(pad, bg=THEME["bg_card"])
+        frame_modes.pack(fill="x", pady=(0, 10))
+
+        rb_canto = tk.Radiobutton(
+            frame_modes,
+            text="Canto inferior direito (Recomendado - preserva o restante da chapa)",
+            variable=self.tip_mode_var,
+            value="canto",
+            bg=THEME["bg_card"],
+            fg=THEME["text_main"],
+            activebackground=THEME["bg_card"],
+            selectcolor=THEME["bg_card"],
+            font=("Segoe UI", 9)
+        )
+        rb_canto.pack(anchor="w", pady=2)
+
+        rb_faixa = tk.Radiobutton(
+            frame_modes,
+            text="Faixa vertical inteira (Corte transversal completo no final da chapa)",
+            variable=self.tip_mode_var,
+            value="faixa",
+            bg=THEME["bg_card"],
+            fg=THEME["text_main"],
+            activebackground=THEME["bg_card"],
+            selectcolor=THEME["bg_card"],
+            font=("Segoe UI", 9)
+        )
+        rb_faixa.pack(anchor="w", pady=2)
+
+        frame_folga = tk.Frame(pad, bg=THEME["bg_card"])
+        frame_folga.pack(fill="x", pady=(4, 16))
+
+        tk.Label(
+            frame_folga,
+            text="Folga extra da ponta (mm):",
+            font=("Segoe UI", 9),
+            bg=THEME["bg_card"],
+            fg=THEME["text_main"]
+        ).pack(side="left")
+
+        self.entry_folga = tk.Entry(frame_folga, textvariable=self.folga_var, width=8, font=("Segoe UI", 9))
+        self.entry_folga.pack(side="left", padx=(8, 0))
+
+        frame_btns = tk.Frame(pad, bg=THEME["bg_card"])
+        frame_btns.pack(side="bottom", fill="x")
+
+        btn_cancel = tk.Button(
+            frame_btns,
+            text="Cancelar",
+            command=self.destroy,
+            width=10,
+            font=("Segoe UI", 9)
+        )
+        btn_cancel.pack(side="right", padx=(6, 0))
+
+        btn_save = tk.Button(
+            frame_btns,
+            text="Salvar",
+            command=self._on_save,
+            width=10,
+            bg=THEME.get("accent", "#2563eb"),
+            fg="#ffffff",
+            font=("Segoe UI", 9, "bold")
+        )
+        btn_save.pack(side="right")
+
+    def _on_save(self):
+        try:
+            folga = float(str(self.entry_folga.get()).replace(",", "."))
+            if folga < 0:
+                folga = 0.0
+        except ValueError:
+            folga = 0.0
+        mode = self.tip_mode_var.get()
+        if self.on_save_cb:
+            self.on_save_cb(mode, folga)
+        self.destroy()
+
 
 class SessionView(tk.Frame):
     def __init__(self, parent, session_data=None, canvas_ref=None, on_close=None, on_minimize=None, on_maximize=None, on_edit_shape=None, on_delete_shape=None, on_import_die=None, on_open_layout_editor=None, on_material_change=None, on_nest=None, on_standby=None, on_rewind=None, on_cut=None, on_strategy_change=None, on_add_shapes=None, all_shapes_catalog=None, db=None, on_open_dieproc=None, on_cancel=None, **kwargs):
@@ -335,6 +492,23 @@ class SessionView(tk.Frame):
             font=("Segoe UI", 9)
         )
         self.chk_separar_sobras.pack(side="left", anchor="w")
+
+        self.btn_config_sobras = tk.Button(
+            frame_checks,
+            text="⚙ Configurar…",
+            command=self.open_sobras_config_dialog,
+            bg=THEME["bg_card"],
+            fg=THEME["text_muted"],
+            activebackground=THEME["bg_card"],
+            activeforeground=THEME["text_main"],
+            relief="flat",
+            bd=0,
+            padx=4,
+            pady=0,
+            cursor="hand2",
+            font=("Segoe UI", 8, "underline")
+        )
+        self.btn_config_sobras.pack(side="left", anchor="w", padx=(2, 10))
 
         # Checkbox 2: Refile automático (ao lado)
         self.var_refile_auto = tk.BooleanVar()
@@ -1250,20 +1424,55 @@ class SessionView(tk.Frame):
                 parent=self
             )
 
+    def get_selected_layout(self) -> Optional[Dict[str, Any]]:
+        """Retorna o layout selecionado na tabela da sessão ou o primeiro layout disponível."""
+        layouts = self.session_data.get("layouts", []) if isinstance(self.session_data, dict) else []
+        if hasattr(self, "tree_lays"):
+            sel = self.tree_lays.selection()
+            if sel and layouts:
+                item_iid = sel[0]
+                if item_iid.startswith("lay_"):
+                    try:
+                        idx = int(item_iid.replace("lay_", ""))
+                        if 0 <= idx < len(layouts):
+                            return layouts[idx]
+                    except ValueError:
+                        pass
+        if layouts:
+            return layouts[0]
+        if isinstance(self.session_data, dict) and self.session_data.get("placed_pieces"):
+            mat = self.session_data.get("material") or {}
+            return {
+                "name": self.session_data.get("layout_name") or "lay0000",
+                "pieces": self.session_data.get("placed_pieces", []),
+                "width_mm": float(mat.get("width_mm", 1380.0)),
+                "height_mm": float(mat.get("height_mm", 1080.0)),
+                "layers": self.get_session_layers(),
+                "tip_zone": self.session_data.get("tip_zone"),
+                "layers_tip": self.session_data.get("layers_tip")
+            }
+        return None
+
     def export_lay_file(self):
         """
-        Exporta o layout atual da sessão com suporte à Dupla Saída:
+        Exporta o layout selecionado da sessão com suporte à Dupla Saída:
         - ATOM (.lay)
         - Comelz (.onx)
         - Ambos (.lay + .onx)
+        Preserva dimensões reais, enfesto, ponta de 2 camadas (tip_zone) e linhas de refile.
         """
-        placed_pieces = self.session_data.get("placed_pieces", [])
+        selected_ly = self.get_selected_layout()
+        if not selected_ly:
+            messagebox.showwarning("Exportar Layout", "Não há layout calculado para esta sessão.\nExecute o cálculo de encaixe (Gerar) primeiro.", parent=self)
+            return
+
+        placed_pieces = selected_ly.get("pieces") or selected_ly.get("placed_pieces") or []
         if not placed_pieces:
-            messagebox.showwarning("Exportar Layout", "Não há peças posicionadas no layout para exportar.", parent=self)
+            messagebox.showwarning("Exportar Layout", "Não há peças posicionadas no layout selecionado para exportar.", parent=self)
             return
 
         sess_id = self.session_data.get("id", 1)
-        init_name = self.session_data.get("layout_name") or f"layout_sessao_{sess_id}"
+        init_name = selected_ly.get("name") or self.session_data.get("layout_name") or f"lay0000"
         for ext in (".lay", ".onx"):
             if init_name.endswith(ext):
                 init_name = init_name[:-len(ext)]
@@ -1284,12 +1493,25 @@ class SessionView(tk.Frame):
             return
 
         try:
-            material = self.session_data.get("material") or {
-                "width_mm": 1350.0,
-                "height_mm": 2553.38,
-                "gap_mm": 1.0,
-                "name": "884412"
+            mat = self.session_data.get("material") or {}
+            w = float(selected_ly.get("width_mm") or mat.get("width_mm") or 1380.0)
+            h = float(selected_ly.get("height_mm") or mat.get("height_mm") or 1080.0)
+            material = {
+                "width_mm": w,
+                "height_mm": h,
+                "gap_mm": float(mat.get("gap_mm", 1.0)),
+                "name": mat.get("name") or "884412",
+                "id": mat.get("id") or "884412"
             }
+            exp_layers = resolve_layout_layers(
+                layout=selected_ly,
+                session=self.session_data,
+                material=mat,
+                default=self.get_session_layers()
+            )
+            tip_zone = selected_ly.get("tip_zone")
+            layers_tip = selected_ly.get("layers_tip")
+
             p = Path(filepath)
             is_dual = (p.suffix.lower() not in (".lay", ".onx")) or (";" in str(p))
 
@@ -1298,7 +1520,10 @@ class SessionView(tk.Frame):
                     placed_pieces,
                     material,
                     base_path=p,
-                    session_id=sess_id
+                    session_id=sess_id,
+                    layers=exp_layers,
+                    tip_zone=tip_zone,
+                    layers_tip=layers_tip
                 )
                 msg = (
                     f"Dupla Saída concluída com sucesso!\n\n"
@@ -1319,7 +1544,10 @@ class SessionView(tk.Frame):
                     placed_pieces,
                     material,
                     file_path=p,
-                    session_id=sess_id
+                    session_id=sess_id,
+                    layers=exp_layers,
+                    tip_zone=tip_zone,
+                    layers_tip=layers_tip
                 )
                 msg = f"Layout ATOM (.lay) exportado com sucesso:\n{saved}\nTotal de peças: {len(placed_pieces)}"
 
@@ -1723,6 +1951,87 @@ class SessionView(tk.Frame):
         if self.on_strategy_change_cb:
             self.on_strategy_change_cb(self.get_strategy(), encoded)
 
+    def open_sobras_config_dialog(self):
+        """Abre diálogo para configurar o modo de ponta e folga para enfesto em degrau."""
+        cur_preset, opts = parse_session_params(self.session_data.get("params"))
+        cur_mode = opts.get("tip_mode", "canto")
+        try:
+            cur_folga = float(opts.get("folga_ponta", 0.0))
+        except (ValueError, TypeError):
+            cur_folga = 0.0
+
+        def _on_saved(new_mode, new_folga):
+            cur_p, cur_opts = parse_session_params(self.session_data.get("params"))
+            cur_opts["tip_mode"] = new_mode
+            cur_opts["folga_ponta"] = str(new_folga)
+            encoded = encode_session_params(cur_p, cur_opts)
+            self.session_data["params"] = encoded
+            if self.db and self.session_data.get("id"):
+                try:
+                    self.db.update_session(self.session_data["id"], params=encoded)
+                except Exception:
+                    pass
+            self._on_decision_changed("Configurar Ponta")
+            if self.var_separar_sobras.get():
+                self.reapply_sobras_separation(True)
+
+        SobrasConfigDialog(self, current_tip_mode=cur_mode, current_folga=cur_folga, on_save_cb=_on_saved)
+
+    def reapply_sobras_separation(self, separate: bool):
+        """Reaplica ou desfaz a separação de sobras dinamicamente nos layouts existentes."""
+        layouts = self.session_data.get("layouts")
+        if not layouts:
+            return
+
+        sess_l = self.get_session_layers()
+        if sess_l != 4:
+            return
+
+        mat = self.session_data.get("material") or {}
+        sheet_w = float(mat.get("width_mm") or (layouts[0].get("width_mm") if layouts else 1380.0) or 1380.0)
+        sheet_h = float(mat.get("height_mm") or (layouts[0].get("height_mm") if layouts else 1080.0) or 1080.0)
+        shapes = self.session_data.get("shapes") or []
+        _, opts = parse_session_params(self.session_data.get("params"))
+        refile = opts.get("refile_auto", "1") in ("1", "true", "True")
+        tip_mode = opts.get("tip_mode", "canto")
+
+        if separate:
+            new_lays, msg = separar_sobras_em_ponta(
+                layouts=layouts,
+                shapes=shapes,
+                sheet_w=sheet_w,
+                sheet_h=sheet_h,
+                material=mat,
+                refile=refile,
+                tip_mode=tip_mode,
+                opts=opts
+            )
+            self.session_data["layouts"] = new_lays
+            log_sobras(f"Reaplicado separar_sobras_em_ponta na SessionView: {msg}")
+        else:
+            new_lays, msg = desfazer_separacao_sobras(layouts)
+            self.session_data["layouts"] = new_lays
+            log_sobras(f"Reaplicado desfazer_separacao_sobras na SessionView: {msg}")
+
+        # Salva no banco de dados se session_id estiver disponível
+        sess_id = self.session_data.get("id")
+        if self.db and sess_id:
+            try:
+                self.db.save_session_layouts(sess_id, new_lays)
+            except Exception as e:
+                print(f"Erro ao salvar layouts da sessão após recalcular sobras: {e}")
+
+        # Atualiza a tabela de layouts
+        self.set_session_data(self.session_data)
+
+        # Atualiza o LayoutEditorView se estiver aberto/embutido
+        parent = getattr(self, "master", None) or getattr(self, "parent", None)
+        if parent and hasattr(parent, "layout_editor") and getattr(parent, "layout_editor", None):
+            try:
+                parent.layout_editor.set_session_layouts(new_lays, initial_index=0)
+            except Exception:
+                pass
+
     def on_separar_sobras_toggled(self):
         val = self.var_separar_sobras.get()
         cur_preset, opts = parse_session_params(self.session_data.get("params"))
@@ -1736,6 +2045,7 @@ class SessionView(tk.Frame):
                 pass
         self._on_decision_changed("Separar Sobras")
         self.refresh_shapes_resto_column()
+        self.reapply_sobras_separation(val)
 
     def is_separar_sobras_active(self) -> bool:
         if hasattr(self, "var_separar_sobras"):

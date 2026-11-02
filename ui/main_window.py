@@ -33,10 +33,12 @@ from cad.layers_rule import (
     pecas_na_mesa,
     is_separar_sobras_enabled,
     is_refile_auto_enabled,
+    parse_session_params,
+    encode_session_params,
     trim_layout_dict,
 )
 
-from cad.layers_split import separar_sobras_camadas
+from cad.layers_split import separar_sobras_camadas, separar_sobras_em_ponta, desfazer_separacao_sobras
 from ui.cad_canvas import CADCanvas
 from ui.order_view import OrderView
 from ui.session_view import SessionView
@@ -2317,7 +2319,7 @@ class MainWindow(tk.Tk):
         if self.current_session and self.current_session.get("layouts"):
             layouts = self.current_session.get("layouts", [])
             sess_shapes = getattr(self, "current_shapes", None) or self.current_session.get("shapes", [])
-            new_lays, split_msg = separar_sobras_camadas(
+            new_lays, split_msg = separar_sobras_em_ponta(
                 layouts=layouts,
                 session=self.current_session,
                 shapes=sess_shapes,
@@ -5142,7 +5144,7 @@ class MainWindow(tk.Tk):
                         # Separação de sobras de 4 camadas em 2 camadas
                         if config.get("separar_sobras", True):
                             sess_obj = next((s for s in self.sessions if s.get("id") == sid), {"id": sid})
-                            layouts, split_summary = separar_sobras_camadas(
+                            layouts, split_summary = separar_sobras_em_ponta(
                                 layouts=layouts,
                                 session=sess_obj,
                                 shapes=sorted_shapes,
@@ -5358,7 +5360,8 @@ class MainWindow(tk.Tk):
             if dims:
                 avg_piece_dim = sum(dims) / len(dims)
 
-        orig_backend = os.environ.get("CORTEAC_BACKEND")
+        # Preserva opções extras existentes em params (ex.: separar_sobras, refile_auto, tip_mode, folga_ponta)
+        clean_preset, existing_opts = parse_session_params(params)
 
         # Ajuste de estratégia/parâmetros/motor conforme Camada 1
         if nesting_mode == "auto":
@@ -5371,23 +5374,23 @@ class MainWindow(tk.Tk):
             # entregava 65,8% em 9,1 s. O modo Automático passa a usar o melhor
             # resultado medido, independentemente do tamanho da peça.
             strategy = "flashnestsheet"
-            params = "HighYield"
+            params = encode_session_params("HighYield", existing_opts)
             os.environ["CORTEAC_BACKEND"] = "nfp"
         elif nesting_mode == "fast":
             strategy = "flashnestsheet"
-            params = "FastNest"
+            params = encode_session_params("FastNest", existing_opts)
             os.environ["CORTEAC_BACKEND"] = "nfp"
         elif nesting_mode == "economic":
             strategy = "flashnestsheet"
-            params = "HighYield"
+            params = encode_session_params("HighYield", existing_opts)
             os.environ["CORTEAC_BACKEND"] = "nfp"
         elif nesting_mode == "tapes":
             strategy = "tape_a"
-            params = "stdNOTFill"
+            params = encode_session_params("stdNOTFill", existing_opts)
             os.environ["CORTEAC_BACKEND"] = "nfp"
         elif nesting_mode == "remnants":
             strategy = "freenest"
-            params = "stdNOTFill"
+            params = encode_session_params("stdNOTFill", existing_opts)
             os.environ["CORTEAC_BACKEND"] = "nfp"
         elif nesting_mode == "custom":
             # Respeita o engine configurado no DebugPanel, se presente
@@ -5600,11 +5603,11 @@ class MainWindow(tk.Tk):
                 self.lbl_status_msg.config(text=f"Auto-Nest: {warn}")
                 return
 
-            # Separação automática das sobras de 4 camadas em layout extra de 2 camadas
+            # Separação automática das sobras de 4 camadas em ponta de 2 camadas
             split_summary = None
             if self.current_session and layouts:
                 sess_shapes = getattr(self, "current_shapes", None) or self.current_session.get("shapes", [])
-                layouts, split_summary = separar_sobras_camadas(
+                layouts, split_summary = separar_sobras_em_ponta(
                     layouts=layouts,
                     session=self.current_session,
                     shapes=sess_shapes,

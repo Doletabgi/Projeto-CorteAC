@@ -8,6 +8,8 @@ from typing import Any, Dict, Optional, Union
 __all__ = [
     "resolve_session_layers",
     "resolve_layout_layers",
+    "layers_for_piece",
+    "format_enfesto_operator_text",
     "is_layers_defined",
     "pecas_na_mesa",
     "calc_resto",
@@ -50,6 +52,153 @@ def resolve_layout_layers(
         layout=layout,
         default=default
     )
+
+
+def layers_for_piece(
+    layout: Optional[Union[Dict[str, Any], Any]] = None,
+    piece: Optional[Union[Dict[str, Any], Any]] = None
+) -> int:
+    """
+    Função única de resolução de camadas de corte por peça individual.
+    
+    Regra do enfesto em degrau com ponta de 2 camadas:
+    - Se o layout possuir 'tip_zone' = (x0, y0, x1, y1) em mm no sistema da placa e o
+      centro geométrico da peça estiver dentro da ponta, retorna 'layers_tip' (2).
+    - Caso contrário, retorna 'layers' do layout (ex: 4).
+    - Sem 'tip_zone', mantém o comportamento padrão via resolve_layout_layers.
+    """
+    if layout is None:
+        return 4
+
+    tip_zone = None
+    layers_tip = 2
+    base_layers = 4
+
+    if isinstance(layout, dict):
+        base_layers = resolve_layout_layers(layout=layout, default=4)
+        tip_zone = layout.get("tip_zone")
+        if layout.get("layers_tip") is not None:
+            try:
+                layers_tip = int(layout["layers_tip"])
+            except (ValueError, TypeError):
+                layers_tip = 2
+    else:
+        base_layers = getattr(layout, "layers", 4) or 4
+        tip_zone = getattr(layout, "tip_zone", None)
+        if getattr(layout, "layers_tip", None) is not None:
+            try:
+                layers_tip = int(getattr(layout, "layers_tip"))
+            except (ValueError, TypeError):
+                layers_tip = 2
+
+    if not tip_zone or not piece:
+        return base_layers
+
+    # Extrai coordenadas e centro da peça
+    if isinstance(piece, dict):
+        px = float(piece.get("x", 0.0))
+        py = float(piece.get("y", 0.0))
+        contour = piece.get("contour") or (piece.get("shape", {}).get("contour") if isinstance(piece.get("shape"), dict) else [])
+        rot = float(piece.get("rotation", piece.get("angle", piece.get("rot_deg", 0.0))))
+    else:
+        px = float(getattr(piece, "x", 0.0))
+        py = float(getattr(piece, "y", 0.0))
+        contour = getattr(piece, "contour", [])
+        rot = float(getattr(piece, "rot_deg", 0.0))
+
+    if contour and len(contour) >= 3:
+        try:
+            from cad.geometry import transform_contour, polygon_bbox
+            poly = transform_contour(contour, px, py, rot)
+            min_x, min_y, max_x, max_y = polygon_bbox(poly)
+            center_x = (min_x + max_x) / 2.0
+            center_y = (min_y + max_y) / 2.0
+        except Exception:
+            center_x, center_y = px, py
+    else:
+        center_x, center_y = px, py
+
+    try:
+        x0, y0, x1, y1 = tip_zone
+        min_zx = min(float(x0), float(x1))
+        max_zx = max(float(x0), float(x1))
+        min_zy = min(float(y0), float(y1))
+        max_zy = max(float(y0), float(y1))
+
+        if (min_zx <= center_x <= max_zx) and (min_zy <= center_y <= max_zy):
+            return layers_tip
+    except Exception:
+        pass
+
+    return base_layers
+
+
+def format_enfesto_operator_text(
+    layout: Optional[Union[Dict[str, Any], Any]] = None,
+    sheet_w: Optional[float] = None,
+    sheet_h: Optional[float] = None,
+    tip_mode: str = "canto"
+) -> str:
+    """
+    Gera o texto oficial de instrução de enfesto para o operador no Editor e na impressão A4.
+    
+    Exemplo Canto:
+    "Enfesto: 2 folhas longas de 299,00 × 138,00 cm + 2 folhas curtas, SEM cobrir a ponta de 50,00 × 30,00 cm no canto final"
+    
+    Exemplo Faixa:
+    "Enfesto: 2 folhas longas de 299,00 × 138,00 cm + 2 folhas curtas de 138,00 × 269,00 cm"
+    """
+    tip_zone = None
+    layers = 4
+    if isinstance(layout, dict):
+        tip_zone = layout.get("tip_zone")
+        layers = int(layout.get("layers") or 4)
+        if sheet_w is None:
+            sheet_w = float(layout.get("width_mm") or layout.get("ris_w") or 1380.0)
+        if sheet_h is None:
+            sheet_h = float(layout.get("height_mm") or layout.get("ris_l") or 2990.0)
+    elif layout is not None:
+        tip_zone = getattr(layout, "tip_zone", None)
+        layers = int(getattr(layout, "layers", 4) or 4)
+        if sheet_w is None:
+            sheet_w = float(getattr(layout, "ris_w", 1380.0) or 1380.0)
+        if sheet_h is None:
+            sheet_h = float(getattr(layout, "ris_l", 2990.0) or 2990.0)
+
+    w_val = float(sheet_w or 1380.0)
+    h_val = float(sheet_h or 2990.0)
+
+    # NNN = comprimento/altura da placa (Y), LLL = largura da placa (X) em cm
+    nnn_cm = h_val / 10.0
+    lll_cm = w_val / 10.0
+
+    if not tip_zone:
+        cam_suf = "camada" if layers == 1 else "camadas"
+        return f"Enfesto: {layers} {cam_suf} ({nnn_cm:.2f} × {lll_cm:.2f} cm)"
+
+    x0, y0, x1, y1 = tip_zone
+    min_x, max_x = min(x0, x1), max(x0, x1)
+    min_y, max_y = min(y0, y1), max(y0, y1)
+
+    l_ponta_cm = (max_x - min_x) / 10.0
+    a_ponta_cm = (max_y - min_y) / 10.0
+    x0_cm = min_x / 10.0
+    y0_cm = min_y / 10.0
+
+    # Modo faixa: x0 = 0 e a ponta cobre toda a largura
+    is_faixa = (tip_mode == "faixa") or (abs(min_x) < 1.0 and abs(max_x - w_val) < 5.0)
+
+    if is_faixa:
+        return (
+            f"Enfesto: 2 folhas longas de {nnn_cm:.2f} × {lll_cm:.2f} cm + "
+            f"2 folhas curtas de {lll_cm:.2f} × {y0_cm:.2f} cm, SEM cobrir a ponta de {lll_cm:.2f} × {a_ponta_cm:.2f} cm"
+        )
+    else:
+        return (
+            f"Enfesto: 2 folhas longas de {nnn_cm:.2f} × {lll_cm:.2f} cm + 2 folhas curtas, "
+            f"SEM cobrir a ponta de {l_ponta_cm:.2f} × {a_ponta_cm:.2f} cm no canto final"
+        )
+
 
 
 def resolve_session_layers(
