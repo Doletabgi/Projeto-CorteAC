@@ -9,7 +9,7 @@ on:
       tag_name:
         description: 'Tag de versão SemVer (ex: v1.0.0)'
         required: false
-        default: 'v1.6.18'
+        default: 'v1.6.19'
 
 permissions:
   contents: write
@@ -189,7 +189,12 @@ jobs:
 
             ---
 
-            ### 🛠️ Recursos Incluídos Nesta Versão (v1.6.18):
+            ### 🛠️ Recursos Incluídos Nesta Versão (v1.6.19):
+            - **Linha azul da ponta não vaza mais na miniatura (aba Layout)**:
+              - O refile feito no editor mantinha a ponta com as medidas da chapa cheia; a miniatura desenhava o retângulo azul fora do contorno e salvava o valor errado.
+              - Agora existe uma regra única (`clamp_tip_zone`) usada no refile do editor, na miniatura da sessão, no refile automático e no PDF.
+              - **529 testes automatizados** (528 passando, 1 skip, 0 falhas), incluindo verificação de que o retângulo azul fica dentro da chapa na miniatura.
+            - **Novidades da v1.6.18 (mantidas)**: salvar o refile de verdade no Ctrl+S.
             - **Refile agora fica salvo de verdade (Ctrl+S)**:
               - O editor já gravava as dimensões refiladas, o corte CAM e a ponta no banco, mas a sessão em memória continuava com o tamanho antigo e sobrescrevia tudo na próxima gravação.
               - Agora a lista de placas é sincronizada e persistida ao salvar; a aba Layout mostra todas as placas (antes era reduzida a uma linha).

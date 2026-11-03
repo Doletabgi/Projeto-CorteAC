@@ -104,22 +104,16 @@ def trim_layout_dict(
     # A ponta de 2 camadas foi calculada sobre a chapa ORIGINAL; após o refile a placa
     # encolhe, e um tip_zone maior que a chapa desenhava a linha azul fora do contorno
     # (e gerava texto de almoxarifado com metragem impossível).
-    tz = layout_dict.get("tip_zone")
-    if tz and len(tz) == 4:
-        try:
-            x0, y0, x1, y1 = (float(v) for v in tz)
-            nx0 = min(max(0.0, min(x0, x1)), target_w)
-            nx1 = min(max(0.0, max(x0, x1)), target_w)
-            ny0 = min(max(0.0, min(y0, y1)), target_h)
-            ny1 = min(max(0.0, max(y0, y1)), target_h)
-            if ny1 - ny0 > 0.5 and nx1 - nx0 > 0.5:
-                layout_dict["tip_zone"] = [round(nx0, 2), round(ny0, 2), round(nx1, 2), round(ny1, 2)]
-            else:
-                # A ponta foi totalmente cortada pelo refile: não há mais área de 2 camadas
-                layout_dict.pop("tip_zone", None)
-                layout_dict.pop("layers_tip", None)
-        except (TypeError, ValueError):
-            pass
+    if layout_dict.get("tip_zone"):
+        from cad.layers_rule import clamp_tip_zone
+
+        zona = clamp_tip_zone(layout_dict.get("tip_zone"), target_w, target_h)
+        if zona:
+            layout_dict["tip_zone"] = [round(v, 2) for v in zona]
+        else:
+            # A ponta foi totalmente cortada pelo refile: não há mais área de 2 camadas
+            layout_dict.pop("tip_zone", None)
+            layout_dict.pop("layers_tip", None)
 
     plate_area_m2 = max(1e-4, (target_w * target_h) / 1_000_000.0)
     layout_dict["area_mm2"] = round(target_w * target_h, 2)

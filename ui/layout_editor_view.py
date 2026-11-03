@@ -5280,6 +5280,17 @@ class LayoutEditorView(tk.Frame):
         if target_w_mm is not None:
             self.sheet_width = float(target_w_mm)
 
+        # 3b. A ponta de 2 camadas foi calculada na chapa cheia: limita à placa refilada,
+        #     senão a linha azul é desenhada fora do contorno (miniatura, editor e PDF).
+        if getattr(self, "tip_zone", None):
+            from cad.layers_rule import clamp_tip_zone
+            zona = clamp_tip_zone(self.tip_zone, self.sheet_width, self.sheet_height)
+            if zona:
+                self.tip_zone = [round(v, 2) for v in zona]
+            else:
+                self.tip_zone = None
+                self.layers_tip = None
+
         # 4. Configura ou remove as linhas de corte transversal/longitudinal CAM
         if add_cut_line:
             self.trim_cut_line = {

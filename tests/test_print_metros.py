@@ -135,3 +135,66 @@ class TestPontaEClamp(unittest.TestCase):
         self.assertGreater(tz[3], tz[1])
         self.assertLessEqual(tz[3], layout["height_mm"] + 0.01)
         self.assertLessEqual(tz[2], layout["width_mm"] + 0.01)
+
+
+class TestClampCompartilhado(unittest.TestCase):
+    """O clamp da ponta é único (cad.layers_rule) e usado por editor, miniatura e PDF."""
+
+    def test_clamp_basico(self):
+        from cad.layers_rule import clamp_tip_zone
+
+        z = clamp_tip_zone([0.0, 800.0, 1380.0, 2980.0], 1350.0, 1130.0)
+        self.assertEqual(z, (0.0, 800.0, 1350.0, 1130.0))
+
+    def test_clamp_miniatura_nao_estoura_placa(self):
+        """A miniatura da aba Layout desenha a linha azul dentro do contorno."""
+        if not HAS_TK:
+            self.skipTest("Tkinter indisponível")
+        import tkinter as tk
+        from ui.session_view import SessionView
+
+        try:
+            root = tk.Tk()
+            root.withdraw()
+        except Exception as exc:  # pragma: no cover
+            self.skipTest(f"sem display: {exc}")
+
+        cont = [{"x": 0, "y": 0}, {"x": 90, "y": 0}, {"x": 90, "y": 200}, {"x": 0, "y": 200}]
+        pecas = [{"id": i, "name": "M1", "size": "38", "x": 10.0 + (i - 1) * 95.0, "y": 10.0,
+                  "rotation": 0.0, "contour": cont, "color": "#3b82f6"} for i in range(1, 4)]
+        sess = {
+            "id": 777, "name": "ClampTip",
+            "layouts": [{
+                "layout_index": 0, "name": "lay0000", "layers": 4,
+                "width_mm": 345.0, "height_mm": 265.0,
+                # ponta antiga, da chapa cheia (1,38 x 2,98)
+                "tip_zone": [0.0, 200.0, 1380.0, 2980.0],
+                "pieces": pecas,
+            }],
+        }
+        view = SessionView(root, session_data=sess)
+        view.session_data = sess
+        view.update_idletasks()
+        view.draw_mini_layout_preview()
+
+        cv = view.mini_layout_canvas
+        placa = None
+        ponta = None
+        for item in cv.find_all():
+            if cv.type(item) != "rectangle":
+                continue
+            cor = cv.itemcget(item, "fill")
+            contorno = cv.itemcget(item, "outline")
+            if cor == "#9b9b9b":
+                placa = [float(v) for v in cv.coords(item)]
+            elif contorno == "#2563eb":
+                ponta = [float(v) for v in cv.coords(item)]
+
+        self.assertIsNotNone(placa, "chapa não desenhada")
+        self.assertIsNotNone(ponta, "linha azul da ponta não desenhada")
+        self.assertGreaterEqual(ponta[0], placa[0] - 0.5)
+        self.assertGreaterEqual(ponta[1], placa[1] - 0.5)
+        self.assertLessEqual(ponta[2], placa[2] + 0.5)
+        self.assertLessEqual(ponta[3], placa[3] + 0.5)
+        view.destroy()
+        root.destroy()

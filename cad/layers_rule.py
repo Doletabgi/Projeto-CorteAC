@@ -133,6 +133,35 @@ def layers_for_piece(
     return base_layers
 
 
+def clamp_tip_zone(tip_zone, sheet_w_mm, sheet_h_mm):
+    """
+    Limita a ponta de 2 camadas aos limites da placa.
+
+    A ponta é calculada sobre a chapa ORIGINAL (ex.: 1,38 × 2,98 m); depois do refile a
+    placa encolhe (ex.: 1,35 × 1,13 m). Sem o clamp, a linha azul é desenhada fora do
+    contorno (miniatura, editor e PDF).
+
+    Devolve (x0, y0, x1, y1) em mm dentro da placa, ou None se não sobrar área útil.
+    """
+    if not tip_zone or len(tip_zone) != 4:
+        return None
+    try:
+        x0, y0, x1, y1 = (float(v) for v in tip_zone)
+    except (TypeError, ValueError):
+        return None
+    w = float(sheet_w_mm or 0.0)
+    h = float(sheet_h_mm or 0.0)
+    if w <= 0 or h <= 0:
+        return None
+    nx0 = min(max(0.0, min(x0, x1)), w)
+    nx1 = min(max(0.0, max(x0, x1)), w)
+    ny0 = min(max(0.0, min(y0, y1)), h)
+    ny1 = min(max(0.0, max(y0, y1)), h)
+    if nx1 - nx0 <= 0.5 or ny1 - ny0 <= 0.5:
+        return None
+    return (nx0, ny0, nx1, ny1)
+
+
 def format_enfesto_operator_text(
     layout: Optional[Union[Dict[str, Any], Any]] = None,
     sheet_w: Optional[float] = None,
@@ -187,8 +216,12 @@ def format_enfesto_operator_text(
     min_y, max_y = min(y0, y1), max(y0, y1)
 
     # A ponta nunca pode passar da chapa (após refile a placa encolhe)
-    min_x, max_x = max(0.0, min_x), min(w_val, max_x)
-    min_y, max_y = max(0.0, min_y), min(h_val, max_y)
+    _zona = clamp_tip_zone((min_x, min_y, max_x, max_y), w_val, h_val)
+    if _zona:
+        min_x, min_y, max_x, max_y = _zona
+    else:
+        min_x = min_y = 0.0
+        max_x, max_y = w_val, h_val
 
     l_ponta = _m(max_x - min_x)
     a_ponta = _m(max_y - min_y)

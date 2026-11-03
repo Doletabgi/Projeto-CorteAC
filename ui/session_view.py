@@ -1886,6 +1886,10 @@ class SessionView(tk.Frame):
             tip_zone = self.session_data.get("tip_zone")
 
         if tip_zone:
+            from cad.layers_rule import clamp_tip_zone
+            zona = clamp_tip_zone(tip_zone, sheet_w, sheet_h)
+            tip_zone = zona
+        if tip_zone:
             tx0, ty0, tx1, ty1 = tip_zone
             min_zx, max_zx = min(tx0, tx1), max(tx0, tx1)
             min_zy, max_zy = min(ty0, ty1), max(ty0, ty1)

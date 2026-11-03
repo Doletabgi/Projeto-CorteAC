@@ -274,30 +274,10 @@ def format_shape_id_tag(s_id) -> str:
 
 
 def _clamp_tip_zone(tip_zone, sheet_w_mm, sheet_h_mm):
-    """
-    Limita a ponta de 2 camadas aos limites da placa.
+    """Alias para o clamp compartilhado (cad.layers_rule.clamp_tip_zone)."""
+    from cad.layers_rule import clamp_tip_zone
 
-    A ponta é calculada sobre a chapa ORIGINAL (ex.: 1,38 × 2,98 m); depois do refile a
-    placa encolhe (ex.: 1,35 × 1,13 m) e a linha azul era desenhada fora do contorno.
-    Devolve (x0, y0, x1, y1) em mm dentro da placa, ou None se não sobrar área útil.
-    """
-    if not tip_zone or len(tip_zone) != 4:
-        return None
-    try:
-        x0, y0, x1, y1 = (float(v) for v in tip_zone)
-    except (TypeError, ValueError):
-        return None
-    w = float(sheet_w_mm or 0.0)
-    h = float(sheet_h_mm or 0.0)
-    if w <= 0 or h <= 0:
-        return None
-    nx0 = min(max(0.0, min(x0, x1)), w)
-    nx1 = min(max(0.0, max(x0, x1)), w)
-    ny0 = min(max(0.0, min(y0, y1)), h)
-    ny1 = min(max(0.0, max(y0, y1)), h)
-    if nx1 - nx0 <= 0.5 or ny1 - ny0 <= 0.5:
-        return None
-    return (nx0, ny0, nx1, ny1)
+    return clamp_tip_zone(tip_zone, sheet_w_mm, sheet_h_mm)
 
 
 def _desenhar_retangulo_tracejado(draw, box, cor="#2563eb", largura=2, traco=6, vao=4):
