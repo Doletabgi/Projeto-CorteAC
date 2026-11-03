@@ -1100,28 +1100,38 @@ def preencher_buracos_em_placas(
     step_mm: float = 10.0,
     time_budget_s: float = 4.0,
     rotacoes=(0.0, 180.0),
+    session=None,
+    shapes=None,
 ):
     """
     Preenche vãos ("buracos") das placas já encaixadas movendo peças da ÚLTIMA placa.
 
-    O motor de nesting encerra a última fileira e deixa um bolsão no canto; essas peças
-    eram material perdido (o operador via o buraco no editor). Aqui:
-      1. mapeia a ocupação de cada placa numa grade grossa;
-      2. encontra regiões vazias (bolsões);
-      3. tenta encaixar cada peça da última placa (4 camadas) em cada bolsão,
-         testando apenas 0°/180° (regra do operador: NUNCA deitar a peça) com
-         colisão real (gap respeitado);
-      4. se a última placa ficar vazia, ela é removida (menos uma chapa).
+    Regras (§8.35, §8.45, §8.46, §8.47):
+      1. Candidatos da última placa: apenas 4 camadas (layers != 2), ignorando
+         peças de ponta (is_tip) e peças dobradas (is_duplicate).
+      2. Prioriza peças da fileira que define a altura da última placa (maior Y),
+         para tentar reduzir a altura e encurtar a chapa.
+      3. Testa exclusivamente rotações 0° e 180° (NUNCA deitar a peça a 90°/270°),
+         alternando rotações a cada posição para permitir intertravamento macho-fêmea.
+      4. Colisão real de polígonos respeitando o gap da sessão e margens da chapa.
+      5. Mantém os dicionários originais das peças e copia apenas x, y e rotation (§8.35).
+      6. Integridade física estrita: sum(peças * camadas) = 2P por molde. Rollback se divergir.
+      7. Se a última placa ficar vazia, ela é removida e as placas restantes são renumeradas.
+      8. Recalcula dimensões úteis, tip_zone (com clamp_tip_zone) e rendimento da última placa.
 
     Retorna (layouts, info) com info = {"movidas": n, "placas_removidas": n}.
     """
+    import copy
     import math
     import time as _time
+    from cad.layers_rule import clamp_tip_zone, layers_for_piece
+    from cad.trim_engine import calculate_layout_trim_bounds
 
     info = {"movidas": 0, "placas_removidas": 0}
     if not layouts or len(layouts) < 2:
         return layouts, info
 
+    original_layouts = copy.deepcopy(layouts)
     t0 = _time.time()
 
     def _poly(p):
@@ -1131,8 +1141,12 @@ def preencher_buracos_em_placas(
             cnt = shp.get("contour")
         if not cnt:
             return None
-        return transform_contour(cnt, float(p.get("x", 0.0)), float(p.get("y", 0.0)),
-                                 float(p.get("rotation", p.get("angle", 0.0))))
+        return transform_contour(
+            cnt,
+            float(p.get("x", 0.0)),
+            float(p.get("y", 0.0)),
+            float(p.get("rotation", p.get("angle", 0.0))),
+        )
 
     def _camadas(p, ly):
         try:
@@ -1144,27 +1158,34 @@ def preencher_buracos_em_placas(
     origem_pieces = list(origem.get("pieces") or [])
 
     def _alvos_da_origem():
-        """Peças de 4 camadas da última placa (as de 2 camadas ficam na ponta)."""
-        return [p for p in origem_pieces if _camadas(p, origem) != 2]
+        """Peças de 4 camadas da última placa (ponta e duplicadas ficam intactas)."""
+        return [
+            p for p in origem_pieces
+            if _camadas(p, origem) != 2
+            and not p.get("is_tip")
+            and not p.get("is_duplicate")
+        ]
 
     candidatos = _alvos_da_origem()
     if not candidatos:
         return layouts, info
 
-    # Bounding box de cada candidato em cada rotação, para pré-filtrar
-    def _bbox_rot(p, rot):
-        cnt = p.get("contour") or (p.get("shape") or {}).get("contour") or []
-        if not cnt:
-            return None
-        loc = transform_contour(cnt, 0.0, 0.0, rot)
-        return polygon_bbox(loc), loc
+    # Prioriza mover peças da fileira que define a altura da última placa (maior Y)
+    candidatos.sort(key=lambda p: float(p.get("y", 0.0)), reverse=True)
+
+    rotacoes_validas = tuple(float(r) for r in rotacoes if round(float(r)) % 180 == 0)
+    if not rotacoes_validas:
+        rotacoes_validas = (0.0, 180.0)
 
     for ly in layouts[:-1]:
         if not candidatos or _time.time() - t0 > time_budget_s:
             break
         bw = float(ly.get("width_mm") or ly.get("sheet_width_mm") or 1380.0)
         bh = float(ly.get("height_mm") or ly.get("sheet_height_mm") or 2980.0)
-        margin = 10.0
+        m_l = float(ly.get("margin_left", 10.0))
+        m_r = float(ly.get("margin_right", 10.0))
+        m_b = float(ly.get("margin_bottom", 10.0))
+        m_t = float(ly.get("margin_top", 10.0))
         pecas = ly.setdefault("pieces", [])
 
         polys = []
@@ -1173,15 +1194,24 @@ def preencher_buracos_em_placas(
             if q:
                 polys.append((q, polygon_bbox(q), p))
 
-        # 1. Grade de ocupação — usa o POLÍGONO real (não a bounding box).
-        #    Com bbox, os vãos entre os contornos do pé ficavam marcados como ocupados
-        #    e nenhum bolsão era encontrado (o passe nunca preenchia nada).
+        # 1. Grade de ocupação — usa polígono real e marca margens como ocupadas
         nx = max(1, int(bw // cell_mm))
         ny = max(1, int(bh // cell_mm))
         ocupado = bytearray(nx * ny)
+
+        for j in range(ny):
+            yc = (j + 0.5) * cell_mm
+            base = j * nx
+            for i in range(nx):
+                xc = (i + 0.5) * cell_mm
+                if xc < m_l or xc > bw - m_r or yc < m_b or yc > bh - m_t:
+                    ocupado[base + i] = 1
+
         for _, bb, _p in polys:
-            i0 = max(0, int(bb[0] // cell_mm)); i1 = min(nx - 1, int(bb[2] // cell_mm))
-            j0 = max(0, int(bb[1] // cell_mm)); j1 = min(ny - 1, int(bb[3] // cell_mm))
+            i0 = max(0, int(bb[0] // cell_mm))
+            i1 = min(nx - 1, int(bb[2] // cell_mm))
+            j0 = max(0, int(bb[1] // cell_mm))
+            j1 = min(ny - 1, int(bb[3] // cell_mm))
             if i1 < i0 or j1 < j0:
                 continue
             for j in range(j0, j1 + 1):
@@ -1193,13 +1223,32 @@ def preencher_buracos_em_placas(
                     if point_in_polygon((i + 0.5) * cell_mm, yc, _):
                         ocupado[base + i] = 1
 
-        # 2. Regiões vazias conectadas (4-vizinhos)
+        # 2. Identificação de células livres sólidas (erosão para grade fina)
+        livre = bytearray(nx * ny)
+        if cell_mm <= 25.0:
+            for j in range(1, ny - 1):
+                for i in range(1, nx - 1):
+                    idx = j * nx + i
+                    if not ocupado[idx]:
+                        if not ocupado[idx - 1] and not ocupado[idx + 1] and not ocupado[idx - nx] and not ocupado[idx + nx]:
+                            livre[idx] = 1
+        else:
+            for idx in range(nx * ny):
+                if not ocupado[idx]:
+                    livre[idx] = 1
+
+        # Limite de altura: preenche apenas vãos dentro da altura já ocupada pela placa
+        # (evita criar fileiras extras fora do contorno original da chapa).
+        curr_max_y = max((bb[3] for _, bb, _ in polys), default=bh - m_t)
+        limite_y = min(bh - m_t, curr_max_y + 10.0)
+
+        # 3. Regiões vazias conectadas
         visitado = bytearray(nx * ny)
         regioes = []
         for j in range(ny):
             for i in range(nx):
                 idx = j * nx + i
-                if ocupado[idx] or visitado[idx]:
+                if not livre[idx] or visitado[idx]:
                     continue
                 fila = [(i, j)]
                 visitado[idx] = 1
@@ -1217,49 +1266,98 @@ def preencher_buracos_em_placas(
                         ni, nj = ci + di, cj + dj
                         if 0 <= ni < nx and 0 <= nj < ny:
                             k = nj * nx + ni
-                            if not ocupado[k] and not visitado[k]:
+                            if livre[k] and not visitado[k]:
                                 visitado[k] = 1
                                 fila.append((ni, nj))
                 if n_cel >= 4:
-                    regioes.append((n_cel, (min_i * cell_mm, min_j * cell_mm,
-                                            (max_i + 1) * cell_mm, (max_j + 1) * cell_mm)))
+                    if cell_mm <= 25.0:
+                        rx0 = max(m_l, (min_i - 1) * cell_mm)
+                        ry0 = max(m_b, (min_j - 1) * cell_mm)
+                        rx1 = min(bw - m_r, (max_i + 2) * cell_mm)
+                        ry1 = min(limite_y, (max_j + 2) * cell_mm)
+                    else:
+                        rx0 = max(m_l, min_i * cell_mm)
+                        ry0 = max(m_b, min_j * cell_mm)
+                        rx1 = min(bw - m_r, (max_i + 1) * cell_mm)
+                        ry1 = min(limite_y, (max_j + 1) * cell_mm)
+                    if rx1 > rx0 and ry1 > ry0:
+                        regioes.append((n_cel, (rx0, ry0, rx1, ry1)))
         regioes.sort(reverse=True)
 
         if not regioes:
             continue
 
-        # 3. Tenta encaixar peças da última placa nos bolsões
+        # 4. Índice espacial para aceleração das colisões locais
+        grid_cell = 100.0
+        g_nx = max(1, int(bw // grid_cell)) + 1
+        g_ny = max(1, int(bh // grid_cell)) + 1
+        spatial_grid = {}
+        for idx_p, (q, qb, _pp) in enumerate(polys):
+            gx0 = max(0, int(qb[0] // grid_cell)); gx1 = min(g_nx - 1, int(qb[2] // grid_cell))
+            gy0 = max(0, int(qb[1] // grid_cell)); gy1 = min(g_ny - 1, int(qb[3] // grid_cell))
+            for gy in range(gy0, gy1 + 1):
+                for gx in range(gx0, gx1 + 1):
+                    spatial_grid.setdefault((gx, gy), []).append(idx_p)
+
+        # 5. Encaixe de candidatos nos bolsões
         for regiao in regioes:
             if _time.time() - t0 > time_budget_s:
                 break
             rx0, ry0, rx1, ry1 = regiao[1]
             restantes = []
             for p in candidatos:
+                if _time.time() - t0 > time_budget_s:
+                    restantes.append(p)
+                    continue
                 posto = False
-                for rot in rotacoes:
-                    br = _bbox_rot(p, rot)
-                    if not br:
-                        continue
-                    (bx0, by0, bx1, by1), loc = br
-                    w = bx1 - bx0
-                    h = by1 - by0
-                    if w > (rx1 - rx0) or h > (ry1 - ry0):
-                        continue
-                    y = ry0
-                    while y + h <= ry1 and not posto:
-                        x = rx0
-                        while x + w <= rx1 and not posto:
-                            if _time.time() - t0 > time_budget_s:
-                                break
-                            cand_poly = [{"x": q["x"] + x - bx0, "y": q["y"] + y - by0} for q in loc]
+                cnt = p.get("contour") or (p.get("shape") or {}).get("contour") or []
+                if not cnt:
+                    restantes.append(p)
+                    continue
+
+                locs = {}
+                for rot in rotacoes_validas:
+                    l = transform_contour(cnt, 0.0, 0.0, rot)
+                    b = polygon_bbox(l)
+                    locs[rot] = (l, b, b[2] - b[0], b[3] - b[1])
+
+                y = ry0
+                while y <= ry1 and not posto:
+                    if _time.time() - t0 > time_budget_s:
+                        break
+                    x = rx0
+                    while x <= rx1 and not posto:
+                        for rot in rotacoes_validas:
+                            loc, (bx0, by0, bx1, by1), w, h = locs[rot]
+                            if x + w > rx1 or y + h > ry1 or y + h > (bh - m_t):
+                                continue
+
+                            # Rejeição ultra-rápida via centro na grade de ocupação
+                            cx = int((x + w * 0.5) // cell_mm)
+                            cy = int((y + h * 0.5) // cell_mm)
+                            if 0 <= cx < nx and 0 <= cy < ny and ocupado[cy * nx + cx]:
+                                continue
+
+                            cand_poly = [{"x": pt["x"] + x - bx0, "y": pt["y"] + y - by0} for pt in loc]
                             cb = polygon_bbox(cand_poly)
+
+                            # Consulta polígonos vizinhos na grade espacial
+                            cgx0 = max(0, int(cb[0] // grid_cell)); cgx1 = min(g_nx - 1, int(cb[2] // grid_cell))
+                            cgy0 = max(0, int(cb[1] // grid_cell)); cgy1 = min(g_ny - 1, int(cb[3] // grid_cell))
+                            cand_indices = set()
+                            for cgy in range(cgy0, cgy1 + 1):
+                                for cgx in range(cgx0, cgx1 + 1):
+                                    cand_indices.update(spatial_grid.get((cgx, cgy), []))
+
                             colide = False
-                            for q, qb, _pp in polys:
+                            for idx_p in cand_indices:
+                                q, qb, _pp = polys[idx_p]
                                 if cb[2] < qb[0] or cb[0] > qb[2] or cb[3] < qb[1] or cb[1] > qb[3]:
                                     continue
                                 if polygons_collide(cand_poly, q, gap=gap_mm, bbox_a=cb, bbox_b=qb):
                                     colide = True
                                     break
+
                             if not colide:
                                 p["x"] = float(x - bx0)
                                 p["y"] = float(y - by0)
@@ -1267,13 +1365,26 @@ def preencher_buracos_em_placas(
                                 for campo in ("poly", "bbox", "_segs"):
                                     p.pop(campo, None)
                                 pecas.append(p)
+                                new_idx = len(polys)
                                 polys.append((cand_poly, cb, p))
+                                for cgy in range(cgy0, cgy1 + 1):
+                                    for cgx in range(cgx0, cgx1 + 1):
+                                        spatial_grid.setdefault((cgx, cgy), []).append(new_idx)
+
+                                i0 = max(0, int(cb[0] // cell_mm)); i1 = min(nx - 1, int(cb[2] // cell_mm))
+                                j0 = max(0, int(cb[1] // cell_mm)); j1 = min(ny - 1, int(cb[3] // cell_mm))
+                                for jj in range(j0, j1 + 1):
+                                    yc = (jj + 0.5) * cell_mm
+                                    base = jj * nx
+                                    for ii in range(i0, i1 + 1):
+                                        if point_in_polygon((ii + 0.5) * cell_mm, yc, cand_poly):
+                                            ocupado[base + ii] = 1
+
                                 info["movidas"] += 1
                                 posto = True
-                            x += step_mm
-                        y += step_mm
-                    if posto:
-                        break
+                                break
+                        x += step_mm
+                    y += step_mm
                 if not posto:
                     restantes.append(p)
             candidatos = restantes
@@ -1281,12 +1392,78 @@ def preencher_buracos_em_placas(
                 break
 
     if info["movidas"]:
-        movidas_ids = {id(p) for p in origem_pieces} - {id(p) for p in origem_pieces if p in candidatos}
-        origem["pieces"] = list(candidatos)
-        origem["num_items"] = len(candidatos)
-        if not candidatos:
+        # Atualiza peças restantes na última placa
+        placed_ids = {id(p) for ly in layouts[:-1] for p in ly.get("pieces", [])}
+        origem["pieces"] = [p for p in origem_pieces if id(p) not in placed_ids]
+        origem["num_items"] = len(origem["pieces"])
+
+        # Verificação física estrita se moldes/sessão fornecidos
+        verif_shapes = shapes or (session.get("shapes") if isinstance(session, dict) else None)
+        if verif_shapes:
+            for shp in verif_shapes:
+                req_p = int(shp.get("pairs") or 0)
+                if req_p <= 0:
+                    continue
+                expected_phys = 2 * req_p
+                actual_phys = sum(
+                    layers_for_piece(ly, p)
+                    for ly in layouts
+                    for p in ly.get("pieces", [])
+                    if piece_matches_shape(p, shp)
+                )
+                if actual_phys != expected_phys:
+                    logger.error(
+                        "[BURACOS] Divergência física no molde '%s': esperado %d, obtido %d. Rollback.",
+                        shp.get("name"), expected_phys, actual_phys,
+                    )
+                    return original_layouts, {"movidas": 0, "placas_removidas": 0}
+
+        # Se a última placa esvaziar, remove e renumera continuamente
+        if not origem["pieces"]:
             layouts.pop()
             info["placas_removidas"] = 1
+            for idx, ly in enumerate(layouts):
+                ly["layout_index"] = idx
+                name = f"lay{idx:04d}"
+                ly["name"] = name
+                ly["code"] = name
+        else:
+            # Recalcula dimensões úteis e clamp_tip_zone da última placa
+            origem_w = float(origem.get("width_mm") or origem.get("sheet_width_mm") or 1380.0)
+            origem_h = float(origem.get("height_mm") or origem.get("sheet_height_mm") or 2980.0)
+            tw, th = calculate_layout_trim_bounds(origem["pieces"], gap_mm=gap_mm)
+            if tw > 0 and th > 0:
+                origem["ris_w"] = tw
+                origem["ris_l"] = th
+                if origem.get("tip_zone"):
+                    zona = clamp_tip_zone(origem["tip_zone"], origem_w, th)
+                    if zona:
+                        origem["tip_zone"] = [round(v, 2) for v in zona]
+                    else:
+                        origem.pop("tip_zone", None)
+                        origem.pop("layers_tip", None)
+
+            plate_area_m2 = max(1e-4, (origem_w * origem_h) / 1e6)
+            eff_pct, used_m2 = calculate_yield(origem["pieces"], plate_area_m2)
+            est_time, _ = calculate_atom_cutting_time(origem["pieces"])
+            origem["yield_percent"] = eff_pct
+            origem["yield_pct"] = eff_pct
+            origem["cutting_time_sec"] = est_time
+            origem["used_area_m2"] = used_m2
+
+        # Recalcula rendimento e estatísticas das placas que receberam peças
+        for ly in (layouts[:-1] if not info["placas_removidas"] else layouts):
+            p_w = float(ly.get("width_mm") or ly.get("sheet_width_mm") or 1380.0)
+            p_h = float(ly.get("height_mm") or ly.get("sheet_height_mm") or 2980.0)
+            p_area_m2 = max(1e-4, (p_w * p_h) / 1e6)
+            eff_pct, used_m2 = calculate_yield(ly.get("pieces", []), p_area_m2)
+            est_time, _ = calculate_atom_cutting_time(ly.get("pieces", []))
+            ly["yield_percent"] = eff_pct
+            ly["yield_pct"] = eff_pct
+            ly["cutting_time_sec"] = est_time
+            ly["used_area_m2"] = used_m2
+            ly["num_items"] = len(ly.get("pieces", []))
+
         logger.info("[BURACOS] %d peça(s) movidas da última placa para vãos das anteriores%s",
                     info["movidas"], " (placa final removida)" if info["placas_removidas"] else "")
     return layouts, info

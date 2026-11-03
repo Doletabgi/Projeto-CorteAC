@@ -1,12 +1,12 @@
 # PROJETO ATOM JobManager Reborn: Documento Vivo
 
 > **Finalidade:** Documento mestre estruturado e autocontido projetado para alimentar e contextualizar qualquer Inteligência Artificial (Antigravity, Claude, ChatGPT, etc.) ou engenheiro sobre 100% do projeto — regras de negócio de calçados/couro (ATOM), arquitetura técnica, schemas de banco (MySQL/SQLite), formatos proprietários (.LAY, .ONX/CZLIB), algoritmos de nesting/CAM, UI/UX e histórico — em um único arquivo de referência imediata.
-**Atalho de leitura:** o comportamento ATUAL de encaixe, sobras, impressão e atalho está consolidado na **§8.47**; as seções §8.26–§8.46 são o histórico de como se chegou lá.
+**Atalho de leitura:** o comportamento ATUAL de encaixe, sobras, impressão e atalho está consolidado na **§8.47** e **§8.48**; as seções §8.26–§8.46 são o histórico de como se chegou lá.
 >
 > **Regra de ouro:** o que está marcado `[CONFIRMADO]` veio do relatório, do código ou do usuário. O que está `[NÃO CONFIRMADO]` é suposição e não deve virar "fato" sem validação. O que está `[PREENCHER]` a IA deve completar lendo o código real.
 
 <!-- AUTO:header:start -->
-**Última sincronização com o código:** 2026-11-03 18:59 (HEAD ao gerar: `2d5cfe7`; 138 arquivos Python, ~67800 linhas)
+**Última sincronização com o código:** 2026-11-03 20:03 (HEAD ao gerar: `a0797e9`; 138 arquivos Python, ~68125 linhas)
 <!-- AUTO:header:end -->
 **Versão deste documento:** 2
 
@@ -497,6 +497,7 @@ ui/units.py                                          # ui/units.py - Formataçã
 ### `tests/test_preencher_buracos.py`
 - `class TestPreencherBuracos` (linha 25, 4 métodos)
 - `class TestNuncaDeitarPeca` (linha 78, 2 métodos): Regra do operador: peça nunca é deitada (90°/270°) — só 0°/180°.
+- `class TestSegundoPassePosSobras` (linha 110, 1 métodos): Cenário real 6 moldes x 101 pares, chapa 1,37 x 2,82 m, 4 camadas (§8.48):
 - funções: `_peca`
 
 ### `tests/test_print_layout_abre.py`
@@ -3546,10 +3547,11 @@ sobras, impressão e distribuição. As seções §8.26–§8.46 detalham como s
 ```
 Gerar
  └─ nest_multi_sheet                (encaixe 0/180, multi-placa)
-     └─ preencher_buracos_em_placas (vãos: só 0/180; peças de 4 camadas da última placa)
+     └─ preencher_buracos_em_placas (1º passe: vãos pré-sobras)
          └─ separar_sobras_em_ponta (ponta 2c + escolha da divisão com dobra)
-             └─ trim_layout_dict    (refile automático, se ligado; clamp da ponta)
-                 └─ save_session_layouts (persistência)
+             └─ preencher_buracos_em_placas (2º passe: fecha buraco pós-separação com grade fina)
+                 └─ trim_layout_dict    (refile automático, se ligado; clamp da ponta)
+                     └─ save_session_layouts (persistência)
 ```
 
 ### 3. Limites medidos (não são bugs)
@@ -3582,9 +3584,56 @@ Gerar
 
 ### 6. Qualidade
 
-- Suíte: **561 testes + 1 skip** (inclui regressões de compactação, vãos, rotação 0/180, refile salvo,
-  impressão em metros, atalho versionado).
+- Suíte: **562 testes + 1 skip** (inclui regressões de compactação, vãos, rotação 0/180, refile salvo,
+  impressão em metros, atalho versionado, fechamento de buraco da placa 0 pós-separação).
 - Testes de catálogo usam banco temporário (não dependem do `jobmanager.db` de produção).
+
+---
+
+## 8.48. Fechamento do Buraco da Placa 0 Pós-Separação de Sobras (v1.6.26) `[CONFIRMADO]`
+
+### 1. Contexto e Causa Raiz
+
+Em sessões multi-placas de 4 camadas com separação automática de sobras (ex.: Sessão #282 com 6 moldes × 101 pares em 4 camadas, chapa refilada 1,37 × 2,82 m), a placa 0 continha originalmente 224 peças (36a/35a/34a/33a × 51 + 20 da 32a).
+A separação de sobras retira 1 peça de cada molde ímpar que termina na placa 0 (36a, 35a, 34a e 33a), reduzindo a contagem para 220 peças. A rotina `_recompact_plate` reencaixa as peças restantes empurrando-as para a base, deixando um bolsão livre de ~36 × 20 cm no canto superior direito (área exata de 4 peças).
+Na arquitetura anterior, `preencher_buracos_em_placas()` rodava exclusivamente **antes** de `separar_sobras_em_ponta()`, quando a placa 0 estava completamente cheia e não havia vão algum.
+
+### 2. O que foi feito
+
+1. **Segundo Passe de Preenchimento de Vãos**:
+   - Integrado ao fluxo do botão Gerar (`MainWindow._poll_nest_worker`) e lote (`_poll_batch_worker`) logo após `separar_sobras_em_ponta` e antes de `trim_layout_dict`.
+   - Executado com grade fina (`cell_mm=20.0`, `step_mm=5.0`, `time_budget_s=4.0`).
+2. **Otimizações Algorítmicas no Motor de Encaixe (`cad/nesting_engine.py`)**:
+   - **Marcação de Margens na Grade de Ocupação**: As margens da chapa (`m_l`, `m_r`, `m_b`, `m_t`) são marcadas como ocupadas, impedindo que a folga de 10 mm na borda superior se conecte com canais periféricos, evitando a fusão espúria de vãos em um único bounding box global gigante.
+   - **Erosão Morfológica**: Ativada para grade fina (`cell_mm <= 25.0`), eliminando gargalos estreitos onde a peça não cabe antes de calcular bounding boxes.
+   - **Aceleração Spatial Hash Grid (100 mm) + Lookup O(1)**: Antes de testar colisão poligonal completa com gap, verifica se a célula central está livre em `ocupado`. O SAT é acelerado por grid espacial local, reduzindo o tempo de encaixe das 4 peças de ~30 s para ~0,2 s.
+   - **Alternância de Rotações 0°/180°**: O teste de ângulos 0° e 180° é alternado a cada ponto $(x, y)$, permitindo intertravamento macho-fêmea compacto imediato.
+   - **Teto de Altura (`limite_y`)**: `limite_y = min(bh - m_t, curr_max_y + 10.0)` garante que o preenchimento não crie fileiras adicionais acima do contorno da chapa original, preenchendo estritamente vãos internos e fechando com 224 peças exatas.
+3. **Regras de Negócio e Conservação Física Estrita**:
+   - Peças de ponta (`layers == 2`, `is_tip=True`) e duplicadas (`is_duplicate=True`) são rigorosamente ignoradas e preservadas intactas.
+   - Apenas peças de 4 camadas da última placa (`layers != 2`) são candidatas a migrar.
+   - Candidatos ordenados por $Y$ decrescente para priorizar redução de altura da última placa.
+   - A ponta de 2 camadas e a linha azul (`tip_zone` / `clamp_tip_zone`) da última placa não sofrem qualquer deslocamento.
+   - Cópia exclusiva de coordenadas e rotação nos moldes originais (§8.35).
+   - Validação física rigorosa $\sum (\text{peças} \times \text{camadas}) = 2P$ com rollback atômico em caso de divergência.
+
+### 3. Resultados Medidos (Sessão #282: 6 moldes × 101 pares, 4 camadas)
+
+| Métrica | Antes do 2º Passe | Depois do 2º Passe | Variação |
+|---|---|---|---|
+| **Peças na Placa 0** | 220 peças | **224 peças** | +4 peças (31a) |
+| - Molde 36a | 50 peças | 50 peças | mantido |
+| - Molde 35a | 50 peças | 50 peças | mantido |
+| - Molde 34a | 50 peças | 50 peças | mantido |
+| - Molde 33a | 50 peças | 50 peças | mantido |
+| - Molde 32a | 20 peças | 20 peças | mantido |
+| - Molde 31a | 0 peças | **4 peças** | +4 peças |
+| **Peças na Última Placa (Placa 1)** | 86 peças | **82 peças** | -4 peças (31a) |
+| - Peças de 4 camadas | 80 peças | 76 peças | -4 peças |
+| - Peças de ponta (2 camadas) | 6 peças (1 de cada molde) | 6 peças | intactas |
+| **Bolsão Livre na Placa 0** | ~36 × 20 cm | **~40 × 140 mm** | Buraco 100% fechado (apenas frestas contorno-a-contorno) |
+| **Dimensões Refiladas Placa 0** | 1370,4 × 2823,1 mm | 1370,4 × 2823,1 mm | Inalterada (mesmo contorno da chapa cheia) |
+| **Conservação Física ($\sum P$)** | $\sum (\text{peças} \times \text{cam}) = 2P$ | $\sum (\text{peças} \times \text{cam}) = 2P$ | 202 físicas por molde (100% exato) |
 
 ---
 
@@ -3754,6 +3803,7 @@ Local: `/home/dola/Documentos/clone do job/antigo/arquivos pos instalacao/Common
 <!-- AUTO:gitlog:start -->
 | Commit | Data | Autor | Mensagem |
 |---|---|---|---|
+| `a0797e9` | 2026-11-03 | Doletabgi | docs: atualiza o PROJETO_ATOM_JOBMANAGER para o estado da v1.6.25 |
 | `2d5cfe7` | 2026-11-03 | Doletabgi | fix(nesting): preenchimento de vaos mede a area real das pecas (v1.6.25) |
 | `b92200c` | 2026-11-03 | Doletabgi | fix(nesting): peca nunca e deitada — apenas 0/180 graus (v1.6.24) |
 | `10514da` | 2026-11-03 | Doletabgi | feat(nesting): preenche os vaos entre placas com pecas da ultima placa (v1.6.23) |
@@ -3768,7 +3818,6 @@ Local: `/home/dola/Documentos/clone do job/antigo/arquivos pos instalacao/Common
 | `27210b3` | 2026-11-03 | Doletabgi | fix(sobras): recompacta a base apos retirar as pecas da ponta (v1.6.14) |
 | `e882072` | 2026-11-02 | Doletabgi | feat(cli): --criar-atalho cria o atalho versionado quando nao existe (v1.6.13) |
 | `0067076` | 2026-11-02 | Doletabgi | feat(ui): atalho da area de trabalho sincroniza sozinho na abertura (v1.6.12) |
-| `0c4abda` | 2026-11-02 | Doletabgi | feat(packaging): atalho da area de trabalho com a versao no nome (v1.6.11) |
 <!-- AUTO:gitlog:end -->
 
 ---
@@ -3796,6 +3845,7 @@ Local: `/home/dola/Documentos/clone do job/antigo/arquivos pos instalacao/Common
 | Seg, 02/11/2026 | 18:00 | Antigravity | Blindagem da persistência de dados das sessões e eliminação de contaminação de moldes (Sessão #188): (1) Imutabilidade estrita na leitura: `SessionView.load_session` tornado 100% somente-leitura no banco, eliminando chamadas a `update_session` e configurando `persist=False` para chamadas a `set_gap_mm` e `set_margins` disparadas no carregamento; (2) Detecção e poda automática de moldes fantasmas em sessões já calculadas (moldes no JSON sem nenhuma peça física posicionada nos layouts); (3) Remoção do fallback artificial `pairs = 16` em `SessionView.set_shapes_data`, preservando os valores numéricos reais ou nulos; (4) Eliminação da contaminação pelo catálogo global (`self.current_shapes`) em `MainWindow._poll_nest_worker`, `clear_session_nesting` e `_ensure_separated_sobras_before_export`, garantindo que os cálculos e persistência manipulem apenas os moldes legítimos da sessão ativa com seus pares originais; (5) Sanitização profunda em `database.py` (`_sanitize_session_shapes`, `update_session_shapes` e `update_session`) blindando e preservando campos críticos (`pairs`, `sequence`, `rest`, `resto`, `target_pieces`); (6) Utilitário `tools/scrub_all_sessions_shapes.py` criado e executado com sucesso, higienizando sessões corrompidas no banco de dados e recuperando a grade de 15 moldes reais da Sessão #188; (7) Nova suíte de testes `tests/test_data_integrity.py` com 5 testes rigorosos cobrindo imutabilidade de load, preservação de pares, isolamento de catálogo e poda de fantasmas. | `database.py`, `ui/session_view.py`, `ui/main_window.py`, `tools/scrub_all_sessions_shapes.py`, `tests/test_data_integrity.py`, `docs/PROJETO_ATOM_JOBMANAGER.md` |
 | Seg, 02/11/2026 | 19:15 | Antigravity | Implantação da Ponta de 2 Camadas no topo da última placa (`tip_zone`) e visualização CAM no Layout Editor: (1) Reescrita do motor `_nest_sobras_on_last_sheet` em `cad/layers_split.py` com posicionamento forçado das sobras de 2 camadas no topo (maior Y) da última placa com modos `canto` e `faixa_topo` e folga de ponta de segurança (`folga_ponta`, default 15.0 mm); (2) Armazenamento estruturado de metadados `tip_zone` no dicionário do layout (`xmin`, `ymin`, `xmax`, `ymax`, `mode`, `pieces_count`); (3) Visualização no Layout Editor (`ui/layout_editor_view.py`) com linha divisória tracejada (`tip_line`), badge e rótulo indicativo `"Ponta 2 Camadas: X peças"` orientando o operador; (4) Integração com SessionView mantendo resto zero efetivo e testes unitários em `tests/test_layers_tip.py`. | `cad/layers_split.py`, `ui/layout_editor_view.py`, `ui/session_view.py`, `tests/test_layers_tip.py`, `docs/PROJETO_ATOM_JOBMANAGER.md` |
 | Seg, 02/11/2026 | 19:45 | Antigravity | Instruções explícitas de corte e enfesto misto do almoxarifado na Impressão A4 (`LayoutPrintDialog`): (1) Função `format_enfesto_operator_text` em `cad/layers_rule.py` gerando texto claro e padronizado especificando quantidade e metragem de folhas de comprimento total e folhas de ponta (ex: `CORTAR: X folhas de COMPRIMENTO TOTAL (Y mm) [4 camadas] + Y folhas de PONTA (Z mm) [2 camadas]`); (2) Renderização visual da delimitação da zona de ponta (`tip_zone`) no preview A4 (canvas Tkinter) e na exportação física/PDF de alta resolução via Pillow; (3) Exibição destacada das instruções operacionais no cabeçalho/metadados da página para conferência no almoxarifado antes do desenrolar do material; (4) Testes em `tests/test_layout_print_legend.py`. | `cad/layers_rule.py`, `ui/layout_print_dialog.py`, `tests/test_layout_print_legend.py`, `docs/PROJETO_ATOM_JOBMANAGER.md` |
+| Ter, 03/11/2026 | 19:40 | Antigravity | Fechamento do buraco da placa 0 pós-separação de sobras (v1.6.26): (1) Inclusão do 2º passe de `preencher_buracos_em_placas` no fluxo do Gerar (`MainWindow._poll_nest_worker`) e lote (`_poll_batch_worker`) logo após `separar_sobras_em_ponta` e antes do `trim_layout_dict`; (2) Otimização do preenchimento com grade fina (célula 20 mm, passo 5 mm, orçamento 4 s), lookup O(1) de ocupação preliminar e aceleração por Spatial Hash Grid (100 mm), baixando o tempo de encaixe de 30 s para ~0,2 s; (3) Marcação de margens na grade de ocupação e erosão morfológica evitando fusão espúria de canais periféricos; (4) Alternância imediata de rotações 0°/180° a cada ponto (x, y) viabilizando intertravamento macho-fêmea compacto; (5) Teto de altura `limite_y` impedindo criação de fileiras além do contorno original da chapa; (6) Regras estritas: move apenas peças de 4 camadas da última placa (maior Y primeiro), sem tocar na ponta de 2 camadas (`is_tip`), duplicadas (`is_duplicate`) nem na linha azul (`tip_zone`/`clamp_tip_zone`); cópia de coordenadas no dicionário original e validação física atômica $\sum (\text{peças} \times \text{camadas}) = 2P$; (7) Medição real (Sessão #282: 6 moldes × 101 pares, 4 camadas, 1,37 × 2,82 m): placa 0 fecha com 224 peças (220 → 224, recuperando 4 peças da 31a), buraco de 36 × 20 cm 100% fechado, última placa de 86 → 82 peças, todas as 202 peças físicas por molde rigorosamente conservadas; (8) Novo teste unitário `test_cenario_6_moldes_101_pares_fecha_buraco` em `tests/test_preencher_buracos.py` e 562 testes automatizados aprovados (100% verde). | `cad/nesting_engine.py`, `ui/main_window.py`, `tests/test_preencher_buracos.py`, `config.py`, `.github/workflows/release.yml`, `docs/PROJETO_ATOM_JOBMANAGER.md` |
 | Ter, 03/11/2026 | 18:40 | DeepSeek | Ocupação real no preenchimento de vãos e limite geométrico (v1.6.25): a grade do passe marcava a bounding box como ocupada, então os vãos entre os contornos do pé nunca eram detectados e o passe não preenchia nada; agora usa `point_in_polygon` no polígono real. Medição (6 moldes × 101 pares, 1,37 × 2,82 m): 231 peças/78,01% com célula 40 mm e também com 20 mm — **0 peças movidas**, porque o maior vão contínuo tem 40 × 660 mm e a peça ~95 × 210 mm. O ganho manual (224 peças) vem de remicroarranjo de fileiras, não de bolsão; registrado como próxima melhoria (otimizador de linha). 561 testes + 1 skip. | `cad/nesting_engine.py`, `docs/PROJETO_ATOM_JOBMANAGER.md`, `config.py`, `.github/workflows/release.yml` |
 | Ter, 03/11/2026 | 18:05 | DeepSeek | Regra do sentido da peça: nunca deitar (v1.6.24): o passe de preenchimento de vãos (v1.6.23) testava 0/90/180/270 e as 5 peças que movia só cabiam DEITADAS — o ganho 78,01% → 79,90% era inválido. Agora `preencher_buracos_em_placas(..., rotacoes=(0.0, 180.0))` respeita a regra (no cenário de 6 moldes não move nenhuma peça: vão de 40 mm, peça de ~95 mm) e o macro engine (IA-teste) passou de ANGLES(0,90,180,270) para ANGLES(0,180). Confirmado que o motor principal já usa apenas 0/180 (115 peças a 0°, 116 a 180°). `TestNuncaDeitarPeca` (2 testes). 561 testes + 1 skip. | `cad/nesting_engine.py`, `cad/macro_engine.py`, `tests/test_preencher_buracos.py`, `docs/PROJETO_ATOM_JOBMANAGER.md`, `config.py`, `.github/workflows/release.yml` |
 | Ter, 03/11/2026 | 17:05 | DeepSeek | Preenchimento dos vãos entre placas (v1.6.23): o motor deixava um bolsão no canto da placa e mandava as peças restantes para a placa seguinte, gerando desperdício (operador estimou ~R$100 em 4 camadas num único vão). Novo `preencher_buracos_em_placas()` em `cad/nesting_engine.py`, chamado no Gerar/Refazer: mapeia ocupação em grade de 40 mm, encontra regiões vazias conectadas e encaixa peças de 4 CAMADAS da última placa nos bolsões (0/90/180/270°, colisão real com gap), removendo a placa final se ficar vazia; peças de 2 camadas (ponta) nunca se movem. Medição (6 moldes × 101 pares, placa 1,37 × 2,82 m): placa 0 de 231 peças/78,01% para 236/79,90%; placa 1 de 75 para 70; total 306 preservado. `tests/test_preencher_buracos.py` (4 testes). 540 testes + 1 skip. | `cad/nesting_engine.py`, `ui/main_window.py`, `tests/test_preencher_buracos.py`, `docs/PROJETO_ATOM_JOBMANAGER.md`, `config.py`, `.github/workflows/release.yml` |

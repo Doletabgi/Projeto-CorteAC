@@ -25,5 +25,6 @@ docs/*
 !docs/img/*
 tools/*
 !tools/scrub_all_sessions_shapes.py
+!tools/export_session.py
 scratch/
 .githooks/

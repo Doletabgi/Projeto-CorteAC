@@ -5184,6 +5184,20 @@ class MainWindow(tk.Tk):
                                 params=config.get("params", "")
                             )
 
+                            try:
+                                from cad.nesting_engine import preencher_buracos_em_placas
+                                layouts, _info2 = preencher_buracos_em_placas(
+                                    layouts,
+                                    gap_mm=float(sess_obj.get("gap_mm", 1.0) or 1.0) if sess_obj else 1.0,
+                                    cell_mm=20.0,
+                                    step_mm=5.0,
+                                    time_budget_s=4.0,
+                                    session=sess_obj,
+                                    shapes=sorted_shapes,
+                                )
+                            except Exception as exc:  # noqa: BLE001
+                                print(f"[AVISO] Falha no 2º passe de buracos no lote #{sid}: {exc}")
+
                         # Refile automático se habilitado
                         auto_trimmed = False
                         if config.get("refile_auto", True):
@@ -5689,6 +5703,24 @@ class MainWindow(tk.Tk):
                 if split_summary:
                     self.lbl_status_msg.config(text=split_summary)
                     print(f"[SOBRAS] {split_summary}")
+
+            # 2º passe de preenchimento de buracos: fecha vãos deixados pela separação de sobras
+            # com grade fina (célula 20 mm, passo 5 mm) e orçamento de 4 s (§8.48).
+            try:
+                from cad.nesting_engine import preencher_buracos_em_placas
+                layouts, _info_lacunas2 = preencher_buracos_em_placas(
+                    layouts,
+                    gap_mm=float(self.current_session.get("gap_mm", 1.0) or 1.0) if self.current_session else 1.0,
+                    cell_mm=20.0,
+                    step_mm=5.0,
+                    time_budget_s=4.0,
+                    session=self.current_session,
+                    shapes=sess_shapes if self.current_session else None,
+                )
+                if _info_lacunas2.get("movidas"):
+                    print(f"[BURACOS-2] {_info_lacunas2['movidas']} peça(s) realocadas para vãos pós-separação")
+            except Exception as exc:  # noqa: BLE001
+                print(f"[AVISO] Falha no 2º passe de preencher buracos: {exc}")
 
             # Refile automático dos layouts gerados se a opção estiver habilitada
             auto_trimmed = False
