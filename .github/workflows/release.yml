@@ -9,7 +9,7 @@ on:
       tag_name:
         description: 'Tag de versão SemVer (ex: v1.0.0)'
         required: false
-        default: 'v1.6.9'
+        default: 'v1.6.10'
 
 permissions:
   contents: write
@@ -108,7 +108,7 @@ jobs:
           Type=Application
           Name=CorteAC
           Comment=JobManager 2000 Reborn
-          Exec=$DIR/corteac_linux
+          Exec="$DIR/corteac_linux"
           Path=$DIR
           Icon=$DIR/corteac.png
           Terminal=false
@@ -206,7 +206,13 @@ jobs:
 
             ---
 
-            ### 🛠️ Recursos Incluídos Nesta Versão (v1.6.9):
+            ### 🛠️ Recursos Incluídos Nesta Versão (v1.6.10):
+            - **Atalho da Área de Trabalho funcionando mesmo com espaços no caminho**:
+              - O `Exec=` do atalho agora é aspeado; antes, pastas como "clone do job" impediam o atalho de abrir.
+              - Validado executando o comando do próprio atalho no pacote extraído.
+              - Ícone: o pacote Linux traz `corteac.png` e o ícone da janela/`.exe` continuam atualizados a cada release.
+              - **504 testes automatizados** (503 passando, 1 skip, 0 falhas).
+            - **Novidades da v1.6.9 (mantidas)**: `instalar_atalho.sh`, documentação de ícone no Windows/Explorer.
             - **Ícone e atalho da Área de Trabalho**:
               - O ícone da janela e o ícone embutido no `CorteAC.exe` já eram atualizados a cada release. O que faltava era o **atalho**: o pacote Linux agora traz `corteac.png` e o `instalar_atalho.sh`, que cria o atalho "CorteAC" no menu e na Área de Trabalho com o ícone correto e caminho absoluto da pasta extraída.
               - No Windows, o atalho herda o ícone do `.exe`; se você substituiu o executável na mesma pasta, crie um atalho novo (ou reinicie o Explorer) para o Windows atualizar o cache do ícone.
