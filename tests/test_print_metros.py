@@ -292,3 +292,74 @@ class TestCabecalhoFolhas(unittest.TestCase):
         self.assertFalse(any("Material Area" in t for t in textos), "Material Area deveria ter sido removida")
         dlg.destroy()
         root.destroy()
+
+
+class TestCabecalhoSomenteNaPlacaComPonta(unittest.TestCase):
+    """
+    O operador pediu: a mudança do cabeçalho é SOMENTE na placa com a ponta.
+    A placa 0 (sem ponta) mantém Dimensions + Material Area.
+    """
+
+    def test_placa_sem_ponta_mantem_cabecalho_classico(self):
+        from cad.layers_rule import format_dimensions_folhas
+
+        # A placa sem ponta não recebe dimensions_lines (None) — decisão dos chamadores
+        self.assertIsNone(None)
+        self.assertTrue(format_dimensions_folhas({"width_mm": 1350.0, "height_mm": 1130.0, "layers": 4}))
+
+    def test_render_placa_sem_ponta_tem_dimensions_e_material_area(self):
+        if not HAS_TK:
+            self.skipTest("Tkinter indisponível")
+        import tkinter as tk
+        from ui.layout_print_dialog import LayoutPrintDialog
+
+        try:
+            root = tk.Tk()
+            root.withdraw()
+        except Exception as exc:  # pragma: no cover
+            self.skipTest(f"sem display: {exc}")
+
+        dlg = LayoutPrintDialog(root, layout_data={
+            "layout_name": "lay0000.lay", "sheet_w_mm": 1350.0, "sheet_h_mm": 1130.0,
+            "dimensions_str": "1,35 x 1,13 m", "mat_area_str": "1.53 sq.M.",
+            "dimensions_lines": None,
+        })
+        dlg.update_idletasks()
+        dlg.redraw()
+        textos = [dlg.canvas.itemcget(i, "text") for i in dlg.canvas.find_all()
+                  if dlg.canvas.type(i) == "text"]
+        self.assertTrue(any(t.startswith("Dimensions:") for t in textos), textos[:10])
+        self.assertTrue(any(t.startswith("Material Area:") for t in textos), textos[:10])
+        self.assertFalse(any("folhas longas" in t for t in textos))
+        dlg.destroy()
+        root.destroy()
+
+    def test_render_placa_com_ponta_usa_folhas_e_sem_material_area(self):
+        if not HAS_TK:
+            self.skipTest("Tkinter indisponível")
+        import tkinter as tk
+        from cad.layers_rule import format_dimensions_folhas
+        from ui.layout_print_dialog import LayoutPrintDialog
+
+        try:
+            root = tk.Tk()
+            root.withdraw()
+        except Exception as exc:  # pragma: no cover
+            self.skipTest(f"sem display: {exc}")
+
+        lay = {"width_mm": 1350.0, "height_mm": 1130.0, "layers": 4,
+               "tip_zone": [0.0, 880.0, 1350.0, 1130.0]}
+        dlg = LayoutPrintDialog(root, layout_data={
+            "layout_name": "lay0001.lay", "sheet_w_mm": 1350.0, "sheet_h_mm": 1130.0,
+            "dimensions_str": "1,35 x 1,13 m", "mat_area_str": "1.53 sq.M.",
+            "dimensions_lines": format_dimensions_folhas(lay),
+        })
+        dlg.update_idletasks()
+        dlg.redraw()
+        textos = [dlg.canvas.itemcget(i, "text") for i in dlg.canvas.find_all()
+                  if dlg.canvas.type(i) == "text"]
+        self.assertTrue(any("folhas longas" in t for t in textos), textos[:10])
+        self.assertTrue(any("folhas curtas" in t for t in textos), textos[:10])
+        self.assertFalse(any(t.startswith("Material Area:") for t in textos))
+        dlg.destroy()
+        root.destroy()

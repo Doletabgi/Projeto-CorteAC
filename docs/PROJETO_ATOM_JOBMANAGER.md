@@ -4,7 +4,7 @@
 > **Regra de ouro:** o que está marcado `[CONFIRMADO]` veio do relatório, do código ou do usuário. O que está `[NÃO CONFIRMADO]` é suposição e não deve virar "fato" sem validação. O que está `[PREENCHER]` a IA deve completar lendo o código real.
 
 <!-- AUTO:header:start -->
-**Última sincronização com o código:** 2026-11-03 15:50 (HEAD ao gerar: `4b621ce`; 134 arquivos Python, ~65697 linhas)
+**Última sincronização com o código:** 2026-11-03 16:02 (HEAD ao gerar: `504c073`; 134 arquivos Python, ~65795 linhas)
 <!-- AUTO:header:end -->
 **Versão deste documento:** 1
 
@@ -489,6 +489,7 @@ ui/units.py                                          # ui/units.py - Formataçã
 - `class TestClampCompartilhado` (linha 140, 2 métodos): O clamp da ponta é único (cad.layers_rule) e usado por editor, miniatura e PDF.
 - `class TestCabecalhoSemDescription` (linha 203, 3 métodos): O operador pediu para remover a linha "Description: ..." da folha impressa.
 - `class TestCabecalhoFolhas` (linha 247, 3 métodos): Cabeçalho com as duas linhas de folhas (longas/curtas) e sem "Material Area".
+- `class TestCabecalhoSomenteNaPlacaComPonta` (linha 297, 3 métodos): O operador pediu: a mudança do cabeçalho é SOMENTE na placa com a ponta.
 
 ### `tests/test_semver.py`
 - `class TestSemVer` (linha 12, 7 métodos)
@@ -1534,8 +1535,8 @@ A ordem de corte do `.lay` para a mesa **não pode** ser aleatória:
 
 | Atalho | Local | Linha |
 |---|---|---|
-| Alt+Down | `ui/session_view.py:3829` | `entry.bind("<Alt-Down>", lambda e: adjust_number(-1))` |
-| Alt+Up | `ui/session_view.py:3828` | `entry.bind("<Alt-Up>", lambda e: adjust_number(+1))` |
+| Alt+Down | `ui/session_view.py:3833` | `entry.bind("<Alt-Down>", lambda e: adjust_number(-1))` |
+| Alt+Up | `ui/session_view.py:3832` | `entry.bind("<Alt-Up>", lambda e: adjust_number(+1))` |
 | Backspace | `ui/cad_canvas.py:72` | `self.master.bind("<BackSpace>", lambda e: self.delete_selected())` |
 | Backspace | `ui/dieproc_dialog.py:87` | `self.preset_listbox.bind("<BackSpace>", lambda e: self.on_delete_clicked())` |
 | Backspace | `ui/main_window.py:686` | `self.bind_all("<BackSpace>", self.on_global_delete_key, add="+")` |
@@ -1557,7 +1558,7 @@ A ordem de corte do `.lay` para a mesa **não pode** ser aleatória:
 | Ctrl+A | `ui/main_window.py:690` | `self.bind_all("<Control-Key-A>", self.on_select_all, add="+")` |
 | Ctrl+C | `ui/main_window.py:293` | `edit_menu.add_command(label="Copiar", accelerator="Ctrl+C")` |
 | Ctrl+Down | `ui/layout_editor_view.py:782` | `self.bind_all("<Control-Down>", lambda e: self.nudge_selected(0, -0.5))` |
-| Ctrl+Down | `ui/session_view.py:3827` | `entry.bind("<Control-Down>", lambda e: adjust_number(-1))` |
+| Ctrl+Down | `ui/session_view.py:3831` | `entry.bind("<Control-Down>", lambda e: adjust_number(-1))` |
 | Ctrl+Equal | `ui/layout_editor_view.py:677` | `w.bind("<Control-equal>", lambda e: (self.zoom_in(), "break")[1])` |
 | Ctrl+Equal | `ui/shape_catalog_view.py:273` | `self.bind("<Control-equal>", lambda e: self.zoom_step(1.2))` |
 | Ctrl+Kp_0 | `ui/shape_catalog_view.py:279` | `self.bind("<Control-KP_0>", lambda e: self.reset_zoom())` |
@@ -1610,7 +1611,7 @@ A ordem de corte do `.lay` para a mesa **não pode** ser aleatória:
 | Ctrl+T | `ui/main_window.py:89` | `self.bind("<Control-t>", self.handle_ctrl_t)` |
 | Ctrl+T | `ui/main_window.py:90` | `self.bind("<Control-T>", self.handle_ctrl_t)` |
 | Ctrl+Up | `ui/layout_editor_view.py:781` | `self.bind_all("<Control-Up>", lambda e: self.nudge_selected(0, 0.5))` |
-| Ctrl+Up | `ui/session_view.py:3826` | `entry.bind("<Control-Up>", lambda e: adjust_number(+1))` |
+| Ctrl+Up | `ui/session_view.py:3830` | `entry.bind("<Control-Up>", lambda e: adjust_number(+1))` |
 | Ctrl+V | `ui/main_window.py:294` | `edit_menu.add_command(label="Colar", accelerator="Ctrl+V")` |
 | Ctrl+X | `ui/main_window.py:292` | `edit_menu.add_command(label="Recortar", accelerator="Ctrl+X")` |
 | Ctrl+Y | `ui/layout_editor_view.py:693` | `self.canvas.bind("<Control-y>", lambda e: "break")` |
@@ -1651,7 +1652,7 @@ A ordem de corte do `.lay` para a mesa **não pode** ser aleatória:
 | Delete | `ui/shape_editor_view.py:247` | `self.bind("<Delete>", lambda e: self.delete_selected())` |
 | Delete | `ui/shape_editor_view.py:249` | `self.canvas.bind("<Delete>", lambda e: self.delete_selected())` |
 | Down | `ui/layout_editor_view.py:777` | `self.bind_all("<Down>", lambda e: self.bump_selection_vector(0, -1))` |
-| Down | `ui/session_view.py:3811` | `entry.bind("<Down>", move_down)` |
+| Down | `ui/session_view.py:3815` | `entry.bind("<Down>", move_down)` |
 | Down | `ui/shape_catalog_view.py:263` | `self.bind("<Down>", lambda e: self.navigate_selection(0, 1))` |
 | Escape | `ui/cad_canvas.py:67` | `self.bind("<Escape>", self.cancel_drag)` |
 | Escape | `ui/cad_canvas.py:68` | `self.master.bind("<Escape>", self.cancel_drag)` |
@@ -1667,9 +1668,9 @@ A ordem de corte do `.lay` para a mesa **não pode** ser aleatória:
 | Escape | `ui/main_window.py:3369` | `dialog.bind("<Escape>", lambda e: dialog.destroy())` |
 | Escape | `ui/material_codes_view.py:510` | `dlg.bind("<Escape>", lambda e: dlg.destroy())` |
 | Escape | `ui/options_dialog.py:40` | `self.bind("<Escape>", lambda e: self.on_cancel())` |
-| Escape | `ui/session_view.py:3265` | `entry.bind("<Escape>", cancel)` |
-| Escape | `ui/session_view.py:3383` | `dialog.bind("<Escape>", lambda e: dialog.destroy())` |
-| Escape | `ui/session_view.py:3821` | `entry.bind("<Escape>", cancel_edit)` |
+| Escape | `ui/session_view.py:3269` | `entry.bind("<Escape>", cancel)` |
+| Escape | `ui/session_view.py:3387` | `dialog.bind("<Escape>", lambda e: dialog.destroy())` |
+| Escape | `ui/session_view.py:3825` | `entry.bind("<Escape>", cancel_edit)` |
 | Escape | `ui/shape_catalog_view.py:268` | `self.bind("<Escape>", lambda e: self.on_close_click())` |
 | Escape | `ui/shape_editor_view.py:243` | `self.bind("<Escape>", self.on_escape_key)` |
 | Escape | `ui/shape_editor_view.py:244` | `self.canvas.bind("<Escape>", self.on_escape_key)` |
@@ -1690,14 +1691,14 @@ A ordem de corte do `.lay` para a mesa **não pode** ser aleatória:
 | F4 | `ui/layout_editor_view.py:758` | `w.bind("<Key-F4>", self.on_f4_press)` |
 | F5 | `ui/main_window.py:130` | `self.bind_all("<F5>", lambda e: self.on_refresh_f5())` |
 | F5 | `ui/main_window.py:313` | `tools_menu.add_command(label="Atualizar", accelerator="F5", command=self.on_refr` |
-| Iso_left_tab | `ui/session_view.py:3820` | `entry.bind("<ISO_Left_Tab>", move_prev_col)` |
-| Kp_down | `ui/session_view.py:3812` | `entry.bind("<KP_Down>", move_down)` |
+| Iso_left_tab | `ui/session_view.py:3824` | `entry.bind("<ISO_Left_Tab>", move_prev_col)` |
+| Kp_down | `ui/session_view.py:3816` | `entry.bind("<KP_Down>", move_down)` |
 | Kp_enter | `ui/fill_user_dialog.py:155` | `self.bind("<KP_Enter>", lambda e: self.on_ok())` |
 | Kp_enter | `ui/main_window.py:556` | `self.tree_main.bind("<KP_Enter>", self.on_tree_key_return)` |
 | Kp_enter | `ui/session_view.py:883` | `self.tree_shapes.bind("<KP_Enter>", self.on_tree_shape_enter)` |
-| Kp_enter | `ui/session_view.py:3816` | `entry.bind("<KP_Enter>", move_down)` |
+| Kp_enter | `ui/session_view.py:3820` | `entry.bind("<KP_Enter>", move_down)` |
 | Kp_enter | `ui/shape_catalog_view.py:267` | `self.bind("<KP_Enter>", lambda e: self.open_selected_shape())` |
-| Kp_up | `ui/session_view.py:3814` | `entry.bind("<KP_Up>", move_up)` |
+| Kp_up | `ui/session_view.py:3818` | `entry.bind("<KP_Up>", move_up)` |
 | Left | `ui/layout_editor_view.py:774` | `self.bind_all("<Left>", lambda e: self.bump_selection_vector(-1, 0))` |
 | Left | `ui/shape_catalog_view.py:264` | `self.bind("<Left>", lambda e: self.navigate_selection(-1, 0))` |
 | R | `ui/cad_canvas.py:69` | `self.master.bind("<r>", lambda e: self.rotate_selected(45))` |
@@ -1716,9 +1717,9 @@ A ordem de corte do `.lay` para a mesa **não pode** ser aleatória:
 | Return | `ui/session_view.py:882` | `self.tree_shapes.bind("<Return>", self.on_tree_shape_enter)` |
 | Return | `ui/session_view.py:1034` | `self.tree_mat.bind("<Return>", self.on_mat_enter_key)` |
 | Return | `ui/session_view.py:1137` | `self.tree_lays.bind("<Return>", self.on_layout_row_double_click)` |
-| Return | `ui/session_view.py:3263` | `entry.bind("<Return>", lambda e: commit())` |
-| Return | `ui/session_view.py:3382` | `dialog.bind("<Return>", lambda e: save())` |
-| Return | `ui/session_view.py:3815` | `entry.bind("<Return>", move_down)` |
+| Return | `ui/session_view.py:3267` | `entry.bind("<Return>", lambda e: commit())` |
+| Return | `ui/session_view.py:3386` | `dialog.bind("<Return>", lambda e: save())` |
+| Return | `ui/session_view.py:3819` | `entry.bind("<Return>", move_down)` |
 | Return | `ui/shape_catalog_view.py:266` | `self.bind("<Return>", lambda e: self.open_selected_shape())` |
 | Return | `ui/shape_editor_view.py:312` | `self.entry_name.bind("<Return>", lambda e: self.on_name_change())` |
 | Return | `ui/shape_editor_view.py:358` | `self.entry_vx.bind("<Return>", self.on_vertex_entry_change)` |
@@ -1728,15 +1729,15 @@ A ordem de corte do `.lay` para a mesa **não pode** ser aleatória:
 | Right | `ui/shape_catalog_view.py:265` | `self.bind("<Right>", lambda e: self.navigate_selection(1, 0))` |
 | Shift+F3 | `ui/layout_editor_view.py:754` | `w.bind("<Shift-F3>", lambda e: "break")` |
 | Shift+F3 | `ui/layout_editor_view.py:755` | `w.bind("<Shift-Key-F3>", lambda e: "break")` |
-| Shift+Return | `ui/session_view.py:3817` | `entry.bind("<Shift-Return>", move_up)` |
-| Shift+Tab | `ui/session_view.py:3267` | `entry.bind("<Shift-Tab>", on_shift_tab)` |
-| Shift+Tab | `ui/session_view.py:3819` | `entry.bind("<Shift-Tab>", move_prev_col)` |
+| Shift+Return | `ui/session_view.py:3821` | `entry.bind("<Shift-Return>", move_up)` |
+| Shift+Tab | `ui/session_view.py:3271` | `entry.bind("<Shift-Tab>", on_shift_tab)` |
+| Shift+Tab | `ui/session_view.py:3823` | `entry.bind("<Shift-Tab>", move_prev_col)` |
 | Space | `ui/add_shapes_dialog.py:135` | `self.tree.bind("<space>", self.on_tree_space)` |
 | Space | `ui/main_window.py:552` | `self.tree_main.bind("<space>", self.on_tree_space_toggle)` |
-| Tab | `ui/session_view.py:3266` | `entry.bind("<Tab>", on_tab)` |
-| Tab | `ui/session_view.py:3818` | `entry.bind("<Tab>", move_next_col)` |
+| Tab | `ui/session_view.py:3270` | `entry.bind("<Tab>", on_tab)` |
+| Tab | `ui/session_view.py:3822` | `entry.bind("<Tab>", move_next_col)` |
 | Up | `ui/layout_editor_view.py:776` | `self.bind_all("<Up>", lambda e: self.bump_selection_vector(0, 1))` |
-| Up | `ui/session_view.py:3813` | `entry.bind("<Up>", move_up)` |
+| Up | `ui/session_view.py:3817` | `entry.bind("<Up>", move_up)` |
 | Up | `ui/shape_catalog_view.py:262` | `self.bind("<Up>", lambda e: self.navigate_selection(0, -1))` |
 
 **Conflitos reais detectados:**
@@ -3343,6 +3344,30 @@ Suíte: **533 testes + 1 skip**.
 
 ---
 
+
+## 8.43. Cabeçalho de Folhas Só na Placa com Ponta (v1.6.22) `[CONFIRMADO]`
+
+Ajuste pedido pelo operador: "a placa zero continua como estava; a mudança é somente na placa com a ponta".
+
+### 1. Regra final
+
+| Placa | Cabeçalho |
+|---|---|
+| Sem ponta (placa 0 do enfesto) | `Dimensions: 1,35 x 1,13 m` + `Material Area: 1.53 sq.M.` (formato clássico) |
+| Com ponta de 2 camadas | `2 folhas longas ... m. N camadas` + `2 folhas curtas: ... m. N camadas`, **sem** `Material Area` |
+
+- `LayoutPrintDialog` decide pelo campo `dimensions_lines`: presente → formato novo; ausente → clássico.
+- `LayoutEditorView.print_layout()` e `SessionView.print_current_layout()` só preenchem
+  `dimensions_lines` quando o layout impresso tem `tip_zone` (a placa da ponta).
+
+### 2. Testes
+
+`tests/test_print_metros.py` ganhou `TestCabecalhoSomenteNaPlacaComPonta` (3 testes): placa sem ponta
+mantém `Dimensions:` e `Material Area:` e não mostra "folhas longas"; placa com ponta mostra as duas
+linhas e não mostra `Material Area`. Suíte: **536 testes + 1 skip**.
+
+---
+
 ## 9. Pendências e arquivos faltantes
 
 ### 9.1 Tarefas abertas
@@ -3500,6 +3525,7 @@ Local: `/home/dola/Documentos/clone do job/antigo/arquivos pos instalacao/Common
 <!-- AUTO:gitlog:start -->
 | Commit | Data | Autor | Mensagem |
 |---|---|---|---|
+| `504c073` | 2026-11-03 | Doletabgi | feat(print): folhas longas/curtas no cabecalho e sem Material Area (v1.6.21) |
 | `4b621ce` | 2026-11-03 | Doletabgi | feat(print): remove a linha Description das folhas impressas (v1.6.20) |
 | `5d85d8b` | 2026-11-03 | Doletabgi | fix(tip): clamp unico da ponta — linha azul nao vaza na miniatura nem no refile (v1.6.19) |
 | `6e610c1` | 2026-11-03 | Doletabgi | fix(save): refile do layout agora e persistido e nao e sobrescrito (v1.6.18) |
@@ -3514,7 +3540,6 @@ Local: `/home/dola/Documentos/clone do job/antigo/arquivos pos instalacao/Common
 | `8cdca5d` | 2026-11-02 | Doletabgi | feat(packaging): icone do app e atalho da area de trabalho no pacote Linux (v1.6.9) |
 | `5001039` | 2026-11-02 | Doletabgi | feat(sobras): dobra 4c->2c, divisao automatica e contadores por enfesto (v1.6.8) |
 | `2048256` | 2026-11-02 | Doletabgi | feat(sobras): ponta de 2 camadas com encaixe compacto e testes de regressao (v1.6.7) |
-| `3baa30c` | 2026-11-02 | Doletabgi | feat(release): contadores dinamicos na barra lateral do editor e versao v1.6.3 |
 <!-- AUTO:gitlog:end -->
 
 ---
@@ -3542,6 +3567,7 @@ Local: `/home/dola/Documentos/clone do job/antigo/arquivos pos instalacao/Common
 | Seg, 02/11/2026 | 18:00 | Antigravity | Blindagem da persistência de dados das sessões e eliminação de contaminação de moldes (Sessão #188): (1) Imutabilidade estrita na leitura: `SessionView.load_session` tornado 100% somente-leitura no banco, eliminando chamadas a `update_session` e configurando `persist=False` para chamadas a `set_gap_mm` e `set_margins` disparadas no carregamento; (2) Detecção e poda automática de moldes fantasmas em sessões já calculadas (moldes no JSON sem nenhuma peça física posicionada nos layouts); (3) Remoção do fallback artificial `pairs = 16` em `SessionView.set_shapes_data`, preservando os valores numéricos reais ou nulos; (4) Eliminação da contaminação pelo catálogo global (`self.current_shapes`) em `MainWindow._poll_nest_worker`, `clear_session_nesting` e `_ensure_separated_sobras_before_export`, garantindo que os cálculos e persistência manipulem apenas os moldes legítimos da sessão ativa com seus pares originais; (5) Sanitização profunda em `database.py` (`_sanitize_session_shapes`, `update_session_shapes` e `update_session`) blindando e preservando campos críticos (`pairs`, `sequence`, `rest`, `resto`, `target_pieces`); (6) Utilitário `tools/scrub_all_sessions_shapes.py` criado e executado com sucesso, higienizando sessões corrompidas no banco de dados e recuperando a grade de 15 moldes reais da Sessão #188; (7) Nova suíte de testes `tests/test_data_integrity.py` com 5 testes rigorosos cobrindo imutabilidade de load, preservação de pares, isolamento de catálogo e poda de fantasmas. | `database.py`, `ui/session_view.py`, `ui/main_window.py`, `tools/scrub_all_sessions_shapes.py`, `tests/test_data_integrity.py`, `docs/PROJETO_ATOM_JOBMANAGER.md` |
 | Seg, 02/11/2026 | 19:15 | Antigravity | Implantação da Ponta de 2 Camadas no topo da última placa (`tip_zone`) e visualização CAM no Layout Editor: (1) Reescrita do motor `_nest_sobras_on_last_sheet` em `cad/layers_split.py` com posicionamento forçado das sobras de 2 camadas no topo (maior Y) da última placa com modos `canto` e `faixa_topo` e folga de ponta de segurança (`folga_ponta`, default 15.0 mm); (2) Armazenamento estruturado de metadados `tip_zone` no dicionário do layout (`xmin`, `ymin`, `xmax`, `ymax`, `mode`, `pieces_count`); (3) Visualização no Layout Editor (`ui/layout_editor_view.py`) com linha divisória tracejada (`tip_line`), badge e rótulo indicativo `"Ponta 2 Camadas: X peças"` orientando o operador; (4) Integração com SessionView mantendo resto zero efetivo e testes unitários em `tests/test_layers_tip.py`. | `cad/layers_split.py`, `ui/layout_editor_view.py`, `ui/session_view.py`, `tests/test_layers_tip.py`, `docs/PROJETO_ATOM_JOBMANAGER.md` |
 | Seg, 02/11/2026 | 19:45 | Antigravity | Instruções explícitas de corte e enfesto misto do almoxarifado na Impressão A4 (`LayoutPrintDialog`): (1) Função `format_enfesto_operator_text` em `cad/layers_rule.py` gerando texto claro e padronizado especificando quantidade e metragem de folhas de comprimento total e folhas de ponta (ex: `CORTAR: X folhas de COMPRIMENTO TOTAL (Y mm) [4 camadas] + Y folhas de PONTA (Z mm) [2 camadas]`); (2) Renderização visual da delimitação da zona de ponta (`tip_zone`) no preview A4 (canvas Tkinter) e na exportação física/PDF de alta resolução via Pillow; (3) Exibição destacada das instruções operacionais no cabeçalho/metadados da página para conferência no almoxarifado antes do desenrolar do material; (4) Testes em `tests/test_layout_print_legend.py`. | `cad/layers_rule.py`, `ui/layout_print_dialog.py`, `tests/test_layout_print_legend.py`, `docs/PROJETO_ATOM_JOBMANAGER.md` |
+| Ter, 03/11/2026 | 16:25 | DeepSeek | Cabeçalho de folhas só na placa com ponta (v1.6.22): o novo formato ("2 folhas longas / 2 folhas curtas", sem "Material Area") passa a valer apenas para o layout que tem `tip_zone`; a placa 0 do enfesto mantém o cabeçalho clássico (`Dimensions` + `Material Area`). `LayoutPrintDialog` decide pelo campo `dimensions_lines`, e o editor/SessionView só o preenchem quando o layout impresso tem ponta. `TestCabecalhoSomenteNaPlacaComPonta` (3 testes). 536 testes + 1 skip. | `ui/layout_print_dialog.py`, `ui/layout_editor_view.py`, `ui/session_view.py`, `tests/test_print_metros.py`, `docs/PROJETO_ATOM_JOBMANAGER.md`, `config.py`, `.github/workflows/release.yml` |
 | Ter, 03/11/2026 | 16:05 | DeepSeek | Cabeçalho com folhas longas/curtas e sem "Material Area" (v1.6.21): a linha `Dimensions` foi substituída por duas linhas em metros — "2 folhas longas 1,35 x 1,13 m. 2 camadas" e "2 folhas curtas: 1,35 x 0,88 m. 2 camadas" — calculadas por novo `format_dimensions_folhas()` (folhas curtas = placa até a divisória da ponta via `clamp_tip_zone`, com metade das camadas do enfesto). A linha `Material Area:` foi removida do canvas e do PDF; `LayoutEditorView.print_layout()` e `SessionView.print_current_layout()` passam `dimensions_lines`. `TestCabecalhoFolhas` (3 testes). 533 testes + 1 skip. | `cad/layers_rule.py`, `ui/layout_print_dialog.py`, `ui/layout_editor_view.py`, `ui/session_view.py`, `tests/test_print_metros.py`, `docs/PROJETO_ATOM_JOBMANAGER.md`, `config.py`, `.github/workflows/release.yml` |
 | Ter, 03/11/2026 | 13:35 | DeepSeek | Remoção da linha "Description" na impressão (v1.6.20): a pedido do operador, o cabeçalho das folhas impressas não exibe mais `Description: fn98 - v1.2.36 - 12.09.2012`; a linha foi removida dos dois renderizadores do `LayoutPrintDialog` (canvas e Pillow/PDF), mantendo Layout, Material, Dimensions, áreas, Refile e a linha de Shapes/Instances/Gap/Enfesto. Novo `TestCabecalhoSemDescription` em `tests/test_print_metros.py`. 530 testes + 1 skip. | `ui/layout_print_dialog.py`, `tests/test_print_metros.py`, `docs/PROJETO_ATOM_JOBMANAGER.md`, `config.py`, `.github/workflows/release.yml` |
 | Ter, 03/11/2026 | 11:55 | DeepSeek | Linha azul da ponta na miniatura e no refile do editor (v1.6.19): o refile feito no editor (`apply_trim_layout`) atualizava as dimensões mas mantinha `tip_zone` da chapa cheia (1,38 × 2,98); a miniatura escalava pela placa refilada e desenhava o retângulo azul fora do contorno (e salvava o valor errado). Criado `clamp_tip_zone()` único em `cad/layers_rule.py`, usado pelo editor ao refilar, pela miniatura da SessionView, pelo `trim_layout_dict` e pelo PDF (alias). Testes: `TestClampCompartilhado` (clamp básico + retângulo da miniatura dentro da chapa). 529 testes + 1 skip. | `cad/layers_rule.py`, `cad/trim_engine.py`, `ui/layout_editor_view.py`, `ui/session_view.py`, `ui/layout_print_dialog.py`, `tests/test_print_metros.py`, `docs/PROJETO_ATOM_JOBMANAGER.md`, `config.py`, `.github/workflows/release.yml` |

@@ -1322,8 +1322,12 @@ class SessionView(tk.Frame):
             "sheet_w_mm": sheet_w,
             "sheet_h_mm": sheet_h,
             "dimensions_str": format_dim_mm(sheet_w, sheet_h),
-            "dimensions_lines": format_dimensions_folhas(
-                target_layout or {}, sheet_w=sheet_w, sheet_h=sheet_h, layers=layers_val
+            "dimensions_lines": (
+                format_dimensions_folhas(
+                    target_layout or {}, sheet_w=sheet_w, sheet_h=sheet_h, layers=layers_val
+                )
+                if (isinstance(target_layout, dict) and target_layout.get("tip_zone"))
+                else None
             ),
             "tip_zone": (target_layout.get("tip_zone") if target_layout else None),
             "layers_tip": (target_layout.get("layers_tip") if target_layout else None),

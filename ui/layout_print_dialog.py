@@ -1044,11 +1044,20 @@ class LayoutPrintDialog(tk.Toplevel):
         meta_y = margin_top + int(82 * self.zoom)
         line_h = int(17 * self.zoom)
 
-        dim_lines = self.dimensions_lines or [f"Dimensions:  {self.dimensions_str}"]
+        # Placa COM ponta de 2 camadas: duas linhas de folhas (longas/curtas).
+        # Placa sem ponta: cabeçalho clássico (Dimensions + Material Area).
         lines = [
             f"Layout: {self.layout_path}",
             f"Material: {self.material_name}",
-        ] + list(dim_lines) + [
+        ]
+        if self.dimensions_lines:
+            lines += list(self.dimensions_lines)
+        else:
+            lines += [
+                f"Dimensions:  {self.dimensions_str}",
+                f"Material Area: {self.mat_area_str}",
+            ]
+        lines += [
             f"Used Area: {self.used_area_str} - Yield:  {self.yield_pct:.2f}%",
             f"Refile: {self.refile_display_str}",
         ]
@@ -1557,11 +1566,20 @@ class LayoutPrintDialog(tk.Toplevel):
         # Metadados
         meta_y = m_top + int(82 * scale)
         line_h = int(17 * scale)
-        dim_lines = self.dimensions_lines or [f"Dimensions:  {self.dimensions_str}"]
+        # Placa COM ponta de 2 camadas: duas linhas de folhas (longas/curtas).
+        # Placa sem ponta: cabeçalho clássico (Dimensions + Material Area).
         lines = [
             f"Layout: {self.layout_path}",
             f"Material: {self.material_name}",
-        ] + list(dim_lines) + [
+        ]
+        if self.dimensions_lines:
+            lines += list(self.dimensions_lines)
+        else:
+            lines += [
+                f"Dimensions:  {self.dimensions_str}",
+                f"Material Area: {self.mat_area_str}",
+            ]
+        lines += [
             f"Used Area: {self.used_area_str} - Yield:  {self.yield_pct:.2f}%",
             f"Refile: {self.refile_display_str}",
         ]
