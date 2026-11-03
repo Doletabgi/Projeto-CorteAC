@@ -1081,6 +1081,19 @@ class MainWindow(tk.Tk):
             status="Nested"
         )
 
+        # 3b. Sincroniza os LAYOUTS multi-placa (refile, ponta de 2 camadas, camadas).
+        #     Sem isso a sessão em memória continuava com as dimensões antigas e
+        #     qualquer gravação posterior (Gerar/Refazer/fechar) sobrescrevia o banco,
+        #     dando a impressão de que o Ctrl+S "não salvou".
+        editor = getattr(self, "layout_editor_view", None)
+        layouts_editor = getattr(editor, "layouts", None) if editor is not None else None
+        if layouts_editor:
+            active_sess["layouts"] = copy.deepcopy(layouts_editor)
+            try:
+                self.db.save_session_layouts(active_sess["id"], active_sess["layouts"])
+            except Exception as exc:  # noqa: BLE001
+                print(f"[AVISO] Falha ao persistir layouts após salvar no editor: {exc}")
+
         # 4. Sincroniza a SessionView se estiver aberta
         sess_view = self.open_sessions.get(active_sess["id"])
         if sess_view:
@@ -1096,15 +1109,11 @@ class MainWindow(tk.Tk):
             time_sec = active_sess.get("cutting_time_sec", 32.0)
             sess_view.update_summary_text(len(placed_pieces), yield_pct, time_sec)
 
-            # Atualiza tabela da aba Layout
-            if hasattr(sess_view, "tree_lays"):
-                sess_view.tree_lays.delete(*sess_view.tree_lays.get_children())
-                eff_str = f"{yield_pct:.2f}%".replace('.', ',')
-                pieces_cnt = str(len(placed_pieces))
-                time_str = f"{int(time_sec // 60):02d}:{int(time_sec % 60):02d}"
-                area_str = f"{used_area_m2:.2f}".replace('.', ',')
-                sess_view.tree_lays.insert("", "end", iid="lay_0", values=("▶", "0", eff_str, "1", "0", time_str, pieces_cnt, area_str))
-                sess_view.tree_lays.selection_set("lay_0")
+            # Atualiza tabela da aba Layout (todas as placas, com as dimensões salvas)
+            if layouts_editor:
+                sess_view.session_data["layouts"] = copy.deepcopy(active_sess["layouts"])
+            if hasattr(sess_view, "refresh_layout_tab"):
+                sess_view.refresh_layout_tab(sess_view.session_data)
 
             # Redesenha a miniatura da chapa na aba Layout com as novas peças
             sess_view.draw_mini_layout_preview()

@@ -9,7 +9,7 @@ on:
       tag_name:
         description: 'Tag de versão SemVer (ex: v1.0.0)'
         required: false
-        default: 'v1.6.17'
+        default: 'v1.6.18'
 
 permissions:
   contents: write
@@ -189,7 +189,12 @@ jobs:
 
             ---
 
-            ### 🛠️ Recursos Incluídos Nesta Versão (v1.6.17):
+            ### 🛠️ Recursos Incluídos Nesta Versão (v1.6.18):
+            - **Refile agora fica salvo de verdade (Ctrl+S)**:
+              - O editor já gravava as dimensões refiladas, o corte CAM e a ponta no banco, mas a sessão em memória continuava com o tamanho antigo e sobrescrevia tudo na próxima gravação.
+              - Agora a lista de placas é sincronizada e persistida ao salvar; a aba Layout mostra todas as placas (antes era reduzida a uma linha).
+              - **527 testes automatizados** (526 passando, 1 skip, 0 falhas), com 2 novos cobrindo refile + salvamento.
+            - **Novidades da v1.6.17 (mantidas)**: linha azul da ponta no PDF e metragem em metros.
             - **PDF de impressão: linha azul da ponta corrigida e tudo em metros**:
               - A ponta de 2 camadas era desenhada com as coordenadas da chapa **antes** do refile, vazando para fora da placa; agora é limitada à chapa (e descartada quando o refile corta a ponta).
               - No PDF a borda era sólida e grossa (o Pillow não tem tracejado): passou a ser tracejada fina, igual à tela.

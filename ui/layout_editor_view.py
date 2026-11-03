@@ -5631,7 +5631,7 @@ class LayoutEditorView(tk.Frame):
                 status_text = f"Layout salvo no banco de dados ({n_pieces} peças) [Ctrl+S]{extra_ai}."
             status_color = THEME.get("text_main", "#000000")
 
-        if hasattr(self, "lbl_stat_pos"):
+        if getattr(self, "lbl_stat_pos", None) is not None:
             self.lbl_stat_pos.config(text=status_text, fg=status_color)
 
         return "break"

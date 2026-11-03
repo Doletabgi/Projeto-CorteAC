@@ -2620,6 +2620,80 @@ class SessionView(tk.Frame):
             vals = ["(unspecified)"] + [f"{m['id']} - {m['name']}" for m in materials]
             self.cb_mat_code["values"] = vals
 
+    def refresh_layout_tab(self, session_data=None):
+        """
+        (Re)desenha a tabela da aba Layout a partir de session_data["layouts"].
+
+        Usado ao carregar a sessão e após salvar no Layout Editor (refile, ponta de 2
+        camadas), para a tabela refletir o estado realmente persistido — antes o
+        salvamento apagava a tabela e inseria uma única linha, escondendo as demais placas.
+        """
+        if session_data is None:
+            session_data = getattr(self, "session_data", None)
+        if not isinstance(session_data, dict):
+            return
+
+        if hasattr(self, "tree_lays"):
+            self.tree_lays.delete(*self.tree_lays.get_children())
+            sess_layouts = session_data.get("layouts", [])
+            if not sess_layouts and session_data.get("id") and hasattr(self, "db") and self.db:
+                try:
+                    res = self.db.get_session_layouts(session_data["id"])
+                    if isinstance(res, list) and res:
+                        sess_layouts = res
+                        session_data["layouts"] = sess_layouts
+                except Exception:
+                    pass
+
+            if not sess_layouts and session_data.get("placed_pieces"):
+                sess_layouts = [{
+                    "layout_index": 0,
+                    "name": session_data.get("layout_name") or "lay0000",
+                    "pieces": session_data.get("placed_pieces", []),
+                    "yield_percent": session_data.get("yield_percent", 0.0),
+                    "cutting_time_sec": session_data.get("cutting_time_sec", 0.0),
+                    "used_area_m2": session_data.get("used_area_m2", 0.0)
+                }]
+                session_data["layouts"] = sess_layouts
+
+            for ly_idx, ly in enumerate(sess_layouts):
+                ly_pieces = ly.get("pieces") or ly.get("placed_pieces") or []
+                if not ly_pieces and ly_idx == 0 and session_data.get("placed_pieces"):
+                    ly_pieces = session_data.get("placed_pieces") or []
+                    ly["pieces"] = ly_pieces
+                    ly["placed_pieces"] = ly_pieces
+
+                eff = float(ly.get("yield_percent", ly.get("yield_pct", 0.0)))
+                eff_str = f"{eff:.2f}%".replace('.', ',')
+
+                cnt = len(ly_pieces)
+                if cnt == 0 and ly.get("num_items"):
+                    try:
+                        cnt = int(ly.get("num_items") or 0)
+                    except (ValueError, TypeError):
+                        cnt = 0
+                pieces_cnt = str(cnt)
+
+                time_s = float(ly.get("cutting_time_sec", 0.0))
+                time_str = f"{int(time_s // 60):02d}:{int(time_s % 60):02d}"
+                area_m2 = ly.get("used_area_m2", 0.0)
+                if not area_m2 and ly_pieces:
+                    tot_mm2 = sum(polygon_area(self._resolve_piece_contour(p)) for p in ly_pieces)
+                    area_m2 = tot_mm2 / 1000000.0
+                area_str = f"{area_m2:.2f}".replace('.', ',') if area_m2 else "0,08"
+                indicator = "▶" if ly_idx == 0 else ""
+                row_iid = f"lay_{ly_idx}"
+                self.tree_lays.insert("", "end", iid=row_iid, values=(indicator, str(ly_idx), eff_str, "1", "0", time_str, pieces_cnt, area_str))
+
+            if isinstance(sess_layouts, list) and sess_layouts:
+                if self.tree_lays.exists("lay_0"):
+                    try:
+                        self.tree_lays.selection_set("lay_0")
+                    except Exception:
+                        pass
+                if not session_data.get("placed_pieces"):
+                    session_data["placed_pieces"] = sess_layouts[0].get("pieces") or sess_layouts[0].get("placed_pieces") or []
+
     def load_session(self, session_data):
         """Carrega e exibe os dados da sessão selecionada."""
         self.session_data = session_data
@@ -2716,67 +2790,8 @@ class SessionView(tk.Frame):
             session_data.get("cutting_time_sec", 0.0)
         )
 
-        # Atualiza a tabela da aba Layouts (em branco caso não haja encaixe)
-        if hasattr(self, "tree_lays"):
-            self.tree_lays.delete(*self.tree_lays.get_children())
-            sess_layouts = session_data.get("layouts", [])
-            if not sess_layouts and session_data.get("id") and hasattr(self, "db") and self.db:
-                try:
-                    res = self.db.get_session_layouts(session_data["id"])
-                    if isinstance(res, list) and res:
-                        sess_layouts = res
-                        session_data["layouts"] = sess_layouts
-                except Exception:
-                    pass
+        self.refresh_layout_tab(session_data)
 
-            if not sess_layouts and session_data.get("placed_pieces"):
-                sess_layouts = [{
-                    "layout_index": 0,
-                    "name": session_data.get("layout_name") or "lay0000",
-                    "pieces": session_data.get("placed_pieces", []),
-                    "yield_percent": session_data.get("yield_percent", 0.0),
-                    "cutting_time_sec": session_data.get("cutting_time_sec", 0.0),
-                    "used_area_m2": session_data.get("used_area_m2", 0.0)
-                }]
-                session_data["layouts"] = sess_layouts
-
-            for ly_idx, ly in enumerate(sess_layouts):
-                ly_pieces = ly.get("pieces") or ly.get("placed_pieces") or []
-                if not ly_pieces and ly_idx == 0 and session_data.get("placed_pieces"):
-                    ly_pieces = session_data.get("placed_pieces") or []
-                    ly["pieces"] = ly_pieces
-                    ly["placed_pieces"] = ly_pieces
-
-                eff = float(ly.get("yield_percent", ly.get("yield_pct", 0.0)))
-                eff_str = f"{eff:.2f}%".replace('.', ',')
-
-                cnt = len(ly_pieces)
-                if cnt == 0 and ly.get("num_items"):
-                    try:
-                        cnt = int(ly.get("num_items") or 0)
-                    except (ValueError, TypeError):
-                        cnt = 0
-                pieces_cnt = str(cnt)
-
-                time_s = float(ly.get("cutting_time_sec", 0.0))
-                time_str = f"{int(time_s // 60):02d}:{int(time_s % 60):02d}"
-                area_m2 = ly.get("used_area_m2", 0.0)
-                if not area_m2 and ly_pieces:
-                    tot_mm2 = sum(polygon_area(self._resolve_piece_contour(p)) for p in ly_pieces)
-                    area_m2 = tot_mm2 / 1000000.0
-                area_str = f"{area_m2:.2f}".replace('.', ',') if area_m2 else "0,08"
-                indicator = "▶" if ly_idx == 0 else ""
-                row_iid = f"lay_{ly_idx}"
-                self.tree_lays.insert("", "end", iid=row_iid, values=(indicator, str(ly_idx), eff_str, "1", "0", time_str, pieces_cnt, area_str))
-
-            if isinstance(sess_layouts, list) and sess_layouts:
-                if self.tree_lays.exists("lay_0"):
-                    try:
-                        self.tree_lays.selection_set("lay_0")
-                    except Exception:
-                        pass
-                if not session_data.get("placed_pieces"):
-                    session_data["placed_pieces"] = sess_layouts[0].get("pieces") or sess_layouts[0].get("placed_pieces") or []
 
         has_pieces = bool(session_data.get("placed_pieces") or session_data.get("layouts")) if isinstance(session_data, dict) else False
         if hasattr(self, "btn_open_editor"):
