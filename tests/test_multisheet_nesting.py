@@ -1209,7 +1209,44 @@ class TestMultiSheetNesting(unittest.TestCase):
 
         editor.destroy()
 
+    def test_nest_multi_sheet_with_encoded_params_and_clean_state(self):
+        """Valida que nest_multi_sheet com parâmetros codificados (ex: HighYield;separar_sobras=1)
+        reconhece o preset, aplica acoplamento alternado e limpa zonas de ponta residuais."""
+        s = {
+            "id": 999,
+            "name": "M999",
+            "size": "38",
+            "pairs": 8,
+            "contour": self.box_100,
+            "tip_zone": (0.0, 500.0, 1000.0, 1000.0),
+            "layers_tip": 2
+        }
+
+        res = nest_multi_sheet(
+            available_shapes=[s],
+            bed_width_mm=1000.0,
+            bed_height_mm=1000.0,
+            strategy="flashnestsheet",
+            params="HighYield;separar_sobras=1;tip_mode=canto;folga_ponta=15.0",
+            gap_mm=1.0,
+            layers=4
+        )
+
+        self.assertTrue(res["success"])
+        # Garante que s foi limpo de tip_zone e layers_tip
+        self.assertNotIn("tip_zone", s)
+        self.assertNotIn("layers_tip", s)
+
+        layouts = res["layouts"]
+        self.assertGreater(len(layouts), 0)
+        pieces = layouts[0]["pieces"]
+        # HighYield deve aplicar rotações alternadas (0° e 180°)
+        rotations = {round(p.get("rotation", 0.0), 1) for p in pieces}
+        self.assertTrue(len(rotations) >= 2 or any(r in (180.0, -180.0) for r in rotations),
+                        f"Deveria ter rotações alternadas em HighYield, mas obteve: {rotations}")
+
 
 if __name__ == "__main__":
     unittest.main()
+
 

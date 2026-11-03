@@ -13,7 +13,7 @@ import time
 import unittest
 import tkinter as tk
 
-from cad.layers_rule import calc_resto
+from cad.layers_rule import calc_resto, calc_resto_efetivo
 from ui.sort_utils import resto_sort_key
 from ui.session_view import SessionView
 
@@ -59,6 +59,31 @@ class TestCalcRestoPure(unittest.TestCase):
         self.assertEqual(resto_sort_key(None), 0)
         self.assertEqual(resto_sort_key('invalid'), 0)
         self.assertLess(resto_sort_key(-1), resto_sort_key(0))
+
+    def test_calc_resto_efetivo_real_layouts(self):
+        """Verifica calc_resto_efetivo com layouts reais (ponta / 2 camadas)."""
+        # Sem separação (separar=False) -> sempre resto real normal
+        self.assertEqual(calc_resto_efetivo(125, 4, separar=False), -1)
+        self.assertEqual(calc_resto_efetivo(126, 4, separar=False), 0)
+
+        # Com separação (separar=True) e layouts_atuais=None -> compatibilidade/desejo = 0
+        self.assertEqual(calc_resto_efetivo(125, 4, separar=True, layouts_atuais=None), 0)
+
+        # Com separação (separar=True) e layout com layers=2 (separação bem sucedida) -> 0
+        layouts_separados = [{"name": "lay0000", "layers": 4}, {"name": "lay0001", "layers": 2}]
+        self.assertEqual(calc_resto_efetivo(125, 4, separar=True, layouts_atuais=layouts_separados), 0)
+        self.assertEqual(calc_resto_efetivo(126, 4, separar=True, layouts_atuais=layouts_separados), 0)
+
+        # Com separação (separar=True) e layout com tip_zone (ponta no mesmo layout) -> 0
+        layouts_ponta = [{"name": "lay0000", "layers": 4, "tip_zone": [0, 0, 500, 500]}]
+        self.assertEqual(calc_resto_efetivo(125, 4, separar=True, layouts_atuais=layouts_ponta), 0)
+
+        # Com separação (separar=True), mas layouts SEM layers=2 nem tip_zone (falhou ou rollback)
+        # Deve alertar visualmente com -1 para moldes ímpares, e manter 0 para pares
+        layouts_falhos = [{"name": "lay0000", "layers": 4}]
+        self.assertEqual(calc_resto_efetivo(125, 4, separar=True, layouts_atuais=layouts_falhos), -1)
+        self.assertEqual(calc_resto_efetivo(109, 4, separar=True, layouts_atuais=layouts_falhos), -1)
+        self.assertEqual(calc_resto_efetivo(126, 4, separar=True, layouts_atuais=layouts_falhos), 0)
 
 
 class TestSessionViewShapesRestoGrid(unittest.TestCase):
@@ -231,3 +256,30 @@ class TestSessionViewShapesRestoGrid(unittest.TestCase):
 
         restos_desc = [int(self.sv.tree_shapes.set(str(i), 'resto')) for i in range(len(self.sv.shapes_list))]
         self.assertEqual(restos_desc, [0, 0, -1, -1], 'Descendente: 0 deve preceder -1')
+
+    def test_11_resto_column_reflects_actual_layout_separation_in_grid(self):
+        """Coluna Resto reflete o layout real: mostra -1 se não separado, e 0 quando separado."""
+        # Configura checkbox separar_sobras como ativo
+        self.sv.var_separar_sobras.set(True)
+
+        # 1. Simula layout calculado SEM separação de sobras (apenas 4 camadas)
+        self.sv.session_data["layouts"] = [{"name": "lay0000", "layers": 4}]
+        self.sv.refresh_shapes_resto_column()
+        self.root.update()
+
+        # Molde_125 (ímpar) deve alertar -1 (pois a separação não aconteceu de fato no layout)
+        # Molde_126 (par) deve ser 0
+        self.assertEqual(self.sv.tree_shapes.set('0', 'resto'), '-1')
+        self.assertEqual(self.sv.tree_shapes.set('1', 'resto'), '0')
+
+        # 2. Simula layout calculado COM separação de sobras (adicionado layout de 2 camadas)
+        self.sv.session_data["layouts"] = [
+            {"name": "lay0000", "layers": 4},
+            {"name": "lay0001", "layers": 2}
+        ]
+        self.sv.refresh_shapes_resto_column()
+        self.root.update()
+
+        # Agora Molde_125 deve ter resto 0 (sobra absorvida no layout real)
+        self.assertEqual(self.sv.tree_shapes.set('0', 'resto'), '0')
+        self.assertEqual(self.sv.tree_shapes.set('1', 'resto'), '0')

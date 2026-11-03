@@ -594,7 +594,8 @@ def nest_synthetic_engine(available_shapes, bed_width_mm, bed_height_mm, target_
     if not shape_queue:
         shape_queue = list(sorted_shapes)
 
-    if params == "stdFill":
+    clean_params = str(params).split(";")[0].split("?")[0].strip() if params else "stdNOTFill"
+    if clean_params == "stdFill":
         max_pieces = 9999
     else:
         max_pieces = target_count if (target_count and target_count > 0) else len(shape_queue)
@@ -745,7 +746,8 @@ def nest_tape_engine(available_shapes, bed_width_mm, bed_height_mm, target_count
     if not shape_queue:
         shape_queue = list(sorted_shapes)
 
-    if params == "stdFill":
+    clean_params = str(params).split(";")[0].split("?")[0].strip() if params else "stdNOTFill"
+    if clean_params == "stdFill":
         max_pieces = 9999
     else:
         max_pieces = target_count if (target_count and target_count > 0) else len(shape_queue)
@@ -936,8 +938,9 @@ def _auto_nest_pieces_core(available_shapes, bed_width_mm, bed_height_mm, target
     if not shape_queue:
         shape_queue = list(sorted_shapes)
 
+    clean_params = str(params).split(";")[0].split("?")[0].strip() if params else "stdNOTFill"
     # Quantidade máxima a posicionar
-    if params == "stdFill":
+    if clean_params == "stdFill":
         max_pieces = 9999
     else:
         max_pieces = target_count if (target_count and target_count > 0) else len(shape_queue)
@@ -949,7 +952,7 @@ def _auto_nest_pieces_core(available_shapes, bed_width_mm, bed_height_mm, target
         m_top = float(margins.get("top", 10.0)) if margins else 10.0
         m_bottom = float(margins.get("bottom", 10.0)) if margins else 10.0
         base_spacing = max(6.0, gap_mm * 2.0)
-        angles = [0, 45, 90, 135, 180, 225, 270, 315] if params == "HighYield" else [0, 90, 180, 270]
+        angles = [0, 45, 90, 135, 180, 225, 270, 315] if clean_params == "HighYield" else [0, 90, 180, 270]
         cur_x = m_left + 5.0
         row_baseline_y = m_bottom + 5.0
         row_height = 0.0
@@ -1018,17 +1021,17 @@ def _auto_nest_pieces_core(available_shapes, bed_width_mm, bed_height_mm, target
     controls = {k: dp_config[k] for k in control_keys if k in dp_config}
     if not any(k not in control_keys for k in dp_config):
         # Mapeia predefinições caso não tenha sido passado objeto customizado
-        if params == "ALTERNADO":
+        if clean_params == "ALTERNADO":
             dp_config = {"coupling": "0/0 0/180", "gap1": gap_mm, "row_interlock": True, "range1_from": -3.0, "range1_to": 3.0, "range1_step": 1.0}
-        elif params == "DIREITA":
+        elif clean_params == "DIREITA":
             dp_config = {"coupling": "0/0", "gap1": gap_mm, "row_interlock": True, "range1_from": -3.0, "range1_to": 3.0, "range1_step": 1.0}
-        elif params == "ESQUERDA":
+        elif clean_params == "ESQUERDA":
             dp_config = {"coupling": "0/180", "gap1": gap_mm, "row_interlock": True, "range1_from": -3.0, "range1_to": 3.0, "range1_step": 1.0}
-        elif params == "GAP 2":
+        elif clean_params == "GAP 2":
             dp_config = {"coupling": "0/0 0/180", "gap1": 2.0, "row_interlock": True, "range1_from": -3.0, "range1_to": 3.0, "range1_step": 1.0}
-        elif params == "HighYield":
+        elif clean_params == "HighYield":
             dp_config = {"coupling": "0/0 0/180", "gap1": max(0.5, float(gap_mm) * 0.7), "row_interlock": True, "range1_from": -5.0, "range1_to": 5.0, "range1_step": 0.5}
-        elif params == "FastNest":
+        elif clean_params == "FastNest":
             dp_config = {"coupling": "0/0 0/180", "gap1": max(1.5, float(gap_mm) * 1.5), "row_interlock": True, "range1_from": 0.0, "range1_to": 0.0, "range1_step": 0.0}
         else:
             dp_config = {"coupling": "0/0", "gap1": gap_mm, "row_interlock": False, "range1_from": 0.0, "range1_to": 1.0, "range1_step": 1.0}
@@ -1173,6 +1176,12 @@ def nest_multi_sheet(
     usable_w = bed_width_mm - m_left - m_right
     usable_h = bed_height_mm - m_bottom - m_top
 
+    # Garante que os shapes de entrada não contenham zonas de ponta residuais
+    for s in available_shapes or []:
+        if isinstance(s, dict):
+            s.pop("tip_zone", None)
+            s.pop("layers_tip", None)
+
     # Proteção prévia: verifica se algum molde é fisicamente maior que a placa útil
     for s in available_shapes:
         c = s.get("contour", [])
@@ -1217,8 +1226,12 @@ def nest_multi_sheet(
             s_layers = max(1, int(s_layers))
         except (ValueError, TypeError):
             s_layers = l_val
-        if "target_pieces" in s and s["target_pieces"] is not None:
-            req_pieces = max(0, int(s["target_pieces"]))
+        # Sessão: a demanda manda pelos PARES. Um `target_pieces` residual (de uma
+        # separação de sobras anterior) não pode reduzir o encaixe — era o que
+        # deixava a placa quase vazia ("vãos gigantes") ao clicar em Gerar/Refazer.
+        stale_target = s.get("target_pieces")
+        if stale_target is not None and req_p <= 0:
+            req_pieces = max(0, int(stale_target))
         else:
             req_pieces = pecas_na_mesa(req_p, s_layers)
         total_pieces_demanded += req_pieces

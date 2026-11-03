@@ -3,7 +3,7 @@ JobManager 2000 (Python Edition)
 Regras de Camadas e Cálculo de Resto de Produção (layers_rule.py)
 """
 import math
-from typing import Any, Dict, Optional, Union
+from typing import Any, Dict, List, Optional, Union
 
 __all__ = [
     "resolve_session_layers",
@@ -401,24 +401,37 @@ def calc_resto(pares: Union[int, float, str, None], camadas: Union[int, float, s
 def calc_resto_efetivo(
     pares: Union[int, float, str, None],
     camadas: Union[int, float, str, None],
-    separar: bool = True
+    separar: bool = True,
+    layouts_atuais: Optional[List[Dict[str, Any]]] = None
 ) -> int:
-    """Resto efetivo considerando a separação automática de sobras de 4 camadas em 2 camadas.
+    """Resto efetivo considerando a separação real de sobras nos layouts.
 
-    Regra de negócio confirmada:
-    - Se separar for True e camadas == 4:
-      A peça de sobra de cada molde com pares ímpares é transferida para uma placa
-      extra de 2 camadas, absorvendo a sobra com precisão de pares (Resto = 0).
-    - Caso contrário (separar False, ou camadas != 4):
-      Retorna o calc_resto(pares, camadas) normal (-1 informativo para ímpar a 4 camadas).
+    Se 'separar' for True e camadas == 4, verifica se algum layout realmente
+    possui tip_zone ou layers=2. Se sim, o resto foi absorvido (0).
+    Se não, a separação falhou e o resto real é -1.
     """
     if separar:
         try:
             c = int(camadas) if camadas is not None else 2
         except (ValueError, TypeError):
             c = 2
+
         if c == 4:
+            if calc_resto(pares, camadas) == 0:
+                return 0
+            if layouts_atuais is not None:
+                tem_ponta = any(
+                    (ly.get("tip_zone") is not None or ly.get("layers") == 2)
+                    if isinstance(ly, dict)
+                    else (getattr(ly, "tip_zone", None) is not None or getattr(ly, "layers", None) == 2)
+                    for ly in layouts_atuais
+                )
+                if tem_ponta:
+                    return 0
+                else:
+                    return -1
             return 0
+
     return calc_resto(pares, camadas)
 
 

@@ -438,6 +438,8 @@ class LayoutPrintDialog(tk.Toplevel):
         if not cur_layout and self.layouts and 0 <= self.current_layout_index < len(self.layouts):
             cur_layout = self.layouts[self.current_layout_index]
 
+        self.current_layout = cur_layout if isinstance(cur_layout, dict) else (self.layout_data if isinstance(self.layout_data, dict) else {})
+
         self.layout_layers = resolve_layout_layers(
             layout=cur_layout,
             session=self.layout_data.get("session"),
@@ -452,6 +454,14 @@ class LayoutPrintDialog(tk.Toplevel):
             self.tip_zone = cur_layout.get("tip_zone")
         self.layers_tip = self.layout_data.get("layers_tip") or (cur_layout.get("layers_tip") if isinstance(cur_layout, dict) else 2)
         self.tip_mode = self.layout_data.get("tip_mode") or (cur_layout.get("tip_mode") if isinstance(cur_layout, dict) else "canto")
+
+        if self.tip_zone and isinstance(self.current_layout, dict):
+            if "tip_zone" not in self.current_layout:
+                self.current_layout["tip_zone"] = self.tip_zone
+            if "tip_mode" not in self.current_layout:
+                self.current_layout["tip_mode"] = self.tip_mode
+            if "layers" not in self.current_layout:
+                self.current_layout["layers"] = self.layout_layers
 
         # Refile (CAM)
         trim_cut = self.layout_data.get("trim_cut_line")
@@ -729,7 +739,8 @@ class LayoutPrintDialog(tk.Toplevel):
 
                 # A sobra legítima NÃO é erro: destacar em vermelho SOMENTE se n exceder m + sobra legítima
                 is_sep = is_separar_sobras_enabled(getattr(self, "session", None))
-                resto = calc_resto_efetivo(m, layers, separar=is_sep)
+                sess_layouts = getattr(self, "layouts", None)
+                resto = calc_resto_efetivo(m, layers, separar=is_sep, layouts_atuais=sess_layouts)
                 max_allowed = m + abs(resto)
                 is_error = (n > max_allowed) if m > 0 else False
                 size_list.append({
@@ -1043,6 +1054,36 @@ class LayoutPrintDialog(tk.Toplevel):
             text=enf_display,
             anchor="nw", font=f_mono, fill="#000000"
         )
+
+        # Instrução explícita de enfesto para almoxarifado/operador no cabeçalho
+        cur_layout = getattr(self, "current_layout", None) or self.layout_data.get("layout") or self.layout_data
+        tip_zone = getattr(self, "tip_zone", None)
+        if not tip_zone and isinstance(cur_layout, dict):
+            tip_zone = cur_layout.get("tip_zone")
+
+        if tip_zone:
+            meta_y += line_h
+            texto_enfesto = format_enfesto_operator_text(
+                layout=cur_layout,
+                sheet_w=self.sheet_w_mm,
+                sheet_h=self.sheet_h_mm,
+                tip_mode=getattr(self, "tip_mode", "canto")
+            )
+            f_op = ("Segoe UI", max(6, int(7.5 * self.zoom)), "bold italic")
+            header_op_text = f"📋 Almoxarifado / Operador: {texto_enfesto}"
+            avail_w = margin_right - margin_left
+            op_item = self.canvas.create_text(
+                margin_left, meta_y,
+                text=header_op_text,
+                anchor="nw", font=f_op, fill="#1d4ed8",
+                width=avail_w,
+                tags="print_meta_enfesto_op"
+            )
+            bbox = self.canvas.bbox(op_item)
+            if bbox:
+                meta_y = bbox[3] + int(2 * self.zoom)
+            else:
+                meta_y += line_h
 
         # =====================================================================
         # 2.5. Tabela de Legenda por Molde (com ShapeId e contagem n/m)
@@ -1383,29 +1424,21 @@ class LayoutPrintDialog(tk.Toplevel):
                 fill="#2563eb",
                 tags="print_tip_lbl"
             )
+            # Rótulo da área principal de 4 camadas (posicionado para evitar sobreposição com a ponta)
+            if sy0 <= bed_y + int(25 * self.zoom):
+                base_lbl_y = bed_y + bed_h - int(6 * self.zoom)
+                base_anchor = "sw"
+            else:
+                base_lbl_y = bed_y + int(6 * self.zoom)
+                base_anchor = "nw"
+
             self.canvas.create_text(
-                bed_x + 6, bed_y + 6,
-                text="4 camadas",
-                anchor="nw",
+                bed_x + int(6 * self.zoom), base_lbl_y,
+                text=f"{self.layout_layers} camadas",
+                anchor=base_anchor,
                 font=("Segoe UI", max(6, int(7 * self.zoom)), "bold"),
                 fill="#059669",
                 tags="print_base_lbl"
-            )
-
-            cur_layout = self.layout_data.get("layout")
-            op_text = format_enfesto_operator_text(
-                layout=cur_layout or self.layout_data,
-                sheet_w=self.sheet_w_mm,
-                sheet_h=self.sheet_h_mm,
-                tip_mode=getattr(self, "tip_mode", "canto")
-            )
-            self.canvas.create_text(
-                bed_x, bed_y + bed_h + int(16 * self.zoom),
-                text=op_text,
-                anchor="nw",
-                font=("Segoe UI", max(7, int(8 * self.zoom)), "bold"),
-                fill="#1e3a8a",
-                tags="print_enfesto_op"
             )
 
         # =====================================================================
@@ -1446,6 +1479,7 @@ class LayoutPrintDialog(tk.Toplevel):
             f_ruler = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSansMono.ttf", max(6, int(6.0 * scale)))
             f_legend_sub = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSansMono.ttf", max(6, int(6.8 * scale)))
             f_footnote = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSansMono.ttf", max(5, int(6.2 * scale)))
+            f_op_pillow = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", max(7, int(7.5 * scale)))
         except Exception:
             f_mono = ImageFont.load_default()
             f_mono_bold = f_mono
@@ -1454,6 +1488,7 @@ class LayoutPrintDialog(tk.Toplevel):
             f_ruler = f_mono
             f_legend_sub = f_mono
             f_footnote = f_mono
+            f_op_pillow = f_mono_bold
 
         m_left = int(36 * scale)
         m_right = pw - int(36 * scale)
@@ -1516,6 +1551,42 @@ class LayoutPrintDialog(tk.Toplevel):
         if getattr(self, "tip_zone", None):
             enf_pillow = f"Enfesto: {self.layout_layers} cam. (ponta 2c)"
         draw.text((m_left + col_w * 3, meta_y), enf_pillow, fill="black", font=f_mono)
+
+        # Instrução explícita de enfesto para almoxarifado/operador no cabeçalho
+        cur_layout = getattr(self, "current_layout", None) or self.layout_data.get("layout") or self.layout_data
+        tip_zone = getattr(self, "tip_zone", None)
+        if not tip_zone and isinstance(cur_layout, dict):
+            tip_zone = cur_layout.get("tip_zone")
+
+        if tip_zone:
+            meta_y += line_h
+            texto_enfesto = format_enfesto_operator_text(
+                layout=cur_layout,
+                sheet_w=self.sheet_w_mm,
+                sheet_h=self.sheet_h_mm,
+                tip_mode=getattr(self, "tip_mode", "canto")
+            )
+            header_op_text = f"Almoxarifado / Operador: {texto_enfesto}"
+            avail_w = m_right - m_left
+
+            words = header_op_text.split(" ")
+            wrapped_lines = []
+            cur_line = []
+            for w in words:
+                cand = (" ".join(cur_line + [w])) if cur_line else w
+                bb = draw.textbbox((0, 0), cand, font=f_op_pillow)
+                if (bb[2] - bb[0]) <= avail_w or not cur_line:
+                    cur_line.append(w)
+                else:
+                    wrapped_lines.append(" ".join(cur_line))
+                    cur_line = [w]
+            if cur_line:
+                wrapped_lines.append(" ".join(cur_line))
+
+            for wl in wrapped_lines:
+                draw.text((m_left, meta_y), wl, fill="#1d4ed8", font=f_op_pillow)
+                bb = draw.textbbox((0, 0), wl, font=f_op_pillow)
+                meta_y += (bb[3] - bb[1]) + int(3 * scale)
 
         # =====================================================================
         # 2.5. Tabela de Legenda por Molde no Pillow (com ShapeId e n/m)
@@ -1744,16 +1815,13 @@ class LayoutPrintDialog(tk.Toplevel):
 
             draw.rectangle([sx0, sy0, sx1, sy1], outline="#2563eb", width=max(2, int(1.5 * scale)))
             draw.text((sx0 + int(4 * scale), sy0 + int(4 * scale)), "2 camadas (ponta)", fill="#2563eb", font=f_small)
-            draw.text((bed_x + int(6 * scale), bed_y + int(6 * scale)), "4 camadas", fill="#059669", font=f_small)
+            # Rótulo da área principal de 4 camadas (posicionado para evitar sobreposição com a ponta)
+            if sy0 <= bed_y + int(25 * scale):
+                base_lbl_y = bed_y + bed_h - int(16 * scale)
+            else:
+                base_lbl_y = bed_y + int(6 * scale)
 
-            cur_layout = self.layout_data.get("layout")
-            op_text = format_enfesto_operator_text(
-                layout=cur_layout or self.layout_data,
-                sheet_w=self.sheet_w_mm,
-                sheet_h=self.sheet_h_mm,
-                tip_mode=getattr(self, "tip_mode", "canto")
-            )
-            draw.text((bed_x, bed_y + bed_h + int(14 * scale)), op_text, fill="#1e3a8a", font=f_mono_bold)
+            draw.text((bed_x + int(6 * scale), base_lbl_y), f"{self.layout_layers} camadas", fill="#059669", font=f_small)
 
         # Rodapé
         footer_y = ph - int(36 * scale)

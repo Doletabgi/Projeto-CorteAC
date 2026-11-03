@@ -36,6 +36,7 @@ from cad.layers_rule import (
     parse_session_params,
     encode_session_params,
     trim_layout_dict,
+    layers_for_piece,
 )
 
 from cad.layers_split import separar_sobras_camadas, separar_sobras_em_ponta, desfazer_separacao_sobras
@@ -1619,6 +1620,18 @@ class MainWindow(tk.Tk):
                     if str(layout_name) in (str(ly_name), str(ly_code), f"lay{idx:04d}", str(idx), f"lay_{idx}", str(ly_idx)):
                         target_idx = idx
                         break
+            elif sess_layouts:
+                if getattr(self, "session_view", None) and hasattr(self.session_view, "tree_lays"):
+                    sel = self.session_view.tree_lays.selection()
+                    if sel and str(sel[0]).startswith("lay_"):
+                        try:
+                            s_idx = int(str(sel[0]).replace("lay_", ""))
+                            if 0 <= s_idx < len(sess_layouts):
+                                target_idx = s_idx
+                        except ValueError:
+                            pass
+                if target_idx == 0 and len(sess_layouts) > 1 and sess_layouts[-1].get("tip_zone"):
+                    target_idx = len(sess_layouts) - 1
 
             if sess_layouts and hasattr(self.layout_editor_view, "set_session_layouts"):
                 self.layout_editor_view.set_session_layouts(sess_layouts, initial_index=target_idx)
@@ -2318,7 +2331,11 @@ class MainWindow(tk.Tk):
         """Reexecuta a separação de sobras de forma idempotente antes de despachar ou exportar."""
         if self.current_session and self.current_session.get("layouts"):
             layouts = self.current_session.get("layouts", [])
-            sess_shapes = getattr(self, "current_shapes", None) or self.current_session.get("shapes", [])
+            sess_shapes = (
+                self.session_view.shapes_list
+                if getattr(self, "session_view", None) and getattr(self.session_view, "shapes_list", None)
+                else self.current_session.get("shapes", [])
+            )
             new_lays, split_msg = separar_sobras_em_ponta(
                 layouts=layouts,
                 session=self.current_session,
@@ -5066,13 +5083,20 @@ class MainWindow(tk.Tk):
                 default=2
             )
 
+            for s in shapes:
+                if isinstance(s, dict):
+                    s.pop("tip_zone", None)
+                    s.pop("layers_tip", None)
+                    s.pop("target_pieces", None)
+
             sorted_shapes, _ = sort_shapes_by_sequence(shapes)
             for s_idx, s in enumerate(sorted_shapes, start=1):
                 s["color"] = get_color_for_size(str(s.get("size", "41")), s_idx)
 
+            clean_preset_batch = str(config.get("raw_preset", params)).split(";")[0].split("?")[0].strip()
             dieproc_params = None
             if self.db:
-                dieproc_params = self.db.get_dieproc_preset(config.get("raw_preset", params))
+                dieproc_params = self.db.get_dieproc_preset(clean_preset_batch)
 
             def _piece_prog(placed, tot):
                 q.put(("SESSION_PROGRESS", placed, tot))
@@ -5177,9 +5201,7 @@ class MainWindow(tk.Tk):
                         for sh in sorted_shapes:
                             tot_p = 0
                             for ly in layouts:
-                                ly_l = ly.get("layers", mat_layers)
-                                cnt = sum(1 for p in ly.get("pieces", []) if piece_matches_shape(p, sh))
-                                tot_p += cnt * ly_l
+                                tot_p += sum(layers_for_piece(ly, p) for p in ly.get("pieces", []) if piece_matches_shape(p, sh))
                             pairs_cut = tot_p // 2
                             req_p = int(sh.get("pairs", 0))
                             rem = max(0, req_p - pairs_cut)
@@ -5316,6 +5338,13 @@ class MainWindow(tk.Tk):
         elif self.current_session and self.current_session.get("shapes"):
             sess_shapes = self.current_session["shapes"]
 
+        # Antes de chamar nest_multi_sheet, garanta que os shapes não tenham zonas de ponta antigas
+        for s in sess_shapes:
+            if isinstance(s, dict):
+                s.pop("tip_zone", None)
+                s.pop("layers_tip", None)
+                s.pop("target_pieces", None)
+
         if not sess_shapes:
             if getattr(self, "session_view", None) and hasattr(self.session_view, "hide_progress"):
                 self.session_view.hide_progress()
@@ -5334,12 +5363,20 @@ class MainWindow(tk.Tk):
             self.lbl_status_msg.config(text="Atenção: Selecione um material na aba Materiais para calcular.")
             return
 
+        # Limpa layouts prévios e pontas antigas da sessão atual antes do novo nesting
+        if self.current_session and isinstance(self.current_session, dict):
+            for ly in self.current_session.get("layouts", []):
+                if isinstance(ly, dict):
+                    ly.pop("tip_zone", None)
+                    ly.pop("layers_tip", None)
+
         # Recupera parâmetros DieProc ativos (acoplamento de rotação, ranges, gaps, row interlock)
+        clean_preset_db, _ = parse_session_params(params)
         dieproc_params = None
         if getattr(self, "session_view", None):
             dieproc_params = self.session_view.get_dieproc_params()
         if not dieproc_params and self.db:
-            dieproc_params = self.db.get_dieproc_preset(params)
+            dieproc_params = self.db.get_dieproc_preset(clean_preset_db)
 
         # Determina o Modo de Encaixe ativo (Camada 1)
         nesting_mode = "custom"
@@ -5501,6 +5538,11 @@ class MainWindow(tk.Tk):
         def _worker():
             t_start = time.perf_counter()
             try:
+                for s in sess_shapes:
+                    if isinstance(s, dict):
+                        s.pop("tip_zone", None)
+                        s.pop("layers_tip", None)
+                        s.pop("target_pieces", None)
                 sorted_sess_shapes, _ = sort_shapes_by_sequence(sess_shapes)
                 if do_profile:
                     import cProfile, pstats, io
@@ -5606,7 +5648,15 @@ class MainWindow(tk.Tk):
             # Separação automática das sobras de 4 camadas em ponta de 2 camadas
             split_summary = None
             if self.current_session and layouts:
-                sess_shapes = getattr(self, "current_shapes", None) or self.current_session.get("shapes", [])
+                sess_shapes = (
+                    self.session_view.shapes_list
+                    if getattr(self, "session_view", None) and getattr(self.session_view, "shapes_list", None)
+                    else self.current_session.get("shapes", [])
+                )
+                for s in sess_shapes:
+                    if isinstance(s, dict):
+                        s.pop("tip_zone", None)
+                        s.pop("layers_tip", None)
                 layouts, split_summary = separar_sobras_em_ponta(
                     layouts=layouts,
                     session=self.current_session,
@@ -5672,21 +5722,25 @@ class MainWindow(tk.Tk):
             self.save_current_session_state()
 
             # Atualiza o saldo restante de pares (resto / rest) nos moldes da sessão considerando TODAS as placas
-            if hasattr(self, "current_shapes") and self.current_shapes:
-                for s in self.current_shapes:
+            sess_shapes_to_update = (
+                self.session_view.shapes_list
+                if getattr(self, "session_view", None) and getattr(self.session_view, "shapes_list", None)
+                else self.current_session.get("shapes", [])
+            )
+            if sess_shapes_to_update:
+                for s in sess_shapes_to_update:
                     total_phys = 0
                     for ly in layouts:
-                        ly_l = ly.get("layers", layers)
-                        cnt = sum(1 for p in ly.get("pieces", []) if piece_matches_shape(p, s))
-                        total_phys += cnt * ly_l
+                        total_phys += sum(layers_for_piece(ly, p) for p in ly.get("pieces", []) if piece_matches_shape(p, s))
                     pairs_cut = total_phys // 2
-                    req_p = int(s.get("pairs", 0))
+                    req_p = int(s.get("pairs", 0) if s.get("pairs") is not None else 0)
                     rem = max(0, req_p - pairs_cut)
                     s["rest"] = rem
                     s["resto"] = rem
 
                 if self.current_session:
-                    self.db.update_session_shapes(self.current_session["id"], self.current_shapes)
+                    self.current_session["shapes"] = sess_shapes_to_update
+                    self.db.update_session_shapes(self.current_session["id"], sess_shapes_to_update)
 
             if self.current_session:
                 self.current_session["status"] = "Nested"
@@ -5792,22 +5846,22 @@ class MainWindow(tk.Tk):
                     s["status"] = "Stand by"
                     break
 
-            # Restaura saldo original de pares (rest / resto) nos moldes
+            # Restaura saldo original de pares (rest / resto) nos moldes da sessão
             layers = int(self.current_session.get("layers", 1))
             is_sep = is_separar_sobras_enabled(self.current_session)
-            if hasattr(self, "current_shapes") and self.current_shapes:
-                for shp in self.current_shapes:
-                    req_p = int(shp.get("pairs", 0))
+            sess_shapes = (
+                self.session_view.shapes_list
+                if getattr(self, "session_view", None) and getattr(self.session_view, "shapes_list", None)
+                else self.current_session.get("shapes", [])
+            )
+            if sess_shapes:
+                for shp in sess_shapes:
+                    req_p = int(shp.get("pairs", 0) if shp.get("pairs") is not None else 0)
                     shp["rest"] = req_p
                     shp["resto"] = calc_resto_efetivo(req_p, layers, separar=is_sep)
+                self.current_session["shapes"] = sess_shapes
                 if self.db and sess_id:
-                    self.db.update_session_shapes(sess_id, self.current_shapes)
-
-            if self.current_session.get("shapes"):
-                for shp in self.current_session["shapes"]:
-                    req_p = int(shp.get("pairs", 0))
-                    shp["rest"] = req_p
-                    shp["resto"] = calc_resto_efetivo(req_p, layers, separar=is_sep)
+                    self.db.update_session_shapes(sess_id, sess_shapes)
 
             # Deleta todos os layouts e peças do banco de dados para esta sessão
             if self.db and sess_id:

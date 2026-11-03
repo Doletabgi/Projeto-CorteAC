@@ -275,8 +275,9 @@ class NfpBackend:
         # se só elas estiverem presentes, o preset deve ser mapeado normalmente.
         control_keys = ("cancel_check", "sheet_timeout_sec", "max_tries_per_piece", "deterministic")
         controls = {k: dp_config[k] for k in control_keys if k in dp_config}
+        clean_preset = str(params).split(";")[0].split("?")[0].strip() if params else "stdNOTFill"
         if not any(k not in control_keys for k in dp_config):
-            if params == "ALTERNADO":
+            if clean_preset == "ALTERNADO":
                 dp_config = {
                     "coupling": "0/0 0/180",
                     "gap1": gap_mm,
@@ -285,7 +286,7 @@ class NfpBackend:
                     "range1_to": 3.0,
                     "range1_step": 1.0,
                 }
-            elif params == "DIREITA":
+            elif clean_preset == "DIREITA":
                 dp_config = {
                     "coupling": "0/0",
                     "gap1": gap_mm,
@@ -294,7 +295,7 @@ class NfpBackend:
                     "range1_to": 3.0,
                     "range1_step": 1.0,
                 }
-            elif params == "ESQUERDA":
+            elif clean_preset == "ESQUERDA":
                 dp_config = {
                     "coupling": "0/180",
                     "gap1": gap_mm,
@@ -303,7 +304,7 @@ class NfpBackend:
                     "range1_to": 3.0,
                     "range1_step": 1.0,
                 }
-            elif params == "GAP 2":
+            elif clean_preset == "GAP 2":
                 dp_config = {
                     "coupling": "0/0 0/180",
                     "gap1": 2.0,
@@ -312,7 +313,7 @@ class NfpBackend:
                     "range1_to": 3.0,
                     "range1_step": 1.0,
                 }
-            elif params == "HighYield":
+            elif clean_preset == "HighYield":
                 dp_config = {
                     "coupling": "0/0 0/180",
                     "gap1": max(0.5, float(gap_mm) * 0.7),
@@ -321,7 +322,7 @@ class NfpBackend:
                     "range1_to": 5.0,
                     "range1_step": 0.5,
                 }
-            elif params == "FastNest":
+            elif clean_preset == "FastNest":
                 dp_config = {
                     "coupling": "0/0 0/180",
                     "gap1": max(1.5, float(gap_mm) * 1.5),
@@ -409,7 +410,7 @@ class NfpBackend:
         if not shape_queue:
             shape_queue = list(sorted_shapes)
 
-        if params == "stdFill":
+        if clean_preset == "stdFill":
             max_pieces = 9999
         else:
             max_pieces = target_count if (target_count and target_count > 0) else len(shape_queue)
@@ -436,7 +437,7 @@ class NfpBackend:
             (dieproc_params.get("sheet_timeout_sec") if isinstance(dieproc_params, dict) else None)
             or os.getenv("CORTEAC_SHEET_TIMEOUT", str(self.SHEET_TIMEOUT_SEC))
         )
-        is_fastnest = (str(params).strip().lower() == "fastnest")
+        is_fastnest = (clean_preset.lower() == "fastnest")
         default_max_tries = self.FASTNEST_MAX_TRIES_PER_PIECE if is_fastnest else self.MAX_TRIES_PER_PIECE
         max_tries_per_piece = int(
             (dieproc_params.get("max_tries_per_piece") if isinstance(dieproc_params, dict) else None)

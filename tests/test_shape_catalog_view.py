@@ -13,6 +13,7 @@ sys.path.insert(0, str(ROOT_DIR))
 
 import database as db
 from ui.shape_catalog_view import ShapeCatalogView, extract_piece_base_name
+from tests._catalog_fixtures import make_temp_catalog_db
 
 
 class TestShapeCatalogView(unittest.TestCase):
@@ -20,8 +21,8 @@ class TestShapeCatalogView(unittest.TestCase):
     def setUpClass(cls):
         cls.root = tk.Tk()
         cls.root.withdraw()
-        cls.db_manager = db.DatabaseManager()
-        cls.db_manager.init_db()
+        # Banco temporário semeado (não depende do banco de produção da fábrica)
+        cls.db_manager, cls._tmp_dir = make_temp_catalog_db(db)
 
     @classmethod
     def tearDownClass(cls):

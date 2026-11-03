@@ -1557,8 +1557,9 @@ class DatabaseManager:
                 updates.append("placed_pieces_json = ?")
                 values.append(json.dumps(placed_pieces))
             if shapes is not None:
+                sanitized_shapes = self._sanitize_session_shapes(session_id, shapes, conn=conn)
                 updates.append("shapes_json = ?")
-                values.append(json.dumps(shapes))
+                values.append(json.dumps(sanitized_shapes))
             if yield_pct is not None:
                 updates.append("yield_percent = ?")
                 values.append(yield_pct)
@@ -1603,6 +1604,81 @@ class DatabaseManager:
                 cursor.execute(f"UPDATE sessions SET {', '.join(updates)} WHERE id = ?", values)
                 conn.commit()
 
+    def _sanitize_session_shapes(self, session_id, shapes, conn=None):
+        """Garante que a lista de moldes de uma sessão seja autossuficiente e nunca perca metadados como pairs e sequence."""
+        if shapes is None:
+            return []
+        if not isinstance(shapes, list):
+            return []
+
+        existing_shapes = []
+        try:
+            if conn:
+                cursor = conn.cursor()
+                cursor.execute("SELECT shapes_json FROM sessions WHERE id = ?", (session_id,))
+                row = cursor.fetchone()
+                if row and row[0]:
+                    existing_shapes = json.loads(row[0])
+            else:
+                existing_shapes = self.get_session_shapes(session_id)
+        except Exception:
+            existing_shapes = []
+
+        existing_by_id = {}
+        existing_by_name = {}
+        for s in existing_shapes:
+            if isinstance(s, dict):
+                if s.get("id") is not None:
+                    existing_by_id[str(s["id"])] = s
+                if s.get("name") and s.get("size"):
+                    existing_by_name[(str(s["name"]), str(s["size"]))] = s
+
+        sanitized = []
+        for idx, s in enumerate(shapes, start=1):
+            if not isinstance(s, dict):
+                continue
+            item = dict(s)
+            s_id = str(item.get("id")) if item.get("id") is not None else None
+            matched_prev = existing_by_id.get(s_id) if s_id else None
+            if not matched_prev and item.get("name") and item.get("size"):
+                matched_prev = existing_by_name.get((str(item["name"]), str(item["size"])))
+
+            # 1. Preservação de sequence
+            if item.get("sequence") is None:
+                if matched_prev and matched_prev.get("sequence") is not None:
+                    item["sequence"] = matched_prev["sequence"]
+                else:
+                    item["sequence"] = idx
+            else:
+                try:
+                    item["sequence"] = int(item["sequence"])
+                except Exception:
+                    item["sequence"] = idx
+
+            # 2. Preservação de pairs
+            if item.get("pairs") is None:
+                if matched_prev and matched_prev.get("pairs") is not None:
+                    item["pairs"] = matched_prev["pairs"]
+            else:
+                try:
+                    item["pairs"] = int(item["pairs"])
+                except Exception:
+                    pass
+
+            # 3. Preservação de rest / resto
+            if item.get("rest") is None and matched_prev and matched_prev.get("rest") is not None:
+                item["rest"] = matched_prev["rest"]
+            if item.get("resto") is None and matched_prev and matched_prev.get("resto") is not None:
+                item["resto"] = matched_prev["resto"]
+
+            # 4. Preservação de target_pieces
+            if item.get("target_pieces") is None and matched_prev and matched_prev.get("target_pieces") is not None:
+                item["target_pieces"] = matched_prev["target_pieces"]
+
+            sanitized.append(item)
+
+        return sanitized
+
     def get_session_shapes(self, session_id):
         with self.get_connection() as conn:
             cursor = conn.cursor()
@@ -1617,8 +1693,9 @@ class DatabaseManager:
 
     def update_session_shapes(self, session_id, shapes):
         with self.get_connection() as conn:
+            sanitized = self._sanitize_session_shapes(session_id, shapes, conn=conn)
             cursor = conn.cursor()
-            cursor.execute("UPDATE sessions SET shapes_json = ? WHERE id = ?", (json.dumps(shapes or []), session_id))
+            cursor.execute("UPDATE sessions SET shapes_json = ? WHERE id = ?", (json.dumps(sanitized), session_id))
             conn.commit()
 
     def delete_sessions(self, session_ids):

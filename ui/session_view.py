@@ -41,6 +41,7 @@ from cad.layers_split import (
     desfazer_separacao_sobras,
     log_sobras,
 )
+from cad.nesting_engine import piece_matches_shape
 
 from ui.sort_utils import natural_sort_key, size_sort_key, shape_area_sort_key, clean_session_display_name, resto_sort_key
 
@@ -101,7 +102,7 @@ class SobrasConfigDialog(tk.Toplevel):
     Diálogo para configuração do modo de Ponta de 2 Camadas (Enfesto em Degrau)
     e folga extra da ponta.
     """
-    def __init__(self, parent, current_tip_mode="canto", current_folga=0.0, on_save_cb=None):
+    def __init__(self, parent, current_tip_mode="canto", current_folga=15.0, on_save_cb=None):
         super().__init__(parent)
         self.title("Configurar Ponta de 2 Camadas (Sobras)")
         self.configure(bg=THEME["bg_card"])
@@ -111,10 +112,11 @@ class SobrasConfigDialog(tk.Toplevel):
 
         self.on_save_cb = on_save_cb
         self.tip_mode_var = tk.StringVar(value=current_tip_mode if current_tip_mode in ("canto", "faixa") else "canto")
-        self.folga_var = tk.DoubleVar(value=float(current_folga or 0.0))
+        val_folga = float(current_folga) if current_folga not in (None, 0.0, "0", "0.0") else 15.0
+        self.folga_var = tk.DoubleVar(value=val_folga)
 
         self._build_ui()
-        self.geometry("490x350")
+        self.geometry("520x360")
         self.center_window()
 
     def center_window(self):
@@ -146,8 +148,8 @@ class SobrasConfigDialog(tk.Toplevel):
         tk.Label(
             pad,
             text="Quando ativo em sessões de 4 camadas, as sobras dos moldes ímpares\n"
-                 "são agrupadas na ponta da última chapa com enfesto de 2 camadas.\n"
-                 "O operador estende 2 folhas longas e 2 curtas (degrau).",
+                 "são agrupadas no topo (maior Y / final do enfesto) da última chapa com 2 camadas.\n"
+                 "O operador estende 2 folhas longas na base e 2 curtas no topo (enfesto em degrau).",
             font=("Segoe UI", 9),
             bg=THEME["bg_card"],
             fg=THEME["text_muted"],
@@ -157,7 +159,7 @@ class SobrasConfigDialog(tk.Toplevel):
 
         lbl_mode = tk.Label(
             pad,
-            text="Modo de delimitação da ponta:",
+            text="Posicionamento da ponta no final da chapa:",
             font=("Segoe UI", 9, "bold"),
             bg=THEME["bg_card"],
             fg=THEME["text_main"],
@@ -170,7 +172,7 @@ class SobrasConfigDialog(tk.Toplevel):
 
         rb_canto = tk.Radiobutton(
             frame_modes,
-            text="Canto inferior direito (Recomendado - preserva o restante da chapa)",
+            text="Canto no final da chapa (Recomendado - sobras no topo à direita)",
             variable=self.tip_mode_var,
             value="canto",
             bg=THEME["bg_card"],
@@ -183,7 +185,7 @@ class SobrasConfigDialog(tk.Toplevel):
 
         rb_faixa = tk.Radiobutton(
             frame_modes,
-            text="Faixa vertical inteira (Corte transversal completo no final da chapa)",
+            text="Faixa inteira no final da chapa (Corte transversal completo no topo)",
             variable=self.tip_mode_var,
             value="faixa",
             bg=THEME["bg_card"],
@@ -1876,6 +1878,30 @@ class SessionView(tk.Frame):
                 sx_cut = x1 + cut_x * sc
                 cv.create_line(sx_cut, y1 - 2, sx_cut, y2 + 2, fill="#dc2626", dash=(4, 2), width=2)
 
+        # Ponta de 2 Camadas se configurada na chapa
+        tip_zone = None
+        if target_layout and isinstance(target_layout, dict) and target_layout.get("tip_zone"):
+            tip_zone = target_layout.get("tip_zone")
+        elif isinstance(self.session_data, dict):
+            tip_zone = self.session_data.get("tip_zone")
+
+        if tip_zone:
+            tx0, ty0, tx1, ty1 = tip_zone
+            min_zx, max_zx = min(tx0, tx1), max(tx0, tx1)
+            min_zy, max_zy = min(ty0, ty1), max(ty0, ty1)
+            st_x0 = x1 + min_zx * sc
+            st_x1 = x1 + max_zx * sc
+            st_y0 = y2 - max_zy * sc
+            st_y1 = y2 - min_zy * sc
+            cv.create_rectangle(st_x0, st_y0, st_x1, st_y1, outline="#2563eb", dash=(4, 2), width=1.5)
+            cv.create_text(
+                st_x0 + 4, max(y1 + 8, st_y0 + 4),
+                text="Ponta 2c",
+                anchor="nw",
+                fill="#2563eb",
+                font=("Segoe UI", 7, "bold")
+            )
+
 
     def update_strategy_description(self, strategy):
         descs = {
@@ -2024,13 +2050,38 @@ class SessionView(tk.Frame):
         # Atualiza a tabela de layouts
         self.set_session_data(self.session_data)
 
-        # Atualiza o LayoutEditorView se estiver aberto/embutido
-        parent = getattr(self, "master", None) or getattr(self, "parent", None)
-        if parent and hasattr(parent, "layout_editor") and getattr(parent, "layout_editor", None):
+        # Atualiza o LayoutEditorView e MainWindow se estiverem abertos/embutidos
+        top = self.winfo_toplevel()
+        main_win = None
+        for cand in (top, getattr(self, "master", None), getattr(getattr(self, "master", None), "master", None)):
+            if cand and (hasattr(cand, "layout_editor_view") or hasattr(cand, "layout_editor")):
+                main_win = cand
+                break
+
+        le_view = getattr(main_win, "layout_editor_view", None) or getattr(main_win, "layout_editor", None)
+        target_idx = 0
+        if separate and new_lays and new_lays[-1].get("tip_zone"):
+            target_idx = len(new_lays) - 1
+        elif le_view and getattr(le_view, "current_layout_index", None) is not None:
+            target_idx = min(getattr(le_view, "current_layout_index", 0), len(new_lays) - 1) if new_lays else 0
+
+        if le_view:
             try:
-                parent.layout_editor.set_session_layouts(new_lays, initial_index=0)
+                le_view.set_session_layouts(new_lays, initial_index=target_idx)
+                if hasattr(le_view, "redraw"):
+                    le_view.redraw()
+            except Exception as e:
+                print(f"[SOBRAS] Erro ao sincronizar LayoutEditorView: {e}")
+
+        if main_win and hasattr(main_win, "canvas") and hasattr(main_win.canvas, "set_pieces") and new_lays:
+            try:
+                p_idx = min(target_idx, len(new_lays) - 1)
+                main_win.canvas.set_pieces(new_lays[p_idx].get("pieces", []))
             except Exception:
                 pass
+
+        if hasattr(self, "draw_mini_layout_preview"):
+            self.draw_mini_layout_preview()
 
     def on_separar_sobras_toggled(self):
         val = self.var_separar_sobras.get()
@@ -2292,7 +2343,7 @@ class SessionView(tk.Frame):
                 pass
         return float(self.session_data.get("gap_mm", 1.0))
 
-    def set_gap_mm(self, val: float):
+    def set_gap_mm(self, val: float, persist: bool = True):
         """Atualiza o controle visual e o session_data com o novo valor de gap."""
         try:
             v = max(0.0, float(val))
@@ -2300,7 +2351,7 @@ class SessionView(tk.Frame):
                 self.entry_gap.delete(0, tk.END)
                 self.entry_gap.insert(0, f"{v:.1f}")
             self.session_data["gap_mm"] = v
-            if getattr(self, "db", None) and self.session_data.get("id"):
+            if persist and getattr(self, "db", None) and self.session_data.get("id"):
                 try:
                     self.db.update_session(self.session_data["id"], gap_mm=v)
                 except Exception:
@@ -2342,7 +2393,7 @@ class SessionView(tk.Frame):
                 margins[side] = max(0.0, default_val)
         return margins
 
-    def set_margins(self, left: Optional[float] = None, right: Optional[float] = None, top: Optional[float] = None, bottom: Optional[float] = None):
+    def set_margins(self, left: Optional[float] = None, right: Optional[float] = None, top: Optional[float] = None, bottom: Optional[float] = None, persist: bool = True):
         """Atualiza o session_data, os botões de seleção de margem e persiste no banco se disponível."""
         updates = {}
         for side, val in [("left", left), ("right", right), ("top", top), ("bottom", bottom)]:
@@ -2366,7 +2417,7 @@ class SessionView(tk.Frame):
         if not matched and hasattr(self, "margin_choice_var"):
             self.margin_choice_var.set(f"{ref_val:.1f}")
 
-        if updates and getattr(self, "db", None) and self.session_data.get("id"):
+        if persist and updates and getattr(self, "db", None) and self.session_data.get("id"):
             try:
                 self.db.update_session(self.session_data["id"], **updates)
             except Exception:
@@ -2601,11 +2652,6 @@ class SessionView(tk.Frame):
             if cur_p == "GAP 2" or (available_p and cur_p not in available_p):
                 cur_p = available_p[0] if available_p else "ALTERNADO"
                 session_data["params"] = encode_session_params(cur_p, cur_opts)
-                if self.db and session_data.get("id"):
-                    try:
-                        self.db.update_session(session_data["id"], params=session_data["params"])
-                    except Exception:
-                        pass
             self.cb_params.set(cur_p)
             if hasattr(self, "var_separar_sobras"):
                 self.var_separar_sobras.set(is_separar_sobras_enabled(session_data))
@@ -2628,22 +2674,39 @@ class SessionView(tk.Frame):
                 gap_val = session_data["material"].get("gap_mm")
             if gap_val is None:
                 gap_val = 1.0
-            self.set_gap_mm(gap_val)
+            self.set_gap_mm(gap_val, persist=False)
 
         if hasattr(self, "set_margins"):
             ml = session_data.get("margin_left", 10.0)
             mr = session_data.get("margin_right", 10.0)
             mt = session_data.get("margin_top", 10.0)
             mb = session_data.get("margin_bottom", 10.0)
-            self.set_margins(left=ml, right=mr, top=mt, bottom=mb)
+            self.set_margins(left=ml, right=mr, top=mt, bottom=mb, persist=False)
 
         self._refresh_layer_2_widgets()
         if hasattr(self, "macro_panel"):
             self.macro_panel.refresh_presets()
             self.macro_panel.refresh_status()
 
-        # Atualiza a tabela da aba Moldes
+        # Atualiza a tabela da aba Moldes (com proteção contra moldes fantasmas)
         session_shapes = session_data.get("shapes", [])
+        sess_layouts = session_data.get("layouts", [])
+        all_pieces = []
+        if isinstance(sess_layouts, list):
+            for ly in sess_layouts:
+                all_pieces.extend(ly.get("pieces") or ly.get("placed_pieces") or [])
+        if not all_pieces and session_data.get("placed_pieces"):
+            all_pieces = session_data.get("placed_pieces") or []
+
+        if all_pieces and session_shapes:
+            matched_shapes = [
+                s for s in session_shapes
+                if any(piece_matches_shape(p, s) for p in all_pieces)
+            ]
+            if matched_shapes and len(matched_shapes) < len(session_shapes):
+                session_shapes = matched_shapes
+                session_data["shapes"] = session_shapes
+
         self.set_shapes_data(session_shapes)
 
         layouts_cnt = len(session_data.get("placed_pieces", []))
@@ -3375,13 +3438,14 @@ class SessionView(tk.Frame):
             return
         layers = self.get_session_layers()
         separar = self.is_separar_sobras_active()
+        layouts = self.session_data.get("layouts", []) if isinstance(self.session_data, dict) else []
         for idx, s in enumerate(self.shapes_list):
             row_id = str(idx)
             try:
-                p = int(s.get("pairs", 16))
+                p = int(s.get("pairs", 0) if s.get("pairs") is not None else 0)
             except Exception:
-                p = 16
-            r_val = calc_resto_efetivo(p, layers, separar=separar)
+                p = 0
+            r_val = calc_resto_efetivo(p, layers, separar=separar, layouts_atuais=layouts)
             try:
                 self.tree_shapes.set(row_id, "resto", str(r_val))
             except Exception:
@@ -3405,12 +3469,12 @@ class SessionView(tk.Frame):
                     s["sequence"] = i
 
             if "pairs" not in s or s["pairs"] is None:
-                s["pairs"] = 16
+                s["pairs"] = 0
             else:
                 try:
-                    s["pairs"] = int(s["pairs"])
+                    s["pairs"] = max(0, int(s["pairs"]))
                 except Exception:
-                    s["pairs"] = 16
+                    s["pairs"] = 0
 
         # Ordena estritamente pela sequência de geração
         self.shapes_list.sort(key=lambda s: int(s.get("sequence", 999)))
@@ -3418,6 +3482,7 @@ class SessionView(tk.Frame):
         self.tree_shapes.delete(*self.tree_shapes.get_children())
         layers = self.get_session_layers()
         separar = self.is_separar_sobras_active()
+        layouts = self.session_data.get("layouts", []) if isinstance(self.session_data, dict) else []
         for idx, s in enumerate(self.shapes_list, start=1):
             s_id = str(s.get("id", idx))
             percurso = str(s.get("folder") or "Externo")
@@ -3426,8 +3491,9 @@ class SessionView(tk.Frame):
             color_badge = get_color_emoji(clr)
             tamanho = f"{color_badge} {s_size}"
             molde_nome = str(s.get("name", f"Shape #{idx}"))
-            pares = str(s.get("pairs", 16))
-            resto = str(calc_resto_efetivo(s.get("pairs", 16), layers, separar=separar))
+            p_val = int(s.get("pairs", 0) if s.get("pairs") is not None else 0)
+            pares = str(p_val)
+            resto = str(calc_resto_efetivo(p_val, layers, separar=separar, layouts_atuais=layouts))
             seq = str(s.get("sequence", idx))
             self.tree_shapes.insert(
                 "", "end", iid=str(idx - 1),
@@ -3538,7 +3604,8 @@ class SessionView(tk.Frame):
                 if is_pairs:
                     layers = self.get_session_layers()
                     separar = self.is_separar_sobras_active()
-                    r_val = calc_resto_efetivo(val_int, layers, separar=separar)
+                    layouts = self.session_data.get("layouts", []) if isinstance(self.session_data, dict) else []
+                    r_val = calc_resto_efetivo(val_int, layers, separar=separar, layouts_atuais=layouts)
                     self.tree_shapes.set(row_id, "resto", str(r_val))
             except Exception:
                 pass
@@ -3682,7 +3749,8 @@ class SessionView(tk.Frame):
                     val_int = int(cleaned)
                     layers = self.get_session_layers()
                     separar = self.is_separar_sobras_active()
-                    r_val = calc_resto_efetivo(val_int, layers, separar=separar)
+                    layouts = self.session_data.get("layouts", []) if isinstance(self.session_data, dict) else []
+                    r_val = calc_resto_efetivo(val_int, layers, separar=separar, layouts_atuais=layouts)
                     self.tree_shapes.set(row_id, "resto", str(r_val))
                 except Exception:
                     pass
@@ -3996,7 +4064,8 @@ class SessionView(tk.Frame):
         elif col == "resto":
             layers = self.get_session_layers()
             separar = self.is_separar_sobras_active()
-            self.shapes_list.sort(key=lambda s: resto_sort_key(calc_resto_efetivo(s.get("pairs", 16), layers, separar=separar)), reverse=desc)
+            layouts = self.session_data.get("layouts", []) if isinstance(self.session_data, dict) else []
+            self.shapes_list.sort(key=lambda s: resto_sort_key(calc_resto_efetivo(s.get("pairs", 0), layers, separar=separar, layouts_atuais=layouts)), reverse=desc)
         elif col == "area":
             self.shapes_list.sort(key=lambda s: shape_area_sort_key(s), reverse=desc)
         elif col == "percurso":

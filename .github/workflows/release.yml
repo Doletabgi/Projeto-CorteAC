@@ -9,7 +9,7 @@ on:
       tag_name:
         description: 'Tag de versão SemVer (ex: v1.0.0)'
         required: false
-        default: 'v1.6.3'
+        default: 'v1.6.7'
 
 permissions:
   contents: write
@@ -183,7 +183,13 @@ jobs:
 
             ---
 
-            ### 🛠️ Recursos Incluídos Nesta Versão (v1.6.3):
+            ### 🛠️ Recursos Incluídos Nesta Versão (v1.6.7):
+            - **Separação de sobras na ponta (enfesto em degrau) com encaixe contorno-a-contorno**:
+              - Pares ímpares em 4 camadas: as peças excedentes vão para uma **ponta de 2 camadas** no topo da última placa, com `tip_zone` desenhada (linha azul), contadores e impressão A4 com a instrução de almoxarifado ("2 folhas longas + 2 folhas curtas").
+              - O nesting voltou a fechar contorno-a-contorno: `params` composto da sessão (`HighYield;separar_sobras=1;tip_mode=canto`) não quebra mais o preset DieProc, e resíduos de `tip_zone`/`layers_tip`/`target_pieces` são descartados antes de cada cálculo.
+              - Medição no cenário de fábrica (15 moldes, 11 pares, 4 camadas, placa 1,32 × 2,98 m): 90 peças, 15 na ponta, **menor distância entre peças = 1,05 mm** (gap de 1 mm respeitado).
+              - **500 testes automatizados** (499 passando, 1 skip, 0 falhas), incluindo regressão de compactação e testes do catálogo isolados do banco de produção.
+            - **Correções anteriores (mantidas)**: bump magnético com mouse, zoom/seleção, tooltips, contadores por placa e cache geométrico sem geometria cruzada.
             - **Contadores de Peças Dinâmicos e Reativos na Barra Lateral (Layout Editor)**:
               - Os contadores de peças `{n}/{m}` da barra lateral agora atualizam em tempo real imediatamente após exclusão (via tecla `Delete`, toolbar ou `clear_all_pieces`), adição (duplo clique na miniatura ou toolbar), duplicação e `Ctrl+Z` (Undo).
               - Desacoplamento da renderização da barra lateral de `bg_changed`, garantindo que toda alteração na chapa recalcule as quantidades e cores (vermelho `#dc2626` para déficit e preto `#000000` para cota atendida).

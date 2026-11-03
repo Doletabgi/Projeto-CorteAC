@@ -23,6 +23,7 @@ docs/*
 !docs/fases/*
 !docs/img/
 !docs/img/*
-tools/
+tools/*
+!tools/scrub_all_sessions_shapes.py
 scratch/
 .githooks/

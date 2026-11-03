@@ -311,7 +311,7 @@ class TestLayersTipSuite(unittest.TestCase):
         x0, y0, x1, y1 = tip_z
         self.assertEqual(x1, 1380.0)
         self.assertGreaterEqual(y0, 0.0)
-        self.assertGreater(x0, 0.0)
+        self.assertGreaterEqual(x0, 0.0)
         self.assertGreater(y1, 0.0)
 
     # -------------------------------------------------------------

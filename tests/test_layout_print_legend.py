@@ -340,6 +340,45 @@ class TestLayoutPrintLegend(unittest.TestCase):
         dlg_portrait.destroy()
         dlg_landscape.destroy()
 
+    def test_11_print_preview_tip_zone_operator_text_header(self):
+        """Caso 11: Valida que LayoutPrintDialog com tip_zone exibe instrução do almoxarifado no cabeçalho."""
+        tip_zone = (0.0, 2450.0, 1380.0, 2990.0)
+        dlg = LayoutPrintDialog(self.root, layout_data={
+            "placed_pieces": [{"name": "M1", "size": "38", "x": 100.0, "y": 2500.0}],
+            "sheet_w_mm": 1380.0,
+            "sheet_h_mm": 2990.0,
+            "tip_zone": tip_zone,
+            "layers_tip": 2,
+            "tip_mode": "faixa",
+            "material_layers": 4
+        })
+
+        # Verifica texto no cabeçalho com a tag print_meta_enfesto_op
+        op_items = dlg.canvas.find_withtag("print_meta_enfesto_op")
+        self.assertTrue(len(op_items) > 0, "Item print_meta_enfesto_op deve existir no canvas")
+        op_header_text = dlg.canvas.itemcget(op_items[0], "text")
+        self.assertIn("Almoxarifado / Operador", op_header_text)
+        self.assertIn("folhas longas", op_header_text)
+        self.assertIn("folhas curtas", op_header_text)
+        self.assertIn("SEM cobrir a ponta", op_header_text)
+
+        # Verifica retângulo e rótulos da ponta no gráfico
+        tip_rects = dlg.canvas.find_withtag("print_tip_rect")
+        self.assertTrue(len(tip_rects) > 0)
+        tip_lbls = dlg.canvas.find_withtag("print_tip_lbl")
+        self.assertTrue(len(tip_lbls) > 0)
+        self.assertEqual(dlg.canvas.itemcget(tip_lbls[0], "text"), "2 camadas (ponta)")
+
+        # Como a ponta está no topo, o rótulo da base "4 camadas" deve ter anchor="sw" para não colidir
+        base_lbls = dlg.canvas.find_withtag("print_base_lbl")
+        self.assertTrue(len(base_lbls) > 0)
+        self.assertEqual(dlg.canvas.itemcget(base_lbls[0], "text"), "4 camadas")
+        # Renderização Pillow sem erros
+        img = dlg.render_pillow_page(dpi=150)
+        self.assertIsInstance(img, Image.Image)
+
+        dlg.destroy()
+
 
 if __name__ == "__main__":
     unittest.main()

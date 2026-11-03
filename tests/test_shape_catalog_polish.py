@@ -14,6 +14,7 @@ import tkinter as tk
 import database as db_mod
 from ui.shape_catalog_view import ShapeCatalogView
 from ui.shape_editor_view import ShapeEditorView
+from tests._catalog_fixtures import make_temp_catalog_db
 
 
 class TestShapeCatalogPolish(unittest.TestCase):
@@ -22,8 +23,7 @@ class TestShapeCatalogPolish(unittest.TestCase):
         cls.root = tk.Tk()
         cls.root.geometry("1100x700")
         cls.root.withdraw()
-        cls.db = db_mod.DatabaseManager()
-        cls.db.init_db()
+        cls.db, cls._tmp_dir = make_temp_catalog_db(db_mod)
 
     @classmethod
     def tearDownClass(cls):

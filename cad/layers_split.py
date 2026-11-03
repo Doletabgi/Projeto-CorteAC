@@ -441,167 +441,121 @@ def _nest_sobras_on_last_sheet(
     folga_ponta: float = 15.0
 ) -> Optional[Tuple[List[Dict[str, Any]], List[float]]]:
     """
-    Posiciona as sobras na última placa de 4 camadas respeitando as regras do operador:
-    - Agrupa peças existentes em faixas Y.
-    - Aninha sobras à direita da última peça na última linha.
-    - Se não couber, tenta na penúltima linha.
-    - Se ainda não couber, abre no máximo 1 linha extra de altura.
-    - Se precisar de > 1 linha extra ou exceder a placa, retorna None (recorre ao Plano B).
-
-    Retorna:
-        (placed_sobras, tip_zone) ou None em caso de impossibilidade.
+    Posiciona as sobras no topo (maior Y) da última placa de 4 camadas (enfesto em degrau).
+    Garante o posicionamento no final da placa de forma forçada e robusta.
     """
     existing_pieces = dest_layout.get("pieces", [])
-    if not existing_pieces or not sobras_to_place:
+    if not sobras_to_place:
         return None
 
+    # 1. Calcula os polígonos de todas as peças existentes (4 camadas)
     for p in existing_pieces:
         if not p.get("poly") or not p.get("bbox"):
             cntr = p.get("contour") or (p.get("shape", {}).get("contour") if isinstance(p.get("shape"), dict) else [])
             px = float(p.get("x", 0.0))
             py = float(p.get("y", 0.0))
             rot = float(p.get("rotation", p.get("angle", 0.0)))
-            poly = transform_contour(cntr, px, py, rot)
-            p["poly"] = poly
-            p["bbox"] = polygon_bbox(poly)
+            if cntr:
+                poly = transform_contour(cntr, px, py, rot)
+                p["poly"] = poly
+                p["bbox"] = polygon_bbox(poly)
+            else:
+                p["bbox"] = (px, py, px + 10, py + 10)
 
-    rows = _cluster_pieces_by_y(existing_pieces)
+    # 2. Acha o maior Y ocupado pelas peças de 4 camadas (o topo do enfesto)
+    max_y_4 = max((p["bbox"][3] for p in existing_pieces if p.get("bbox")), default=margins.get("bottom", 10.0))
 
-    placed_sobras: List[Dict[str, Any]] = []
-    current_board_items = list(existing_pieces)
+    # 3. Define o Y inicial da ponta: logo acima da última peça + folga da ponta
+    start_y = max_y_4 + folga_ponta
 
-    placed_in_last_row: List[Dict[str, Any]] = []
-    placed_in_penult_row: List[Dict[str, Any]] = []
-    placed_in_extra_row: List[Dict[str, Any]] = []
+    # Se o start_y já passou do limite da placa, tenta colocar na mesma linha (mais à direita)
+    if start_y > bed_h - margins.get("top", 10.0):
+        start_y = max_y_4  # Tenta alinhar com o topo da última linha
 
-    last_row = rows[-1] if rows else []
-    penult_row = rows[-2] if len(rows) >= 2 else []
+    placed_sobras = []
+    current_x = margins.get("left", 10.0)
 
-    extra_rows_created = 0
-
+    # 4. Posiciona as peças da esquerda para a direita, formando a faixa da ponta
     for item in sobras_to_place:
         p_dict = item["piece"]
         orig_rot = float(p_dict.get("rotation", p_dict.get("angle", 0.0)))
-        rot_candidates = [orig_rot]
-        for alt_rot in (0.0, 180.0):
-            if alt_rot not in rot_candidates:
-                rot_candidates.append(alt_rot)
 
-        placed_piece = None
+        placed = None
+        # Tenta rotações para caber melhor
+        for rot in [orig_rot, 0.0, 180.0]:
+            test_x = current_x
 
-        if tip_mode == "canto":
-            # 1. Tenta posicionar à direita na ÚLTIMA LINHA
-            if last_row:
-                items_in_last = last_row + placed_in_last_row
-                base_x = max(p["bbox"][2] for p in items_in_last)
-                target_x = base_x + (folga_ponta if not placed_in_last_row else gap_mm)
-                cand_y = min(p["bbox"][1] for p in last_row)
+            cntr = p_dict.get("contour", []) or (p_dict.get("shape", {}).get("contour") if isinstance(p_dict.get("shape"), dict) else [])
+            if not cntr:
+                continue
+            poly0 = transform_contour(cntr, 0, 0, rot)
+            bbox0 = polygon_bbox(poly0)
+            w_piece = bbox0[2] - bbox0[0]
 
-                for rot in rot_candidates:
-                    for x_offset in (0.0, 2.0, 5.0, 10.0, 20.0):
-                        res = _place_sobra_piece(
-                            p_dict, target_x + x_offset, cand_y, rot,
-                            bed_w, bed_h, margins, gap_mm, current_board_items
-                        )
-                        if res:
-                            placed_piece = res
-                            placed_in_last_row.append(res)
-                            break
-                    if placed_piece:
-                        break
+            if test_x + w_piece > bed_w - margins.get("right", 10.0):
+                continue  # Não cabe nesta linha
 
-            # 2. Se não coube na última linha, tenta na PENÚLTIMA LINHA
-            if not placed_piece and penult_row:
-                items_in_penult = penult_row + placed_in_penult_row
-                base_x = max(p["bbox"][2] for p in items_in_penult)
-                target_x = base_x + (folga_ponta if not placed_in_penult_row else gap_mm)
-                cand_y = min(p["bbox"][1] for p in penult_row)
-
-                for rot in rot_candidates:
-                    for x_offset in (0.0, 2.0, 5.0, 10.0, 20.0):
-                        res = _place_sobra_piece(
-                            p_dict, target_x + x_offset, cand_y, rot,
-                            bed_w, bed_h, margins, gap_mm, current_board_items
-                        )
-                        if res:
-                            placed_piece = res
-                            placed_in_penult_row.append(res)
-                            break
-                    if placed_piece:
-                        break
-
-        # 3. Se não coube (ou se tip_mode == 'faixa'), tenta abrir NO MÁXIMO 1 LINHA EXTRA
-        if not placed_piece:
-            if extra_rows_created == 0:
-                extra_rows_created = 1
-
-            if extra_rows_created <= 1:
-                all_placed_so_far = existing_pieces + placed_in_last_row + placed_in_penult_row
-                max_y_existing = max(p["bbox"][3] for p in all_placed_so_far)
-                extra_row_y = max_y_existing + gap_mm
-
-                if placed_in_extra_row:
-                    cand_x = max(p["bbox"][2] for p in placed_in_extra_row) + gap_mm
-                else:
-                    if tip_mode == "canto":
-                        if placed_in_last_row or placed_in_penult_row:
-                            cand_x = min(p["bbox"][0] for p in placed_in_last_row + placed_in_penult_row)
-                        elif last_row:
-                            cand_x = max(p["bbox"][2] for p in last_row) + folga_ponta
-                        else:
-                            cand_x = margins["left"]
-                    else:
-                        cand_x = margins["left"]
-
-                for rot in rot_candidates:
-                    for x_offset in (0.0, 2.0, 5.0, 10.0, 20.0):
-                        res = _place_sobra_piece(
-                            p_dict, cand_x + x_offset, extra_row_y, rot,
-                            bed_w, bed_h, margins, gap_mm, current_board_items
-                        )
-                        if res:
-                            placed_piece = res
-                            placed_in_extra_row.append(res)
-                            break
-                    if placed_piece:
-                        break
-
-        if not placed_piece:
-            logger.info(
-                "[SOBRAS] Molde '%s' não coube na ponta da última placa (exige mais de 1 linha extra ou excede dimensões).",
-                item.get("shape", {}).get("name")
+            res = _place_sobra_piece(
+                p_dict, test_x, start_y, rot,
+                bed_w, bed_h, margins, gap_mm, existing_pieces + placed_sobras
             )
-            return None
+            if res:
+                placed = res
+                current_x = res["bbox"][2] + gap_mm  # Avança o X
+                break
 
-        placed_sobras.append(placed_piece)
-        current_board_items.append(placed_piece)
+        if not placed and placed_sobras:
+            # Se não coube na linha atual por largura, tenta nova linha acima no topo
+            row_max_y = max(p["bbox"][3] for p in placed_sobras)
+            next_row_y = row_max_y + gap_mm
+            test_x = margins.get("left", 10.0)
+            for rot in [orig_rot, 0.0, 180.0]:
+                res = _place_sobra_piece(
+                    p_dict, test_x, next_row_y, rot,
+                    bed_w, bed_h, margins, gap_mm, existing_pieces + placed_sobras
+                )
+                if res:
+                    placed = res
+                    start_y = next_row_y
+                    current_x = res["bbox"][2] + gap_mm
+                    break
+
+        if not placed:
+            # Se não coube na linha nova (Y alto), tenta colocar no final da linha anterior (4 camadas)
+            max_x_4 = max((p["bbox"][2] for p in existing_pieces if p.get("bbox")), default=margins.get("left", 10.0))
+            test_x = max_x_4 + folga_ponta
+
+            for rot in [orig_rot, 0.0, 180.0]:
+                res = _place_sobra_piece(
+                    p_dict, test_x, max_y_4, rot,
+                    bed_w, bed_h, margins, gap_mm, existing_pieces + placed_sobras
+                )
+                if res:
+                    placed = res
+                    break
+
+        if placed:
+            placed_sobras.append(placed)
+        else:
+            logger.error("[SOBRAS] Impossível posicionar a peça de sobra '%s'. Abortando ponta.", item.get("shape", {}).get("name"))
+            return None
 
     if not placed_sobras:
         return None
 
+    # 5. Calcula a tip_zone (área da ponta)
     sobras_min_x = min(p["bbox"][0] for p in placed_sobras)
-    sobras_max_x = max(p["bbox"][2] for p in placed_sobras)
     sobras_min_y = min(p["bbox"][1] for p in placed_sobras)
-    sobras_max_y = max(p["bbox"][3] for p in placed_sobras)
 
     if tip_mode == "faixa":
         x0 = 0.0
         x1 = bed_w
-        y0 = max(0.0, sobras_min_y - gap_mm)
-        y1 = bed_h
     else:
-        pieces_4_y = [p for p in existing_pieces if p["bbox"][1] <= sobras_max_y and p["bbox"][3] >= sobras_min_y]
-        if pieces_4_y:
-            max_x_4 = max(p["bbox"][2] for p in pieces_4_y)
-            x0 = max(max_x_4 + folga_ponta, (max_x_4 + sobras_min_x) / 2.0)
-            if x0 >= sobras_min_x:
-                x0 = (max_x_4 + sobras_min_x) / 2.0
-        else:
-            x0 = max(0.0, sobras_min_x - folga_ponta)
-
+        x0 = max(0.0, sobras_min_x - 10.0)
         x1 = bed_w
-        y0 = max(0.0, sobras_min_y - gap_mm)
-        y1 = bed_h
+
+    y0 = max(0.0, sobras_min_y - gap_mm)
+    y1 = bed_h
 
     tip_zone = [round(x0, 2), round(y0, 2), round(x1, 2), round(y1, 2)]
     return placed_sobras, tip_zone

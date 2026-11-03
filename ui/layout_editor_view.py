@@ -1210,7 +1210,7 @@ class LayoutEditorView(tk.Frame):
             ]
             sess_layers_str = " + ".join(layer_parts) if layer_parts else "0 pç"
             is_sep = is_separar_sobras_enabled(sess)
-            resto_efetivo = calc_resto_efetivo(req_cnt, session_layers, separar=is_sep)
+            resto_efetivo = calc_resto_efetivo(req_cnt, session_layers, separar=is_sep, layouts_atuais=self.layouts)
 
             tip_text = (
                 f"Molde: {target.get('name')} | Tam: {target.get('size')} | "
@@ -2556,10 +2556,18 @@ class LayoutEditorView(tk.Frame):
                 fill="#2563eb",
                 tags=("tip_zone_item", "tip_zone_lbl")
             )
+            # Rótulo da área principal de 4 camadas (posicionado para evitar sobreposição com a ponta)
+            if s_top <= y1 + 30:
+                base_lbl_y = y2 - 8
+                base_anchor = "sw"
+            else:
+                base_lbl_y = y1 + 6
+                base_anchor = "nw"
+
             self.canvas.create_text(
-                x1 + 6, y1 + 6,
+                x1 + 6, base_lbl_y,
                 text="4 camadas",
-                anchor="nw",
+                anchor=base_anchor,
                 font=("Segoe UI", 9, "bold"),
                 fill="#059669",
                 tags=("tip_zone_item", "base_layers_lbl")
@@ -5453,7 +5461,7 @@ class LayoutEditorView(tk.Frame):
             self.layouts[cur_idx]["tip_zone"] = copy.deepcopy(getattr(self, "tip_zone", None))
             self.layouts[cur_idx]["layers_tip"] = getattr(self, "layers_tip", None)
             self.layouts[cur_idx]["tip_mode"] = getattr(self, "tip_mode", "canto")
-            if self.db and getattr(self, "session_id", None) and len(self.layouts) > 1:
+            if self.db and getattr(self, "session_id", None) and len(self.layouts) >= 1:
                 try:
                     self.db.save_session_layouts(self.session_id, self.layouts)
                     saved_db = True

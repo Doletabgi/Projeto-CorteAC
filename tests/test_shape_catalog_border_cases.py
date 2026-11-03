@@ -16,6 +16,7 @@ import tkinter as tk
 import database as db_mod
 from cad.die_parser import parse_die_file, save_die_file
 from ui.shape_catalog_view import ShapeCatalogView
+from tests._catalog_fixtures import make_temp_catalog_db
 
 
 class TestShapeCatalogBorderCases(unittest.TestCase):
@@ -24,8 +25,8 @@ class TestShapeCatalogBorderCases(unittest.TestCase):
         cls.root = tk.Tk()
         cls.root.geometry("1000x700")
         cls.root.withdraw()
-        cls.db = db_mod.DatabaseManager()
-        cls.db.init_db()
+        # Banco temporário semeado (não depende do banco de produção da fábrica)
+        cls.db, cls._tmp_dir = make_temp_catalog_db(db_mod)
 
     @classmethod
     def tearDownClass(cls):
