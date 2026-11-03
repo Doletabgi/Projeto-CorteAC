@@ -71,11 +71,32 @@ def _conteudo_desktop(nome: str, versao: str, exe: Path, diretorio: Path, icone:
     )
 
 
-def sincronizar_atalho(versao: str, exe_path: Optional[str] = None, icon_path: Optional[str] = None) -> dict:
+def _instalar_icone(origem: Path) -> Path:
     """
-    Atualiza o atalho existente para a versão atual.
+    Copia o ícone para um caminho estável (~/.local/share/corteac/corteac.png).
 
-    Retorna {"acao": "atualizado"|"nenhum"|"indisponivel", "criados": [...], "removidos": [...], "erro": str|None}
+    O executável PyInstaller guarda os assets dentro do próprio binário; o atalho
+    precisa de um arquivo real no disco, então mantemos uma cópia de referência.
+    """
+    try:
+        destino_dir = Path.home() / ".local" / "share" / "corteac"
+        destino_dir.mkdir(parents=True, exist_ok=True)
+        destino = destino_dir / "corteac.png"
+        if origem.exists():
+            shutil.copyfile(origem, destino)
+        if destino.exists():
+            return destino
+    except Exception:
+        pass
+    return origem
+
+
+def sincronizar_atalho(versao: str, exe_path: Optional[str] = None, icon_path: Optional[str] = None,
+                       criar_se_ausente: bool = False) -> dict:
+    """
+    Atualiza (ou cria, se `criar_se_ausente`) o atalho para a versão atual.
+
+    Retorna {"acao": "atualizado"|"criado"|"nenhum"|"indisponivel", "criados": [...], "removidos": [...], "erro": str|None}
     """
     resultado = {"acao": "nenhum", "criados": [], "removidos": [], "erro": None}
     if not sys.platform.startswith("linux"):
@@ -100,9 +121,10 @@ def sincronizar_atalho(versao: str, exe_path: Optional[str] = None, icon_path: O
         resultado["erro"] = str(exc)
         return resultado
 
-    if not existentes:
-        return resultado  # não cria atalho do nada
+    if not existentes and not criar_se_ausente:
+        return resultado  # não cria atalho do nada sem o operador pedir
 
+    icone = _instalar_icone(icone)
     nome = f"CorteAC-{versao}"
     arq = f"corteac-{versao.lower()}.desktop"
     conteudo = _conteudo_desktop(nome, versao, exe, diretorio, icone)
@@ -141,5 +163,5 @@ def sincronizar_atalho(versao: str, exe_path: Optional[str] = None, icon_path: O
         pass
 
     if resultado["criados"]:
-        resultado["acao"] = "atualizado"
+        resultado["acao"] = "atualizado" if existentes else "criado"
     return resultado

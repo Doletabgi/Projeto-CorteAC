@@ -38,6 +38,20 @@ def main():
     except Exception as exc:  # noqa: BLE001
         print(f"[AVISO] Não foi possível atualizar o atalho: {exc}")
 
+    if "--criar-atalho" in sys.argv or "--atalho" in sys.argv:
+        from config import APP_VERSION
+        from ui.desktop_shortcut import sincronizar_atalho
+        info = sincronizar_atalho(APP_VERSION, criar_se_ausente=True)
+        if info.get("criados"):
+            print(f"Atalho criado/atualizado: CorteAC-{APP_VERSION}")
+            for caminho in info["criados"]:
+                print(f"  {caminho}")
+            for removido in info.get("removidos", []):
+                print(f"  removido: {removido}")
+            sys.exit(0)
+        print(f"Nao foi possivel criar o atalho: {info.get('erro') or 'ambiente sem suporte'}")
+        sys.exit(1)
+
     if "--version" in sys.argv or "-v" in sys.argv:
         from config import APP_NAME, APP_VERSION
         print(f"{APP_NAME} {APP_VERSION}")
