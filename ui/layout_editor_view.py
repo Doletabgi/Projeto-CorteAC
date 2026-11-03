@@ -801,6 +801,12 @@ class LayoutEditorView(tk.Frame):
         self.lbl_stat_x = tk.Label(self.x_panel, text="X: 718.32", bg=THEME["bg_surface"], fg=THEME["text_main"], font=("Segoe UI", 8), padx=4)
         self.lbl_stat_x.pack(side="left")
 
+        # Painel 2c: Divisão do enfesto por camadas (4c / 2c) — ponta de 2 camadas
+        self.layers_panel = tk.Frame(self.status_bar, relief="sunken", bd=1, bg=THEME["bg_surface"])
+        self.layers_panel.pack(side="right", padx=2, pady=1)
+        self.lbl_stat_layers = tk.Label(self.layers_panel, text="4c: 0  ·  2c: 0", bg=THEME["bg_surface"], fg=THEME["text_main"], font=("Segoe UI", 8), padx=4)
+        self.lbl_stat_layers.pack(side="left")
+
         # Painel 2b: Quantidade de peças selecionadas (Sel: 0) — ao lado do Id
         self.sel_panel = tk.Frame(self.status_bar, relief="sunken", bd=1, bg=THEME["bg_surface"])
         self.sel_panel.pack(side="right", padx=2, pady=1)
@@ -4846,6 +4852,19 @@ class LayoutEditorView(tk.Frame):
 
         if hasattr(self, "lbl_stat_yield"):
             self.lbl_stat_yield.config(text=f"{yd:.2f}%")
+
+        # Contadores separados do enfesto: 4 camadas (base) e 2 camadas (ponta)
+        if hasattr(self, "lbl_stat_layers"):
+            n_2c = 0
+            for p in self.placed_pieces:
+                try:
+                    cam = int(p.get("layers") or 0)
+                except (TypeError, ValueError):
+                    cam = 0
+                if p.get("is_tip") or cam == 2:
+                    n_2c += 1
+            n_4c = len(self.placed_pieces) - n_2c
+            self.lbl_stat_layers.config(text=f"4c: {n_4c}  ·  2c: {n_2c}")
 
         if hasattr(self, "lbl_stat_sel"):
             try:

@@ -561,6 +561,61 @@ def _nest_sobras_on_last_sheet(
     return placed_sobras, tip_zone
 
 
+def _escolher_divisao_otima(
+    layouts, session=None, shapes=None, params=None,
+    sheet_w=None, sheet_h=None, material=None, refile=None, tip_mode=None, opts=None,
+    max_k: int = 3,
+):
+    """
+    Escolhe a divisão 4 camadas / 2 camadas que fecha a placa com MENOS sobra.
+
+    Para cada k (dobras), a divisão de cada molde vira:
+        peças_4 = P//2 - k      peças_2 = (P%2) + 2k
+    mantendo sempre 4*peças_4 + 2*peças_2 = 2P (pares exatos, sem cortar a mais).
+    A melhor opção é a que resulta na menor altura total utilizada (refile menor).
+    """
+    pares = [max(0, int(s.get("pairs", 0) or 0)) for s in (shapes or [])]
+    p_max = max(pares) if pares else 0
+    limite = max(0, min(int(max_k), p_max // 2))
+
+    melhor = None
+    for k in range(0, limite + 1):
+        try:
+            res = separar_sobras_em_ponta(
+                layouts, session=session, shapes=shapes, params=params,
+                sheet_w=sheet_w, sheet_h=sheet_h, material=material,
+                refile=refile, tip_mode=tip_mode, opts=opts, _k=k,
+            )
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("[SOBRAS] Divisão com k=%d falhou: %s", k, exc)
+            continue
+        if not res or not res[0] or not res[1]:
+            continue
+        resultado, msg = res
+        if not any(ly.get("tip_zone") for ly in resultado):
+            continue
+        altura_total = 0.0
+        for ly in resultado:
+            try:
+                _, th = calculate_layout_trim_bounds(ly.get("pieces") or [], gap_mm=1.0)
+            except Exception:
+                th = float(ly.get("height_mm") or 0.0)
+            altura_total += float(th or 0.0)
+        logger.info("[SOBRAS] k=%d -> altura total utilizada %.1f mm", k, altura_total)
+        if melhor is None or altura_total < melhor[0] - 5.0:
+            melhor = (altura_total, res)
+
+    if melhor is None:
+        # Mantém o comportamento/mensagem originais (ex.: "todos os moldes têm pares pares")
+        logger.info("[SOBRAS] Nenhuma divisão viável; mantendo enfesto padrão.")
+        return separar_sobras_em_ponta(
+            layouts, session=session, shapes=shapes, params=params,
+            sheet_w=sheet_w, sheet_h=sheet_h, material=material,
+            refile=refile, tip_mode=tip_mode, opts=opts, _k=0,
+        )
+    return melhor[1]
+
+
 def separar_sobras_em_ponta(
     layouts: List[Dict[str, Any]],
     session: Optional[Dict[str, Any]] = None,
@@ -572,6 +627,7 @@ def separar_sobras_em_ponta(
     refile: Optional[bool] = None,
     tip_mode: Optional[str] = None,
     opts: Optional[Dict[str, Any]] = None,
+    _k: Optional[int] = None,
     **kwargs
 ) -> Tuple[List[Dict[str, Any]], Optional[str]]:
     """
@@ -590,6 +646,14 @@ def separar_sobras_em_ponta(
     if not layouts:
         logger.info("[SOBRAS] Nenhum layout na sessão para separar sobras.")
         return layouts, "[SOBRAS] Nenhum layout na sessão para separar sobras."
+
+    # Sem `_k` explícito: escolhe automaticamente a divisão que fecha a placa melhor
+    if _k is None:
+        return _escolher_divisao_otima(
+            layouts, session=session, shapes=shapes, params=params,
+            sheet_w=sheet_w, sheet_h=sheet_h, material=material,
+            refile=refile, tip_mode=tip_mode, opts=opts,
+        )
 
     # 1. Validação de pré-requisitos: enfesto base deve ser 4 camadas
     sess_layers = resolve_session_layers(session, material=material, default=4)
@@ -617,12 +681,16 @@ def separar_sobras_em_ponta(
     sorted_shapes, _ = sort_shapes_by_sequence(shapes)
 
     # 4. Estado Desejado por molde
+    # Regra da dobra (confirmada pelo operador): cada peça retirada das 4 camadas vira
+    # DUAS na ponta de 2 camadas, pois 4 físicas = 2 pares <-> 2 peças x 2 camadas = 2 pares.
+    #   peças_4 = P//2 - k      peças_2 = (P%2) + 2k      (k = número de dobras)
     desired: Dict[Any, Dict[str, Any]] = {}
     has_any_odd = False
+    k_div = max(0, int(_k or 0))
     for s in sorted_shapes:
         p = max(0, int(s.get("pairs", 0)))
-        t_4 = p // 2
-        t_2 = p % 2
+        t_4 = max(0, p // 2 - min(k_div, p // 2))
+        t_2 = (p % 2) + 2 * min(k_div, p // 2)
         if t_2 > 0:
             has_any_odd = True
         s_key = s.get("id") or s.get("name")
@@ -716,6 +784,30 @@ def separar_sobras_em_ponta(
                     })
                     excess -= 1
                     curr_counts_4[k] -= 1
+
+    # 7.2 DOBRA: cada peça retirada das 4 camadas vira DUAS na ponta de 2 camadas.
+    #     A cópia é um desenho novo da MESMA peça cortada a 2 camadas: 2 desenhos x 2
+    #     camadas = 4 físicas = 2 pares, exatamente o que a peça representava em 4 camadas.
+    #     Assim 4*N4 + 2*N2 = 2P continua valendo (nenhuma peça física a mais).
+    por_molde: Dict[Any, List[Dict[str, Any]]] = {}
+    for item in sobras_to_place:
+        por_molde.setdefault(item["shape_key"], []).append(item)
+
+    for k, info in desired.items():
+        alvo = int(info["target_2"])
+        atuais = por_molde.get(k, [])
+        faltam = alvo - len(atuais)
+        if faltam <= 0 or not atuais:
+            continue
+        for i in range(faltam):
+            base = atuais[i % len(atuais)]
+            copia = copy.deepcopy(base["piece"])
+            copia["id"] = None
+            copia["is_duplicate"] = True
+            copia["is_tip"] = True
+            sobras_to_place.append({"shape_key": k, "piece": copia, "shape": info["shape"]})
+        logger.info("[SOBRAS] Molde %s: %d dobra(s) na ponta de 2 camadas.",
+                    info["shape"].get("name"), faltam)
 
     # 8. Elimina placas de 4 camadas vazias
     layouts_4 = [ly for ly in layouts_4 if len(ly.get("pieces", [])) > 0]

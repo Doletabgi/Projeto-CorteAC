@@ -4,7 +4,7 @@
 > **Regra de ouro:** o que está marcado `[CONFIRMADO]` veio do relatório, do código ou do usuário. O que está `[NÃO CONFIRMADO]` é suposição e não deve virar "fato" sem validação. O que está `[PREENCHER]` a IA deve completar lendo o código real.
 
 <!-- AUTO:header:start -->
-**Última sincronização com o código:** 2026-11-02 21:04 (HEAD ao gerar: `3baa30c`; 128 arquivos Python, ~64119 linhas)
+**Última sincronização com o código:** 2026-11-02 21:19 (HEAD ao gerar: `2048256`; 129 arquivos Python, ~64361 linhas)
 <!-- AUTO:header:end -->
 **Versão deste documento:** 1
 
@@ -185,6 +185,7 @@ tests/test_shape_editor_stitching.py
 tests/test_shape_sorting.py                          # Testes Unitários: Classificação e Ordenação de Moldes e Tamanhos (Maior para Menor / Menor para Maior)
 tests/test_shapes_resto.py                           # Testes unitários e de integração para a coluna 'Resto' na grade de Moldes da SessionView.
 tests/test_sidebar_counter.py                        # Testes unitários e de integração para o contador de peças da barra lateral,
+tests/test_sobras_dobra.py                           # tests/test_sobras_dobra.py
 tests/test_strategy_removal.py                       # Testes automatizados para validação da remoção da estratégia flashnestroll (bobinas contínuas):
 tests/test_tooltip.py                                # tests/test_tooltip.py
 tests/test_validation_and_cancellation.py            # JobManager 2000 (Python Edition)
@@ -293,7 +294,7 @@ ui/units.py                                          # ui/units.py - Formataçã
 - funções: `resolve_layout_layers`, `layers_for_piece`, `format_enfesto_operator_text`, `resolve_session_layers`, `is_layers_defined`, `pecas_na_mesa`, `calc_resto`, `calc_resto_efetivo`, `parse_session_params`, `encode_session_params`, `is_separar_sobras_enabled`, `is_refile_auto_enabled`
 
 ### `cad/layers_split.py`
-- funções: `log_sobras`, `separar_sobras_camadas`, `_cluster_pieces_by_y`, `_place_sobra_piece`, `_nest_sobras_on_last_sheet`, `separar_sobras_em_ponta`, `desfazer_separacao_sobras`
+- funções: `log_sobras`, `separar_sobras_camadas`, `_cluster_pieces_by_y`, `_place_sobra_piece`, `_nest_sobras_on_last_sheet`, `_escolher_divisao_otima`, `separar_sobras_em_ponta`, `desfazer_separacao_sobras`
 
 ### `cad/macro_engine.py`
 - `class SafeFormulaEvaluator` (linha 215, 4 métodos): Avaliador de expressões matemáticas e lógicas estritamente seguro.
@@ -511,6 +512,10 @@ ui/units.py                                          # ui/units.py - Formataçã
 
 ### `tests/test_sidebar_counter.py`
 - `class TestSidebarCounterAndLayers` (linha 12, 20 métodos)
+
+### `tests/test_sobras_dobra.py`
+- `class TestSobrasDobra` (linha 52, 7 métodos)
+- funções: `_shape`, `_layout`
 
 ### `tests/test_strategy_removal.py`
 - `class TestStrategyRemoval` (linha 19, 9 métodos)
@@ -2823,6 +2828,51 @@ melhoria futura, não aplicada nesta versão.
 
 ---
 
+
+## 8.30. Regra da Dobra 4c → 2c, Divisão Automática e Contadores por Enfesto (v1.6.8) `[CONFIRMADO pelo operador]`
+
+### 1. A regra (confirmada com o operador)
+
+- 1 peça desenhada em **4 camadas** = 4 peças físicas = **2 pares**.
+- 1 peça desenhada em **2 camadas** = 2 peças físicas = **1 par**.
+- Portanto, **cada peça retirada das 4 camadas vira DUAS na ponta de 2 camadas**
+  (4 físicas = 2 pares ↔ 2 desenhos × 2 camadas = 4 físicas = 2 pares). Nada de cortar a mais,
+  nada de sobra: a soma física continua exatamente $2P$.
+
+### 2. Divisão variável (antes era fixa)
+
+Com $k$ dobras, por molde:
+
+$$N_4 = \left\lfloor P/2 \right\rfloor - k \qquad N_2 = (P \bmod 2) + 2k \qquad 4N_4 + 2N_2 = 2P$$
+
+Antes o sistema usava **somente $k=0$** ($N_4=P//2$, $N_2=P\bmod 2$), o que deixava a ponta com
+1 peça por molde e vagas vazias na base. Agora existe `_escolher_divisao_otima()`, que testa
+$k = 0\ldots 3$ e escolhe a divisão com **menor altura total utilizada** (menor refile/sobra),
+exigindo ganho mínimo de 5 mm para aceitar mais dobras.
+
+- A dobra é implementada **duplicando** a peça retirada na ponta (`is_duplicate=True`), pois o
+  desenho novo é necessário para manter as 22 físicas — o sistema antes só movia peças
+  ("nunca cria nem apaga"), o que impedia a regra de funcionar.
+- A verificação física estrita continua valendo (rollback atômico em divergência).
+- Medição (15 moldes, 11 pares, 4 camadas, placa 1,32 × 2,98 m): todas as divisões fecham
+  **330 peças físicas**; alturas — k=0: 1.244 mm · k=1: 1.668 mm · k=2: 2.073 mm · k=3: 2.481 mm.
+  Nesse layout o otimizador escolhe **k=0** (dobrar aumentaria a chapa); em layouts em que a
+  dobra realmente fecha a placa, ele escolhe k>0 automaticamente.
+
+### 3. Contadores separados por enfesto
+
+- Novo painel na barra de status do Layout Editor: **`4c: N · 2c: M`**, ao lado de `Sel:`.
+- Calculado em `update_status()` a partir de `piece["layers"]`/`is_tip`, mostrando quantas peças
+  desenhadas pertencem ao enfesto de 4 camadas e quantas à ponta de 2 camadas.
+
+### 4. Testes
+
+`tests/test_sobras_dobra.py` (4 testes): qualquer k preserva $4N_4+2N_2=2P$; k=1 remove 2 e
+coloca 3 (2 movidas + 1 dobrada, com `is_duplicate`); a escolha automática nunca é pior que o
+melhor k fixo; as peças dobradas não colidem. Suíte: **504 testes + 1 skip**.
+
+---
+
 ## 9. Pendências e arquivos faltantes
 
 ### 9.1 Tarefas abertas
@@ -2980,6 +3030,7 @@ Local: `/home/dola/Documentos/clone do job/antigo/arquivos pos instalacao/Common
 <!-- AUTO:gitlog:start -->
 | Commit | Data | Autor | Mensagem |
 |---|---|---|---|
+| `2048256` | 2026-11-02 | Doletabgi | feat(sobras): ponta de 2 camadas com encaixe compacto e testes de regressao (v1.6.7) |
 | `3baa30c` | 2026-11-02 | Doletabgi | feat(release): contadores dinamicos na barra lateral do editor e versao v1.6.3 |
 | `6fe7c1d` | 2026-11-01 | Doletabgi | feat(release): sessoes novas criadas em branco sem material associado e versao v1.6.2 |
 | `014fc95` | 2026-11-01 | Doletabgi | feat(release): desacoplamento de zoom e selecao de pecas, refile automatico e versao v1.6.1 |
@@ -2994,7 +3045,6 @@ Local: `/home/dola/Documentos/clone do job/antigo/arquivos pos instalacao/Common
 | `49a5391` | 2026-10-30 | Doletabgi | fix(ui): editor reabria sem a placa cinza/grade apos limpar layout (v1.5.2) |
 | `a99aeca` | 2026-10-30 | Doletabgi | ci(release): serializar publicacoes e permitir atualizar release existente |
 | `b4a11d7` | 2026-10-30 | Doletabgi | fix(ui): Layout Editor mostrava geometria de outra sessao e falsa colisao (v1.5.1) |
-| `ed24d46` | 2026-10-30 | Doletabgi | feat(cli): flag --version para conferir o build instalado |
 <!-- AUTO:gitlog:end -->
 
 ---
@@ -3022,6 +3072,7 @@ Local: `/home/dola/Documentos/clone do job/antigo/arquivos pos instalacao/Common
 | Seg, 02/11/2026 | 18:00 | Antigravity | Blindagem da persistência de dados das sessões e eliminação de contaminação de moldes (Sessão #188): (1) Imutabilidade estrita na leitura: `SessionView.load_session` tornado 100% somente-leitura no banco, eliminando chamadas a `update_session` e configurando `persist=False` para chamadas a `set_gap_mm` e `set_margins` disparadas no carregamento; (2) Detecção e poda automática de moldes fantasmas em sessões já calculadas (moldes no JSON sem nenhuma peça física posicionada nos layouts); (3) Remoção do fallback artificial `pairs = 16` em `SessionView.set_shapes_data`, preservando os valores numéricos reais ou nulos; (4) Eliminação da contaminação pelo catálogo global (`self.current_shapes`) em `MainWindow._poll_nest_worker`, `clear_session_nesting` e `_ensure_separated_sobras_before_export`, garantindo que os cálculos e persistência manipulem apenas os moldes legítimos da sessão ativa com seus pares originais; (5) Sanitização profunda em `database.py` (`_sanitize_session_shapes`, `update_session_shapes` e `update_session`) blindando e preservando campos críticos (`pairs`, `sequence`, `rest`, `resto`, `target_pieces`); (6) Utilitário `tools/scrub_all_sessions_shapes.py` criado e executado com sucesso, higienizando sessões corrompidas no banco de dados e recuperando a grade de 15 moldes reais da Sessão #188; (7) Nova suíte de testes `tests/test_data_integrity.py` com 5 testes rigorosos cobrindo imutabilidade de load, preservação de pares, isolamento de catálogo e poda de fantasmas. | `database.py`, `ui/session_view.py`, `ui/main_window.py`, `tools/scrub_all_sessions_shapes.py`, `tests/test_data_integrity.py`, `docs/PROJETO_ATOM_JOBMANAGER.md` |
 | Seg, 02/11/2026 | 19:15 | Antigravity | Implantação da Ponta de 2 Camadas no topo da última placa (`tip_zone`) e visualização CAM no Layout Editor: (1) Reescrita do motor `_nest_sobras_on_last_sheet` em `cad/layers_split.py` com posicionamento forçado das sobras de 2 camadas no topo (maior Y) da última placa com modos `canto` e `faixa_topo` e folga de ponta de segurança (`folga_ponta`, default 15.0 mm); (2) Armazenamento estruturado de metadados `tip_zone` no dicionário do layout (`xmin`, `ymin`, `xmax`, `ymax`, `mode`, `pieces_count`); (3) Visualização no Layout Editor (`ui/layout_editor_view.py`) com linha divisória tracejada (`tip_line`), badge e rótulo indicativo `"Ponta 2 Camadas: X peças"` orientando o operador; (4) Integração com SessionView mantendo resto zero efetivo e testes unitários em `tests/test_layers_tip.py`. | `cad/layers_split.py`, `ui/layout_editor_view.py`, `ui/session_view.py`, `tests/test_layers_tip.py`, `docs/PROJETO_ATOM_JOBMANAGER.md` |
 | Seg, 02/11/2026 | 19:45 | Antigravity | Instruções explícitas de corte e enfesto misto do almoxarifado na Impressão A4 (`LayoutPrintDialog`): (1) Função `format_enfesto_operator_text` em `cad/layers_rule.py` gerando texto claro e padronizado especificando quantidade e metragem de folhas de comprimento total e folhas de ponta (ex: `CORTAR: X folhas de COMPRIMENTO TOTAL (Y mm) [4 camadas] + Y folhas de PONTA (Z mm) [2 camadas]`); (2) Renderização visual da delimitação da zona de ponta (`tip_zone`) no preview A4 (canvas Tkinter) e na exportação física/PDF de alta resolução via Pillow; (3) Exibição destacada das instruções operacionais no cabeçalho/metadados da página para conferência no almoxarifado antes do desenrolar do material; (4) Testes em `tests/test_layout_print_legend.py`. | `cad/layers_rule.py`, `ui/layout_print_dialog.py`, `tests/test_layout_print_legend.py`, `docs/PROJETO_ATOM_JOBMANAGER.md` |
+| Seg, 02/11/2026 | 21:45 | DeepSeek | Regra da dobra 4c→2c, divisão automática e contadores por enfesto (v1.6.8): (1) implementada a regra confirmada pelo operador — cada peça retirada das 4 camadas vira DUAS na ponta de 2 camadas (4 físicas = 2 pares ↔ 2×2 camadas = 4 físicas), com a peça duplicada marcada `is_duplicate` (antes o sistema só movia peças e a dobra era impossível); (2) divisão variável por molde (`N4 = P//2 - k`, `N2 = (P%2) + 2k`) com `_escolher_divisao_otima()` testando k=0..3 e escolhendo a menor altura total utilizada (ganho mínimo de 5 mm); verificação física estrita mantida (4N4+2N2=2P, rollback atômico); (3) medição com 15 moldes/11 pares/4 camadas: todas as divisões fecham 330 peças físicas (k=0: 1.244 mm, k=1: 1.668 mm, k=2: 2.073 mm, k=3: 2.481 mm — o otimizador escolhe k=0 nesse layout); (4) novo painel `4c: N · 2c: M` na barra de status do Layout Editor separando os dois enfestos; (5) novo `tests/test_sobras_dobra.py` (4 testes). 504 testes + 1 skip. | `cad/layers_split.py`, `ui/layout_editor_view.py`, `tests/test_sobras_dobra.py`, `docs/PROJETO_ATOM_JOBMANAGER.md`, `config.py`, `.github/workflows/release.yml` |
 | Seg, 02/11/2026 | 21:15 | DeepSeek | Blindagem do encaixe (pares mandam), isolamento dos testes do catálogo e regressão de vãos (v1.6.7): (1) `nest_multi_sheet` passou a priorizar os PARES da sessão e ignorar `target_pieces` residual — reprodução do defeito mostrava 3 peças em vez de 18 (placa quase vazia com "vãos gigantes" após separação de sobras anterior); a chamada programática da ponta (pairs=0) continua honrando `target_pieces`; (2) 13 testes do catálogo deixaram de usar o `jobmanager.db` de produção (ficavam vermelhos quando o operador apagava artigos) — novo `tests/_catalog_fixtures.py` com SQLite temporário semeado (17 moldes, 3 peças, 16 tamanhos, lacuna PALM_CAVA/22a); (3) novo `tests/test_nesting_compactness.py` com 4 testes de regressão (params composto vs puro, tip_zone/target_pieces não alteram posições, base e ponta compactas após separação, Gerar+Refazer sem degradação). Medição no cenário do operador (15 moldes, 11 pares, 4 camadas, placa 1,32 × 2,98 m): 90 peças, 15 na ponta, menor distância 1,05 mm, 500 testes + 1 skip. | `cad/nesting_engine.py`, `tests/_catalog_fixtures.py`, `tests/test_shape_catalog_view.py`, `tests/test_shape_catalog_polish.py`, `tests/test_shape_catalog_border_cases.py`, `tests/test_nesting_compactness.py`, `docs/PROJETO_ATOM_JOBMANAGER.md`, `config.py`, `.github/workflows/release.yml` |
 | Seg, 02/11/2026 | 20:20 | Antigravity | Correção do espalhamento de peças e restauração do encaixe contorno-a-contorno no Nesting automático: (1) Diagnóstico e correção de falha no reconhecimento de presets DieProc (`HighYield`, `ALTERNADO`, `stdFill`, `FastNest`) decorrente de contaminação por parâmetros codificados de sessão (`params` contendo opções como `;separar_sobras=1;tip_mode=canto`); (2) Sanitização universal com `clean_preset` em `cad/nesting_backend.py` e `cad/nesting_engine.py`, reativando `row_interlock: True` (rebaixamento de linhas nos vales) e acoplamento com alternância 0°/180° (`coupling: "0/0 0/180"`); (3) Purificação prévia de estado eliminando campos transitórios de ponta (`tip_zone`, `layers_tip`, `target_pieces`) de `sess_shapes` e `layouts` em `ui/main_window.py` e `cad/nesting_engine.py`; (4) Novo teste unitário `test_nest_multi_sheet_with_encoded_params_and_clean_state` em `tests/test_multisheet_nesting.py`; recompilação dos executáveis Linux (`dist/CorteAC`, `dist/teste_dola`, `./corteac_linux`). | `cad/nesting_backend.py`, `cad/nesting_engine.py`, `ui/main_window.py`, `tests/test_multisheet_nesting.py`, `docs/PROJETO_ATOM_JOBMANAGER.md`, `build_linux.sh`, `corteac_linux` |
 

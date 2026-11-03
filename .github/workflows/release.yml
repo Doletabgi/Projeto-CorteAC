@@ -9,7 +9,7 @@ on:
       tag_name:
         description: 'Tag de versão SemVer (ex: v1.0.0)'
         required: false
-        default: 'v1.6.7'
+        default: 'v1.6.8'
 
 permissions:
   contents: write
@@ -183,7 +183,13 @@ jobs:
 
             ---
 
-            ### 🛠️ Recursos Incluídos Nesta Versão (v1.6.7):
+            ### 🛠️ Recursos Incluídos Nesta Versão (v1.6.8):
+            - **Regra da dobra 4 camadas → 2 camadas (confirmada pelo operador)**:
+              - Cada peça retirada das 4 camadas passa a valer **duas** na ponta de 2 camadas (4 físicas = 2 pares ↔ 2 desenhos × 2 camadas = 4 físicas). O total físico continua exatamente `2P`: sem sobra e sem cortar a mais.
+              - O sistema escolhe automaticamente quantas dobras fazer (`k`), testando as divisões e ficando com a que **fecha a placa com menor altura** (menos chapa).
+              - Novo painel na barra de status do Layout Editor: **`4c: N · 2c: M`**, separando as peças do enfesto de 4 camadas e as da ponta de 2 camadas.
+              - **504 testes automatizados** (503 passando, 1 skip, 0 falhas), incluindo verificação de que qualquer divisão mantém `4·N4 + 2·N2 = 2P`.
+            - **Correções anteriores (mantidas)**: separação de sobras na ponta, encaixe contorno-a-contorno, bump com mouse, contadores por placa e cache geométrico.
             - **Separação de sobras na ponta (enfesto em degrau) com encaixe contorno-a-contorno**:
               - Pares ímpares em 4 camadas: as peças excedentes vão para uma **ponta de 2 camadas** no topo da última placa, com `tip_zone` desenhada (linha azul), contadores e impressão A4 com a instrução de almoxarifado ("2 folhas longas + 2 folhas curtas").
               - O nesting voltou a fechar contorno-a-contorno: `params` composto da sessão (`HighYield;separar_sobras=1;tip_mode=canto`) não quebra mais o preset DieProc, e resíduos de `tip_zone`/`layers_tip`/`target_pieces` são descartados antes de cada cálculo.
