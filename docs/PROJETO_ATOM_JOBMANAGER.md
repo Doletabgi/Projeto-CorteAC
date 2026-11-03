@@ -4,7 +4,7 @@
 > **Regra de ouro:** o que está marcado `[CONFIRMADO]` veio do relatório, do código ou do usuário. O que está `[NÃO CONFIRMADO]` é suposição e não deve virar "fato" sem validação. O que está `[PREENCHER]` a IA deve completar lendo o código real.
 
 <!-- AUTO:header:start -->
-**Última sincronização com o código:** 2026-11-03 16:20 (HEAD ao gerar: `b53c1bc`; 135 arquivos Python, ~66077 linhas)
+**Última sincronização com o código:** 2026-11-03 17:43 (HEAD ao gerar: `10514da`; 138 arquivos Python, ~67792 linhas)
 <!-- AUTO:header:end -->
 **Versão deste documento:** 1
 
@@ -97,6 +97,7 @@ cad/nesting_backend.py                               # cad/nesting_backend.py - 
 cad/nesting_engine.py                                # JobManager 2000 (Python Edition)
 cad/nfp.py                                           # cad/nfp.py - Motor No-Fit Polygon (NFP) em Python Puro para CorteAC / JobManager 2000
 cad/onx_exporter.py                                  # JobManager 2000 (Python Edition)
+cad/project_packager.py                              # CorteAC - Exportação de Sessão Multi-Placa para a Máquina ATOM.
 cad/semver.py                                        # Sistema de Versionamento SemVer (Semantic Versioning 2.0.0)
 cad/trim_engine.py                                   # JobManager 2000 (Python Edition)
 db/__init__.py                                       # Camada de Acesso a Dados do JobManager (MySQL 8.0 / SQLite Reserva)
@@ -174,6 +175,7 @@ tests/test_nfp.py                                    # tests/test_nfp.py
 tests/test_preencher_buracos.py                      # tests/test_preencher_buracos.py
 tests/test_print_layout_abre.py                      # tests/test_print_layout_abre.py
 tests/test_print_metros.py                           # tests/test_print_metros.py
+tests/test_project_packager.py                       # Testes do empacotador de sessão multi-placa (cad/project_packager.py).
 tests/test_semver.py                                 # Testes Automatizados para o Sistema de Versionamento SemVer (MAJOR.MINOR.PATCH)
 tests/test_session_material_delete.py                # Testes automatizados para remoção de material na sessão via tecla Delete / botão / menu:
 tests/test_session_monotonic.py                      # Testes Unitários: Monotonicidade Estrita de Sessões e Persistência contra Re-semeadura
@@ -207,6 +209,7 @@ tools/capture_layout_screenshots.py                  # tools/capture_layout_scre
 tools/check_release_cadence.py                       # Verificador de Cadência de Release (Regra dos 5 Commits)
 tools/compare_ia_teste_yield.py                      # tools/compare_ia_teste_yield.py
 tools/compare_learning_states.py                     # tools/compare_learning_states.py
+tools/export_session.py                              # Exporta uma sessão multi-placa do CorteAC para uma pasta pronta para a máquina ATOM.
 tools/generate_modern_icons.py                       # tools/generate_modern_icons.py
 tools/migrate_sqlite_to_mysql.py                     # tools/migrate_sqlite_to_mysql.py - Migra jobmanager.db (SQLite) para MySQL 8.0 Central.
 tools/profile_drag.py                                # tools/profile_drag.py
@@ -324,6 +327,15 @@ ui/units.py                                          # ui/units.py - Formataçã
 
 ### `cad/onx_exporter.py`
 - funções: `_format_num`, `build_onx_xml`, `export_onx_from_pieces`, `save_onx_file`, `parse_onx`
+
+### `cad/project_packager.py`
+- `class PackagingError` (linha 63, 0 métodos): Erro de empacotamento/exportação de sessão.
+- `class MissingDiesError` (linha 67, 1 métodos): Um ou mais moldes referenciados não puderam ser resolvidos.
+- `class DieAsset` (linha 79, 3 métodos): Um molde resolvido, pronto para ir para ``Shapes/`` ou para o manifesto.
+- `class LayoutAsset` (linha 113, 1 métodos): Um layout (placa) exportado.
+- `class ExportResult` (linha 135, 3 métodos): Resultado completo de uma exportação de sessão.
+- `class DieSourceIndex` (linha 311, 4 métodos): Índice nome-do-arquivo -> caminho, opcional, para achar .die na rede.
+- funções: `_as_list`, `_as_float`, `_as_int`, `_safe_component`, `_safe_filename`, `_write_bytes_atomic`, `_write_json_atomic`, `_die_code`, `_is_die_file`, `_resolve_sidecar`, `_existing_die_path`, `_normalize_shape`, `_normalize_piece`, `_normalize_layout`, `_shape_has_geometry` (+9)
 
 ### `cad/semver.py`
 - `class SemVer` (linha 24, 8 métodos)
@@ -482,6 +494,7 @@ ui/units.py                                          # ui/units.py - Formataçã
 
 ### `tests/test_preencher_buracos.py`
 - `class TestPreencherBuracos` (linha 25, 4 métodos)
+- `class TestNuncaDeitarPeca` (linha 78, 2 métodos): Regra do operador: peça nunca é deitada (90°/270°) — só 0°/180°.
 - funções: `_peca`
 
 ### `tests/test_print_layout_abre.py`
@@ -495,6 +508,10 @@ ui/units.py                                          # ui/units.py - Formataçã
 - `class TestCabecalhoSemDescription` (linha 203, 3 métodos): O operador pediu para remover a linha "Description: ..." da folha impressa.
 - `class TestCabecalhoFolhas` (linha 247, 3 métodos): Cabeçalho com as duas linhas de folhas (longas/curtas) e sem "Material Area".
 - `class TestCabecalhoSomenteNaPlacaComPonta` (linha 297, 3 métodos): O operador pediu: a mudança do cabeçalho é SOMENTE na placa com a ponta.
+
+### `tests/test_project_packager.py`
+- `class FakeDB` (linha 39, 4 métodos): Banco mínimo, com a mesma interface usada pelo packager.
+- funções: `_piece`, `_session`, `_read_lay`, `_lay_value`, `test_export_all_layouts_and_only_referenced_dies`, `test_lay_line2_and_dlib_point_to_export_folder`, `test_generated_die_is_valid_fustella`, `test_original_die_is_copied_byte_for_byte`, `test_shapes_search_root_finds_nested_original`, `test_missing_die_is_reported_and_can_be_strict`, `test_same_die_in_two_layouts_is_deduplicated`, `test_no_subfolder_writes_directly_to_target`, `test_reference_mode_does_not_copy_dies_and_uses_dlib_override`, `test_pack_session_folder_creates_zip_with_relative_names`, `test_export_session_cac_returns_cac_and_cleans_temp` (+8)
 
 ### `tests/test_semver.py`
 - `class TestSemVer` (linha 12, 7 métodos)
@@ -597,6 +614,9 @@ ui/units.py                                          # ui/units.py - Formataçã
 
 ### `tools/compare_learning_states.py`
 - funções: `calculate_sheet_g00`, `get_all_settings`, `restore_snapshot`, `setup_state_in_db`, `evaluate_state`, `determine_learning_curve_verdict`, `run_comparison`, `main`
+
+### `tools/export_session.py`
+- funções: `build_parser`, `_print_summary`, `main`
 
 ### `tools/generate_modern_icons.py`
 - funções: `create_supersampled`, `finish_icon`, `make_cut_icon`, `make_copy_icon`, `make_paste_icon`, `make_details_icon`, `make_layout_icon`, `make_shed_icon`, `make_mode_prod_icon`, `make_mode_moldes_icon`, `make_mode_mat_icon`, `make_tree_prod_node_icon`, `make_tree_folder_icon`, `make_tree_order_icon`, `make_tree_session_icon` (+3)
@@ -3407,11 +3427,55 @@ Novo passe em `cad/nesting_engine.py`, chamado no Gerar/Refazer logo após o nes
 
 Orçamento de tempo: 4 s (no Gerar) para não travar a interface.
 
+> **Correção na v1.6.24 (§8.45):** aquele ganho usava peças **deitadas** (90°/270°), o que é
+> proibido pela fábrica. Com a regra 0°/180° respeitada, o passe não move peças neste cenário
+> e a placa fica em 78,01%.
+
 ### 4. Testes
 
 `tests/test_preencher_buracos.py` (4 testes): move peça da última placa para o vão e remove a placa
 vazia; não move peças de 2 camadas; nenhuma colisão após o preenchimento; com uma placa só não faz nada.
 Suíte: **540 testes + 1 skip**.
+
+---
+
+
+## 8.45. Regra do Sentido da Peça: Nunca Deitar (v1.6.24) `[CONFIRMADO]`
+
+Relato do operador: "gerou assim na 1.6.23 deitando na ponta do lay0000; tem que respeitar 0/180,
+não pode deitar peças no alternado".
+
+### 1. O que aconteceu
+
+- O passe `preencher_buracos_em_placas()` (v1.6.23) testava **0°/90°/180°/270°** para encaixar peças
+  nos vãos. As 5 peças que ele "ganhava" só cabiam **deitadas** — violando a regra da fábrica.
+- O ganho de 78,01% → 79,90% divulgado na §8.44 era, portanto, **inválido**: vinha de peças giradas
+  em 90°.
+
+### 2. Correções
+
+- `preencher_buracos_em_placas(..., rotacoes=(0.0, 180.0))`: apenas 0°/180°; com isso, no cenário
+  de 6 moldes o passe **não move nenhuma peça** (os vãos têm 40 mm de largura e a peça tem ~95 mm —
+  não cabe sem deitar). A placa permanece em 78,01%.
+- `cad/macro_engine.py` (estratégia IA-teste): `FILL HOLES ... ANGLES(0, 90, 180, 270)` passou a
+  `ANGLES(0, 180)` e `fill_holes_angles` default `[0.0, 180.0]`.
+
+### 3. Situação final do encaixe
+
+| | Resultado |
+|---|---|
+| Placa 0 (6 moldes × 101 pares, 1,37 × 2,82 m) | 231 peças · **78,01%** |
+| Placa 1 (restante) | 75 peças · 29,29% |
+| Área realmente livre na placa 0 | 17,5%, maior vão contínuo **40 × 660 mm** |
+
+O motor principal **já usava apenas 0°/180°** (conferido nas rotações gravadas: 115 peças a 0° e
+116 a 180°, nenhuma a 90°/270°). O 90° vinha só do passe de vãos e do macro.
+
+### 4. Testes
+
+`tests/test_preencher_buracos.py` ganhou `TestNuncaDeitarPeca` (2 testes): a assinatura só aceita
+0/180 e nenhuma peça movida pode terminar com rotação diferente de 0°/180°.
+Suíte: **561 testes + 1 skip**.
 
 ---
 
@@ -3572,6 +3636,7 @@ Local: `/home/dola/Documentos/clone do job/antigo/arquivos pos instalacao/Common
 <!-- AUTO:gitlog:start -->
 | Commit | Data | Autor | Mensagem |
 |---|---|---|---|
+| `10514da` | 2026-11-03 | Doletabgi | feat(nesting): preenche os vaos entre placas com pecas da ultima placa (v1.6.23) |
 | `b53c1bc` | 2026-11-03 | Doletabgi | fix(print): cabecalho de folhas apenas na placa com ponta (v1.6.22) |
 | `504c073` | 2026-11-03 | Doletabgi | feat(print): folhas longas/curtas no cabecalho e sem Material Area (v1.6.21) |
 | `4b621ce` | 2026-11-03 | Doletabgi | feat(print): remove a linha Description das folhas impressas (v1.6.20) |
@@ -3586,7 +3651,6 @@ Local: `/home/dola/Documentos/clone do job/antigo/arquivos pos instalacao/Common
 | `0c4abda` | 2026-11-02 | Doletabgi | feat(packaging): atalho da area de trabalho com a versao no nome (v1.6.11) |
 | `3e83a15` | 2026-11-02 | Doletabgi | fix(packaging): atalho da area de trabalho com caminhos contendo espacos (v1.6.10) |
 | `8cdca5d` | 2026-11-02 | Doletabgi | feat(packaging): icone do app e atalho da area de trabalho no pacote Linux (v1.6.9) |
-| `5001039` | 2026-11-02 | Doletabgi | feat(sobras): dobra 4c->2c, divisao automatica e contadores por enfesto (v1.6.8) |
 <!-- AUTO:gitlog:end -->
 
 ---
@@ -3614,6 +3678,7 @@ Local: `/home/dola/Documentos/clone do job/antigo/arquivos pos instalacao/Common
 | Seg, 02/11/2026 | 18:00 | Antigravity | Blindagem da persistência de dados das sessões e eliminação de contaminação de moldes (Sessão #188): (1) Imutabilidade estrita na leitura: `SessionView.load_session` tornado 100% somente-leitura no banco, eliminando chamadas a `update_session` e configurando `persist=False` para chamadas a `set_gap_mm` e `set_margins` disparadas no carregamento; (2) Detecção e poda automática de moldes fantasmas em sessões já calculadas (moldes no JSON sem nenhuma peça física posicionada nos layouts); (3) Remoção do fallback artificial `pairs = 16` em `SessionView.set_shapes_data`, preservando os valores numéricos reais ou nulos; (4) Eliminação da contaminação pelo catálogo global (`self.current_shapes`) em `MainWindow._poll_nest_worker`, `clear_session_nesting` e `_ensure_separated_sobras_before_export`, garantindo que os cálculos e persistência manipulem apenas os moldes legítimos da sessão ativa com seus pares originais; (5) Sanitização profunda em `database.py` (`_sanitize_session_shapes`, `update_session_shapes` e `update_session`) blindando e preservando campos críticos (`pairs`, `sequence`, `rest`, `resto`, `target_pieces`); (6) Utilitário `tools/scrub_all_sessions_shapes.py` criado e executado com sucesso, higienizando sessões corrompidas no banco de dados e recuperando a grade de 15 moldes reais da Sessão #188; (7) Nova suíte de testes `tests/test_data_integrity.py` com 5 testes rigorosos cobrindo imutabilidade de load, preservação de pares, isolamento de catálogo e poda de fantasmas. | `database.py`, `ui/session_view.py`, `ui/main_window.py`, `tools/scrub_all_sessions_shapes.py`, `tests/test_data_integrity.py`, `docs/PROJETO_ATOM_JOBMANAGER.md` |
 | Seg, 02/11/2026 | 19:15 | Antigravity | Implantação da Ponta de 2 Camadas no topo da última placa (`tip_zone`) e visualização CAM no Layout Editor: (1) Reescrita do motor `_nest_sobras_on_last_sheet` em `cad/layers_split.py` com posicionamento forçado das sobras de 2 camadas no topo (maior Y) da última placa com modos `canto` e `faixa_topo` e folga de ponta de segurança (`folga_ponta`, default 15.0 mm); (2) Armazenamento estruturado de metadados `tip_zone` no dicionário do layout (`xmin`, `ymin`, `xmax`, `ymax`, `mode`, `pieces_count`); (3) Visualização no Layout Editor (`ui/layout_editor_view.py`) com linha divisória tracejada (`tip_line`), badge e rótulo indicativo `"Ponta 2 Camadas: X peças"` orientando o operador; (4) Integração com SessionView mantendo resto zero efetivo e testes unitários em `tests/test_layers_tip.py`. | `cad/layers_split.py`, `ui/layout_editor_view.py`, `ui/session_view.py`, `tests/test_layers_tip.py`, `docs/PROJETO_ATOM_JOBMANAGER.md` |
 | Seg, 02/11/2026 | 19:45 | Antigravity | Instruções explícitas de corte e enfesto misto do almoxarifado na Impressão A4 (`LayoutPrintDialog`): (1) Função `format_enfesto_operator_text` em `cad/layers_rule.py` gerando texto claro e padronizado especificando quantidade e metragem de folhas de comprimento total e folhas de ponta (ex: `CORTAR: X folhas de COMPRIMENTO TOTAL (Y mm) [4 camadas] + Y folhas de PONTA (Z mm) [2 camadas]`); (2) Renderização visual da delimitação da zona de ponta (`tip_zone`) no preview A4 (canvas Tkinter) e na exportação física/PDF de alta resolução via Pillow; (3) Exibição destacada das instruções operacionais no cabeçalho/metadados da página para conferência no almoxarifado antes do desenrolar do material; (4) Testes em `tests/test_layout_print_legend.py`. | `cad/layers_rule.py`, `ui/layout_print_dialog.py`, `tests/test_layout_print_legend.py`, `docs/PROJETO_ATOM_JOBMANAGER.md` |
+| Ter, 03/11/2026 | 18:05 | DeepSeek | Regra do sentido da peça: nunca deitar (v1.6.24): o passe de preenchimento de vãos (v1.6.23) testava 0/90/180/270 e as 5 peças que movia só cabiam DEITADAS — o ganho 78,01% → 79,90% era inválido. Agora `preencher_buracos_em_placas(..., rotacoes=(0.0, 180.0))` respeita a regra (no cenário de 6 moldes não move nenhuma peça: vão de 40 mm, peça de ~95 mm) e o macro engine (IA-teste) passou de ANGLES(0,90,180,270) para ANGLES(0,180). Confirmado que o motor principal já usa apenas 0/180 (115 peças a 0°, 116 a 180°). `TestNuncaDeitarPeca` (2 testes). 561 testes + 1 skip. | `cad/nesting_engine.py`, `cad/macro_engine.py`, `tests/test_preencher_buracos.py`, `docs/PROJETO_ATOM_JOBMANAGER.md`, `config.py`, `.github/workflows/release.yml` |
 | Ter, 03/11/2026 | 17:05 | DeepSeek | Preenchimento dos vãos entre placas (v1.6.23): o motor deixava um bolsão no canto da placa e mandava as peças restantes para a placa seguinte, gerando desperdício (operador estimou ~R$100 em 4 camadas num único vão). Novo `preencher_buracos_em_placas()` em `cad/nesting_engine.py`, chamado no Gerar/Refazer: mapeia ocupação em grade de 40 mm, encontra regiões vazias conectadas e encaixa peças de 4 CAMADAS da última placa nos bolsões (0/90/180/270°, colisão real com gap), removendo a placa final se ficar vazia; peças de 2 camadas (ponta) nunca se movem. Medição (6 moldes × 101 pares, placa 1,37 × 2,82 m): placa 0 de 231 peças/78,01% para 236/79,90%; placa 1 de 75 para 70; total 306 preservado. `tests/test_preencher_buracos.py` (4 testes). 540 testes + 1 skip. | `cad/nesting_engine.py`, `ui/main_window.py`, `tests/test_preencher_buracos.py`, `docs/PROJETO_ATOM_JOBMANAGER.md`, `config.py`, `.github/workflows/release.yml` |
 | Ter, 03/11/2026 | 16:25 | DeepSeek | Cabeçalho de folhas só na placa com ponta (v1.6.22): o novo formato ("2 folhas longas / 2 folhas curtas", sem "Material Area") passa a valer apenas para o layout que tem `tip_zone`; a placa 0 do enfesto mantém o cabeçalho clássico (`Dimensions` + `Material Area`). `LayoutPrintDialog` decide pelo campo `dimensions_lines`, e o editor/SessionView só o preenchem quando o layout impresso tem ponta. `TestCabecalhoSomenteNaPlacaComPonta` (3 testes). 536 testes + 1 skip. | `ui/layout_print_dialog.py`, `ui/layout_editor_view.py`, `ui/session_view.py`, `tests/test_print_metros.py`, `docs/PROJETO_ATOM_JOBMANAGER.md`, `config.py`, `.github/workflows/release.yml` |
 | Ter, 03/11/2026 | 16:05 | DeepSeek | Cabeçalho com folhas longas/curtas e sem "Material Area" (v1.6.21): a linha `Dimensions` foi substituída por duas linhas em metros — "2 folhas longas 1,35 x 1,13 m. 2 camadas" e "2 folhas curtas: 1,35 x 0,88 m. 2 camadas" — calculadas por novo `format_dimensions_folhas()` (folhas curtas = placa até a divisória da ponta via `clamp_tip_zone`, com metade das camadas do enfesto). A linha `Material Area:` foi removida do canvas e do PDF; `LayoutEditorView.print_layout()` e `SessionView.print_current_layout()` passam `dimensions_lines`. `TestCabecalhoFolhas` (3 testes). 533 testes + 1 skip. | `cad/layers_rule.py`, `ui/layout_print_dialog.py`, `ui/layout_editor_view.py`, `ui/session_view.py`, `tests/test_print_metros.py`, `docs/PROJETO_ATOM_JOBMANAGER.md`, `config.py`, `.github/workflows/release.yml` |

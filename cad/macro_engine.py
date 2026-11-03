@@ -203,7 +203,7 @@ CLUSTER PAIR angles(0, 180) sweep(-3, 3, 1.0)
 GRID STAGGER shift_x(0.38) gap(1.0)
 GRAVITY VECTOR(-0.5, -1.0) steps(8, 4, 2, 0.5)
 JIGGLE angles(-2, 2, 0.5)
-FILL HOLES WHERE area < 4500 ANGLES(0, 90, 180, 270)
+FILL HOLES WHERE area < 4500 ANGLES(0, 180)
 SCORE "used_height * 1.0 - yield_pct * 10.0"
 """
 
@@ -374,7 +374,7 @@ class MacroConfig:
         self.jiggle_angles: List[float] = [-2.0, -1.0, 0.0, 1.0, 2.0]
         self.fill_holes_enabled: bool = False
         self.fill_holes_where: str = "area < 4500"
-        self.fill_holes_angles: List[float] = [0.0, 90.0, 180.0, 270.0]
+        self.fill_holes_angles: List[float] = [0.0, 180.0]  # regra da fábrica: nunca deitar a peça
         self.score_formula: str = "used_height * 1.0 - yield_pct * 10.0"
 
 

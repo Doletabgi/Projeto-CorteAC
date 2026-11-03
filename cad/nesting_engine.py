@@ -1099,6 +1099,7 @@ def preencher_buracos_em_placas(
     cell_mm: float = 40.0,
     step_mm: float = 10.0,
     time_budget_s: float = 4.0,
+    rotacoes=(0.0, 180.0),
 ):
     """
     Preenche vãos ("buracos") das placas já encaixadas movendo peças da ÚLTIMA placa.
@@ -1108,7 +1109,8 @@ def preencher_buracos_em_placas(
       1. mapeia a ocupação de cada placa numa grade grossa;
       2. encontra regiões vazias (bolsões);
       3. tenta encaixar cada peça da última placa (4 camadas) em cada bolsão,
-         testando 0/90/180/270° com colisão real (gap respeitado);
+         testando apenas 0°/180° (regra do operador: NUNCA deitar a peça) com
+         colisão real (gap respeitado);
       4. se a última placa ficar vazia, ela é removida (menos uma chapa).
 
     Retorna (layouts, info) com info = {"movidas": n, "placas_removidas": n}.
@@ -1226,7 +1228,7 @@ def preencher_buracos_em_placas(
             restantes = []
             for p in candidatos:
                 posto = False
-                for rot in (0.0, 90.0, 180.0, 270.0):
+                for rot in rotacoes:
                     br = _bbox_rot(p, rot)
                     if not br:
                         continue

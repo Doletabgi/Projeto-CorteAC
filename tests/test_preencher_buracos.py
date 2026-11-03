@@ -73,3 +73,35 @@ class TestPreencherBuracos(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestNuncaDeitarPeca(unittest.TestCase):
+    """Regra do operador: peça nunca é deitada (90°/270°) — só 0°/180°."""
+
+    def test_rotacoes_permitidas_sao_0_e_180(self):
+        import inspect
+        from cad.nesting_engine import preencher_buracos_em_placas
+
+        assinatura = inspect.signature(preencher_buracos_em_placas)
+        self.assertEqual(tuple(assinatura.parameters["rotacoes"].default), (0.0, 180.0))
+
+    def test_peca_movida_nao_e_deitada(self):
+        cont = [
+            {"x": 0.0, "y": 0.0}, {"x": 60.0, "y": 0.0},
+            {"x": 60.0, "y": 200.0}, {"x": 0.0, "y": 200.0},
+        ]
+        def peca(pid, x, y):
+            return {"id": pid, "name": "M1", "size": "38", "x": float(x), "y": float(y),
+                    "rotation": 0.0, "contour": [dict(p) for p in cont], "layers": 4}
+
+        # vão estreito: só caberia deitando a peça — portanto NÃO deve ser movida
+        lay0 = {"name": "lay0000", "width_mm": 200.0, "height_mm": 600.0, "layers": 4,
+                "pieces": [peca(1, 10, 10), peca(2, 10, 220), peca(3, 10, 430)]}
+        lay1 = {"name": "lay0001", "width_mm": 200.0, "height_mm": 600.0, "layers": 4,
+                "pieces": [peca(4, 10, 10)]}
+
+        layouts, info = preencher_buracos_em_placas([lay0, lay1], gap_mm=1.0, time_budget_s=2.0)
+        for ly in layouts:
+            for p in ly["pieces"]:
+                self.assertIn(round(float(p.get("rotation", 0.0))) % 360, (0, 180),
+                              f"peça deitada: rotação {p.get('rotation')}")
