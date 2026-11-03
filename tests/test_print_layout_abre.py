@@ -98,6 +98,8 @@ class TestPrintLayoutAbre(unittest.TestCase):
         # 4 x 25.000 mm² em 1,38 x 2,98 m => ~2,43% (nunca o antigo 83.02 falso)
         self.assertAlmostEqual(float(capturado.get("yield_pct")), 2.43, places=1)
         self.assertNotAlmostEqual(float(capturado.get("yield_pct")), 83.02, places=2)
+        # Padronização: dimensões sempre em metros
+        self.assertEqual(capturado.get("dimensions_str"), "1,38 x 2,98 m")
 
     def test_print_layout_abre_com_contorno_tupla(self):
         capturado = self._capturar_dialogo()

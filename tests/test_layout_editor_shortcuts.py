@@ -755,8 +755,8 @@ class TestLayoutEditorShortcuts(unittest.TestCase):
         self.view.show_grid = True
         self.view.redraw()
 
-    def test_print_preview_contains_10cm_grid_and_labels(self):
-        """O relatório de impressão e exportação contém a grade, traços e números de 10 em 10 cm na chapa."""
+    def test_print_preview_contains_grid_and_labels_in_meters(self):
+        """O relatório de impressão contém grade, traços e numeração da régua em METROS (0,1 / 0,2...)."""
         from ui.layout_print_dialog import LayoutPrintDialog
 
         dlg = LayoutPrintDialog(self.view, layout_data={
@@ -774,12 +774,13 @@ class TestLayoutEditorShortcuts(unittest.TestCase):
 
         self.assertGreater(len(grid_lines), 15, "A tela de impressão deve conter linhas de grade interna")
         self.assertGreater(len(ticks), 20, "A tela de impressão deve conter traços (ticks) de régua")
-        self.assertGreater(len(labels), 15, "A tela de impressão deve conter numeração em cm")
+        self.assertGreater(len(labels), 15, "A tela de impressão deve conter numeração na régua")
 
         label_texts = [dlg.canvas.itemcget(item, "text") for item in labels]
-        self.assertIn("10", label_texts, "Deve conter a marcação de 10 cm na régua da impressão")
-        self.assertIn("20", label_texts, "Deve conter a marcação de 20 cm na régua da impressão")
-        self.assertIn("30", label_texts, "Deve conter a marcação de 30 cm na régua da impressão")
+        self.assertIn("0,1", label_texts, "Régua da impressão deve marcar 0,1 m")
+        self.assertIn("0,2", label_texts, "Régua da impressão deve marcar 0,2 m")
+        self.assertIn("0,3", label_texts, "Régua da impressão deve marcar 0,3 m")
+        self.assertNotIn("10", label_texts, "A régua não deve mais numerar em centímetros")
 
         # 2. Renderização Pillow (utilizada para PDF, impressão física e exportação de imagem) deve gerar com sucesso
         im = dlg.render_pillow_page(dpi=150)

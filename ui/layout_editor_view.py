@@ -5908,7 +5908,7 @@ class LayoutEditorView(tk.Frame):
             "layout_name": getattr(self, "layout_name", "10001.lay"),
             "sheet_w_mm": self.sheet_width,
             "sheet_h_mm": self.sheet_height,
-            "dimensions_str": f"{self.sheet_height / 10.0:.2f} X {self.sheet_width / 10.0:.2f} cm ({mat_h_m:.2f} X {mat_w_m:.2f} M)",
+            "dimensions_str": format_dim_mm(self.sheet_width, self.sheet_height),
             "mat_area_str": f"{mat_area:.2f} sq.M.",
             "used_area_str": f"{used_area:.2f} sq.M.",
             "yield_pct": yield_pct,

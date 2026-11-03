@@ -367,7 +367,7 @@ class LayoutPrintDialog(tk.Toplevel):
         else:
             self.material_name = "132011 - VELCRO 4'' ARGOLA - PRETO ( 4 layer(s) )"
 
-        self.dimensions_str = self.layout_data.get("dimensions_str", "1.50 X 0.09 M")
+        self.dimensions_str = self.layout_data.get("dimensions_str", "1,50 x 2,98 m")
         self.mat_area_str = self.layout_data.get("mat_area_str", "0.13 sq.M.")
         self.used_area_str = self.layout_data.get("used_area_str", "0.11 sq.M.")
         self.yield_pct = self.layout_data.get("yield_pct", 83.02)
@@ -394,7 +394,7 @@ class LayoutPrintDialog(tk.Toplevel):
 
         # Se não foram fornecidas peças nem dimensões customizadas, usa layout de exemplo (velcro)
         if not self.placed_pieces and "sheet_w_mm" not in self.layout_data:
-            self.dimensions_str = "1.50 X 0.09 M"
+            self.dimensions_str = "1,50 x 2,98 m"
             self.mat_area_str = "0.13 sq.M."
             self.used_area_str = "0.11 sq.M."
             self.yield_pct = 83.02
@@ -1281,12 +1281,11 @@ class LayoutPrintDialog(tk.Toplevel):
             self.canvas.create_line(gx, bed_y + bed_h - tick_len, gx, bed_y + bed_h + tick_len, fill="#000000", width=1, tags="print_tick")
             self.canvas.create_line(gx, bed_y - tick_len, gx, bed_y + tick_len, fill="#000000", width=1, tags="print_tick")
 
-            # Numeração inferior em cm (10, 20, 30...)
-            cm_x = int(round(cur_wx / 10.0))
-            if cm_x > 0 and cur_wx < self.sheet_w_mm - 0.5:
+            # Numeração inferior em METROS (0,1 0,2 0,3...)
+            if cur_wx > 0.5 and cur_wx < self.sheet_w_mm - 0.5:
                 self.canvas.create_text(
                     gx, bed_y + bed_h + tick_len + 2,
-                    text=str(cm_x),
+                    text=format_m(cur_wx, 1),
                     font=f_ruler,
                     fill="#000000",
                     anchor="n",
@@ -1306,12 +1305,11 @@ class LayoutPrintDialog(tk.Toplevel):
             self.canvas.create_line(bed_x - tick_len, gy, bed_x + tick_len, gy, fill="#000000", width=1, tags="print_tick")
             self.canvas.create_line(bed_x + bed_w - tick_len, gy, bed_x + bed_w + tick_len, gy, fill="#000000", width=1, tags="print_tick")
 
-            # Numeração direita em cm (10, 20, 30...)
-            cm_y = int(round(cur_wy / 10.0))
-            if cm_y > 0 and cur_wy < self.sheet_h_mm - 0.5:
+            # Numeração direita em METROS (0,1 0,2 0,3...)
+            if cur_wy > 0.5 and cur_wy < self.sheet_h_mm - 0.5:
                 self.canvas.create_text(
                     bed_x + bed_w + tick_len + 3, gy,
-                    text=str(cm_y),
+                    text=format_m(cur_wy, 1),
                     font=f_ruler,
                     fill="#000000",
                     anchor="w",
@@ -1731,12 +1729,12 @@ class LayoutPrintDialog(tk.Toplevel):
             draw.line([gx, bed_y + bed_h - tick_px, gx, bed_y + bed_h + tick_px], fill="black", width=line_w)
             draw.line([gx, bed_y - tick_px, gx, bed_y + tick_px], fill="black", width=line_w)
 
-            # Numeração inferior em cm (10, 20, 30...)
-            cm_x = int(round(cur_wx / 10.0))
-            if cm_x > 0 and cur_wx < self.sheet_w_mm - 0.5:
-                bbox = draw.textbbox((0, 0), str(cm_x), font=f_ruler)
+            # Numeração inferior em METROS (0,1 0,2 0,3...)
+            if cur_wx > 0.5 and cur_wx < self.sheet_w_mm - 0.5:
+                rotulo_x = format_m(cur_wx, 1)
+                bbox = draw.textbbox((0, 0), rotulo_x, font=f_ruler)
                 tw = bbox[2] - bbox[0]
-                draw.text((gx - tw // 2, bed_y + bed_h + tick_px + 2), str(cm_x), fill="black", font=f_ruler)
+                draw.text((gx - tw // 2, bed_y + bed_h + tick_px + 2), rotulo_x, fill="black", font=f_ruler)
 
             cur_wx += grid_step
 
@@ -1751,12 +1749,12 @@ class LayoutPrintDialog(tk.Toplevel):
             draw.line([bed_x - tick_px, gy, bed_x + tick_px, gy], fill="black", width=line_w)
             draw.line([bed_x + bed_w - tick_px, gy, bed_x + bed_w + tick_px, gy], fill="black", width=line_w)
 
-            # Numeração direita em cm (10, 20, 30...)
-            cm_y = int(round(cur_wy / 10.0))
-            if cm_y > 0 and cur_wy < self.sheet_h_mm - 0.5:
-                bbox = draw.textbbox((0, 0), str(cm_y), font=f_ruler)
+            # Numeração direita em METROS (0,1 0,2 0,3...)
+            if cur_wy > 0.5 and cur_wy < self.sheet_h_mm - 0.5:
+                rotulo_y = format_m(cur_wy, 1)
+                bbox = draw.textbbox((0, 0), rotulo_y, font=f_ruler)
                 th = bbox[3] - bbox[1]
-                draw.text((bed_x + bed_w + tick_px + 3, gy - th // 2), str(cm_y), fill="black", font=f_ruler)
+                draw.text((bed_x + bed_w + tick_px + 3, gy - th // 2), rotulo_y, fill="black", font=f_ruler)
 
             cur_wy += grid_step
 

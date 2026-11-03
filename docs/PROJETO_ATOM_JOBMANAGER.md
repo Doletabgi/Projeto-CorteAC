@@ -4,7 +4,7 @@
 > **Regra de ouro:** o que está marcado `[CONFIRMADO]` veio do relatório, do código ou do usuário. O que está `[NÃO CONFIRMADO]` é suposição e não deve virar "fato" sem validação. O que está `[PREENCHER]` a IA deve completar lendo o código real.
 
 <!-- AUTO:header:start -->
-**Última sincronização com o código:** 2026-11-03 07:37 (HEAD ao gerar: `27210b3`; 132 arquivos Python, ~65055 linhas)
+**Última sincronização com o código:** 2026-11-03 09:16 (HEAD ao gerar: `9e47af8`; 133 arquivos Python, ~65135 linhas)
 <!-- AUTO:header:end -->
 **Versão deste documento:** 1
 
@@ -171,6 +171,7 @@ tests/test_nesting_contour_gap.py
 tests/test_nesting_mode_architecture.py              # JobManager 2000 (Python Edition)
 tests/test_nfp.py                                    # tests/test_nfp.py
 tests/test_print_layout_abre.py                      # tests/test_print_layout_abre.py
+tests/test_print_metros.py                           # tests/test_print_metros.py
 tests/test_semver.py                                 # Testes Automatizados para o Sistema de Versionamento SemVer (MAJOR.MINOR.PATCH)
 tests/test_session_material_delete.py                # Testes automatizados para remoção de material na sessão via tecla Delete / botão / menu:
 tests/test_session_monotonic.py                      # Testes Unitários: Monotonicidade Estrita de Sessões e Persistência contra Re-semeadura
@@ -475,6 +476,9 @@ ui/units.py                                          # ui/units.py - Formataçã
 ### `tests/test_print_layout_abre.py`
 - `class TestContourArea` (linha 25, 2 métodos)
 - `class TestPrintLayoutAbre` (linha 35, 7 métodos)
+
+### `tests/test_print_metros.py`
+- `class TestImpressaoEmMetros` (linha 17, 6 métodos)
 
 ### `tests/test_semver.py`
 - `class TestSemVer` (linha 12, 7 métodos)
@@ -3141,6 +3145,38 @@ Suíte: **517 testes + 1 skip**.
 
 ---
 
+
+## 8.37. Impressão Padronizada em Metros (v1.6.16) `[CONFIRMADO]`
+
+Pedido do operador: "marcar as medidas em metros na impressão, padronizar tudo para metros".
+
+### 1. O que estava misturado
+
+| Elemento | Antes | Depois |
+|---|---|---|
+| Cabeçalho "Dimensions" | `113.02 X 134.67 cm (1.13 X 1.35 M)` | `1,13 x 1,35 m` |
+| Régua inferior/lateral | `10, 20, 30 ...` (cm) | `0,1, 0,2, 0,3 ...` (m) |
+| Corte de refile | `CORTE DE REFILE: 1,12 m` | mantido (já em metros) |
+
+### 2. Implementação
+
+- `LayoutEditorView.print_layout()` passou a usar `format_dim_mm(largura, altura)` (helper de
+  `ui/units.py`), que devolve metros com vírgula decimal: `1,38 x 2,98 m`.
+- Régua do diálogo de impressão (canvas) e da exportação Pillow/PDF: os rótulos usam
+  `format_m(coordenada, 1)` → `0,1 / 0,2 / ...`, mantendo a grade de 100 mm.
+- Defaults do diálogo atualizados para `1,50 x 2,98 m`.
+
+### 3. Testes
+
+- `tests/test_layout_editor_shortcuts.py::test_print_preview_contains_grid_and_labels_in_meters`
+  (antes verificava cm, agora exige metros e proíbe `10`, `20`, `30`).
+- Novo `tests/test_print_metros.py` (3 testes): régua em metros, cabeçalho sem "cm" e
+  `format_dim_mm` produzindo `1,38 x 2,98 m`.
+- `tests/test_print_layout_abre.py` também valida `dimensions_str` em metros.
+- Suíte: **520 testes + 1 skip**.
+
+---
+
 ## 9. Pendências e arquivos faltantes
 
 ### 9.1 Tarefas abertas
@@ -3298,6 +3334,7 @@ Local: `/home/dola/Documentos/clone do job/antigo/arquivos pos instalacao/Common
 <!-- AUTO:gitlog:start -->
 | Commit | Data | Autor | Mensagem |
 |---|---|---|---|
+| `9e47af8` | 2026-11-03 | Doletabgi | fix(print): Ctrl+P e o icone Imprimir voltam a abrir o dialogo (v1.6.15) |
 | `27210b3` | 2026-11-03 | Doletabgi | fix(sobras): recompacta a base apos retirar as pecas da ponta (v1.6.14) |
 | `e882072` | 2026-11-02 | Doletabgi | feat(cli): --criar-atalho cria o atalho versionado quando nao existe (v1.6.13) |
 | `0067076` | 2026-11-02 | Doletabgi | feat(ui): atalho da area de trabalho sincroniza sozinho na abertura (v1.6.12) |
@@ -3312,7 +3349,6 @@ Local: `/home/dola/Documentos/clone do job/antigo/arquivos pos instalacao/Common
 | `5563fe0` | 2026-10-31 | Doletabgi | feat(release): exclusao de artigos, criacao por clique, tooltips e versao v1.6.0 |
 | `f510f60` | 2026-10-30 | Doletabgi | feat(ui): tooltips com o nome da ferramenta na barra do Layout Editor (v1.5.9) |
 | `29223ea` | 2026-10-30 | Doletabgi | feat(ui): contador Sel na barra de status e Ctrl+clique para selecao (v1.5.8) |
-| `af874be` | 2026-10-30 | Doletabgi | feat(ui): clique na miniatura seleciona todas as pecas do molde na placa (v1.5.7) |
 <!-- AUTO:gitlog:end -->
 
 ---
@@ -3340,6 +3376,7 @@ Local: `/home/dola/Documentos/clone do job/antigo/arquivos pos instalacao/Common
 | Seg, 02/11/2026 | 18:00 | Antigravity | Blindagem da persistência de dados das sessões e eliminação de contaminação de moldes (Sessão #188): (1) Imutabilidade estrita na leitura: `SessionView.load_session` tornado 100% somente-leitura no banco, eliminando chamadas a `update_session` e configurando `persist=False` para chamadas a `set_gap_mm` e `set_margins` disparadas no carregamento; (2) Detecção e poda automática de moldes fantasmas em sessões já calculadas (moldes no JSON sem nenhuma peça física posicionada nos layouts); (3) Remoção do fallback artificial `pairs = 16` em `SessionView.set_shapes_data`, preservando os valores numéricos reais ou nulos; (4) Eliminação da contaminação pelo catálogo global (`self.current_shapes`) em `MainWindow._poll_nest_worker`, `clear_session_nesting` e `_ensure_separated_sobras_before_export`, garantindo que os cálculos e persistência manipulem apenas os moldes legítimos da sessão ativa com seus pares originais; (5) Sanitização profunda em `database.py` (`_sanitize_session_shapes`, `update_session_shapes` e `update_session`) blindando e preservando campos críticos (`pairs`, `sequence`, `rest`, `resto`, `target_pieces`); (6) Utilitário `tools/scrub_all_sessions_shapes.py` criado e executado com sucesso, higienizando sessões corrompidas no banco de dados e recuperando a grade de 15 moldes reais da Sessão #188; (7) Nova suíte de testes `tests/test_data_integrity.py` com 5 testes rigorosos cobrindo imutabilidade de load, preservação de pares, isolamento de catálogo e poda de fantasmas. | `database.py`, `ui/session_view.py`, `ui/main_window.py`, `tools/scrub_all_sessions_shapes.py`, `tests/test_data_integrity.py`, `docs/PROJETO_ATOM_JOBMANAGER.md` |
 | Seg, 02/11/2026 | 19:15 | Antigravity | Implantação da Ponta de 2 Camadas no topo da última placa (`tip_zone`) e visualização CAM no Layout Editor: (1) Reescrita do motor `_nest_sobras_on_last_sheet` em `cad/layers_split.py` com posicionamento forçado das sobras de 2 camadas no topo (maior Y) da última placa com modos `canto` e `faixa_topo` e folga de ponta de segurança (`folga_ponta`, default 15.0 mm); (2) Armazenamento estruturado de metadados `tip_zone` no dicionário do layout (`xmin`, `ymin`, `xmax`, `ymax`, `mode`, `pieces_count`); (3) Visualização no Layout Editor (`ui/layout_editor_view.py`) com linha divisória tracejada (`tip_line`), badge e rótulo indicativo `"Ponta 2 Camadas: X peças"` orientando o operador; (4) Integração com SessionView mantendo resto zero efetivo e testes unitários em `tests/test_layers_tip.py`. | `cad/layers_split.py`, `ui/layout_editor_view.py`, `ui/session_view.py`, `tests/test_layers_tip.py`, `docs/PROJETO_ATOM_JOBMANAGER.md` |
 | Seg, 02/11/2026 | 19:45 | Antigravity | Instruções explícitas de corte e enfesto misto do almoxarifado na Impressão A4 (`LayoutPrintDialog`): (1) Função `format_enfesto_operator_text` em `cad/layers_rule.py` gerando texto claro e padronizado especificando quantidade e metragem de folhas de comprimento total e folhas de ponta (ex: `CORTAR: X folhas de COMPRIMENTO TOTAL (Y mm) [4 camadas] + Y folhas de PONTA (Z mm) [2 camadas]`); (2) Renderização visual da delimitação da zona de ponta (`tip_zone`) no preview A4 (canvas Tkinter) e na exportação física/PDF de alta resolução via Pillow; (3) Exibição destacada das instruções operacionais no cabeçalho/metadados da página para conferência no almoxarifado antes do desenrolar do material; (4) Testes em `tests/test_layout_print_legend.py`. | `cad/layers_rule.py`, `ui/layout_print_dialog.py`, `tests/test_layout_print_legend.py`, `docs/PROJETO_ATOM_JOBMANAGER.md` |
+| Ter, 03/11/2026 | 09:40 | DeepSeek | Impressão padronizada em metros (v1.6.16): o cabeçalho mostrava "113.02 X 134.67 cm (1.13 X 1.35 M)" e a régua numerava em centímetros. Agora `print_layout()` usa `format_dim_mm()` (metros com vírgula: "1,38 x 2,98 m") e a régua do diálogo e da exportação Pillow/PDF usa `format_m(coord, 1)` → "0,1 / 0,2 / ...", mantendo a grade de 100 mm; defaults do diálogo atualizados. Testes: `test_print_preview_contains_grid_and_labels_in_meters` (antes checava cm), novo `tests/test_print_metros.py` (3 testes) e validação de `dimensions_str` em `test_print_layout_abre.py`. 520 testes + 1 skip. | `ui/layout_print_dialog.py`, `ui/layout_editor_view.py`, `tests/test_print_metros.py`, `tests/test_layout_editor_shortcuts.py`, `tests/test_print_layout_abre.py`, `docs/PROJETO_ATOM_JOBMANAGER.md`, `config.py`, `.github/workflows/release.yml` |
 | Ter, 03/11/2026 | 07:45 | DeepSeek | Impressão do layout não abria (Ctrl+P e ícone) (v1.6.15): `LayoutEditorView.print_layout()` lia o contorno como tupla (`cntr[i][0]`), mas o editor usa dict `{"x","y"}` — o `KeyError: 0` estourava dentro do callback do Tk, que engole a exceção, e o operador via "nada acontece". Novo helper `_contour_area_mm2()` tolerante aos dois formatos (e a contorno inválido, devolvendo 0); removidos os números falsos do fallback (`yield_pct=83.02`, 40 instâncias); a abertura do diálogo agora mostra `messagebox.showerror` em caso de falha. Novo `tests/test_print_layout_abre.py` (5 testes). Validação em harness Tk: diálogo abre, rendimento real 2,43%. 517 testes + 1 skip. | `ui/layout_editor_view.py`, `tests/test_print_layout_abre.py`, `docs/PROJETO_ATOM_JOBMANAGER.md`, `config.py`, `.github/workflows/release.yml` |
 | Ter, 03/11/2026 | 07:20 | DeepSeek | Recompactação da base após retirar as sobras (v1.6.14): o operador relatou que a vaga da peça ímpar virava um buraco na placa de 4 camadas. Novo `_recompact_plate()` chamado nas duas rotas da separação (ponta/faixa e Plano B) reencaixa as peças restantes com `auto_nest_pieces`/`target_pieces`, mantendo os dicionários originais e copiando só posição/rotação (substituir as peças quebrava `piece_matches_shape` quando dois moldes têm o mesmo contorno e revertia a separação); rollback local em divergência. Medição (6 moldes, 101 pares, 4 camadas, placa 1,38 × 2,98 m): buracos 4 → 0, altura 2.424 → 2.271 mm, 4c/2c 300/6 → 294/18, físicas 1.212 = 2P. `tests/test_sobras_dobra.py` ganhou `TestRecompactacaoBase` (3 testes). 512 testes + 1 skip. | `cad/layers_split.py`, `tests/test_sobras_dobra.py`, `docs/PROJETO_ATOM_JOBMANAGER.md`, `config.py`, `.github/workflows/release.yml` |
 | Seg, 02/11/2026 | 23:25 | DeepSeek | Criação manual do atalho via linha de comando (v1.6.13): o operador apagou os atalhos e a sincronização automática só atualizava atalhos existentes. Adicionado `--criar-atalho` (ou `--atalho`) no `main.py`, que força a criação de `corteac-<versão>.desktop` no menu e na Área de Trabalho, remove versões anteriores e imprime os caminhos; `ui/desktop_shortcut.py` ganhou `criar_se_ausente=True` e `_instalar_icone()` (copia o ícone para `~/.local/share/corteac/corteac.png`, pois o PyInstaller guarda os assets no binário). Validado na máquina do operador: `CorteAC-1.6.12` criado em `~/.local/share/applications` e `~/Área de trabalho`, com `Exec=` aspeado e `Icon=` estável. | `ui/desktop_shortcut.py`, `main.py`, `docs/PROJETO_ATOM_JOBMANAGER.md`, `config.py`, `.github/workflows/release.yml` |
