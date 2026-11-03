@@ -273,6 +273,59 @@ def format_shape_id_tag(s_id) -> str:
     return f"  #{sid_str}"
 
 
+def _clamp_tip_zone(tip_zone, sheet_w_mm, sheet_h_mm):
+    """
+    Limita a ponta de 2 camadas aos limites da placa.
+
+    A ponta é calculada sobre a chapa ORIGINAL (ex.: 1,38 × 2,98 m); depois do refile a
+    placa encolhe (ex.: 1,35 × 1,13 m) e a linha azul era desenhada fora do contorno.
+    Devolve (x0, y0, x1, y1) em mm dentro da placa, ou None se não sobrar área útil.
+    """
+    if not tip_zone or len(tip_zone) != 4:
+        return None
+    try:
+        x0, y0, x1, y1 = (float(v) for v in tip_zone)
+    except (TypeError, ValueError):
+        return None
+    w = float(sheet_w_mm or 0.0)
+    h = float(sheet_h_mm or 0.0)
+    if w <= 0 or h <= 0:
+        return None
+    nx0 = min(max(0.0, min(x0, x1)), w)
+    nx1 = min(max(0.0, max(x0, x1)), w)
+    ny0 = min(max(0.0, min(y0, y1)), h)
+    ny1 = min(max(0.0, max(y0, y1)), h)
+    if nx1 - nx0 <= 0.5 or ny1 - ny0 <= 0.5:
+        return None
+    return (nx0, ny0, nx1, ny1)
+
+
+def _desenhar_retangulo_tracejado(draw, box, cor="#2563eb", largura=2, traco=6, vao=4):
+    """Desenha um retângulo com linha TRACEJADA no Pillow (a API não tem dash nativo)."""
+    x0, y0, x1, y1 = (int(round(v)) for v in box)
+
+    def _linha_h(xa, xb, y):
+        passo = traco + vao
+        x = min(xa, xb)
+        fim = max(xa, xb)
+        while x < fim:
+            draw.line([(x, y), (min(x + traco, fim), y)], fill=cor, width=largura)
+            x += passo
+
+    def _linha_v(ya, yb, x):
+        passo = traco + vao
+        y = min(ya, yb)
+        fim = max(ya, yb)
+        while y < fim:
+            draw.line([(x, y), (x, min(y + traco, fim))], fill=cor, width=largura)
+            y += passo
+
+    _linha_h(x0, x1, y0)
+    _linha_h(x0, x1, y1)
+    _linha_v(y0, y1, x0)
+    _linha_v(y0, y1, x1)
+
+
 class LayoutPrintDialog(tk.Toplevel):
     """
     Janela modal de Visualização de Impressão (Print Preview) do Layout Editor.
@@ -1395,12 +1448,9 @@ class LayoutPrintDialog(tk.Toplevel):
                 )
 
         # Ponta de 2 Camadas (Enfesto em Degrau)
-        if getattr(self, "tip_zone", None):
-            x0, y0, x1, y1 = self.tip_zone
-            min_zx = min(x0, x1)
-            max_zx = max(x0, x1)
-            min_zy = min(y0, y1)
-            max_zy = max(y0, y1)
+        _zona = _clamp_tip_zone(getattr(self, "tip_zone", None), self.sheet_w_mm, self.sheet_h_mm)
+        if _zona:
+            min_zx, min_zy, max_zx, max_zy = _zona
 
             sx0 = bed_x + min_zx * bed_scale
             sx1 = bed_x + max_zx * bed_scale
@@ -1802,17 +1852,23 @@ class LayoutPrintDialog(tk.Toplevel):
                 draw.text((cut_sx + int(4 * scale), max(bed_y - int(14 * scale), 4)), f"CORTE LATERAL: {format_m(cut_x)} m", fill="#dc2626", font=f_ruler)
 
         # Ponta de 2 Camadas (Enfesto em Degrau)
-        if getattr(self, "tip_zone", None):
-            x0, y0, x1, y1 = self.tip_zone
-            min_zx, max_zx = min(x0, x1), max(x0, x1)
-            min_zy, max_zy = min(y0, y1), max(y0, y1)
+        _zona = _clamp_tip_zone(getattr(self, "tip_zone", None), self.sheet_w_mm, self.sheet_h_mm)
+        if _zona:
+            min_zx, min_zy, max_zx, max_zy = _zona
             sx0 = bed_x + min_zx * scale_bed
             sx1 = bed_x + max_zx * scale_bed
             sy0 = bed_y + (self.sheet_h_mm - max_zy) * scale_bed
             sy1 = bed_y + (self.sheet_h_mm - min_zy) * scale_bed
 
-            draw.rectangle([sx0, sy0, sx1, sy1], outline="#2563eb", width=max(2, int(1.5 * scale)))
-            draw.text((sx0 + int(4 * scale), sy0 + int(4 * scale)), "2 camadas (ponta)", fill="#2563eb", font=f_small)
+            if sx1 - sx0 > 2 and sy1 - sy0 > 2:
+                _traco = max(4, int(3 * scale))
+                _vao = max(3, int(2 * scale))
+                _larg = max(1, int(0.8 * scale))
+                _desenhar_retangulo_tracejado(
+                    draw, (sx0, sy0, sx1, sy1),
+                    cor="#2563eb", largura=_larg, traco=_traco, vao=_vao
+                )
+                draw.text((sx0 + int(4 * scale), sy0 + int(4 * scale)), "2 camadas (ponta)", fill="#2563eb", font=f_small)
             # Rótulo da área principal de 4 camadas (posicionado para evitar sobreposição com a ponta)
             if sy0 <= bed_y + int(25 * scale):
                 base_lbl_y = bed_y + bed_h - int(16 * scale)

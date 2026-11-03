@@ -4,7 +4,7 @@
 > **Regra de ouro:** o que está marcado `[CONFIRMADO]` veio do relatório, do código ou do usuário. O que está `[NÃO CONFIRMADO]` é suposição e não deve virar "fato" sem validação. O que está `[PREENCHER]` a IA deve completar lendo o código real.
 
 <!-- AUTO:header:start -->
-**Última sincronização com o código:** 2026-11-03 09:16 (HEAD ao gerar: `9e47af8`; 133 arquivos Python, ~65135 linhas)
+**Última sincronização com o código:** 2026-11-03 09:42 (HEAD ao gerar: `5fa8823`; 133 arquivos Python, ~65278 linhas)
 <!-- AUTO:header:end -->
 **Versão deste documento:** 1
 
@@ -479,6 +479,7 @@ ui/units.py                                          # ui/units.py - Formataçã
 
 ### `tests/test_print_metros.py`
 - `class TestImpressaoEmMetros` (linha 17, 6 métodos)
+- `class TestPontaEClamp` (linha 81, 5 métodos): A linha azul da ponta não pode sair da placa (caso do PDF refilado).
 
 ### `tests/test_semver.py`
 - `class TestSemVer` (linha 12, 7 métodos)
@@ -652,8 +653,8 @@ ui/units.py                                          # ui/units.py - Formataçã
 - funções: `_contour_area_mm2`, `_shade_color`, `_contour_key`, `rotate_piece_in_place`
 
 ### `ui/layout_print_dialog.py`
-- `class LayoutPrintDialog` (linha 276, 22 métodos): Janela modal de Visualização de Impressão (Print Preview) do Layout Editor.
-- funções: `get_company_logo_path`, `open_company_logo_dialog`, `format_size`, `extract_molde_base_name`, `format_shape_id_tag`
+- `class LayoutPrintDialog` (linha 329, 22 métodos): Janela modal de Visualização de Impressão (Print Preview) do Layout Editor.
+- funções: `get_company_logo_path`, `open_company_logo_dialog`, `format_size`, `extract_molde_base_name`, `format_shape_id_tag`, `_clamp_tip_zone`, `_desenhar_retangulo_tracejado`
 
 ### `ui/macro_panel.py`
 - `class MacroPanel` (linha 23, 12 métodos): Camada 3: Macro / Aprendizado.
@@ -1570,8 +1571,8 @@ A ordem de corte do `.lay` para a mesa **não pode** ser aleatória:
 | Ctrl+P | `ui/layout_editor_view.py:500` | `self.bind("<Control-P>", lambda e: self.print_layout())` |
 | Ctrl+P | `ui/layout_editor_view.py:710` | `w.bind("<Control-p>", lambda e: (self.print_layout(), "break")[1])` |
 | Ctrl+P | `ui/layout_editor_view.py:711` | `w.bind("<Control-P>", lambda e: (self.print_layout(), "break")[1])` |
-| Ctrl+P | `ui/layout_print_dialog.py:851` | `self.bind("<Control-p>", lambda e: self.do_print())` |
-| Ctrl+P | `ui/layout_print_dialog.py:852` | `self.bind("<Control-P>", lambda e: self.do_print())` |
+| Ctrl+P | `ui/layout_print_dialog.py:904` | `self.bind("<Control-p>", lambda e: self.do_print())` |
+| Ctrl+P | `ui/layout_print_dialog.py:905` | `self.bind("<Control-P>", lambda e: self.do_print())` |
 | Ctrl+P | `ui/main_window.py:87` | `self.bind("<Control-p>", self.handle_ctrl_p)` |
 | Ctrl+P | `ui/main_window.py:88` | `self.bind("<Control-P>", self.handle_ctrl_p)` |
 | Ctrl+P | `ui/session_view.py:1131` | `self.tree_lays.bind("<Control-p>", lambda e: (self.print_current_layout(), "brea` |
@@ -1651,7 +1652,7 @@ A ordem de corte do `.lay` para a mesa **não pode** ser aleatória:
 | Escape | `ui/import_materials_dialog.py:49` | `self.bind("<Escape>", lambda e: self.destroy())` |
 | Escape | `ui/layout_editor_view.py:664` | `self.canvas.bind("<Escape>", self.on_canvas_escape)` |
 | Escape | `ui/layout_editor_view.py:760` | `w.bind("<Escape>", self.cancel_drag)` |
-| Escape | `ui/layout_print_dialog.py:854` | `self.bind("<Escape>", self.on_escape)` |
+| Escape | `ui/layout_print_dialog.py:907` | `self.bind("<Escape>", self.on_escape)` |
 | Escape | `ui/main_window.py:84` | `self.bind("<Escape>", self.exit_fullscreen)` |
 | Escape | `ui/main_window.py:684` | `self.bind_all("<Escape>", self.dismiss_popup_menus, add="+")` |
 | Escape | `ui/main_window.py:3360` | `dialog.bind("<Escape>", lambda e: dialog.destroy())` |
@@ -1666,7 +1667,7 @@ A ordem de corte do `.lay` para a mesa **não pode** ser aleatória:
 | Escape | `ui/trim_layout_dialog.py:77` | `self.bind("<Escape>", lambda e: self.destroy())` |
 | F1 | `ui/layout_editor_view.py:740` | `w.bind("<F1>", self.on_f1_press)` |
 | F1 | `ui/layout_editor_view.py:741` | `w.bind("<Key-F1>", self.on_f1_press)` |
-| F11 | `ui/layout_print_dialog.py:853` | `self.bind("<F11>", self.toggle_fullscreen)` |
+| F11 | `ui/layout_print_dialog.py:906` | `self.bind("<F11>", self.toggle_fullscreen)` |
 | F11 | `ui/main_window.py:83` | `self.bind("<F11>", self.toggle_fullscreen)` |
 | F11 | `ui/shape_editor_view.py:241` | `self.bind("<F11>", self.on_f11_fullscreen)` |
 | F11 | `ui/shape_editor_view.py:242` | `self.canvas.bind("<F11>", self.on_f11_fullscreen)` |
@@ -3177,6 +3178,42 @@ Pedido do operador: "marcar as medidas em metros na impressão, padronizar tudo 
 
 ---
 
+
+## 8.38. Linha da Ponta Fora da Placa e Almoxarifado em Metros (v1.6.17) `[CONFIRMADO]`
+
+Relato do operador: "a correção é no PDF de impressão, arrume a linha azul e coloque a metragem em metros".
+
+### 1. A linha azul vazando da placa
+
+- A `tip_zone` é calculada sobre a chapa **original** (ex.: 1,38 × 2,98 m). Depois do refile a
+  placa encolhe (ex.: 1,35 × 1,13 m) e o retângulo azul era desenhado com as coordenadas antigas,
+  formando uma moldura fora do contorno da chapa.
+- Correções:
+  1. `trim_layout_dict()` (cad/trim_engine.py) agora **limita a `tip_zone`** às novas dimensões
+     logo após o refile; se a ponta foi inteiramente cortada, `tip_zone`/`layers_tip` são removidos.
+  2. Novo `_clamp_tip_zone()` (ui/layout_print_dialog.py), usado pelo canvas e pelo Pillow — protege
+     também sessões antigas já salvas com coordenadas grandes.
+  3. No PDF a borda era **sólida e grossa** (o Pillow não tem traço nativo); novo
+     `_desenhar_retangulo_tracejado()` desenha o tracejado fino igual ao da tela.
+
+### 2. Metragem do almoxarifado em metros
+
+- `format_enfesto_operator_text()` (cad/layers_rule.py) passou a emitir **metros com vírgula** e
+  nunca mais centímetros, com clamp da ponta na chapa:
+
+```
+Antes: Enfesto: 2 folhas longas de 113.02 × 134.67 cm + 2 folhas curtas, SEM cobrir a ponta de 138.00 × 209.57 cm
+Depois: Enfesto: 2 folhas longas de 1,13 × 1,35 m + 2 folhas curtas, SEM cobrir a ponta de 1,35 × 0,33 m
+```
+
+### 3. Testes
+
+`tests/test_print_metros.py` ganhou `TestPontaEClamp` (5 testes): clamp na chapa refilada, ponta
+totalmente cortada é descartada, entradas inválidas devolvem `None`, texto em metros e
+`trim_layout_dict` encolhendo a `tip_zone`. Suíte: **525 testes + 1 skip**.
+
+---
+
 ## 9. Pendências e arquivos faltantes
 
 ### 9.1 Tarefas abertas
@@ -3334,6 +3371,7 @@ Local: `/home/dola/Documentos/clone do job/antigo/arquivos pos instalacao/Common
 <!-- AUTO:gitlog:start -->
 | Commit | Data | Autor | Mensagem |
 |---|---|---|---|
+| `5fa8823` | 2026-11-03 | Doletabgi | feat(print): padroniza todas as medidas da impressao em metros (v1.6.16) |
 | `9e47af8` | 2026-11-03 | Doletabgi | fix(print): Ctrl+P e o icone Imprimir voltam a abrir o dialogo (v1.6.15) |
 | `27210b3` | 2026-11-03 | Doletabgi | fix(sobras): recompacta a base apos retirar as pecas da ponta (v1.6.14) |
 | `e882072` | 2026-11-02 | Doletabgi | feat(cli): --criar-atalho cria o atalho versionado quando nao existe (v1.6.13) |
@@ -3348,7 +3386,6 @@ Local: `/home/dola/Documentos/clone do job/antigo/arquivos pos instalacao/Common
 | `014fc95` | 2026-11-01 | Doletabgi | feat(release): desacoplamento de zoom e selecao de pecas, refile automatico e versao v1.6.1 |
 | `5563fe0` | 2026-10-31 | Doletabgi | feat(release): exclusao de artigos, criacao por clique, tooltips e versao v1.6.0 |
 | `f510f60` | 2026-10-30 | Doletabgi | feat(ui): tooltips com o nome da ferramenta na barra do Layout Editor (v1.5.9) |
-| `29223ea` | 2026-10-30 | Doletabgi | feat(ui): contador Sel na barra de status e Ctrl+clique para selecao (v1.5.8) |
 <!-- AUTO:gitlog:end -->
 
 ---
@@ -3376,6 +3413,7 @@ Local: `/home/dola/Documentos/clone do job/antigo/arquivos pos instalacao/Common
 | Seg, 02/11/2026 | 18:00 | Antigravity | Blindagem da persistência de dados das sessões e eliminação de contaminação de moldes (Sessão #188): (1) Imutabilidade estrita na leitura: `SessionView.load_session` tornado 100% somente-leitura no banco, eliminando chamadas a `update_session` e configurando `persist=False` para chamadas a `set_gap_mm` e `set_margins` disparadas no carregamento; (2) Detecção e poda automática de moldes fantasmas em sessões já calculadas (moldes no JSON sem nenhuma peça física posicionada nos layouts); (3) Remoção do fallback artificial `pairs = 16` em `SessionView.set_shapes_data`, preservando os valores numéricos reais ou nulos; (4) Eliminação da contaminação pelo catálogo global (`self.current_shapes`) em `MainWindow._poll_nest_worker`, `clear_session_nesting` e `_ensure_separated_sobras_before_export`, garantindo que os cálculos e persistência manipulem apenas os moldes legítimos da sessão ativa com seus pares originais; (5) Sanitização profunda em `database.py` (`_sanitize_session_shapes`, `update_session_shapes` e `update_session`) blindando e preservando campos críticos (`pairs`, `sequence`, `rest`, `resto`, `target_pieces`); (6) Utilitário `tools/scrub_all_sessions_shapes.py` criado e executado com sucesso, higienizando sessões corrompidas no banco de dados e recuperando a grade de 15 moldes reais da Sessão #188; (7) Nova suíte de testes `tests/test_data_integrity.py` com 5 testes rigorosos cobrindo imutabilidade de load, preservação de pares, isolamento de catálogo e poda de fantasmas. | `database.py`, `ui/session_view.py`, `ui/main_window.py`, `tools/scrub_all_sessions_shapes.py`, `tests/test_data_integrity.py`, `docs/PROJETO_ATOM_JOBMANAGER.md` |
 | Seg, 02/11/2026 | 19:15 | Antigravity | Implantação da Ponta de 2 Camadas no topo da última placa (`tip_zone`) e visualização CAM no Layout Editor: (1) Reescrita do motor `_nest_sobras_on_last_sheet` em `cad/layers_split.py` com posicionamento forçado das sobras de 2 camadas no topo (maior Y) da última placa com modos `canto` e `faixa_topo` e folga de ponta de segurança (`folga_ponta`, default 15.0 mm); (2) Armazenamento estruturado de metadados `tip_zone` no dicionário do layout (`xmin`, `ymin`, `xmax`, `ymax`, `mode`, `pieces_count`); (3) Visualização no Layout Editor (`ui/layout_editor_view.py`) com linha divisória tracejada (`tip_line`), badge e rótulo indicativo `"Ponta 2 Camadas: X peças"` orientando o operador; (4) Integração com SessionView mantendo resto zero efetivo e testes unitários em `tests/test_layers_tip.py`. | `cad/layers_split.py`, `ui/layout_editor_view.py`, `ui/session_view.py`, `tests/test_layers_tip.py`, `docs/PROJETO_ATOM_JOBMANAGER.md` |
 | Seg, 02/11/2026 | 19:45 | Antigravity | Instruções explícitas de corte e enfesto misto do almoxarifado na Impressão A4 (`LayoutPrintDialog`): (1) Função `format_enfesto_operator_text` em `cad/layers_rule.py` gerando texto claro e padronizado especificando quantidade e metragem de folhas de comprimento total e folhas de ponta (ex: `CORTAR: X folhas de COMPRIMENTO TOTAL (Y mm) [4 camadas] + Y folhas de PONTA (Z mm) [2 camadas]`); (2) Renderização visual da delimitação da zona de ponta (`tip_zone`) no preview A4 (canvas Tkinter) e na exportação física/PDF de alta resolução via Pillow; (3) Exibição destacada das instruções operacionais no cabeçalho/metadados da página para conferência no almoxarifado antes do desenrolar do material; (4) Testes em `tests/test_layout_print_legend.py`. | `cad/layers_rule.py`, `ui/layout_print_dialog.py`, `tests/test_layout_print_legend.py`, `docs/PROJETO_ATOM_JOBMANAGER.md` |
+| Ter, 03/11/2026 | 10:10 | DeepSeek | Linha azul da ponta fora da placa e metragem do almoxarifado em metros (v1.6.17): a `tip_zone` é calculada na chapa original (1,38 × 2,98) mas o PDF sai refilado (1,35 × 1,13), então o retângulo azul era desenhado fora do contorno e em traço sólido grosso (Pillow sem dash). `trim_layout_dict()` agora limita a `tip_zone` às novas dimensões (removendo-a se a ponta foi cortada), novo `_clamp_tip_zone()` protege sessões antigas no canvas e no Pillow, e `_desenhar_retangulo_tracejado()` desenha o tracejado fino no PDF. `format_enfesto_operator_text()` agora emite metros com vírgula ("2 folhas longas de 1,13 × 1,35 m + ... SEM cobrir a ponta de 1,35 × 0,33 m") com clamp na chapa. `tests/test_print_metros.py` ganhou `TestPontaEClamp` (5 testes). 525 testes + 1 skip. | `cad/trim_engine.py`, `cad/layers_rule.py`, `ui/layout_print_dialog.py`, `tests/test_print_metros.py`, `docs/PROJETO_ATOM_JOBMANAGER.md`, `config.py`, `.github/workflows/release.yml` |
 | Ter, 03/11/2026 | 09:40 | DeepSeek | Impressão padronizada em metros (v1.6.16): o cabeçalho mostrava "113.02 X 134.67 cm (1.13 X 1.35 M)" e a régua numerava em centímetros. Agora `print_layout()` usa `format_dim_mm()` (metros com vírgula: "1,38 x 2,98 m") e a régua do diálogo e da exportação Pillow/PDF usa `format_m(coord, 1)` → "0,1 / 0,2 / ...", mantendo a grade de 100 mm; defaults do diálogo atualizados. Testes: `test_print_preview_contains_grid_and_labels_in_meters` (antes checava cm), novo `tests/test_print_metros.py` (3 testes) e validação de `dimensions_str` em `test_print_layout_abre.py`. 520 testes + 1 skip. | `ui/layout_print_dialog.py`, `ui/layout_editor_view.py`, `tests/test_print_metros.py`, `tests/test_layout_editor_shortcuts.py`, `tests/test_print_layout_abre.py`, `docs/PROJETO_ATOM_JOBMANAGER.md`, `config.py`, `.github/workflows/release.yml` |
 | Ter, 03/11/2026 | 07:45 | DeepSeek | Impressão do layout não abria (Ctrl+P e ícone) (v1.6.15): `LayoutEditorView.print_layout()` lia o contorno como tupla (`cntr[i][0]`), mas o editor usa dict `{"x","y"}` — o `KeyError: 0` estourava dentro do callback do Tk, que engole a exceção, e o operador via "nada acontece". Novo helper `_contour_area_mm2()` tolerante aos dois formatos (e a contorno inválido, devolvendo 0); removidos os números falsos do fallback (`yield_pct=83.02`, 40 instâncias); a abertura do diálogo agora mostra `messagebox.showerror` em caso de falha. Novo `tests/test_print_layout_abre.py` (5 testes). Validação em harness Tk: diálogo abre, rendimento real 2,43%. 517 testes + 1 skip. | `ui/layout_editor_view.py`, `tests/test_print_layout_abre.py`, `docs/PROJETO_ATOM_JOBMANAGER.md`, `config.py`, `.github/workflows/release.yml` |
 | Ter, 03/11/2026 | 07:20 | DeepSeek | Recompactação da base após retirar as sobras (v1.6.14): o operador relatou que a vaga da peça ímpar virava um buraco na placa de 4 camadas. Novo `_recompact_plate()` chamado nas duas rotas da separação (ponta/faixa e Plano B) reencaixa as peças restantes com `auto_nest_pieces`/`target_pieces`, mantendo os dicionários originais e copiando só posição/rotação (substituir as peças quebrava `piece_matches_shape` quando dois moldes têm o mesmo contorno e revertia a separação); rollback local em divergência. Medição (6 moldes, 101 pares, 4 camadas, placa 1,38 × 2,98 m): buracos 4 → 0, altura 2.424 → 2.271 mm, 4c/2c 300/6 → 294/18, físicas 1.212 = 2P. `tests/test_sobras_dobra.py` ganhou `TestRecompactacaoBase` (3 testes). 512 testes + 1 skip. | `cad/layers_split.py`, `tests/test_sobras_dobra.py`, `docs/PROJETO_ATOM_JOBMANAGER.md`, `config.py`, `.github/workflows/release.yml` |

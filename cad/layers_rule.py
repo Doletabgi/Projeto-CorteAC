@@ -142,11 +142,13 @@ def format_enfesto_operator_text(
     """
     Gera o texto oficial de instrução de enfesto para o operador no Editor e na impressão A4.
     
+    Todas as medidas saem em METROS com vírgula decimal (padrão do operador).
+
     Exemplo Canto:
-    "Enfesto: 2 folhas longas de 299,00 × 138,00 cm + 2 folhas curtas, SEM cobrir a ponta de 50,00 × 30,00 cm no canto final"
-    
+    "Enfesto: 2 folhas longas de 2,99 × 1,38 m + 2 folhas curtas, SEM cobrir a ponta de 0,50 × 0,30 m no canto final"
+
     Exemplo Faixa:
-    "Enfesto: 2 folhas longas de 299,00 × 138,00 cm + 2 folhas curtas de 138,00 × 269,00 cm"
+    "Enfesto: 2 folhas longas de 2,99 × 1,38 m + 2 folhas curtas de 1,38 × 2,69 m"
     """
     tip_zone = None
     layers = 4
@@ -168,36 +170,42 @@ def format_enfesto_operator_text(
     w_val = float(sheet_w or 1380.0)
     h_val = float(sheet_h or 2990.0)
 
-    # NNN = comprimento/altura da placa (Y), LLL = largura da placa (X) em cm
-    nnn_cm = h_val / 10.0
-    lll_cm = w_val / 10.0
+    def _m(mm: float) -> str:
+        """Milímetros -> metros com vírgula decimal (ex.: 1380 -> '1,38')."""
+        return f"{float(mm) / 1000.0:.2f}".replace(".", ",")
+
+    # NNN = comprimento/altura da placa (Y), LLL = largura da placa (X), sempre em metros
+    nnn = _m(h_val)
+    lll = _m(w_val)
 
     if not tip_zone:
         cam_suf = "camada" if layers == 1 else "camadas"
-        return f"Enfesto: {layers} {cam_suf} ({nnn_cm:.2f} × {lll_cm:.2f} cm)"
+        return f"Enfesto: {layers} {cam_suf} ({nnn} × {lll} m)"
 
     x0, y0, x1, y1 = tip_zone
     min_x, max_x = min(x0, x1), max(x0, x1)
     min_y, max_y = min(y0, y1), max(y0, y1)
 
-    l_ponta_cm = (max_x - min_x) / 10.0
-    a_ponta_cm = (max_y - min_y) / 10.0
-    x0_cm = min_x / 10.0
-    y0_cm = min_y / 10.0
+    # A ponta nunca pode passar da chapa (após refile a placa encolhe)
+    min_x, max_x = max(0.0, min_x), min(w_val, max_x)
+    min_y, max_y = max(0.0, min_y), min(h_val, max_y)
+
+    l_ponta = _m(max_x - min_x)
+    a_ponta = _m(max_y - min_y)
+    y0_m = _m(min_y)
 
     # Modo faixa: x0 = 0 e a ponta cobre toda a largura
     is_faixa = (tip_mode == "faixa") or (abs(min_x) < 1.0 and abs(max_x - w_val) < 5.0)
 
     if is_faixa:
         return (
-            f"Enfesto: 2 folhas longas de {nnn_cm:.2f} × {lll_cm:.2f} cm + "
-            f"2 folhas curtas de {lll_cm:.2f} × {y0_cm:.2f} cm, SEM cobrir a ponta de {lll_cm:.2f} × {a_ponta_cm:.2f} cm"
+            f"Enfesto: 2 folhas longas de {nnn} × {lll} m + "
+            f"2 folhas curtas de {lll} × {y0_m} m, SEM cobrir a ponta de {lll} × {a_ponta} m"
         )
-    else:
-        return (
-            f"Enfesto: 2 folhas longas de {nnn_cm:.2f} × {lll_cm:.2f} cm + 2 folhas curtas, "
-            f"SEM cobrir a ponta de {l_ponta_cm:.2f} × {a_ponta_cm:.2f} cm no canto final"
-        )
+    return (
+        f"Enfesto: 2 folhas longas de {nnn} × {lll} m + 2 folhas curtas, "
+        f"SEM cobrir a ponta de {l_ponta} × {a_ponta} m no canto final"
+    )
 
 
 

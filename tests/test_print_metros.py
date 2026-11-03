@@ -76,3 +76,62 @@ class TestImpressaoEmMetros(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestPontaEClamp(unittest.TestCase):
+    """A linha azul da ponta não pode sair da placa (caso do PDF refilado)."""
+
+    def test_clamp_limita_a_chapa_refilada(self):
+        from ui.layout_print_dialog import _clamp_tip_zone
+
+        # ponta calculada na chapa original 1,38 x 2,98; placa refilada 1,35 x 1,13
+        z = _clamp_tip_zone([0.0, 800.0, 1380.0, 2980.0], 1350.0, 1130.0)
+        self.assertIsNotNone(z)
+        x0, y0, x1, y1 = z
+        self.assertGreaterEqual(x0, 0.0)
+        self.assertGreaterEqual(y0, 0.0)
+        self.assertLessEqual(x1, 1350.0)
+        self.assertLessEqual(y1, 1130.0)
+        self.assertAlmostEqual(y0, 800.0)
+        self.assertAlmostEqual(y1, 1130.0)
+
+    def test_clamp_descarta_ponta_cortada_pelo_refile(self):
+        from ui.layout_print_dialog import _clamp_tip_zone
+
+        # ponta inteira acima da nova altura da placa -> nada a desenhar
+        self.assertIsNone(_clamp_tip_zone([0.0, 1500.0, 1380.0, 2980.0], 1350.0, 1130.0))
+
+    def test_clamp_aceita_entradas_invalidas(self):
+        from ui.layout_print_dialog import _clamp_tip_zone
+
+        for ruim in (None, [], [1, 2, 3], "abc", [0, 0, 0, 0]):
+            self.assertIsNone(_clamp_tip_zone(ruim, 1350.0, 1130.0))
+
+    def test_texto_almoxarifado_em_metros(self):
+        from cad.layers_rule import format_enfesto_operator_text
+
+        texto = format_enfesto_operator_text(
+            {"tip_zone": [0.0, 800.0, 1380.0, 2980.0], "layers": 4,
+             "width_mm": 1350.0, "height_mm": 1130.0},
+            tip_mode="faixa",
+        )
+        self.assertIn(" m", texto)
+        self.assertNotIn("cm", texto)
+        self.assertIn("1,35", texto)
+        self.assertIn("0,33", texto)   # altura da ponta após o clamp
+
+    def test_trim_engine_encolhe_tip_zone_no_refile(self):
+        from cad.trim_engine import trim_layout_dict
+
+        pecas = [
+            {"id": 1, "name": "A", "size": "31a", "x": 10.0, "y": 10.0, "rotation": 0.0,
+             "contour": [{"x": 0, "y": 0}, {"x": 200.0, "y": 0}, {"x": 200.0, "y": 900.0}, {"x": 0, "y": 900.0}]},
+        ]
+        layout = {"width_mm": 1380.0, "height_mm": 2980.0, "pieces": pecas,
+                  "tip_zone": [0.0, 800.0, 1380.0, 2980.0], "layers_tip": 2}
+        trim_layout_dict(layout, gap_mm=1.0)
+        tz = layout.get("tip_zone")
+        self.assertIsNotNone(tz, f"tip_zone removida; layout={ {k: layout[k] for k in ('width_mm','height_mm')} }")
+        self.assertGreater(tz[3], tz[1])
+        self.assertLessEqual(tz[3], layout["height_mm"] + 0.01)
+        self.assertLessEqual(tz[2], layout["width_mm"] + 0.01)
