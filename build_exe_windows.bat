@@ -29,3 +29,8 @@ echo   Compilacao concluida com sucesso!
 echo   Executavel gerado em: dist\CorteAC.exe
 echo ========================================================
 pause
+
+REM Copia o criador de atalho versionado para a pasta do executavel
+if exist "packaging\criar_atalho_windows.ps1" copy /Y "packaging\criar_atalho_windows.ps1" "dist\" >nul
+python -c "import config; open('dist/versao.txt','w').write(config.APP_VERSION)" 2>nul
+echo Atalho versionado: dist\criar_atalho_windows.ps1 (gera CorteAC-<versao>.lnk)

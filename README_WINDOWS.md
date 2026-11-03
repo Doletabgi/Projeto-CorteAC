@@ -65,3 +65,13 @@ release. O atalho da Área de Trabalho herda esse ícone automaticamente **quand
 do .exe**. Se você substituiu o `.exe` na mesma pasta, o Windows mantém o ícone antigo em cache:
 para atualizar, crie um atalho novo (botão direito no `CorteAC.exe` → Enviar para → Área de
 Trabalho) ou reinicie o Explorer (`taskkill /f /im explorer.exe && start explorer`).
+
+## Atalho versionado na Área de Trabalho
+
+O pacote Windows traz `criar_atalho_windows.ps1` e `versao.txt`. Clique com o botão direito no
+`criar_atalho_windows.ps1` → **Executar com PowerShell** (ou
+`powershell -ExecutionPolicy Bypass -File .\criar_atalho_windows.ps1`).
+
+Ele cria o atalho **`CorteAC-<versão>.lnk`** (ex.: `CorteAC-1.6.11.lnk`) apontando para o
+`CorteAC.exe`, usando o ícone embutido no executável, e **remove os atalhos antigos** do CorteAC
+da Área de Trabalho. Assim o operador sempre sabe qual build está instalado.

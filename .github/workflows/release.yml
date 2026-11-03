@@ -9,7 +9,7 @@ on:
       tag_name:
         description: 'Tag de versão SemVer (ex: v1.0.0)'
         required: false
-        default: 'v1.6.10'
+        default: 'v1.6.11'
 
 permissions:
   contents: write
@@ -52,6 +52,9 @@ jobs:
           Copy-Item "dist\CorteAC.exe" -Destination "dist_package\CorteAC\"
           Copy-Item "README_WINDOWS.txt" -Destination "dist_package\CorteAC\"
           Copy-Item "db.example.ini" -Destination "dist_package\CorteAC\"
+          Copy-Item "packaging\criar_atalho_windows.ps1" -Destination "dist_package\CorteAC\"
+          python -c "import config; open('dist_package/CorteAC/versao.txt','w').write(config.APP_VERSION)"
+          python -c "import config; open('versao.txt','w').write(config.APP_VERSION)"
           Compress-Archive -Path "dist_package\CorteAC\*" -DestinationPath "dist\CorteAC-Windows-x64.zip"
 
       - name: Upload Artefatos Windows
@@ -97,28 +100,8 @@ jobs:
           cp run.sh dist_linux/CorteAC/
           cp db.example.ini dist_linux/CorteAC/
           cp assets/app_icon.png dist_linux/CorteAC/corteac.png
-          cat > dist_linux/CorteAC/instalar_atalho.sh <<'ATALHO'
-          #!/usr/bin/env bash
-          set -e
-          DIR="$(cd "$(dirname "$0")" && pwd)"
-          APPS="$HOME/.local/share/applications"
-          mkdir -p "$APPS"
-          cat > "$APPS/corteac.desktop" <<ENTRY
-          [Desktop Entry]
-          Type=Application
-          Name=CorteAC
-          Comment=JobManager 2000 Reborn
-          Exec="$DIR/corteac_linux"
-          Path=$DIR
-          Icon=$DIR/corteac.png
-          Terminal=false
-          Categories=Graphics;Engineering;
-          ENTRY
-          chmod +x "$APPS/corteac.desktop"
-          DESKTOP_DIR="$(xdg-user-dir DESKTOP 2>/dev/null || echo "$HOME/Desktop")"
-          [ -d "$DESKTOP_DIR" ] && cp "$APPS/corteac.desktop" "$DESKTOP_DIR/" && chmod +x "$DESKTOP_DIR/corteac.desktop"
-          echo "Atalho instalado com icone: $DIR/corteac.png"
-          ATALHO
+          VERSAO_APP="$(python3 -c "import config; print(config.APP_VERSION)")"
+          sed "s/@VERSAO@/${VERSAO_APP}/g" packaging/instalar_atalho.sh > dist_linux/CorteAC/instalar_atalho.sh
           chmod +x dist_linux/CorteAC/corteac_linux dist_linux/CorteAC/run.sh dist_linux/CorteAC/instalar_atalho.sh
           tar -czf dist/CorteAC-Linux-x64.tar.gz -C dist_linux CorteAC
 
@@ -206,7 +189,13 @@ jobs:
 
             ---
 
-            ### 🛠️ Recursos Incluídos Nesta Versão (v1.6.10):
+            ### 🛠️ Recursos Incluídos Nesta Versão (v1.6.11):
+            - **Atalho da Área de Trabalho com a versão no nome (ex.: `CorteAC-1.6.11`)**:
+              - Linux: `instalar_atalho.sh` gera `corteac-<versão>.desktop` com o nome versionado, o ícone do pacote e remove automaticamente o atalho da versão anterior.
+              - Windows: `criar_atalho_windows.ps1` (incluído no ZIP junto com `versao.txt`) cria `CorteAC-<versão>.lnk` usando o ícone do `.exe` e limpa os atalhos antigos.
+              - A versão vem do próprio executável (`--version`) e do `config.APP_VERSION`, então acompanha cada release sem ajuste manual.
+              - **507 testes automatizados** (506 passando, 1 skip, 0 falhas).
+            - **Novidades da v1.6.10 (mantidas)**: caminho com espaços no atalho, ícone do pacote.
             - **Atalho da Área de Trabalho funcionando mesmo com espaços no caminho**:
               - O `Exec=` do atalho agora é aspeado; antes, pastas como "clone do job" impediam o atalho de abrir.
               - Validado executando o comando do próprio atalho no pacote extraído.

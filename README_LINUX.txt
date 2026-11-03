@@ -13,8 +13,9 @@ COMO EXECUTAR NO LINUX:
 ATALHO COM ICONE NA AREA DE TRABALHO (OPCIONAL):
 1. Dê permissão e execute:
    chmod +x ./instalar_atalho.sh && ./instalar_atalho.sh
-2. Isso cria "CorteAC" no menu de aplicativos e na área de trabalho,
-   apontando para ESTA pasta e usando o ícone corteac.png.
+2. Isso cria o atalho "CorteAC-<versão>" (ex.: CorteAC-1.6.11) no menu de
+   aplicativos e na área de trabalho, apontando para ESTA pasta, usando o
+   ícone corteac.png e removendo os atalhos de versões anteriores.
 3. Se o ícone não atualizar na hora, saia e entre na sessão (ou rode
    "gtk-update-icon-cache"), pois o ambiente guarda o ícone em cache.
 

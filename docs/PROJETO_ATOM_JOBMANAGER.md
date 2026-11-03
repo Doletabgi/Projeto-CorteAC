@@ -4,7 +4,7 @@
 > **Regra de ouro:** o que está marcado `[CONFIRMADO]` veio do relatório, do código ou do usuário. O que está `[NÃO CONFIRMADO]` é suposição e não deve virar "fato" sem validação. O que está `[PREENCHER]` a IA deve completar lendo o código real.
 
 <!-- AUTO:header:start -->
-**Última sincronização com o código:** 2026-11-02 21:35 (HEAD ao gerar: `8cdca5d`; 129 arquivos Python, ~64361 linhas)
+**Última sincronização com o código:** 2026-11-02 21:43 (HEAD ao gerar: `3e83a15`; 130 arquivos Python, ~64465 linhas)
 <!-- AUTO:header:end -->
 **Versão deste documento:** 1
 
@@ -135,6 +135,7 @@ docs/fases/RELATORIO_IMPLEMENTACAO_MELHORIAS.md
 docs/fases/RELATORIO_REVERSA_COMELZ_ONX.md
 docs/fases/RELATORIO_SISTEMA_COMPLETO.md
 docs/ref/layout_re/help_topics.json
+packaging/instalar_atalho.sh
 tests/_catalog_fixtures.py                           # tests/_catalog_fixtures.py
 tests/conftest.py                                    # tests/conftest.py
 tests/test_auto_trim_checkbox.py                     # Testes Unitários: Checkbox de Refile Automático e Recorte Pós-Nesting (test_auto_trim_checkbox.py)
@@ -144,6 +145,7 @@ tests/test_create_session_left_click.py              # Testes Unitários: Criaç
 tests/test_data_integrity.py                         # tests/test_data_integrity.py
 tests/test_db_layer.py                               # Testes Unitários da Camada de Banco de Dados Central (MySQL 8.0 & SQLite Reserva)
 tests/test_delete_order.py
+tests/test_desktop_shortcut.py                       # tests/test_desktop_shortcut.py
 tests/test_dual_exporter.py                          # JobManager 2000 (Python Edition)
 tests/test_exporter_tsp.py                           # tests/test_exporter_tsp.py
 tests/test_lay_parser.py                             # Testes Unitários para o Parser e Gerador de Arquivos .lay (ATOM $$LAYOUT.v3$$)
@@ -372,6 +374,9 @@ ui/units.py                                          # ui/units.py - Formataçã
 - `class DummyBtn` (linha 12, 1 métodos)
 - `class FakeMain` (linha 16, 7 métodos)
 - `class TestDeleteOrderAndArticle` (linha 56, 8 métodos)
+
+### `tests/test_desktop_shortcut.py`
+- `class TestDesktopShortcut` (linha 20, 6 métodos)
 
 ### `tests/test_dual_exporter.py`
 - `class TestCZLIB` (linha 22, 4 métodos): Validação do container de compressão CZLIB da Comelz.
@@ -2922,6 +2927,41 @@ se o ambiente tiver cache, sair/entrar na sessão resolve.
 
 ---
 
+
+## 8.32. Atalho da Área de Trabalho com a Versão no Nome (v1.6.11) `[CONFIRMADO]`
+
+Pedido do operador: a cada atualização, o ícone da Área de Trabalho deve mostrar a versão
+(`CorteAC-1.6.11`), automaticamente.
+
+### 1. Template único de atalho
+
+- Novo `packaging/instalar_atalho.sh` com o marcador de versão, usado **tanto** pelo
+  `build_linux.sh` **quanto** pelo CI (`release.yml`): o empacotamento faz
+  `sed "s/@VERSAO@/<APP_VERSION>/"` (lendo `config.APP_VERSION`).
+- Ao rodar, o instalador:
+  1. descobre a versão **perguntando ao próprio binário** (`./corteac_linux --version`) e cai no
+     valor gravado no pacote se o binário não responder;
+  2. remove os atalhos antigos (`corteac.desktop`, `corteac-*.desktop`, `CorteAC*.desktop`) do
+     menu e da Área de Trabalho — nunca ficam dois ícones;
+  3. cria `corteac-<versão>.desktop` com `Name=CorteAC-<versão>`, `Exec=` **aspeado** (caminho
+     pode conter espaços), `Icon=` do pacote, `X-CorteAC-Version=<versão>` e cópia na Área de
+     Trabalho.
+
+### 2. Windows
+
+- Novo `packaging/criar_atalho_windows.ps1`, incluído no ZIP (CI e `build_exe_windows.bat`) junto
+  com `versao.txt` gerado de `config.APP_VERSION`.
+- Cria `CorteAC-<versão>.lnk` apontando para o `CorteAC.exe` (ícone embutido) e remove os atalhos
+  `CorteAC*.lnk` antigos da Área de Trabalho.
+
+### 3. Testes
+
+`tests/test_desktop_shortcut.py` (3 testes, Linux): atalho sai com a versão no nome e no conteúdo;
+a versão é lida do binário quando disponível; a versão anterior é removida ao atualizar.
+Suíte: **507 testes + 1 skip**.
+
+---
+
 ## 9. Pendências e arquivos faltantes
 
 ### 9.1 Tarefas abertas
@@ -3079,6 +3119,7 @@ Local: `/home/dola/Documentos/clone do job/antigo/arquivos pos instalacao/Common
 <!-- AUTO:gitlog:start -->
 | Commit | Data | Autor | Mensagem |
 |---|---|---|---|
+| `3e83a15` | 2026-11-02 | Doletabgi | fix(packaging): atalho da area de trabalho com caminhos contendo espacos (v1.6.10) |
 | `8cdca5d` | 2026-11-02 | Doletabgi | feat(packaging): icone do app e atalho da area de trabalho no pacote Linux (v1.6.9) |
 | `5001039` | 2026-11-02 | Doletabgi | feat(sobras): dobra 4c->2c, divisao automatica e contadores por enfesto (v1.6.8) |
 | `2048256` | 2026-11-02 | Doletabgi | feat(sobras): ponta de 2 camadas com encaixe compacto e testes de regressao (v1.6.7) |
@@ -3093,7 +3134,6 @@ Local: `/home/dola/Documentos/clone do job/antigo/arquivos pos instalacao/Common
 | `840db6a` | 2026-10-30 | Doletabgi | feat(ui): bump magnetico interativo com mouse e auditoria do editor (v1.5.5) |
 | `c78190d` | 2026-10-30 | Doletabgi | fix(cad): cache de transformacao validava identidade reciclada (v1.5.4) |
 | `d4dbdc6` | 2026-10-30 | Doletabgi | fix(ui): leitura continua do encaixe no editor (v1.5.3) |
-| `49a5391` | 2026-10-30 | Doletabgi | fix(ui): editor reabria sem a placa cinza/grade apos limpar layout (v1.5.2) |
 <!-- AUTO:gitlog:end -->
 
 ---
@@ -3121,6 +3161,7 @@ Local: `/home/dola/Documentos/clone do job/antigo/arquivos pos instalacao/Common
 | Seg, 02/11/2026 | 18:00 | Antigravity | Blindagem da persistência de dados das sessões e eliminação de contaminação de moldes (Sessão #188): (1) Imutabilidade estrita na leitura: `SessionView.load_session` tornado 100% somente-leitura no banco, eliminando chamadas a `update_session` e configurando `persist=False` para chamadas a `set_gap_mm` e `set_margins` disparadas no carregamento; (2) Detecção e poda automática de moldes fantasmas em sessões já calculadas (moldes no JSON sem nenhuma peça física posicionada nos layouts); (3) Remoção do fallback artificial `pairs = 16` em `SessionView.set_shapes_data`, preservando os valores numéricos reais ou nulos; (4) Eliminação da contaminação pelo catálogo global (`self.current_shapes`) em `MainWindow._poll_nest_worker`, `clear_session_nesting` e `_ensure_separated_sobras_before_export`, garantindo que os cálculos e persistência manipulem apenas os moldes legítimos da sessão ativa com seus pares originais; (5) Sanitização profunda em `database.py` (`_sanitize_session_shapes`, `update_session_shapes` e `update_session`) blindando e preservando campos críticos (`pairs`, `sequence`, `rest`, `resto`, `target_pieces`); (6) Utilitário `tools/scrub_all_sessions_shapes.py` criado e executado com sucesso, higienizando sessões corrompidas no banco de dados e recuperando a grade de 15 moldes reais da Sessão #188; (7) Nova suíte de testes `tests/test_data_integrity.py` com 5 testes rigorosos cobrindo imutabilidade de load, preservação de pares, isolamento de catálogo e poda de fantasmas. | `database.py`, `ui/session_view.py`, `ui/main_window.py`, `tools/scrub_all_sessions_shapes.py`, `tests/test_data_integrity.py`, `docs/PROJETO_ATOM_JOBMANAGER.md` |
 | Seg, 02/11/2026 | 19:15 | Antigravity | Implantação da Ponta de 2 Camadas no topo da última placa (`tip_zone`) e visualização CAM no Layout Editor: (1) Reescrita do motor `_nest_sobras_on_last_sheet` em `cad/layers_split.py` com posicionamento forçado das sobras de 2 camadas no topo (maior Y) da última placa com modos `canto` e `faixa_topo` e folga de ponta de segurança (`folga_ponta`, default 15.0 mm); (2) Armazenamento estruturado de metadados `tip_zone` no dicionário do layout (`xmin`, `ymin`, `xmax`, `ymax`, `mode`, `pieces_count`); (3) Visualização no Layout Editor (`ui/layout_editor_view.py`) com linha divisória tracejada (`tip_line`), badge e rótulo indicativo `"Ponta 2 Camadas: X peças"` orientando o operador; (4) Integração com SessionView mantendo resto zero efetivo e testes unitários em `tests/test_layers_tip.py`. | `cad/layers_split.py`, `ui/layout_editor_view.py`, `ui/session_view.py`, `tests/test_layers_tip.py`, `docs/PROJETO_ATOM_JOBMANAGER.md` |
 | Seg, 02/11/2026 | 19:45 | Antigravity | Instruções explícitas de corte e enfesto misto do almoxarifado na Impressão A4 (`LayoutPrintDialog`): (1) Função `format_enfesto_operator_text` em `cad/layers_rule.py` gerando texto claro e padronizado especificando quantidade e metragem de folhas de comprimento total e folhas de ponta (ex: `CORTAR: X folhas de COMPRIMENTO TOTAL (Y mm) [4 camadas] + Y folhas de PONTA (Z mm) [2 camadas]`); (2) Renderização visual da delimitação da zona de ponta (`tip_zone`) no preview A4 (canvas Tkinter) e na exportação física/PDF de alta resolução via Pillow; (3) Exibição destacada das instruções operacionais no cabeçalho/metadados da página para conferência no almoxarifado antes do desenrolar do material; (4) Testes em `tests/test_layout_print_legend.py`. | `cad/layers_rule.py`, `ui/layout_print_dialog.py`, `tests/test_layout_print_legend.py`, `docs/PROJETO_ATOM_JOBMANAGER.md` |
+| Seg, 02/11/2026 | 22:40 | DeepSeek | Atalho da Área de Trabalho com a versão no nome (v1.6.11): novo template único `packaging/instalar_atalho.sh` (usado pelo `build_linux.sh` e pelo CI via `sed` do `config.APP_VERSION`) que cria `corteac-<versão>.desktop` com `Name=CorteAC-<versão>`, `Exec=` aspeado, `Icon=` do pacote e `X-CorteAC-Version`, removendo os atalhos antigos (`corteac.desktop`, `corteac-*.desktop`); a versão é obtida preferencialmente perguntando ao próprio binário (`--version`). No Windows, novo `packaging/criar_atalho_windows.ps1` + `versao.txt` no ZIP (CI e `build_exe_windows.bat`) criando `CorteAC-<versão>.lnk` e removendo os atalhos antigos. `README_LINUX.txt`/`README_WINDOWS.md` atualizados. Novo `tests/test_desktop_shortcut.py` (3 testes). 507 testes + 1 skip. | `packaging/instalar_atalho.sh`, `packaging/criar_atalho_windows.ps1`, `build_linux.sh`, `build_exe_windows.bat`, `.github/workflows/release.yml`, `README_LINUX.txt`, `README_WINDOWS.md`, `tests/test_desktop_shortcut.py`, `docs/PROJETO_ATOM_JOBMANAGER.md`, `config.py` |
 | Seg, 02/11/2026 | 22:20 | DeepSeek | Atalho da área de trabalho com caminhos contendo espaços (v1.6.10): o `Exec=` gerado pelo `instalar_atalho.sh` (e pelo pacote do CI) passou a ser aspeado (`Exec="$DIR/corteac_linux"`); sem as aspas, pastas como "clone do job" faziam o atalho não abrir. Validado executando o comando do próprio `Exec=` a partir do pacote extraído (retornou `CorteAC 1.6.10`), com `Icon=` apontando para o `corteac.png` do pacote e cópia do atalho para a Área de Trabalho. | `build_linux.sh`, `.github/workflows/release.yml`, `docs/PROJETO_ATOM_JOBMANAGER.md`, `config.py` |
 | Seg, 02/11/2026 | 22:00 | DeepSeek | Ícone do aplicativo e atalho da área de trabalho (v1.6.9): auditoria confirmou que o ícone da JANELA (iconphoto/iconbitmap) e o ícone EMBUTIDO no `CorteAC.exe` (PyInstaller `--icon assets/app_icon.ico`) já são atualizados em toda release, mas NÃO existia atalho de área de trabalho (nenhum `.desktop`). O pacote Linux passou a incluir `corteac.png` e `instalar_atalho.sh`, que gera `~/.local/share/applications/corteac.desktop` com caminho absoluto, `Icon=` do pacote, `Path=`, `StartupWMClass=corteac_linux`, cópia para a Área de Trabalho via `xdg-user-dir DESKTOP`, `gio metadata::trusted` e `update-desktop-database`; `README_LINUX.txt` e `README_WINDOWS.md` documentam o passo a passo (incluindo o cache de ícones do Windows/Explorer). | `build_linux.sh`, `.github/workflows/release.yml`, `README_LINUX.txt`, `README_WINDOWS.md`, `docs/PROJETO_ATOM_JOBMANAGER.md`, `config.py` |
 | Seg, 02/11/2026 | 21:45 | DeepSeek | Regra da dobra 4c→2c, divisão automática e contadores por enfesto (v1.6.8): (1) implementada a regra confirmada pelo operador — cada peça retirada das 4 camadas vira DUAS na ponta de 2 camadas (4 físicas = 2 pares ↔ 2×2 camadas = 4 físicas), com a peça duplicada marcada `is_duplicate` (antes o sistema só movia peças e a dobra era impossível); (2) divisão variável por molde (`N4 = P//2 - k`, `N2 = (P%2) + 2k`) com `_escolher_divisao_otima()` testando k=0..3 e escolhendo a menor altura total utilizada (ganho mínimo de 5 mm); verificação física estrita mantida (4N4+2N2=2P, rollback atômico); (3) medição com 15 moldes/11 pares/4 camadas: todas as divisões fecham 330 peças físicas (k=0: 1.244 mm, k=1: 1.668 mm, k=2: 2.073 mm, k=3: 2.481 mm — o otimizador escolhe k=0 nesse layout); (4) novo painel `4c: N · 2c: M` na barra de status do Layout Editor separando os dois enfestos; (5) novo `tests/test_sobras_dobra.py` (4 testes). 504 testes + 1 skip. | `cad/layers_split.py`, `ui/layout_editor_view.py`, `tests/test_sobras_dobra.py`, `docs/PROJETO_ATOM_JOBMANAGER.md`, `config.py`, `.github/workflows/release.yml` |
