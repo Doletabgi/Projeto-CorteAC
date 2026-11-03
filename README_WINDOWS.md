@@ -57,3 +57,11 @@ Se desejar conectar ao servidor de banco de dados corporativo **MySQL**:
 1. Renomeie o arquivo `db.example.ini` para `db.ini`.
 2. Abra o `db.ini` com o Bloco de Notas e preencha o IP do host, usuário, senha e porta do seu servidor MySQL.
 3. Ao abrir o CorteAC, ele alternará automaticamente para o backend MySQL com failover automático para SQLite em caso de perda de conexão.
+
+## Ícone do atalho na Área de Trabalho
+
+O executável `CorteAC.exe` já carrega o ícone oficial (`assets/app_icon.ico`) gerado a cada
+release. O atalho da Área de Trabalho herda esse ícone automaticamente **quando criado a partir
+do .exe**. Se você substituiu o `.exe` na mesma pasta, o Windows mantém o ícone antigo em cache:
+para atualizar, crie um atalho novo (botão direito no `CorteAC.exe` → Enviar para → Área de
+Trabalho) ou reinicie o Explorer (`taskkill /f /im explorer.exe && start explorer`).

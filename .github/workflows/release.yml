@@ -9,7 +9,7 @@ on:
       tag_name:
         description: 'Tag de versão SemVer (ex: v1.0.0)'
         required: false
-        default: 'v1.6.8'
+        default: 'v1.6.9'
 
 permissions:
   contents: write
@@ -96,7 +96,30 @@ jobs:
           cp README_LINUX.txt dist_linux/CorteAC/
           cp run.sh dist_linux/CorteAC/
           cp db.example.ini dist_linux/CorteAC/
-          chmod +x dist_linux/CorteAC/corteac_linux dist_linux/CorteAC/run.sh
+          cp assets/app_icon.png dist_linux/CorteAC/corteac.png
+          cat > dist_linux/CorteAC/instalar_atalho.sh <<'ATALHO'
+          #!/usr/bin/env bash
+          set -e
+          DIR="$(cd "$(dirname "$0")" && pwd)"
+          APPS="$HOME/.local/share/applications"
+          mkdir -p "$APPS"
+          cat > "$APPS/corteac.desktop" <<ENTRY
+          [Desktop Entry]
+          Type=Application
+          Name=CorteAC
+          Comment=JobManager 2000 Reborn
+          Exec=$DIR/corteac_linux
+          Path=$DIR
+          Icon=$DIR/corteac.png
+          Terminal=false
+          Categories=Graphics;Engineering;
+          ENTRY
+          chmod +x "$APPS/corteac.desktop"
+          DESKTOP_DIR="$(xdg-user-dir DESKTOP 2>/dev/null || echo "$HOME/Desktop")"
+          [ -d "$DESKTOP_DIR" ] && cp "$APPS/corteac.desktop" "$DESKTOP_DIR/" && chmod +x "$DESKTOP_DIR/corteac.desktop"
+          echo "Atalho instalado com icone: $DIR/corteac.png"
+          ATALHO
+          chmod +x dist_linux/CorteAC/corteac_linux dist_linux/CorteAC/run.sh dist_linux/CorteAC/instalar_atalho.sh
           tar -czf dist/CorteAC-Linux-x64.tar.gz -C dist_linux CorteAC
 
       - name: Upload Artefatos Linux
@@ -183,7 +206,13 @@ jobs:
 
             ---
 
-            ### 🛠️ Recursos Incluídos Nesta Versão (v1.6.8):
+            ### 🛠️ Recursos Incluídos Nesta Versão (v1.6.9):
+            - **Ícone e atalho da Área de Trabalho**:
+              - O ícone da janela e o ícone embutido no `CorteAC.exe` já eram atualizados a cada release. O que faltava era o **atalho**: o pacote Linux agora traz `corteac.png` e o `instalar_atalho.sh`, que cria o atalho "CorteAC" no menu e na Área de Trabalho com o ícone correto e caminho absoluto da pasta extraída.
+              - No Windows, o atalho herda o ícone do `.exe`; se você substituiu o executável na mesma pasta, crie um atalho novo (ou reinicie o Explorer) para o Windows atualizar o cache do ícone.
+              - Instruções passo a passo no `README_LINUX.txt` e `README_WINDOWS.md`.
+              - **504 testes automatizados** (503 passando, 1 skip, 0 falhas).
+            - **Novidades da v1.6.8 (mantidas)**: regra da dobra 4c→2c com divisão automática e contadores `4c · 2c`.
             - **Regra da dobra 4 camadas → 2 camadas (confirmada pelo operador)**:
               - Cada peça retirada das 4 camadas passa a valer **duas** na ponta de 2 camadas (4 físicas = 2 pares ↔ 2 desenhos × 2 camadas = 4 físicas). O total físico continua exatamente `2P`: sem sobra e sem cortar a mais.
               - O sistema escolhe automaticamente quantas dobras fazer (`k`), testando as divisões e ficando com a que **fecha a placa com menor altura** (menos chapa).

@@ -10,6 +10,14 @@ COMO EXECUTAR NO LINUX:
 3. Execute:
    ./corteac_linux
 
+ATALHO COM ICONE NA AREA DE TRABALHO (OPCIONAL):
+1. Dê permissão e execute:
+   chmod +x ./instalar_atalho.sh && ./instalar_atalho.sh
+2. Isso cria "CorteAC" no menu de aplicativos e na área de trabalho,
+   apontando para ESTA pasta e usando o ícone corteac.png.
+3. Se o ícone não atualizar na hora, saia e entre na sessão (ou rode
+   "gtk-update-icon-cache"), pois o ambiente guarda o ícone em cache.
+
 BANCO DE DADOS:
 - Na primeira execução, o banco SQLite local ("jobmanager.db")
   será inicializado automaticamente nesta pasta.
