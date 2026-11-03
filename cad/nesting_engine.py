@@ -12,7 +12,7 @@ logger = logging.getLogger(__name__)
 
 from cad.geometry import (
     transform_contour, polygon_area, polygon_perimeter, polygon_bbox,
-    polygons_collide, bbox_overlap, simplify_contour_for_collision, prepare_segments,
+    polygons_collide, bbox_overlap, simplify_contour_for_collision, prepare_segments, point_in_polygon,
     SpatialGrid, find_contact_coordinate_binary
 )
 from cad.colors import get_color_for_size
@@ -1173,17 +1173,25 @@ def preencher_buracos_em_placas(
             if q:
                 polys.append((q, polygon_bbox(q), p))
 
-        # 1. Grade de ocupação (célula grossa)
+        # 1. Grade de ocupação — usa o POLÍGONO real (não a bounding box).
+        #    Com bbox, os vãos entre os contornos do pé ficavam marcados como ocupados
+        #    e nenhum bolsão era encontrado (o passe nunca preenchia nada).
         nx = max(1, int(bw // cell_mm))
         ny = max(1, int(bh // cell_mm))
         ocupado = bytearray(nx * ny)
         for _, bb, _p in polys:
             i0 = max(0, int(bb[0] // cell_mm)); i1 = min(nx - 1, int(bb[2] // cell_mm))
             j0 = max(0, int(bb[1] // cell_mm)); j1 = min(ny - 1, int(bb[3] // cell_mm))
+            if i1 < i0 or j1 < j0:
+                continue
             for j in range(j0, j1 + 1):
+                yc = (j + 0.5) * cell_mm
                 base = j * nx
                 for i in range(i0, i1 + 1):
-                    ocupado[base + i] = 1
+                    if ocupado[base + i]:
+                        continue
+                    if point_in_polygon((i + 0.5) * cell_mm, yc, _):
+                        ocupado[base + i] = 1
 
         # 2. Regiões vazias conectadas (4-vizinhos)
         visitado = bytearray(nx * ny)

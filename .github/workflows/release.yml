@@ -9,7 +9,7 @@ on:
       tag_name:
         description: 'Tag de versão SemVer (ex: v1.0.0)'
         required: false
-        default: 'v1.6.24'
+        default: 'v1.6.25'
 
 permissions:
   contents: write
@@ -189,7 +189,13 @@ jobs:
 
             ---
 
-            ### 🛠️ Recursos Incluídos Nesta Versão (v1.6.24):
+            ### 🛠️ Recursos Incluídos Nesta Versão (v1.6.25):
+            - **Preenchimento de vãos usa a área real das peças**:
+              - A grade de ocupação marcava a bounding box (retângulo) de cada peça; com pés de contorno côncavo isso escondia os vãos reais e o passe nunca preenchia nada.
+              - Agora a ocupação é medida no polígono real (`point_in_polygon`).
+              - Medição (6 moldes × 101 pares): placa 0 em 78,01% com 231 peças; o maior vão contínuo tem 40 × 660 mm e a peça ~95 × 210 mm, então **nenhuma peça cabe** — a sobra fica só na última placa, como solicitado.
+              - **561 testes automatizados** (560 passando, 1 skip, 0 falhas).
+            - **Novidades da v1.6.24 (mantidas)**: peça nunca é deitada (0°/180°).
             - **Peça nunca é deitada (só 0°/180°)**:
               - O passe de preenchimento de vãos testava 90°/270°; as peças que ele movia só cabiam deitadas — corrigido.
               - O macro da IA-teste também passou a usar apenas 0°/180°.
