@@ -5,6 +5,7 @@ Mesa CAD estática, fixa, sem zoom de bolinha do mouse, barra de ferramentas de 
 """
 
 import copy
+import logging
 import math
 import re
 import json
@@ -21,6 +22,34 @@ from ui.tooltip import ToolTip
 from cad.geometry import transform_contour, point_in_polygon, rotate_point, polygon_bbox, polygons_collide, polygon_area, SpatialGrid, bbox_overlap
 from cad.colors import get_color_for_size, get_contrast_text_color
 from ui.layout_print_dialog import LayoutPrintDialog
+
+
+def _contour_area_mm2(cntr) -> float:
+    """Área (mm²) de um contorno em qualquer um dos formatos usados no projeto.
+
+    Aceita pontos como dict {"x","y"} (formato do editor) ou sequência (x, y).
+    Nunca levanta exceção: contorno inválido devolve 0.0.
+    """
+    try:
+        pts = []
+        for pt in cntr:
+            if isinstance(pt, dict):
+                pts.append((float(pt.get("x", 0.0)), float(pt.get("y", 0.0))))
+            elif isinstance(pt, (list, tuple)) and len(pt) >= 2:
+                pts.append((float(pt[0]), float(pt[1])))
+            else:
+                return 0.0
+        n = len(pts)
+        if n < 3:
+            return 0.0
+        area = 0.0
+        for i in range(n):
+            x1, y1 = pts[i]
+            x2, y2 = pts[(i + 1) % n]
+            area += (x1 * y2) - (x2 * y1)
+        return abs(area) / 2.0
+    except Exception:
+        return 0.0
 from ui.trim_layout_dialog import TrimLayoutDialog
 from cad.lay_parser import parse_lay, export_layout_from_pieces, validate_layout_placement
 from cad.dual_exporter import DualLayoutExporter
@@ -5815,28 +5844,23 @@ class LayoutEditorView(tk.Frame):
                     if s.get("id") == sid or s.get("name") == sid:
                         cntr = s.get("contour")
                         break
-            if cntr and len(cntr) >= 3:
-                a = 0.0
-                n = len(cntr)
-                for i in range(n):
-                    x1, y1 = cntr[i][0], cntr[i][1]
-                    x2, y2 = cntr[(i + 1) % n][0], cntr[(i + 1) % n][1]
-                    a += (x1 * y2 - x2 * y1)
-                total_poly_area_mm2 += abs(a) * 0.5
+            # Contornos podem vir como dict {"x","y"} (formato do editor) ou tupla (x, y)
+            total_poly_area_mm2 += float(_contour_area_mm2(cntr or []))
             sname = p.get("name") or p.get("shape_name")
             if sname:
                 unique_shape_names.add(sname)
 
+        # Sem peças: valores zerados (nunca inventar rendimento)
         if num_pieces > 0 and total_poly_area_mm2 > 0:
             used_area = round(total_poly_area_mm2 / 1_000_000.0, 2)
             yield_pct = round((total_poly_area_mm2 / (self.sheet_width * self.sheet_height)) * 100.0, 2) if (self.sheet_width * self.sheet_height) > 0 else 0.0
             instances = num_pieces
-            shapes = len(unique_shape_names) if unique_shape_names else min(num_pieces, 15)
+            shapes = len(unique_shape_names) if unique_shape_names else 0
         else:
-            used_area = 0.11
-            yield_pct = 83.02
-            instances = 40
-            shapes = 15
+            used_area = 0.0
+            yield_pct = 0.0
+            instances = num_pieces
+            shapes = len(unique_shape_names)
 
         # Resolve dados dinâmicos do material: código, descrição e camadas
         mat = getattr(self, "material", None)
@@ -5908,8 +5932,12 @@ class LayoutEditorView(tk.Frame):
             "current_layout_index": cur_idx_print,
         }
 
-        dlg = LayoutPrintDialog(self, layout_data=layout_data)
-        dlg.focus_set()
+        try:
+            dlg = LayoutPrintDialog(self, layout_data=layout_data)
+            dlg.focus_set()
+        except Exception as exc:  # noqa: BLE001
+            logging.getLogger(__name__).exception("Falha ao abrir a impressão do layout")
+            messagebox.showerror("Imprimir Layout", f"Não foi possível abrir a impressão:\n{exc}", parent=self)
 
     def configure_company_logo(self):
         """Abre diálogo para configurar o logotipo personalizado da empresa."""
