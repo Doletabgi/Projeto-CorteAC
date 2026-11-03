@@ -4,7 +4,7 @@
 > **Regra de ouro:** o que está marcado `[CONFIRMADO]` veio do relatório, do código ou do usuário. O que está `[NÃO CONFIRMADO]` é suposição e não deve virar "fato" sem validação. O que está `[PREENCHER]` a IA deve completar lendo o código real.
 
 <!-- AUTO:header:start -->
-**Última sincronização com o código:** 2026-11-03 11:30 (HEAD ao gerar: `6e610c1`; 134 arquivos Python, ~65554 linhas)
+**Última sincronização com o código:** 2026-11-03 13:09 (HEAD ao gerar: `5d85d8b`; 134 arquivos Python, ~65596 linhas)
 <!-- AUTO:header:end -->
 **Versão deste documento:** 1
 
@@ -487,6 +487,7 @@ ui/units.py                                          # ui/units.py - Formataçã
 - `class TestImpressaoEmMetros` (linha 17, 6 métodos)
 - `class TestPontaEClamp` (linha 81, 5 métodos): A linha azul da ponta não pode sair da placa (caso do PDF refilado).
 - `class TestClampCompartilhado` (linha 140, 2 métodos): O clamp da ponta é único (cad.layers_rule) e usado por editor, miniatura e PDF.
+- `class TestCabecalhoSemDescription` (linha 203, 3 métodos): O operador pediu para remover a linha "Description: ..." da folha impressa.
 
 ### `tests/test_semver.py`
 - `class TestSemVer` (linha 12, 7 métodos)
@@ -3288,6 +3289,26 @@ Suíte: **529 testes + 1 skip**.
 
 ---
 
+
+## 8.41. Remoção da Linha "Description" na Impressão (v1.6.20) `[CONFIRMADO]`
+
+Pedido do operador: apagar a linha `Description: fn98 - v1.2.36 - 12.09.2012` das folhas impressas.
+
+### 1. Alteração
+
+- Removida a linha `Description: {self.description}` do bloco de metadados em **ambos** os
+  renderizadores do `LayoutPrintDialog` (visualização em canvas e exportação Pillow/PDF).
+- O restante do cabeçalho permanece: `Layout:` (caminho), `Material:`, `Dimensions:`,
+  `Material Area:`, `Used Area/Yield`, `Refile:` e a linha de `Shapes / Instances / Gap / Enfesto`.
+
+### 2. Testes
+
+`tests/test_print_metros.py` ganhou `TestCabecalhoSemDescription`: garante que nenhum texto do
+cabeçalho contém "Description" e que o render do PDF continua funcionando.
+Suíte: **530 testes + 1 skip**.
+
+---
+
 ## 9. Pendências e arquivos faltantes
 
 ### 9.1 Tarefas abertas
@@ -3445,6 +3466,7 @@ Local: `/home/dola/Documentos/clone do job/antigo/arquivos pos instalacao/Common
 <!-- AUTO:gitlog:start -->
 | Commit | Data | Autor | Mensagem |
 |---|---|---|---|
+| `5d85d8b` | 2026-11-03 | Doletabgi | fix(tip): clamp unico da ponta — linha azul nao vaza na miniatura nem no refile (v1.6.19) |
 | `6e610c1` | 2026-11-03 | Doletabgi | fix(save): refile do layout agora e persistido e nao e sobrescrito (v1.6.18) |
 | `a081166` | 2026-11-03 | Doletabgi | fix(print): linha azul da ponta dentro da placa e almoxarifado em metros (v1.6.17) |
 | `5fa8823` | 2026-11-03 | Doletabgi | feat(print): padroniza todas as medidas da impressao em metros (v1.6.16) |
@@ -3459,7 +3481,6 @@ Local: `/home/dola/Documentos/clone do job/antigo/arquivos pos instalacao/Common
 | `2048256` | 2026-11-02 | Doletabgi | feat(sobras): ponta de 2 camadas com encaixe compacto e testes de regressao (v1.6.7) |
 | `3baa30c` | 2026-11-02 | Doletabgi | feat(release): contadores dinamicos na barra lateral do editor e versao v1.6.3 |
 | `6fe7c1d` | 2026-11-01 | Doletabgi | feat(release): sessoes novas criadas em branco sem material associado e versao v1.6.2 |
-| `014fc95` | 2026-11-01 | Doletabgi | feat(release): desacoplamento de zoom e selecao de pecas, refile automatico e versao v1.6.1 |
 <!-- AUTO:gitlog:end -->
 
 ---
@@ -3487,6 +3508,7 @@ Local: `/home/dola/Documentos/clone do job/antigo/arquivos pos instalacao/Common
 | Seg, 02/11/2026 | 18:00 | Antigravity | Blindagem da persistência de dados das sessões e eliminação de contaminação de moldes (Sessão #188): (1) Imutabilidade estrita na leitura: `SessionView.load_session` tornado 100% somente-leitura no banco, eliminando chamadas a `update_session` e configurando `persist=False` para chamadas a `set_gap_mm` e `set_margins` disparadas no carregamento; (2) Detecção e poda automática de moldes fantasmas em sessões já calculadas (moldes no JSON sem nenhuma peça física posicionada nos layouts); (3) Remoção do fallback artificial `pairs = 16` em `SessionView.set_shapes_data`, preservando os valores numéricos reais ou nulos; (4) Eliminação da contaminação pelo catálogo global (`self.current_shapes`) em `MainWindow._poll_nest_worker`, `clear_session_nesting` e `_ensure_separated_sobras_before_export`, garantindo que os cálculos e persistência manipulem apenas os moldes legítimos da sessão ativa com seus pares originais; (5) Sanitização profunda em `database.py` (`_sanitize_session_shapes`, `update_session_shapes` e `update_session`) blindando e preservando campos críticos (`pairs`, `sequence`, `rest`, `resto`, `target_pieces`); (6) Utilitário `tools/scrub_all_sessions_shapes.py` criado e executado com sucesso, higienizando sessões corrompidas no banco de dados e recuperando a grade de 15 moldes reais da Sessão #188; (7) Nova suíte de testes `tests/test_data_integrity.py` com 5 testes rigorosos cobrindo imutabilidade de load, preservação de pares, isolamento de catálogo e poda de fantasmas. | `database.py`, `ui/session_view.py`, `ui/main_window.py`, `tools/scrub_all_sessions_shapes.py`, `tests/test_data_integrity.py`, `docs/PROJETO_ATOM_JOBMANAGER.md` |
 | Seg, 02/11/2026 | 19:15 | Antigravity | Implantação da Ponta de 2 Camadas no topo da última placa (`tip_zone`) e visualização CAM no Layout Editor: (1) Reescrita do motor `_nest_sobras_on_last_sheet` em `cad/layers_split.py` com posicionamento forçado das sobras de 2 camadas no topo (maior Y) da última placa com modos `canto` e `faixa_topo` e folga de ponta de segurança (`folga_ponta`, default 15.0 mm); (2) Armazenamento estruturado de metadados `tip_zone` no dicionário do layout (`xmin`, `ymin`, `xmax`, `ymax`, `mode`, `pieces_count`); (3) Visualização no Layout Editor (`ui/layout_editor_view.py`) com linha divisória tracejada (`tip_line`), badge e rótulo indicativo `"Ponta 2 Camadas: X peças"` orientando o operador; (4) Integração com SessionView mantendo resto zero efetivo e testes unitários em `tests/test_layers_tip.py`. | `cad/layers_split.py`, `ui/layout_editor_view.py`, `ui/session_view.py`, `tests/test_layers_tip.py`, `docs/PROJETO_ATOM_JOBMANAGER.md` |
 | Seg, 02/11/2026 | 19:45 | Antigravity | Instruções explícitas de corte e enfesto misto do almoxarifado na Impressão A4 (`LayoutPrintDialog`): (1) Função `format_enfesto_operator_text` em `cad/layers_rule.py` gerando texto claro e padronizado especificando quantidade e metragem de folhas de comprimento total e folhas de ponta (ex: `CORTAR: X folhas de COMPRIMENTO TOTAL (Y mm) [4 camadas] + Y folhas de PONTA (Z mm) [2 camadas]`); (2) Renderização visual da delimitação da zona de ponta (`tip_zone`) no preview A4 (canvas Tkinter) e na exportação física/PDF de alta resolução via Pillow; (3) Exibição destacada das instruções operacionais no cabeçalho/metadados da página para conferência no almoxarifado antes do desenrolar do material; (4) Testes em `tests/test_layout_print_legend.py`. | `cad/layers_rule.py`, `ui/layout_print_dialog.py`, `tests/test_layout_print_legend.py`, `docs/PROJETO_ATOM_JOBMANAGER.md` |
+| Ter, 03/11/2026 | 13:35 | DeepSeek | Remoção da linha "Description" na impressão (v1.6.20): a pedido do operador, o cabeçalho das folhas impressas não exibe mais `Description: fn98 - v1.2.36 - 12.09.2012`; a linha foi removida dos dois renderizadores do `LayoutPrintDialog` (canvas e Pillow/PDF), mantendo Layout, Material, Dimensions, áreas, Refile e a linha de Shapes/Instances/Gap/Enfesto. Novo `TestCabecalhoSemDescription` em `tests/test_print_metros.py`. 530 testes + 1 skip. | `ui/layout_print_dialog.py`, `tests/test_print_metros.py`, `docs/PROJETO_ATOM_JOBMANAGER.md`, `config.py`, `.github/workflows/release.yml` |
 | Ter, 03/11/2026 | 11:55 | DeepSeek | Linha azul da ponta na miniatura e no refile do editor (v1.6.19): o refile feito no editor (`apply_trim_layout`) atualizava as dimensões mas mantinha `tip_zone` da chapa cheia (1,38 × 2,98); a miniatura escalava pela placa refilada e desenhava o retângulo azul fora do contorno (e salvava o valor errado). Criado `clamp_tip_zone()` único em `cad/layers_rule.py`, usado pelo editor ao refilar, pela miniatura da SessionView, pelo `trim_layout_dict` e pelo PDF (alias). Testes: `TestClampCompartilhado` (clamp básico + retângulo da miniatura dentro da chapa). 529 testes + 1 skip. | `cad/layers_rule.py`, `cad/trim_engine.py`, `ui/layout_editor_view.py`, `ui/session_view.py`, `ui/layout_print_dialog.py`, `tests/test_print_metros.py`, `docs/PROJETO_ATOM_JOBMANAGER.md`, `config.py`, `.github/workflows/release.yml` |
 | Ter, 03/11/2026 | 11:20 | DeepSeek | Salvar o layout refilado de verdade (v1.6.18): o Ctrl+S do editor já persistia dimensões/corte/ponta no banco, mas `MainWindow.on_layout_editor_save()` não sincronizava a lista `layouts` multi-placa em memória — a sessão ficava com 1,38 × 2,98 e qualquer gravação posterior (Gerar/Refazer, sobras, fechar) sobrescrevia o refile, dando a impressão de "não salvou". Adicionado o passo 3b (sincroniza `current_session["layouts"]` e persiste), extraído `SessionView.refresh_layout_tab()` (redesenha todas as placas; antes o callback inseria uma única linha `lay_0`) e guard para `lbl_stat_pos` nulo. Novo `tests/test_layout_save_refile.py` (2 testes com banco temporário). 527 testes + 1 skip. | `ui/main_window.py`, `ui/session_view.py`, `ui/layout_editor_view.py`, `tests/test_layout_save_refile.py`, `docs/PROJETO_ATOM_JOBMANAGER.md`, `config.py`, `.github/workflows/release.yml` |
 | Ter, 03/11/2026 | 10:10 | DeepSeek | Linha azul da ponta fora da placa e metragem do almoxarifado em metros (v1.6.17): a `tip_zone` é calculada na chapa original (1,38 × 2,98) mas o PDF sai refilado (1,35 × 1,13), então o retângulo azul era desenhado fora do contorno e em traço sólido grosso (Pillow sem dash). `trim_layout_dict()` agora limita a `tip_zone` às novas dimensões (removendo-a se a ponta foi cortada), novo `_clamp_tip_zone()` protege sessões antigas no canvas e no Pillow, e `_desenhar_retangulo_tracejado()` desenha o tracejado fino no PDF. `format_enfesto_operator_text()` agora emite metros com vírgula ("2 folhas longas de 1,13 × 1,35 m + ... SEM cobrir a ponta de 1,35 × 0,33 m") com clamp na chapa. `tests/test_print_metros.py` ganhou `TestPontaEClamp` (5 testes). 525 testes + 1 skip. | `cad/trim_engine.py`, `cad/layers_rule.py`, `ui/layout_print_dialog.py`, `tests/test_print_metros.py`, `docs/PROJETO_ATOM_JOBMANAGER.md`, `config.py`, `.github/workflows/release.yml` |

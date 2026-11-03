@@ -9,7 +9,7 @@ on:
       tag_name:
         description: 'Tag de versão SemVer (ex: v1.0.0)'
         required: false
-        default: 'v1.6.19'
+        default: 'v1.6.20'
 
 permissions:
   contents: write
@@ -189,7 +189,12 @@ jobs:
 
             ---
 
-            ### 🛠️ Recursos Incluídos Nesta Versão (v1.6.19):
+            ### 🛠️ Recursos Incluídos Nesta Versão (v1.6.20):
+            - **Linha "Description" removida da impressão**:
+              - O cabeçalho das folhas (visualização, PDF e imagem) não exibe mais `Description: fn98 - v1.2.36 - 12.09.2012`.
+              - Permanecem Layout, Material, Dimensions, áreas, Refile e a linha de Shapes/Instances/Gap/Enfesto.
+              - **530 testes automatizados** (529 passando, 1 skip, 0 falhas).
+            - **Novidades da v1.6.19 (mantidas)**: clamp da ponta na miniatura.
             - **Linha azul da ponta não vaza mais na miniatura (aba Layout)**:
               - O refile feito no editor mantinha a ponta com as medidas da chapa cheia; a miniatura desenhava o retângulo azul fora do contorno e salvava o valor errado.
               - Agora existe uma regra única (`clamp_tip_zone`) usada no refile do editor, na miniatura da sessão, no refile automático e no PDF.

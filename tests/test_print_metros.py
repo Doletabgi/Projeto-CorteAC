@@ -198,3 +198,47 @@ class TestClampCompartilhado(unittest.TestCase):
         self.assertLessEqual(ponta[3], placa[3] + 0.5)
         view.destroy()
         root.destroy()
+
+
+class TestCabecalhoSemDescription(unittest.TestCase):
+    """O operador pediu para remover a linha "Description: ..." da folha impressa."""
+
+    def setUp(self):
+        if not HAS_TK:
+            self.skipTest("Tkinter indisponível")
+        try:
+            self.root = tk.Tk()
+            self.root.withdraw()
+        except Exception as exc:  # pragma: no cover
+            self.skipTest(f"sem display: {exc}")
+
+    def tearDown(self):
+        try:
+            self.root.destroy()
+        except Exception:
+            pass
+
+    def test_sem_linha_description_no_cabecalho(self):
+        from ui.layout_print_dialog import LayoutPrintDialog
+
+        dlg = LayoutPrintDialog(self.root, layout_data={
+            "layout_name": "lay0001.lay",
+            "sheet_w_mm": 1350.0,
+            "sheet_h_mm": 1130.0,
+            "dimensions_str": "1,35 x 1,13 m",
+            "description": "fn98 - v1.2.36 - 12.09.2012",
+        })
+        dlg.update_idletasks()
+        dlg.redraw()
+
+        textos = [
+            dlg.canvas.itemcget(i, "text")
+            for i in dlg.canvas.find_all()
+            if dlg.canvas.type(i) == "text"
+        ]
+        self.assertFalse(any("Description" in t for t in textos), f"linha Description ainda presente: {textos[:12]}")
+
+        # A renderização do PDF/imagem não pode falhar após a remoção
+        im = dlg.render_pillow_page(dpi=100)
+        self.assertIsNotNone(im)
+        dlg.destroy()

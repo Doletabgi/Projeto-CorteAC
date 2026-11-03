@@ -1045,7 +1045,6 @@ class LayoutPrintDialog(tk.Toplevel):
 
         lines = [
             f"Layout: {self.layout_path}",
-            f"Description: {self.description}",
             f"Material: {self.material_name}",
             f"Dimensions:  {self.dimensions_str}",
             f"Material Area: {self.mat_area_str}",
@@ -1559,7 +1558,6 @@ class LayoutPrintDialog(tk.Toplevel):
         line_h = int(17 * scale)
         lines = [
             f"Layout: {self.layout_path}",
-            f"Description: {self.description}",
             f"Material: {self.material_name}",
             f"Dimensions:  {self.dimensions_str}",
             f"Material Area: {self.mat_area_str}",
