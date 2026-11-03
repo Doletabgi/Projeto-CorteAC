@@ -401,6 +401,7 @@ class LayoutPrintDialog(tk.Toplevel):
             self.material_name = "132011 - VELCRO 4'' ARGOLA - PRETO ( 4 layer(s) )"
 
         self.dimensions_str = self.layout_data.get("dimensions_str", "1,50 x 2,98 m")
+        self.dimensions_lines = self.layout_data.get("dimensions_lines")
         self.mat_area_str = self.layout_data.get("mat_area_str", "0.13 sq.M.")
         self.used_area_str = self.layout_data.get("used_area_str", "0.11 sq.M.")
         self.yield_pct = self.layout_data.get("yield_pct", 83.02)
@@ -1043,11 +1044,11 @@ class LayoutPrintDialog(tk.Toplevel):
         meta_y = margin_top + int(82 * self.zoom)
         line_h = int(17 * self.zoom)
 
+        dim_lines = self.dimensions_lines or [f"Dimensions:  {self.dimensions_str}"]
         lines = [
             f"Layout: {self.layout_path}",
             f"Material: {self.material_name}",
-            f"Dimensions:  {self.dimensions_str}",
-            f"Material Area: {self.mat_area_str}",
+        ] + list(dim_lines) + [
             f"Used Area: {self.used_area_str} - Yield:  {self.yield_pct:.2f}%",
             f"Refile: {self.refile_display_str}",
         ]
@@ -1556,11 +1557,11 @@ class LayoutPrintDialog(tk.Toplevel):
         # Metadados
         meta_y = m_top + int(82 * scale)
         line_h = int(17 * scale)
+        dim_lines = self.dimensions_lines or [f"Dimensions:  {self.dimensions_str}"]
         lines = [
             f"Layout: {self.layout_path}",
             f"Material: {self.material_name}",
-            f"Dimensions:  {self.dimensions_str}",
-            f"Material Area: {self.mat_area_str}",
+        ] + list(dim_lines) + [
             f"Used Area: {self.used_area_str} - Yield:  {self.yield_pct:.2f}%",
             f"Refile: {self.refile_display_str}",
         ]

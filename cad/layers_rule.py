@@ -133,6 +133,45 @@ def layers_for_piece(
     return base_layers
 
 
+def format_dimensions_folhas(layout=None, sheet_w=None, sheet_h=None, layers=None, tip_mode="canto"):
+    """
+    Dimensões para o cabeçalho da impressão, em duas linhas (metros):
+
+        "2 folhas longas 1,35 x 1,13 m. 2 camadas"
+        "2 folhas curtas: 1,35 x 0,88 m. 2 camadas"
+
+    - Folhas longas: placa inteira.
+    - Folhas curtas: placa sem a ponta de 2 camadas (altura até a divisória).
+    - "camadas" de cada par = metade das camadas do enfesto (2 longas + 2 curtas = 4).
+    """
+    if isinstance(layout, dict):
+        tip_zone = layout.get("tip_zone")
+        layers = layers if layers is not None else (int(layout.get("layers") or 4))
+        if sheet_w is None:
+            sheet_w = float(layout.get("width_mm") or layout.get("ris_w") or 1380.0)
+        if sheet_h is None:
+            sheet_h = float(layout.get("height_mm") or layout.get("ris_l") or 2990.0)
+    else:
+        tip_zone = None
+
+    w_val = float(sheet_w or 1380.0)
+    h_val = float(sheet_h or 2990.0)
+    n_cam = max(1, int((layers or 4) // 2))
+
+    def _m(mm: float) -> str:
+        return f"{float(mm) / 1000.0:.2f}".replace(".", ",")
+
+    altura_curta = h_val
+    zona = clamp_tip_zone(tip_zone, w_val, h_val)
+    if zona:
+        altura_curta = float(zona[1])
+
+    return [
+        f"2 folhas longas {_m(w_val)} x {_m(h_val)} m. {n_cam} camadas",
+        f"2 folhas curtas: {_m(w_val)} x {_m(altura_curta)} m. {n_cam} camadas",
+    ]
+
+
 def clamp_tip_zone(tip_zone, sheet_w_mm, sheet_h_mm):
     """
     Limita a ponta de 2 camadas aos limites da placa.

@@ -24,6 +24,7 @@ from ui.debug_panel import DebugPanel
 from cad.lay_parser import parse_lay, export_layout_from_pieces, validate_layout_placement
 from cad.dual_exporter import DualLayoutExporter
 from cad.layers_rule import (
+    format_dimensions_folhas,
     calc_resto,
     calc_resto_efetivo,
     resolve_session_layers,
@@ -1321,6 +1322,11 @@ class SessionView(tk.Frame):
             "sheet_w_mm": sheet_w,
             "sheet_h_mm": sheet_h,
             "dimensions_str": format_dim_mm(sheet_w, sheet_h),
+            "dimensions_lines": format_dimensions_folhas(
+                target_layout or {}, sheet_w=sheet_w, sheet_h=sheet_h, layers=layers_val
+            ),
+            "tip_zone": (target_layout.get("tip_zone") if target_layout else None),
+            "layers_tip": (target_layout.get("layers_tip") if target_layout else None),
             "mat_area_str": f"{mat_area:.2f} sq.M.",
             "used_area_str": f"{used_area:.2f} sq.M.",
             "yield_pct": eff,

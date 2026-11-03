@@ -242,3 +242,53 @@ class TestCabecalhoSemDescription(unittest.TestCase):
         im = dlg.render_pillow_page(dpi=100)
         self.assertIsNotNone(im)
         dlg.destroy()
+
+
+class TestCabecalhoFolhas(unittest.TestCase):
+    """Cabeçalho com as duas linhas de folhas (longas/curtas) e sem "Material Area"."""
+
+    def test_format_dimensions_folhas(self):
+        from cad.layers_rule import format_dimensions_folhas
+
+        lay = {"width_mm": 1350.0, "height_mm": 1130.0, "layers": 4,
+               "tip_zone": [0.0, 880.0, 1350.0, 1130.0]}
+        linhas = format_dimensions_folhas(lay)
+        self.assertEqual(linhas[0], "2 folhas longas 1,35 x 1,13 m. 2 camadas")
+        self.assertEqual(linhas[1], "2 folhas curtas: 1,35 x 0,88 m. 2 camadas")
+
+    def test_sem_ponta_curta_igual_a_longa(self):
+        from cad.layers_rule import format_dimensions_folhas
+
+        linhas = format_dimensions_folhas({"width_mm": 1350.0, "height_mm": 1130.0, "layers": 4})
+        self.assertEqual(linhas[0], linhas[1].replace("2 folhas curtas: ", "2 folhas longas "))
+
+    def test_cabecalho_renderiza_as_duas_linhas_e_sem_material_area(self):
+        if not HAS_TK:
+            self.skipTest("Tkinter indisponível")
+        import tkinter as tk
+        from cad.layers_rule import format_dimensions_folhas
+        from ui.layout_print_dialog import LayoutPrintDialog
+
+        try:
+            root = tk.Tk()
+            root.withdraw()
+        except Exception as exc:  # pragma: no cover
+            self.skipTest(f"sem display: {exc}")
+
+        lay = {"width_mm": 1350.0, "height_mm": 1130.0, "layers": 4,
+               "tip_zone": [0.0, 880.0, 1350.0, 1130.0]}
+        dlg = LayoutPrintDialog(root, layout_data={
+            "layout_name": "lay0001.lay", "sheet_w_mm": 1350.0, "sheet_h_mm": 1130.0,
+            "dimensions_str": "1,35 x 1,13 m",
+            "dimensions_lines": format_dimensions_folhas(lay),
+            "mat_area_str": "1.53 sq.M.",
+        })
+        dlg.update_idletasks()
+        dlg.redraw()
+        textos = [dlg.canvas.itemcget(i, "text") for i in dlg.canvas.find_all()
+                  if dlg.canvas.type(i) == "text"]
+        self.assertTrue(any("folhas longas" in t for t in textos), textos[:12])
+        self.assertTrue(any("folhas curtas" in t for t in textos), textos[:12])
+        self.assertFalse(any("Material Area" in t for t in textos), "Material Area deveria ter sido removida")
+        dlg.destroy()
+        root.destroy()

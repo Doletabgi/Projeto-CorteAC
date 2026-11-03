@@ -64,6 +64,7 @@ from cad.fill_engine import (
 )
 from ui.fill_user_dialog import FillUserDialog
 from cad.layers_rule import (
+    format_dimensions_folhas,
     resolve_session_layers,
     resolve_layout_layers,
     is_layers_defined,
@@ -5920,6 +5921,10 @@ class LayoutEditorView(tk.Frame):
             "sheet_w_mm": self.sheet_width,
             "sheet_h_mm": self.sheet_height,
             "dimensions_str": format_dim_mm(self.sheet_width, self.sheet_height),
+            "dimensions_lines": format_dimensions_folhas(
+                cur_ly_print or {}, sheet_w=self.sheet_width, sheet_h=self.sheet_height,
+                layers=ly_layers_print
+            ),
             "mat_area_str": f"{mat_area:.2f} sq.M.",
             "used_area_str": f"{used_area:.2f} sq.M.",
             "yield_pct": yield_pct,

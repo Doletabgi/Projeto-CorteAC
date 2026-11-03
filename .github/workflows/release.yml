@@ -9,7 +9,7 @@ on:
       tag_name:
         description: 'Tag de versão SemVer (ex: v1.0.0)'
         required: false
-        default: 'v1.6.20'
+        default: 'v1.6.21'
 
 permissions:
   contents: write
@@ -189,7 +189,12 @@ jobs:
 
             ---
 
-            ### 🛠️ Recursos Incluídos Nesta Versão (v1.6.20):
+            ### 🛠️ Recursos Incluídos Nesta Versão (v1.6.21):
+            - **Cabeçalho da impressão com as folhas longas e curtas**:
+              - A linha `Dimensions` virou duas linhas em metros: `2 folhas longas 1,35 x 1,13 m. 2 camadas` e `2 folhas curtas: 1,35 x 0,88 m. 2 camadas` (a curta já desconta a ponta de 2 camadas).
+              - A linha `Material Area:` foi removida (visualização, PDF e imagem).
+              - **533 testes automatizados** (532 passando, 1 skip, 0 falhas).
+            - **Novidades da v1.6.20 (mantidas)**: linha Description removida.
             - **Linha "Description" removida da impressão**:
               - O cabeçalho das folhas (visualização, PDF e imagem) não exibe mais `Description: fn98 - v1.2.36 - 12.09.2012`.
               - Permanecem Layout, Material, Dimensions, áreas, Refile e a linha de Shapes/Instances/Gap/Enfesto.
