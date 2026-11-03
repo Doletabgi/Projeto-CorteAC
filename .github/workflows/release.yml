@@ -9,7 +9,7 @@ on:
       tag_name:
         description: 'Tag de versão SemVer (ex: v1.0.0)'
         required: false
-        default: 'v1.6.13'
+        default: 'v1.6.14'
 
 permissions:
   contents: write
@@ -189,7 +189,13 @@ jobs:
 
             ---
 
-            ### 🛠️ Recursos Incluídos Nesta Versão (v1.6.13):
+            ### 🛠️ Recursos Incluídos Nesta Versão (v1.6.14):
+            - **Sem buraco na placa de 4 camadas após separar as sobras**:
+              - A vaga da peça que ia para a ponta de 2 camadas era perdida; agora a base é **reencaixada** automaticamente, fechando os vãos.
+              - Medição (6 moldes, 101 pares, 4 camadas): vãos 4 → **0**, altura 2.424 → **2.271 mm**, total físico continua exato (`2P`).
+              - Com a base compacta, a divisão automática passou a usar 1 dobra (294 peças em 4c + 18 em 2c) em vez de 300/6.
+              - **512 testes automatizados** (511 passando, 1 skip, 0 falhas).
+            - **Novidades da v1.6.13 (mantidas)**: `--criar-atalho` e atalho versionado.
             - **`--criar-atalho`: cria/atualiza o atalho versionado quando não existe**:
               - `./corteac_linux --criar-atalho` cria `CorteAC-<versão>` no menu e na Área de Trabalho (inclusive no padrão pt-BR `~/Área de Trabalho`), remove versões antigas e instala o ícone em `~/.local/share/corteac/corteac.png`.
               - A abertura normal continua apenas **atualizando** atalhos existentes (não cria ícones sem pedido).

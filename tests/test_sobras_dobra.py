@@ -20,6 +20,7 @@ BOX = [
 
 SHEET_W, SHEET_H = 1200.0, 2400.0
 MARG = {"left": 10.0, "right": 10.0, "top": 10.0, "bottom": 10.0}
+GAP = 1.0
 
 
 def _shape(idx, pairs):
@@ -124,6 +125,63 @@ class TestSobrasDobra(unittest.TestCase):
                         continue
                     self.assertFalse(polygons_collide(polys[i], polys[j], gap=0.0, bbox_a=a, bbox_b=b),
                                      f"colisão entre peças {i} e {j} após a dobra")
+
+
+
+class TestRecompactacaoBase(unittest.TestCase):
+    """A retirada da peça ímpar não pode deixar buraco na placa de 4 camadas."""
+
+    @staticmethod
+    def _buracos(ly, gap=1.0):
+        """Conta vãos horizontais maiores que 3x o gap dentro da mesma linha."""
+        from cad.geometry import polygon_bbox, transform_contour
+        linhas = {}
+        for p in ly["pieces"]:
+            bb = polygon_bbox(transform_contour(p["contour"], p["x"], p["y"], p.get("rotation", 0)))
+            linhas.setdefault(round(bb[1] / 5) * 5, []).append((bb[0], bb[2]))
+        total = 0
+        for v in linhas.values():
+            v.sort()
+            total += sum(1 for a, b in zip(v, v[1:]) if b[0] - a[1] > 3 * gap)
+        return total
+
+    def _cenario(self, pares=21, moldes=3):
+        from cad.layers_split import separar_sobras_em_ponta
+        from cad.nesting_engine import nest_multi_sheet
+
+        shapes = [_shape(i + 1, pares) for i in range(moldes)]
+        res = nest_multi_sheet(
+            available_shapes=[dict(s) for s in shapes],
+            bed_width_mm=SHEET_W, bed_height_mm=SHEET_H,
+            strategy="flashnestsheet", params="HighYield;separar_sobras=1;tip_mode=faixa",
+            gap_mm=GAP, margins=MARG, layers=4, max_total_sec=30,
+        )
+        self.assertTrue(res["success"], res.get("warning"))
+        antes = [sum(1 for _ in ly["pieces"]) for ly in res["layouts"]]
+        out, msg = separar_sobras_em_ponta(
+            res["layouts"],
+            session={"id": 1, "layers": 4, "gap_mm": GAP, "params": "HighYield;separar_sobras=1"},
+            shapes=shapes, params="HighYield;separar_sobras=1",
+            sheet_w=SHEET_W, sheet_h=SHEET_H,
+            material={"layers": 4, "gap_mm": GAP, "width_mm": SHEET_W, "height_mm": SHEET_H},
+        )
+        return out, antes, pares, moldes
+
+    def test_base_sem_buracos_apos_separar_sobras(self):
+        out, antes, pares, moldes = self._cenario()
+        total_buracos = sum(self._buracos(ly) for ly in out)
+        self.assertEqual(total_buracos, 0, f"ficaram {total_buracos} vãos na base: {[self._buracos(l) for l in out]}")
+
+    def test_pecas_fisicas_preservadas_apos_recompactar(self):
+        out, antes, pares, moldes = self._cenario()
+        fis = sum(int(p.get("layers") or 4) for ly in out for p in ly["pieces"])
+        self.assertEqual(fis, 2 * pares * moldes)
+
+    def test_altura_nao_cresce_ao_recompactar(self):
+        from cad.trim_engine import calculate_layout_trim_bounds
+        out, antes, pares, moldes = self._cenario()
+        altura = max(calculate_layout_trim_bounds(ly["pieces"], gap_mm=GAP)[1] for ly in out)
+        self.assertLessEqual(altura, SHEET_H)
 
 
 if __name__ == "__main__":

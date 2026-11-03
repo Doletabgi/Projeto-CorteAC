@@ -4,7 +4,7 @@
 > **Regra de ouro:** o que está marcado `[CONFIRMADO]` veio do relatório, do código ou do usuário. O que está `[NÃO CONFIRMADO]` é suposição e não deve virar "fato" sem validação. O que está `[PREENCHER]` a IA deve completar lendo o código real.
 
 <!-- AUTO:header:start -->
-**Última sincronização com o código:** 2026-11-02 22:02 (HEAD ao gerar: `0067076`; 131 arquivos Python, ~64714 linhas)
+**Última sincronização com o código:** 2026-11-03 07:09 (HEAD ao gerar: `e882072`; 131 arquivos Python, ~64908 linhas)
 <!-- AUTO:header:end -->
 **Versão deste documento:** 1
 
@@ -75,9 +75,6 @@ build_linux.sh
 config.py                                            # CorteAC (Python Edition)
 database.py                                          # JobManager 2000 (Python Edition)
 db.example.ini
-diagnostico_reabertura_188.md
-diagnostico_sobras_188.md
-diagnostico_sobras_188_parte2.md
 docker-compose.yml
 executar_windows.bat
 main.py                                              # CorteAC (Python Edition para Windows 10 / 11)
@@ -297,7 +294,7 @@ ui/units.py                                          # ui/units.py - Formataçã
 - funções: `resolve_layout_layers`, `layers_for_piece`, `format_enfesto_operator_text`, `resolve_session_layers`, `is_layers_defined`, `pecas_na_mesa`, `calc_resto`, `calc_resto_efetivo`, `parse_session_params`, `encode_session_params`, `is_separar_sobras_enabled`, `is_refile_auto_enabled`
 
 ### `cad/layers_split.py`
-- funções: `log_sobras`, `separar_sobras_camadas`, `_cluster_pieces_by_y`, `_place_sobra_piece`, `_nest_sobras_on_last_sheet`, `_escolher_divisao_otima`, `separar_sobras_em_ponta`, `desfazer_separacao_sobras`
+- funções: `log_sobras`, `_recompact_plate`, `separar_sobras_camadas`, `_cluster_pieces_by_y`, `_place_sobra_piece`, `_nest_sobras_on_last_sheet`, `_escolher_divisao_otima`, `separar_sobras_em_ponta`, `desfazer_separacao_sobras`
 
 ### `cad/macro_engine.py`
 - `class SafeFormulaEvaluator` (linha 215, 4 métodos): Avaliador de expressões matemáticas e lógicas estritamente seguro.
@@ -521,7 +518,8 @@ ui/units.py                                          # ui/units.py - Formataçã
 - `class TestSidebarCounterAndLayers` (linha 12, 20 métodos)
 
 ### `tests/test_sobras_dobra.py`
-- `class TestSobrasDobra` (linha 52, 7 métodos)
+- `class TestSobrasDobra` (linha 53, 7 métodos)
+- `class TestRecompactacaoBase` (linha 131, 5 métodos): A retirada da peça ímpar não pode deixar buraco na placa de 4 camadas.
 - funções: `_shape`, `_layout`
 
 ### `tests/test_strategy_removal.py`
@@ -3055,6 +3053,53 @@ removida automaticamente.
 
 ---
 
+
+## 8.35. Recompactação da Base Após Retirar as Sobras (v1.6.14) `[CONFIRMADO pelo operador]`
+
+Relato do operador (sessão #282): "de onde ele retirou os ímpares e colocou na ponta de duas
+camadas ficou um buraco".
+
+### 1. Causa
+
+- A retirada da peça ímpar da placa de 4 camadas deixava a **vaga vazia** (a placa era tratada como
+  "congelada", sem renest). O refile corta o retângulo, mas o buraco interno continua sendo
+  material perdido e atrapalha o operador.
+
+### 2. Correção
+
+- Novo `_recompact_plate()` em `cad/layers_split.py`, chamado nas **duas** rotas da separação
+  (ponta/faixa em `separar_sobras_em_ponta` e Plano B em `separar_sobras_camadas`) logo após a
+  retirada das peças:
+  - agrupa as peças restantes por molde e reencaixa com `auto_nest_pieces` (`target_pieces`);
+  - **mantém os dicionários originais** e copia apenas `x`/`y`/`rotation` — trocar as peças quebrava
+    `piece_matches_shape` quando dois moldes têm o mesmo contorno/tamanho (a verificação física
+    acusava divergência e revertia tudo);
+  - rollback local: qualquer divergência de contagem mantém a placa original.
+
+### 3. Medição (6 moldes, 101 pares, 4 camadas, placa 1,38 × 2,98 m)
+
+| Métrica | Antes | Depois |
+|---|---|---|
+| Vãos na base (buracos) | 4 | **0** |
+| Altura utilizada | 2.424 mm | **2.271 mm** (−153 mm) |
+| Peças 4c / 2c | 300 / 6 | 294 / 18 |
+| Peças físicas | 1.212 | **1.212** (2P exato) |
+
+Com a base recompactada, o otimizador passou a preferir **k=1** (uma dobra): a base perde 6 peças e
+a ponta ganha 12, fechando a placa 153 mm mais curta — exatamente o efeito que o operador descreveu.
+
+### 4. Testes
+
+`tests/test_sobras_dobra.py` ganhou `TestRecompactacaoBase` (3 testes): base sem buracos após a
+separação, peças físicas preservadas e altura dentro da chapa. Suíte: **512 testes + 1 skip**.
+
+### 5. Mudança de regra
+
+A §6.5 dizia "placas de origem congeladas (não renestam)". Por pedido do operador, a placa que
+**cede** peças agora é recompactada; as demais continuam intocadas.
+
+---
+
 ## 9. Pendências e arquivos faltantes
 
 ### 9.1 Tarefas abertas
@@ -3212,6 +3257,7 @@ Local: `/home/dola/Documentos/clone do job/antigo/arquivos pos instalacao/Common
 <!-- AUTO:gitlog:start -->
 | Commit | Data | Autor | Mensagem |
 |---|---|---|---|
+| `e882072` | 2026-11-02 | Doletabgi | feat(cli): --criar-atalho cria o atalho versionado quando nao existe (v1.6.13) |
 | `0067076` | 2026-11-02 | Doletabgi | feat(ui): atalho da area de trabalho sincroniza sozinho na abertura (v1.6.12) |
 | `0c4abda` | 2026-11-02 | Doletabgi | feat(packaging): atalho da area de trabalho com a versao no nome (v1.6.11) |
 | `3e83a15` | 2026-11-02 | Doletabgi | fix(packaging): atalho da area de trabalho com caminhos contendo espacos (v1.6.10) |
@@ -3226,7 +3272,6 @@ Local: `/home/dola/Documentos/clone do job/antigo/arquivos pos instalacao/Common
 | `29223ea` | 2026-10-30 | Doletabgi | feat(ui): contador Sel na barra de status e Ctrl+clique para selecao (v1.5.8) |
 | `af874be` | 2026-10-30 | Doletabgi | feat(ui): clique na miniatura seleciona todas as pecas do molde na placa (v1.5.7) |
 | `7d96cb5` | 2026-10-30 | Doletabgi | fix(ui): contadores da barra lateral por placa no Layout Editor (v1.5.6) |
-| `840db6a` | 2026-10-30 | Doletabgi | feat(ui): bump magnetico interativo com mouse e auditoria do editor (v1.5.5) |
 <!-- AUTO:gitlog:end -->
 
 ---
@@ -3254,6 +3299,7 @@ Local: `/home/dola/Documentos/clone do job/antigo/arquivos pos instalacao/Common
 | Seg, 02/11/2026 | 18:00 | Antigravity | Blindagem da persistência de dados das sessões e eliminação de contaminação de moldes (Sessão #188): (1) Imutabilidade estrita na leitura: `SessionView.load_session` tornado 100% somente-leitura no banco, eliminando chamadas a `update_session` e configurando `persist=False` para chamadas a `set_gap_mm` e `set_margins` disparadas no carregamento; (2) Detecção e poda automática de moldes fantasmas em sessões já calculadas (moldes no JSON sem nenhuma peça física posicionada nos layouts); (3) Remoção do fallback artificial `pairs = 16` em `SessionView.set_shapes_data`, preservando os valores numéricos reais ou nulos; (4) Eliminação da contaminação pelo catálogo global (`self.current_shapes`) em `MainWindow._poll_nest_worker`, `clear_session_nesting` e `_ensure_separated_sobras_before_export`, garantindo que os cálculos e persistência manipulem apenas os moldes legítimos da sessão ativa com seus pares originais; (5) Sanitização profunda em `database.py` (`_sanitize_session_shapes`, `update_session_shapes` e `update_session`) blindando e preservando campos críticos (`pairs`, `sequence`, `rest`, `resto`, `target_pieces`); (6) Utilitário `tools/scrub_all_sessions_shapes.py` criado e executado com sucesso, higienizando sessões corrompidas no banco de dados e recuperando a grade de 15 moldes reais da Sessão #188; (7) Nova suíte de testes `tests/test_data_integrity.py` com 5 testes rigorosos cobrindo imutabilidade de load, preservação de pares, isolamento de catálogo e poda de fantasmas. | `database.py`, `ui/session_view.py`, `ui/main_window.py`, `tools/scrub_all_sessions_shapes.py`, `tests/test_data_integrity.py`, `docs/PROJETO_ATOM_JOBMANAGER.md` |
 | Seg, 02/11/2026 | 19:15 | Antigravity | Implantação da Ponta de 2 Camadas no topo da última placa (`tip_zone`) e visualização CAM no Layout Editor: (1) Reescrita do motor `_nest_sobras_on_last_sheet` em `cad/layers_split.py` com posicionamento forçado das sobras de 2 camadas no topo (maior Y) da última placa com modos `canto` e `faixa_topo` e folga de ponta de segurança (`folga_ponta`, default 15.0 mm); (2) Armazenamento estruturado de metadados `tip_zone` no dicionário do layout (`xmin`, `ymin`, `xmax`, `ymax`, `mode`, `pieces_count`); (3) Visualização no Layout Editor (`ui/layout_editor_view.py`) com linha divisória tracejada (`tip_line`), badge e rótulo indicativo `"Ponta 2 Camadas: X peças"` orientando o operador; (4) Integração com SessionView mantendo resto zero efetivo e testes unitários em `tests/test_layers_tip.py`. | `cad/layers_split.py`, `ui/layout_editor_view.py`, `ui/session_view.py`, `tests/test_layers_tip.py`, `docs/PROJETO_ATOM_JOBMANAGER.md` |
 | Seg, 02/11/2026 | 19:45 | Antigravity | Instruções explícitas de corte e enfesto misto do almoxarifado na Impressão A4 (`LayoutPrintDialog`): (1) Função `format_enfesto_operator_text` em `cad/layers_rule.py` gerando texto claro e padronizado especificando quantidade e metragem de folhas de comprimento total e folhas de ponta (ex: `CORTAR: X folhas de COMPRIMENTO TOTAL (Y mm) [4 camadas] + Y folhas de PONTA (Z mm) [2 camadas]`); (2) Renderização visual da delimitação da zona de ponta (`tip_zone`) no preview A4 (canvas Tkinter) e na exportação física/PDF de alta resolução via Pillow; (3) Exibição destacada das instruções operacionais no cabeçalho/metadados da página para conferência no almoxarifado antes do desenrolar do material; (4) Testes em `tests/test_layout_print_legend.py`. | `cad/layers_rule.py`, `ui/layout_print_dialog.py`, `tests/test_layout_print_legend.py`, `docs/PROJETO_ATOM_JOBMANAGER.md` |
+| Ter, 03/11/2026 | 07:20 | DeepSeek | Recompactação da base após retirar as sobras (v1.6.14): o operador relatou que a vaga da peça ímpar virava um buraco na placa de 4 camadas. Novo `_recompact_plate()` chamado nas duas rotas da separação (ponta/faixa e Plano B) reencaixa as peças restantes com `auto_nest_pieces`/`target_pieces`, mantendo os dicionários originais e copiando só posição/rotação (substituir as peças quebrava `piece_matches_shape` quando dois moldes têm o mesmo contorno e revertia a separação); rollback local em divergência. Medição (6 moldes, 101 pares, 4 camadas, placa 1,38 × 2,98 m): buracos 4 → 0, altura 2.424 → 2.271 mm, 4c/2c 300/6 → 294/18, físicas 1.212 = 2P. `tests/test_sobras_dobra.py` ganhou `TestRecompactacaoBase` (3 testes). 512 testes + 1 skip. | `cad/layers_split.py`, `tests/test_sobras_dobra.py`, `docs/PROJETO_ATOM_JOBMANAGER.md`, `config.py`, `.github/workflows/release.yml` |
 | Seg, 02/11/2026 | 23:25 | DeepSeek | Criação manual do atalho via linha de comando (v1.6.13): o operador apagou os atalhos e a sincronização automática só atualizava atalhos existentes. Adicionado `--criar-atalho` (ou `--atalho`) no `main.py`, que força a criação de `corteac-<versão>.desktop` no menu e na Área de Trabalho, remove versões anteriores e imprime os caminhos; `ui/desktop_shortcut.py` ganhou `criar_se_ausente=True` e `_instalar_icone()` (copia o ícone para `~/.local/share/corteac/corteac.png`, pois o PyInstaller guarda os assets no binário). Validado na máquina do operador: `CorteAC-1.6.12` criado em `~/.local/share/applications` e `~/Área de trabalho`, com `Exec=` aspeado e `Icon=` estável. | `ui/desktop_shortcut.py`, `main.py`, `docs/PROJETO_ATOM_JOBMANAGER.md`, `config.py`, `.github/workflows/release.yml` |
 | Seg, 02/11/2026 | 23:05 | DeepSeek | Sincronização automática do atalho na abertura (v1.6.12): o atalho só era atualizado se o operador rodasse o instalador, e no Mint pt-BR a pasta é `~/Área de Trabalho` (não `~/Desktop`). Novo `ui/desktop_shortcut.py::sincronizar_atalho()` chamado no início do `main()`: procura qualquer atalho do CorteAC no menu e nas pastas Desktop/Área de Trabalho/Area de Trabalho, remove os antigos (inclusive `CorteAC.desktop` manual) e recria `corteac-<versão>.desktop` com nome versionado, `Exec=` aspeado, ícone do pacote, `X-CorteAC-Version` e `gio metadata::trusted`; se não houver atalho, não cria nada. Instalador ganhou o mesmo fallback pt-BR. Validação com pacote real e HOME isolado: `CorteAC.desktop` → `corteac-1.6.12.desktop` (Name=CorteAC-1.6.12). `tests/test_desktop_shortcut.py` com 5 testes. 509 testes + 1 skip. | `ui/desktop_shortcut.py`, `main.py`, `packaging/instalar_atalho.sh`, `tests/test_desktop_shortcut.py`, `docs/PROJETO_ATOM_JOBMANAGER.md`, `config.py`, `.github/workflows/release.yml` |
 | Seg, 02/11/2026 | 22:40 | DeepSeek | Atalho da Área de Trabalho com a versão no nome (v1.6.11): novo template único `packaging/instalar_atalho.sh` (usado pelo `build_linux.sh` e pelo CI via `sed` do `config.APP_VERSION`) que cria `corteac-<versão>.desktop` com `Name=CorteAC-<versão>`, `Exec=` aspeado, `Icon=` do pacote e `X-CorteAC-Version`, removendo os atalhos antigos (`corteac.desktop`, `corteac-*.desktop`); a versão é obtida preferencialmente perguntando ao próprio binário (`--version`). No Windows, novo `packaging/criar_atalho_windows.ps1` + `versao.txt` no ZIP (CI e `build_exe_windows.bat`) criando `CorteAC-<versão>.lnk` e removendo os atalhos antigos. `README_LINUX.txt`/`README_WINDOWS.md` atualizados. Novo `tests/test_desktop_shortcut.py` (3 testes). 507 testes + 1 skip. | `packaging/instalar_atalho.sh`, `packaging/criar_atalho_windows.ps1`, `build_linux.sh`, `build_exe_windows.bat`, `.github/workflows/release.yml`, `README_LINUX.txt`, `README_WINDOWS.md`, `tests/test_desktop_shortcut.py`, `docs/PROJETO_ATOM_JOBMANAGER.md`, `config.py` |

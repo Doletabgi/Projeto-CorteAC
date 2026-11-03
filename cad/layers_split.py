@@ -42,6 +42,7 @@ from cad.nesting_engine import (
     piece_matches_shape,
     sort_shapes_by_sequence,
     nest_multi_sheet,
+    auto_nest_pieces,
     calculate_yield,
     calculate_atom_cutting_time,
 )
@@ -52,6 +53,119 @@ logger = logging.getLogger("layers_split")
 def log_sobras(msg: str):
     """Emite log formatado com tag [SOBRAS] para rastreabilidade de nesting e auditoria."""
     logger.info("[SOBRAS] %s", msg)
+
+
+def _recompact_plate(
+    plate: Dict[str, Any],
+    strategy: str = "flashnestsheet",
+    params: str = "HighYield",
+    layers: int = 4,
+    gap_mm: Optional[float] = None,
+) -> bool:
+    """
+    Reencaixa as peças restantes de uma placa que cedeu sobras, fechando os buracos.
+
+    Ao mover a peça ímpar para a ponta de 2 camadas, a placa de 4 camadas ficava com a
+    vaga vazia (o operador via um "buraco" no encaixe). Aqui as peças restantes são
+    reencaixadas compactamente, preservando exatamente as contagens por molde. Qualquer
+    divergência mantém a placa original (rollback local).
+    """
+    pieces = plate.get("pieces") or []
+    if len(pieces) < 2:
+        return False
+
+    bed_w = float(plate.get("width_mm") or plate.get("sheet_width_mm") or 1380.0)
+    bed_h = float(plate.get("height_mm") or plate.get("sheet_height_mm") or 2990.0)
+    margins = {
+        "left": float(plate.get("margin_left", 10.0)),
+        "right": float(plate.get("margin_right", 10.0)),
+        "top": float(plate.get("margin_top", 10.0)),
+        "bottom": float(plate.get("margin_bottom", 10.0)),
+    }
+    gap = float(gap_mm if gap_mm is not None else (plate.get("gap_mm", 1.0) or 1.0))
+
+    grupos: Dict[Any, Dict[str, Any]] = {}
+    for p in pieces:
+        shp = p.get("shape") if isinstance(p.get("shape"), dict) else {}
+        nome = p.get("name") or shp.get("name") or "Molde"
+        size = str(p.get("size") or shp.get("size") or "")
+        chave = (str(nome), size)
+        if chave not in grupos:
+            cntr = p.get("contour") or shp.get("contour") or []
+            if not cntr:
+                return False
+            base_shp = dict(shp) if shp else {}
+            base_shp.update({
+                "name": nome,
+                "size": size,
+                "contour": [dict(q) for q in cntr],
+                "pairs": 0,          # pares zerados: a demanda vem de target_pieces
+                "layers": layers,
+                "sequence": len(grupos) + 1,
+            })
+            grupos[chave] = {"shape": base_shp, "count": 0}
+        grupos[chave]["count"] += 1
+
+    shapes_in = []
+    for info in grupos.values():
+        shp = dict(info["shape"])
+        shp["target_pieces"] = info["count"]
+        shapes_in.append(shp)
+
+    total = len(pieces)
+    try:
+        novos = auto_nest_pieces(
+            available_shapes=shapes_in,
+            bed_width_mm=bed_w,
+            bed_height_mm=bed_h,
+            target_count=total,
+            strategy=strategy,
+            params=params,
+            gap_mm=gap,
+            margins=margins,
+            layers=layers,
+        )
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("[SOBRAS] Recompactação falhou (%s); mantendo placa original.", exc)
+        return False
+
+    if not novos or len(novos) != total:
+        logger.info("[SOBRAS] Recompactação não fechou a contagem (%s/%s); mantendo placa original.",
+                    len(novos or []), total)
+        return False
+
+    # Mantém os dicionários ORIGINAIS (identidade do molde intacta) e copia só a posição.
+    # Substituir as peças quebrava `piece_matches_shape` quando dois moldes têm o mesmo
+    # contorno/tamanho, fazendo a verificação física acusar divergência e reverter tudo.
+    def _chave(item: Dict[str, Any]) -> Any:
+        shp = item.get("shape") if isinstance(item.get("shape"), dict) else {}
+        return (str(item.get("name") or shp.get("name") or ""),
+                str(item.get("size") or shp.get("size") or ""))
+
+    originais: Dict[Any, List[Dict[str, Any]]] = {}
+    for item in pieces:
+        originais.setdefault(_chave(item), []).append(item)
+
+    novos_por_grupo: Dict[Any, List[Dict[str, Any]]] = {}
+    for item in novos:
+        novos_por_grupo.setdefault(_chave(item), []).append(item)
+
+    for chave, lista in originais.items():
+        candidatos = novos_por_grupo.get(chave, [])
+        if len(candidatos) != len(lista):
+            logger.info("[SOBRAS] Recompactação divergiu no molde %s (%s/%s); mantendo placa original.",
+                        chave[0], len(candidatos), len(lista))
+            return False
+        for original, novo in zip(lista, candidatos):
+            original["x"] = float(novo.get("x", original.get("x", 0.0)))
+            original["y"] = float(novo.get("y", original.get("y", 0.0)))
+            original["rotation"] = float(novo.get("rotation", original.get("rotation", 0.0)))
+            for campo in ("poly", "bbox", "_segs"):
+                original.pop(campo, None)
+
+    plate["num_items"] = len(pieces)
+    logger.info("[SOBRAS] Placa recompactada: %d peças reencaixadas sem buraco.", len(pieces))
+    return True
 
 
 def separar_sobras_camadas(
@@ -158,6 +272,7 @@ def separar_sobras_camadas(
     # 7. Identificação de déficits manuais e retirada de peças excedentes das placas de 4 camadas
     manual_deficits: Dict[Any, int] = {}
     removed_pieces_map: Dict[Any, List[Dict[str, Any]]] = {k: [] for k in desired}
+    affected_plates: set = set()
 
     for k, info in desired.items():
         shp = info["shape"]
@@ -202,6 +317,16 @@ def separar_sobras_camadas(
                     removed_pieces_map[k].append(p_removed)
                     excess_to_remove -= 1
                     curr_counts_4[k] -= 1
+                affected_plates.add(id(ly))
+
+    # 7.1 Recompacta as placas que cederam peças: fecha o "buraco" deixado pela retirada
+    if affected_plates:
+        _strat = (session.get("strategy") if isinstance(session, dict) else None) or "flashnestsheet"
+        _clean, _ = parse_session_params(session_params)
+        _gap = float(session.get("gap_mm", 1.0)) if isinstance(session, dict) and session.get("gap_mm") is not None else None
+        for ly in layouts_4:
+            if id(ly) in affected_plates and ly.get("pieces"):
+                _recompact_plate(ly, strategy=_strat, params=_clean or "HighYield", layers=4, gap_mm=_gap)
 
     # 8. Remoção de layouts de 4 camadas vazios (que só continham peças de sobra)
     layouts_4 = [ly for ly in layouts_4 if len(ly.get("pieces", [])) > 0]
@@ -743,6 +868,7 @@ def separar_sobras_em_ponta(
     # 7. Identificação de déficits manuais e coleta de sobras
     manual_deficits: Dict[Any, int] = {}
     sobras_to_place: List[Dict[str, Any]] = []
+    affected_plates: set = set()
 
     for k, info in desired.items():
         shp = info["shape"]
@@ -784,6 +910,7 @@ def separar_sobras_em_ponta(
                     })
                     excess -= 1
                     curr_counts_4[k] -= 1
+                affected_plates.add(id(ly))
 
     # 7.2 DOBRA: cada peça retirada das 4 camadas vira DUAS na ponta de 2 camadas.
     #     A cópia é um desenho novo da MESMA peça cortada a 2 camadas: 2 desenhos x 2
@@ -808,6 +935,15 @@ def separar_sobras_em_ponta(
             sobras_to_place.append({"shape_key": k, "piece": copia, "shape": info["shape"]})
         logger.info("[SOBRAS] Molde %s: %d dobra(s) na ponta de 2 camadas.",
                     info["shape"].get("name"), faltam)
+
+    # 7.1 Recompacta as placas que cederam peças: fecha o "buraco" deixado pela retirada
+    if affected_plates:
+        _strat = (session.get("strategy") if isinstance(session, dict) else None) or "flashnestsheet"
+        _clean, _ = parse_session_params(session_params)
+        _gap = float(session.get("gap_mm", 1.0)) if isinstance(session, dict) and session.get("gap_mm") is not None else None
+        for ly in layouts_4:
+            if id(ly) in affected_plates and ly.get("pieces"):
+                _recompact_plate(ly, strategy=_strat, params=_clean or "HighYield", layers=4, gap_mm=_gap)
 
     # 8. Elimina placas de 4 camadas vazias
     layouts_4 = [ly for ly in layouts_4 if len(ly.get("pieces", [])) > 0]
