@@ -1,12 +1,14 @@
 # PROJETO ATOM JobManager Reborn: Documento Vivo
 
 > **Finalidade:** Documento mestre estruturado e autocontido projetado para alimentar e contextualizar qualquer Inteligência Artificial (Antigravity, Claude, ChatGPT, etc.) ou engenheiro sobre 100% do projeto — regras de negócio de calçados/couro (ATOM), arquitetura técnica, schemas de banco (MySQL/SQLite), formatos proprietários (.LAY, .ONX/CZLIB), algoritmos de nesting/CAM, UI/UX e histórico — em um único arquivo de referência imediata.
+**Atalho de leitura:** o comportamento ATUAL de encaixe, sobras, impressão e atalho está consolidado na **§8.47**; as seções §8.26–§8.46 são o histórico de como se chegou lá.
+>
 > **Regra de ouro:** o que está marcado `[CONFIRMADO]` veio do relatório, do código ou do usuário. O que está `[NÃO CONFIRMADO]` é suposição e não deve virar "fato" sem validação. O que está `[PREENCHER]` a IA deve completar lendo o código real.
 
 <!-- AUTO:header:start -->
-**Última sincronização com o código:** 2026-11-03 18:05 (HEAD ao gerar: `b92200c`; 138 arquivos Python, ~67800 linhas)
+**Última sincronização com o código:** 2026-11-03 18:59 (HEAD ao gerar: `2d5cfe7`; 138 arquivos Python, ~67800 linhas)
 <!-- AUTO:header:end -->
-**Versão deste documento:** 1
+**Versão deste documento:** 2
 
 ---
 
@@ -18,7 +20,7 @@
 2. Nunca apagar entradas do Changelog (seção 10). Apenas acrescentar.
 3. Ao mudar um item de `[NÃO CONFIRMADO]` para `[CONFIRMADO]`, registrar quem confirmou e quando.
 4. O Claude só afirma sobre o código aquilo que está descrito aqui. Se algo não estiver aqui, o Claude pergunta em vez de presumir.
-5. **Publicação Automática de Releases a Cada 5 Commits (`v2026.X`) (seção 12)**: a cada 5 commits acumulados no repositório (medidos e monitorados via `tools/check_release_cadence.py`), uma nova release oficial deve ser publicada automaticamente via GitHub Actions gerando binários portáteis Windows (`CorteAC.exe`) e Linux (`corteac_linux`) atualizados, incrementando rigorosamente a sequência de versões em `config.py`, `.github/workflows/release.yml` e tags do Git.
+5. **Publicação de Releases (seção 12)**: toda entrega com mudança de código gera **release oficial** via GitHub Actions (binários `CorteAC.exe`, `CorteAC-Windows-x64.zip`, `corteac_linux`, `CorteAC-Linux-x64.tar.gz`), incrementando a versão **SemVer** em `config.py`, `.github/workflows/release.yml` e na tag `vX.Y.Z` — sempre os três em sincronia.
 6. **Centralização Total de Relatórios e Especificações**: A partir de 30/10/2026, **todo e qualquer relatório de fase, diagnóstico técnico, benchmark, especificação de arquitetura ou decisão de projeto deve ser documentado DIRETAMENTE neste arquivo (`docs/PROJETO_ATOM_JOBMANAGER.md`)**. É expressamente proibido criar novos arquivos `.md` avulsos na pasta `docs/`, mantendo a pasta limpa e este arquivo como a fonte única de verdade absoluta.
 
 ---
@@ -3519,6 +3521,73 @@ Suíte mantida em **561 testes + 1 skip**.
 
 ---
 
+## 8.47. Estado Consolidado: Encaixe, Sobras, Impressão e Atalho (v1.6.25) `[CONFIRMADO]`
+
+Esta seção consolida o comportamento **atual** (não o histórico) de tudo que envolve encaixe,
+sobras, impressão e distribuição. As seções §8.26–§8.46 detalham como se chegou aqui.
+
+### 1. Regras de negócio em vigor
+
+1. **Camadas**: cada layout tem um número de camadas (2 ou 4); a demanda em peças desenhadas é
+   $\lceil 2P / L \rceil$ para $P$ pares.
+2. **Sentido da peça**: o encaixe automático usa **somente 0°/180°** (intertravamento macho-fêmea).
+   **Nunca** deita a peça (90°/270°) — regra do operador, válida também para o preenchimento de vãos
+   e para o macro da IA-teste.
+3. **Sobra/ponta de 2 camadas** (pares ímpares em 4 camadas): cada peça retirada das 4 camadas vira
+   **duas** na ponta ($N_4 = P//2 - k$, $N_2 = (P \bmod 2) + 2k$), mantendo $4N_4 + 2N_2 = 2P$.
+   A divisão é escolhida automaticamente pela menor altura consumida (dobra só quando compensa).
+4. **Sobra só na última placa**: o motor enche as placas na ordem e o resto fica na última.
+5. **Refile**: corta a placa no fim das peças (gap 1 mm); pode ser automático (todas as placas) ou
+   manual (✂ Refilar / Ctrl+T na placa aberta).
+6. **Resto** na grade de moldes: 0 quando a separação fecha a produção exata.
+
+### 2. Fluxo do botão Gerar
+
+```
+Gerar
+ └─ nest_multi_sheet                (encaixe 0/180, multi-placa)
+     └─ preencher_buracos_em_placas (vãos: só 0/180; peças de 4 camadas da última placa)
+         └─ separar_sobras_em_ponta (ponta 2c + escolha da divisão com dobra)
+             └─ trim_layout_dict    (refile automático, se ligado; clamp da ponta)
+                 └─ save_session_layouts (persistência)
+```
+
+### 3. Limites medidos (não são bugs)
+
+| Cenário | Resultado |
+|---|---|
+| 6 moldes × 101 pares, chapa 1,38 × 2,98 m, 4 camadas | **246 peças na placa 0** (80,5% após refile) + **60 na última** (67,5%) — 306 no total |
+| Maior vão contínuo na placa cheia | **40 × 660 mm** (a peça tem ~95 × 210 mm → não cabe) |
+| Teto prático de aproveitamento | **80–85%** (o contorno do pé ocupa ~68% do próprio retângulo) |
+| Peças deitadas | **0** (115 a 0° + 116 a 180° no teste) |
+
+### 4. Impressão A4/PDF
+
+- Todas as medidas em **metros com vírgula** (cabeçalho, régua `0,1 / 0,2 …`, refile, almoxarifado).
+- Cabeçalho da **placa com ponta**: duas linhas `2 folhas longas … m. N camadas` e
+  `2 folhas curtas: … m. N camadas` (a curta desconta a faixa da ponta), **sem** `Material Area`.
+- Cabeçalho das **demais placas**: formato clássico (`Dimensions` + `Material Area`).
+- Linha `Description` removida de todas as folhas.
+- Linha azul da ponta: tracejada, **sempre dentro do contorno** da placa (clamp único em
+  `cad.layers_rule.clamp_tip_zone`, usado por editor, miniatura, refile e PDF).
+- Instrução de almoxarifado (`format_enfesto_operator_text`) também em metros e com clamp.
+
+### 5. Persistência e distribuição
+
+- **Ctrl+S** no Layout Editor grava peças, dimensões refiladas, `trim_cut_line`, `tip_zone` e
+  `layers_tip`; a sessão em memória é sincronizada (senão uma gravação posterior sobrescrevia).
+- **Atalho da Área de Trabalho**: `CorteAC-<versão>` (cria com `--criar-atalho`, atualiza sozinho na
+  abertura), ícone em `~/.local/share/corteac/corteac.png`; no Windows, `criar_atalho_windows.ps1`.
+- Releases no GitHub com 4 artefatos + notas por versão (§12).
+
+### 6. Qualidade
+
+- Suíte: **561 testes + 1 skip** (inclui regressões de compactação, vãos, rotação 0/180, refile salvo,
+  impressão em metros, atalho versionado).
+- Testes de catálogo usam banco temporário (não dependem do `jobmanager.db` de produção).
+
+---
+
 ## 9. Pendências e arquivos faltantes
 
 ### 9.1 Tarefas abertas
@@ -3543,12 +3612,21 @@ Suíte mantida em **561 testes + 1 skip**.
 - [x] Adicionar coluna 'Resto' na grade de Moldes da SessionView (paridade com sessão 619955 do Job Manager original) — Concluído (`cad/layers_rule.py`, `ui/session_view.py`, `ui/sort_utils.py`, `tests/test_shapes_resto.py`); regra inferida `[INFERIDO]` $-( (2 \times pares \pmod{camadas}) // 2 )$ pendente de confirmação empírica no Windows
 - [x] Corrigir travamento do Encaixe com contornos reais: guard de complexidade no NFP, orçamento global de tempo, timeout por placa no SAT, progresso por estimativa e thread safety da UI (Fase 6.8) — Concluído (`cad/nesting_backend.py`, `cad/nesting_engine.py`, `ui/main_window.py`, `ui/session_view.py`, `tests/test_multisheet_progress.py`)
 - [x] NFP para contorno real: `is_complex_polygon` + `_contact_fallback` eliminam a explosão combinatória nos motores que usam NFP (IA-teste e NfpBackend) — Concluído (§8.12)
+- [ ] **Otimizador de linha** (encaixe denso): escolher, por fileira, a combinação de tamanhos que fecha a largura exata (misturando 31a…36a), sempre 0°/180°, para fechar as placas acima dos ~80% atuais — mudança de algoritmo, opcional e ligável (§8.46 documenta o limite medido)
+- [ ] Reempacotamento global das placas já geradas (permite recuperar as ~4 peças que o ajuste manual do operador encaixou em relação ao automático)
 - [ ] Refino estrutural restante do NFP: cache por par de moldes + rotação com translação, pré-normalização única das partes convexas e fim das cópias profundas (só necessário para moldes simples/convexos em lote)
 - [x] Benchmark de regressão com contorno real de 130+ vértices — Concluído (`tools/bench_real_shapes.py`)
 - [x] Separação automática das sobras de 4 camadas em layout extra de 2 camadas (`cad/layers_split.py`) — Concluído (regra $N_4 = P // 2$ e $N_2 = P \pmod 2$, verificação física atômica $\sum (\text{peças} \times \text{layers}) = 2P$, conservação de peças, idempotência, checkbox de controle em `params`, resto efetivo 0, indicador `(sobras)` e 16 testes em `tests/test_layers_split.py`)
 - [x] Implantação da Ponta de 2 Camadas no topo da última placa (`tip_zone`) com modos `canto` e `faixa_topo`, folga de segurança configurável e linha delimitadora tracejada com etiqueta CAM no Layout Editor — Concluído (`cad/layers_split.py`, `ui/layout_editor_view.py`, `ui/session_view.py`, `tests/test_layers_tip.py`)
 - [x] Instruções explícitas de corte/enfesto do almoxarifado no relatório de impressão A4 (`format_enfesto_operator_text`) e visualização da ponta na impressão física/PDF — Concluído (`cad/layers_rule.py`, `ui/layout_print_dialog.py`, `tests/test_layout_print_legend.py`)
 - [x] Correção do espalhamento de peças no Nesting por contaminação de opções de sessão em `params` (`clean_preset`), restaurando intertravamento contorno-a-contorno, alternância 0°/180° e limpeza de estado prévio — Concluído (`cad/nesting_backend.py`, `cad/nesting_engine.py`, `ui/main_window.py`, `tests/test_multisheet_nesting.py`)
+- [x] Blindagem do encaixe: `pairs` manda e `target_pieces` residual é ignorado; testes de catálogo isolados em banco temporário; regressão de compactação — Concluído (§8.29, `tests/test_nesting_compactness.py`, `tests/_catalog_fixtures.py`)
+- [x] Regra da dobra 4c→2c com divisão automática por aproveitamento e contadores `4c · 2c` — Concluído (§8.30, `tests/test_sobras_dobra.py`)
+- [x] Ícone do app, atalho versionado `CorteAC-<versão>` e `--criar-atalho` (Linux e Windows) — Concluído (§8.31–§8.34, `packaging/instalar_atalho.sh`, `packaging/criar_atalho_windows.ps1`, `ui/desktop_shortcut.py`)
+- [x] Impressão: Ctrl+P/ícone voltaram a abrir; medidas em metros; folhas longas/curtas só na placa com ponta; `Description` e `Material Area` removidas — Concluído (§8.36–§8.43, `ui/layout_print_dialog.py`, `tests/test_print_layout_abre.py`, `tests/test_print_metros.py`)
+- [x] Linha azul da ponta (miniatura, editor e PDF) limitada à placa refilada com `clamp_tip_zone` único — Concluído (§8.37–§8.40)
+- [x] Salvar o refile no Ctrl+S (sessão em memória sincronizada com os layouts) — Concluído (§8.39, `tests/test_layout_save_refile.py`)
+- [x] Preenchimento de vãos entre placas medido pela área real das peças, respeitando 0°/180° — Concluído (§8.44–§8.46, `tests/test_preencher_buracos.py`)
 
 ### 9.2 Arquivos de amostra que faltam (por prioridade)
 
@@ -3676,6 +3754,7 @@ Local: `/home/dola/Documentos/clone do job/antigo/arquivos pos instalacao/Common
 <!-- AUTO:gitlog:start -->
 | Commit | Data | Autor | Mensagem |
 |---|---|---|---|
+| `2d5cfe7` | 2026-11-03 | Doletabgi | fix(nesting): preenchimento de vaos mede a area real das pecas (v1.6.25) |
 | `b92200c` | 2026-11-03 | Doletabgi | fix(nesting): peca nunca e deitada — apenas 0/180 graus (v1.6.24) |
 | `10514da` | 2026-11-03 | Doletabgi | feat(nesting): preenche os vaos entre placas com pecas da ultima placa (v1.6.23) |
 | `b53c1bc` | 2026-11-03 | Doletabgi | fix(print): cabecalho de folhas apenas na placa com ponta (v1.6.22) |
@@ -3690,7 +3769,6 @@ Local: `/home/dola/Documentos/clone do job/antigo/arquivos pos instalacao/Common
 | `e882072` | 2026-11-02 | Doletabgi | feat(cli): --criar-atalho cria o atalho versionado quando nao existe (v1.6.13) |
 | `0067076` | 2026-11-02 | Doletabgi | feat(ui): atalho da area de trabalho sincroniza sozinho na abertura (v1.6.12) |
 | `0c4abda` | 2026-11-02 | Doletabgi | feat(packaging): atalho da area de trabalho com a versao no nome (v1.6.11) |
-| `3e83a15` | 2026-11-02 | Doletabgi | fix(packaging): atalho da area de trabalho com caminhos contendo espacos (v1.6.10) |
 <!-- AUTO:gitlog:end -->
 
 ---
