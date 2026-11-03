@@ -5654,6 +5654,20 @@ class MainWindow(tk.Tk):
                 self.lbl_status_msg.config(text=f"Auto-Nest: {warn}")
                 return
 
+            # Preenche os vãos das placas anteriores movendo peças da última placa
+            # (evita o "buraco" que o operador via como desperdício de material).
+            try:
+                from cad.nesting_engine import preencher_buracos_em_placas
+                layouts, _info_lacunas = preencher_buracos_em_placas(
+                    layouts,
+                    gap_mm=float(self.current_session.get("gap_mm", 1.0) or 1.0) if self.current_session else 1.0,
+                    time_budget_s=4.0,
+                )
+                if _info_lacunas.get("movidas"):
+                    print(f"[BURACOS] {_info_lacunas['movidas']} peça(s) realocadas para vãos")
+            except Exception as exc:  # noqa: BLE001
+                print(f"[AVISO] Falha ao preencher buracos: {exc}")
+
             # Separação automática das sobras de 4 camadas em ponta de 2 camadas
             split_summary = None
             if self.current_session and layouts:

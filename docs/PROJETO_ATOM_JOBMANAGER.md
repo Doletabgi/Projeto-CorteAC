@@ -4,7 +4,7 @@
 > **Regra de ouro:** o que está marcado `[CONFIRMADO]` veio do relatório, do código ou do usuário. O que está `[NÃO CONFIRMADO]` é suposição e não deve virar "fato" sem validação. O que está `[PREENCHER]` a IA deve completar lendo o código real.
 
 <!-- AUTO:header:start -->
-**Última sincronização com o código:** 2026-11-03 16:02 (HEAD ao gerar: `504c073`; 134 arquivos Python, ~65795 linhas)
+**Última sincronização com o código:** 2026-11-03 16:20 (HEAD ao gerar: `b53c1bc`; 135 arquivos Python, ~66077 linhas)
 <!-- AUTO:header:end -->
 **Versão deste documento:** 1
 
@@ -171,6 +171,7 @@ tests/test_nesting_compactness.py                    # tests/test_nesting_compac
 tests/test_nesting_contour_gap.py
 tests/test_nesting_mode_architecture.py              # JobManager 2000 (Python Edition)
 tests/test_nfp.py                                    # tests/test_nfp.py
+tests/test_preencher_buracos.py                      # tests/test_preencher_buracos.py
 tests/test_print_layout_abre.py                      # tests/test_print_layout_abre.py
 tests/test_print_metros.py                           # tests/test_print_metros.py
 tests/test_semver.py                                 # Testes Automatizados para o Sistema de Versionamento SemVer (MAJOR.MINOR.PATCH)
@@ -316,7 +317,7 @@ ui/units.py                                          # ui/units.py - Formataçã
 - funções: `count_convex_parts`, `get_nesting_backend`
 
 ### `cad/nesting_engine.py`
-- funções: `parse_sequence_num`, `sort_shapes_by_sequence`, `get_paired_offset_cached`, `try_hole_filling_placement`, `check_collision_against_placed`, `calculate_yield`, `calculate_atom_cutting_time`, `parse_coupling_angles`, `dieproc_nest_pieces`, `nest_synthetic_engine`, `nest_tape_engine`, `auto_nest_pieces`, `_auto_nest_pieces_core`, `piece_matches_shape`, `nest_multi_sheet`
+- funções: `parse_sequence_num`, `sort_shapes_by_sequence`, `get_paired_offset_cached`, `try_hole_filling_placement`, `check_collision_against_placed`, `calculate_yield`, `calculate_atom_cutting_time`, `parse_coupling_angles`, `dieproc_nest_pieces`, `nest_synthetic_engine`, `nest_tape_engine`, `auto_nest_pieces`, `_auto_nest_pieces_core`, `piece_matches_shape`, `preencher_buracos_em_placas` (+1)
 
 ### `cad/nfp.py`
 - funções: `_translation_invariant_key`, `is_complex_polygon`, `_contact_fallback`, `_normalize_points`, `polygon_signed_area`, `_point_in_triangle`, `_is_strictly_convex`, `decompose_convex`, `minkowski_sum_convex`, `clear_nfp_cache`, `compute_nfp`, `contact_placement_x`, `contact_placement_y`, `find_lowest_point_in_nfp`, `contact_placement`
@@ -478,6 +479,10 @@ ui/units.py                                          # ui/units.py - Formataçã
 ### `tests/test_nfp.py`
 - `class TestNFP` (linha 38, 7 métodos)
 - `class TestTransformCacheIdentity` (linha 161, 2 métodos): Regressão: o cache de transformação era indexado por id(contorno) sem validar o
+
+### `tests/test_preencher_buracos.py`
+- `class TestPreencherBuracos` (linha 25, 4 métodos)
+- funções: `_peca`
 
 ### `tests/test_print_layout_abre.py`
 - `class TestContourArea` (linha 25, 2 métodos)
@@ -3368,6 +3373,48 @@ linhas e não mostra `Material Area`. Suíte: **536 testes + 1 skip**.
 
 ---
 
+
+## 8.44. Preenchimento dos Vãos Entre Placas (v1.6.23) `[CONFIRMADO]`
+
+Relato do operador: "mesmo refilada, olhe o buraco — isso é desperdício de material, só neste
+pedaço ficaria uns 100 reais em 4 camadas".
+
+### 1. Causa
+
+- O motor de nesting encerra a última fileira e deixa um bolsão no canto da placa; as peças que
+  sobravam iam para a placa seguinte mesmo existindo espaço vazio na anterior (o "buraco" apontado).
+- Antes de qualquer ajuste, o cenário de 6 moldes × 101 pares (placa 1,37 × 2,82 m) fechava em
+  **78,01%** na placa 0 com 231 peças e 75 peças na placa 1.
+
+### 2. Correção: `preencher_buracos_em_placas()`
+
+Novo passe em `cad/nesting_engine.py`, chamado no Gerar/Refazer logo após o nesting:
+
+1. mapeia a ocupação de cada placa numa grade grossa (40 mm);
+2. encontra as **regiões vazias conectadas** (bolsões) com área útil;
+3. tenta encaixar cada peça de **4 camadas** da última placa em cada bolsão, com rotações
+   0°/90°/180°/270° e colisão real (`polygons_collide`, gap respeitado);
+4. se a última placa ficar vazia, ela é removida (menos uma chapa);
+5. peças de **2 camadas** (ponta) nunca são movidas.
+
+### 3. Medição (mesmo cenário)
+
+| | Antes | Depois |
+|---|---|---|
+| Placa 0 | 231 peças · 78,01% | **236 peças · 79,90%** |
+| Placa 1 | 75 peças · 29,29% | 70 peças · 27,40% |
+| Total | 306 peças | 306 peças (nada criado/perdido) |
+
+Orçamento de tempo: 4 s (no Gerar) para não travar a interface.
+
+### 4. Testes
+
+`tests/test_preencher_buracos.py` (4 testes): move peça da última placa para o vão e remove a placa
+vazia; não move peças de 2 camadas; nenhuma colisão após o preenchimento; com uma placa só não faz nada.
+Suíte: **540 testes + 1 skip**.
+
+---
+
 ## 9. Pendências e arquivos faltantes
 
 ### 9.1 Tarefas abertas
@@ -3525,6 +3572,7 @@ Local: `/home/dola/Documentos/clone do job/antigo/arquivos pos instalacao/Common
 <!-- AUTO:gitlog:start -->
 | Commit | Data | Autor | Mensagem |
 |---|---|---|---|
+| `b53c1bc` | 2026-11-03 | Doletabgi | fix(print): cabecalho de folhas apenas na placa com ponta (v1.6.22) |
 | `504c073` | 2026-11-03 | Doletabgi | feat(print): folhas longas/curtas no cabecalho e sem Material Area (v1.6.21) |
 | `4b621ce` | 2026-11-03 | Doletabgi | feat(print): remove a linha Description das folhas impressas (v1.6.20) |
 | `5d85d8b` | 2026-11-03 | Doletabgi | fix(tip): clamp unico da ponta — linha azul nao vaza na miniatura nem no refile (v1.6.19) |
@@ -3539,7 +3587,6 @@ Local: `/home/dola/Documentos/clone do job/antigo/arquivos pos instalacao/Common
 | `3e83a15` | 2026-11-02 | Doletabgi | fix(packaging): atalho da area de trabalho com caminhos contendo espacos (v1.6.10) |
 | `8cdca5d` | 2026-11-02 | Doletabgi | feat(packaging): icone do app e atalho da area de trabalho no pacote Linux (v1.6.9) |
 | `5001039` | 2026-11-02 | Doletabgi | feat(sobras): dobra 4c->2c, divisao automatica e contadores por enfesto (v1.6.8) |
-| `2048256` | 2026-11-02 | Doletabgi | feat(sobras): ponta de 2 camadas com encaixe compacto e testes de regressao (v1.6.7) |
 <!-- AUTO:gitlog:end -->
 
 ---
@@ -3567,6 +3614,7 @@ Local: `/home/dola/Documentos/clone do job/antigo/arquivos pos instalacao/Common
 | Seg, 02/11/2026 | 18:00 | Antigravity | Blindagem da persistência de dados das sessões e eliminação de contaminação de moldes (Sessão #188): (1) Imutabilidade estrita na leitura: `SessionView.load_session` tornado 100% somente-leitura no banco, eliminando chamadas a `update_session` e configurando `persist=False` para chamadas a `set_gap_mm` e `set_margins` disparadas no carregamento; (2) Detecção e poda automática de moldes fantasmas em sessões já calculadas (moldes no JSON sem nenhuma peça física posicionada nos layouts); (3) Remoção do fallback artificial `pairs = 16` em `SessionView.set_shapes_data`, preservando os valores numéricos reais ou nulos; (4) Eliminação da contaminação pelo catálogo global (`self.current_shapes`) em `MainWindow._poll_nest_worker`, `clear_session_nesting` e `_ensure_separated_sobras_before_export`, garantindo que os cálculos e persistência manipulem apenas os moldes legítimos da sessão ativa com seus pares originais; (5) Sanitização profunda em `database.py` (`_sanitize_session_shapes`, `update_session_shapes` e `update_session`) blindando e preservando campos críticos (`pairs`, `sequence`, `rest`, `resto`, `target_pieces`); (6) Utilitário `tools/scrub_all_sessions_shapes.py` criado e executado com sucesso, higienizando sessões corrompidas no banco de dados e recuperando a grade de 15 moldes reais da Sessão #188; (7) Nova suíte de testes `tests/test_data_integrity.py` com 5 testes rigorosos cobrindo imutabilidade de load, preservação de pares, isolamento de catálogo e poda de fantasmas. | `database.py`, `ui/session_view.py`, `ui/main_window.py`, `tools/scrub_all_sessions_shapes.py`, `tests/test_data_integrity.py`, `docs/PROJETO_ATOM_JOBMANAGER.md` |
 | Seg, 02/11/2026 | 19:15 | Antigravity | Implantação da Ponta de 2 Camadas no topo da última placa (`tip_zone`) e visualização CAM no Layout Editor: (1) Reescrita do motor `_nest_sobras_on_last_sheet` em `cad/layers_split.py` com posicionamento forçado das sobras de 2 camadas no topo (maior Y) da última placa com modos `canto` e `faixa_topo` e folga de ponta de segurança (`folga_ponta`, default 15.0 mm); (2) Armazenamento estruturado de metadados `tip_zone` no dicionário do layout (`xmin`, `ymin`, `xmax`, `ymax`, `mode`, `pieces_count`); (3) Visualização no Layout Editor (`ui/layout_editor_view.py`) com linha divisória tracejada (`tip_line`), badge e rótulo indicativo `"Ponta 2 Camadas: X peças"` orientando o operador; (4) Integração com SessionView mantendo resto zero efetivo e testes unitários em `tests/test_layers_tip.py`. | `cad/layers_split.py`, `ui/layout_editor_view.py`, `ui/session_view.py`, `tests/test_layers_tip.py`, `docs/PROJETO_ATOM_JOBMANAGER.md` |
 | Seg, 02/11/2026 | 19:45 | Antigravity | Instruções explícitas de corte e enfesto misto do almoxarifado na Impressão A4 (`LayoutPrintDialog`): (1) Função `format_enfesto_operator_text` em `cad/layers_rule.py` gerando texto claro e padronizado especificando quantidade e metragem de folhas de comprimento total e folhas de ponta (ex: `CORTAR: X folhas de COMPRIMENTO TOTAL (Y mm) [4 camadas] + Y folhas de PONTA (Z mm) [2 camadas]`); (2) Renderização visual da delimitação da zona de ponta (`tip_zone`) no preview A4 (canvas Tkinter) e na exportação física/PDF de alta resolução via Pillow; (3) Exibição destacada das instruções operacionais no cabeçalho/metadados da página para conferência no almoxarifado antes do desenrolar do material; (4) Testes em `tests/test_layout_print_legend.py`. | `cad/layers_rule.py`, `ui/layout_print_dialog.py`, `tests/test_layout_print_legend.py`, `docs/PROJETO_ATOM_JOBMANAGER.md` |
+| Ter, 03/11/2026 | 17:05 | DeepSeek | Preenchimento dos vãos entre placas (v1.6.23): o motor deixava um bolsão no canto da placa e mandava as peças restantes para a placa seguinte, gerando desperdício (operador estimou ~R$100 em 4 camadas num único vão). Novo `preencher_buracos_em_placas()` em `cad/nesting_engine.py`, chamado no Gerar/Refazer: mapeia ocupação em grade de 40 mm, encontra regiões vazias conectadas e encaixa peças de 4 CAMADAS da última placa nos bolsões (0/90/180/270°, colisão real com gap), removendo a placa final se ficar vazia; peças de 2 camadas (ponta) nunca se movem. Medição (6 moldes × 101 pares, placa 1,37 × 2,82 m): placa 0 de 231 peças/78,01% para 236/79,90%; placa 1 de 75 para 70; total 306 preservado. `tests/test_preencher_buracos.py` (4 testes). 540 testes + 1 skip. | `cad/nesting_engine.py`, `ui/main_window.py`, `tests/test_preencher_buracos.py`, `docs/PROJETO_ATOM_JOBMANAGER.md`, `config.py`, `.github/workflows/release.yml` |
 | Ter, 03/11/2026 | 16:25 | DeepSeek | Cabeçalho de folhas só na placa com ponta (v1.6.22): o novo formato ("2 folhas longas / 2 folhas curtas", sem "Material Area") passa a valer apenas para o layout que tem `tip_zone`; a placa 0 do enfesto mantém o cabeçalho clássico (`Dimensions` + `Material Area`). `LayoutPrintDialog` decide pelo campo `dimensions_lines`, e o editor/SessionView só o preenchem quando o layout impresso tem ponta. `TestCabecalhoSomenteNaPlacaComPonta` (3 testes). 536 testes + 1 skip. | `ui/layout_print_dialog.py`, `ui/layout_editor_view.py`, `ui/session_view.py`, `tests/test_print_metros.py`, `docs/PROJETO_ATOM_JOBMANAGER.md`, `config.py`, `.github/workflows/release.yml` |
 | Ter, 03/11/2026 | 16:05 | DeepSeek | Cabeçalho com folhas longas/curtas e sem "Material Area" (v1.6.21): a linha `Dimensions` foi substituída por duas linhas em metros — "2 folhas longas 1,35 x 1,13 m. 2 camadas" e "2 folhas curtas: 1,35 x 0,88 m. 2 camadas" — calculadas por novo `format_dimensions_folhas()` (folhas curtas = placa até a divisória da ponta via `clamp_tip_zone`, com metade das camadas do enfesto). A linha `Material Area:` foi removida do canvas e do PDF; `LayoutEditorView.print_layout()` e `SessionView.print_current_layout()` passam `dimensions_lines`. `TestCabecalhoFolhas` (3 testes). 533 testes + 1 skip. | `cad/layers_rule.py`, `ui/layout_print_dialog.py`, `ui/layout_editor_view.py`, `ui/session_view.py`, `tests/test_print_metros.py`, `docs/PROJETO_ATOM_JOBMANAGER.md`, `config.py`, `.github/workflows/release.yml` |
 | Ter, 03/11/2026 | 13:35 | DeepSeek | Remoção da linha "Description" na impressão (v1.6.20): a pedido do operador, o cabeçalho das folhas impressas não exibe mais `Description: fn98 - v1.2.36 - 12.09.2012`; a linha foi removida dos dois renderizadores do `LayoutPrintDialog` (canvas e Pillow/PDF), mantendo Layout, Material, Dimensions, áreas, Refile e a linha de Shapes/Instances/Gap/Enfesto. Novo `TestCabecalhoSemDescription` em `tests/test_print_metros.py`. 530 testes + 1 skip. | `ui/layout_print_dialog.py`, `tests/test_print_metros.py`, `docs/PROJETO_ATOM_JOBMANAGER.md`, `config.py`, `.github/workflows/release.yml` |

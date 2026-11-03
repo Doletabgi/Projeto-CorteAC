@@ -3,9 +3,12 @@ JobManager 2000 (Python Edition)
 Nesting Engine & ATOM Machine Cycle Estimator (Recriação de FreeNest & AtomCuttingTimeEstimator)
 """
 
+import logging
 import math
 import os
 import time
+
+logger = logging.getLogger(__name__)
 
 from cad.geometry import (
     transform_contour, polygon_area, polygon_perimeter, polygon_bbox,
@@ -1088,6 +1091,195 @@ def piece_matches_shape(piece: dict, shape: dict) -> bool:
         return True
 
     return False
+
+
+def preencher_buracos_em_placas(
+    layouts,
+    gap_mm: float = 1.0,
+    cell_mm: float = 40.0,
+    step_mm: float = 10.0,
+    time_budget_s: float = 4.0,
+):
+    """
+    Preenche vãos ("buracos") das placas já encaixadas movendo peças da ÚLTIMA placa.
+
+    O motor de nesting encerra a última fileira e deixa um bolsão no canto; essas peças
+    eram material perdido (o operador via o buraco no editor). Aqui:
+      1. mapeia a ocupação de cada placa numa grade grossa;
+      2. encontra regiões vazias (bolsões);
+      3. tenta encaixar cada peça da última placa (4 camadas) em cada bolsão,
+         testando 0/90/180/270° com colisão real (gap respeitado);
+      4. se a última placa ficar vazia, ela é removida (menos uma chapa).
+
+    Retorna (layouts, info) com info = {"movidas": n, "placas_removidas": n}.
+    """
+    import math
+    import time as _time
+
+    info = {"movidas": 0, "placas_removidas": 0}
+    if not layouts or len(layouts) < 2:
+        return layouts, info
+
+    t0 = _time.time()
+
+    def _poly(p):
+        cnt = p.get("contour")
+        if not cnt:
+            shp = p.get("shape") if isinstance(p.get("shape"), dict) else {}
+            cnt = shp.get("contour")
+        if not cnt:
+            return None
+        return transform_contour(cnt, float(p.get("x", 0.0)), float(p.get("y", 0.0)),
+                                 float(p.get("rotation", p.get("angle", 0.0))))
+
+    def _camadas(p, ly):
+        try:
+            return int(p.get("layers") or ly.get("layers") or 4)
+        except (TypeError, ValueError):
+            return 4
+
+    origem = layouts[-1]
+    origem_pieces = list(origem.get("pieces") or [])
+
+    def _alvos_da_origem():
+        """Peças de 4 camadas da última placa (as de 2 camadas ficam na ponta)."""
+        return [p for p in origem_pieces if _camadas(p, origem) != 2]
+
+    candidatos = _alvos_da_origem()
+    if not candidatos:
+        return layouts, info
+
+    # Bounding box de cada candidato em cada rotação, para pré-filtrar
+    def _bbox_rot(p, rot):
+        cnt = p.get("contour") or (p.get("shape") or {}).get("contour") or []
+        if not cnt:
+            return None
+        loc = transform_contour(cnt, 0.0, 0.0, rot)
+        return polygon_bbox(loc), loc
+
+    for ly in layouts[:-1]:
+        if not candidatos or _time.time() - t0 > time_budget_s:
+            break
+        bw = float(ly.get("width_mm") or ly.get("sheet_width_mm") or 1380.0)
+        bh = float(ly.get("height_mm") or ly.get("sheet_height_mm") or 2980.0)
+        margin = 10.0
+        pecas = ly.setdefault("pieces", [])
+
+        polys = []
+        for p in pecas:
+            q = _poly(p)
+            if q:
+                polys.append((q, polygon_bbox(q), p))
+
+        # 1. Grade de ocupação (célula grossa)
+        nx = max(1, int(bw // cell_mm))
+        ny = max(1, int(bh // cell_mm))
+        ocupado = bytearray(nx * ny)
+        for _, bb, _p in polys:
+            i0 = max(0, int(bb[0] // cell_mm)); i1 = min(nx - 1, int(bb[2] // cell_mm))
+            j0 = max(0, int(bb[1] // cell_mm)); j1 = min(ny - 1, int(bb[3] // cell_mm))
+            for j in range(j0, j1 + 1):
+                base = j * nx
+                for i in range(i0, i1 + 1):
+                    ocupado[base + i] = 1
+
+        # 2. Regiões vazias conectadas (4-vizinhos)
+        visitado = bytearray(nx * ny)
+        regioes = []
+        for j in range(ny):
+            for i in range(nx):
+                idx = j * nx + i
+                if ocupado[idx] or visitado[idx]:
+                    continue
+                fila = [(i, j)]
+                visitado[idx] = 1
+                min_i = max_i = i
+                min_j = max_j = j
+                n_cel = 0
+                while fila:
+                    ci, cj = fila.pop()
+                    n_cel += 1
+                    if ci < min_i: min_i = ci
+                    if ci > max_i: max_i = ci
+                    if cj < min_j: min_j = cj
+                    if cj > max_j: max_j = cj
+                    for di, dj in ((1, 0), (-1, 0), (0, 1), (0, -1)):
+                        ni, nj = ci + di, cj + dj
+                        if 0 <= ni < nx and 0 <= nj < ny:
+                            k = nj * nx + ni
+                            if not ocupado[k] and not visitado[k]:
+                                visitado[k] = 1
+                                fila.append((ni, nj))
+                if n_cel >= 4:
+                    regioes.append((n_cel, (min_i * cell_mm, min_j * cell_mm,
+                                            (max_i + 1) * cell_mm, (max_j + 1) * cell_mm)))
+        regioes.sort(reverse=True)
+
+        if not regioes:
+            continue
+
+        # 3. Tenta encaixar peças da última placa nos bolsões
+        for regiao in regioes:
+            if _time.time() - t0 > time_budget_s:
+                break
+            rx0, ry0, rx1, ry1 = regiao[1]
+            restantes = []
+            for p in candidatos:
+                posto = False
+                for rot in (0.0, 90.0, 180.0, 270.0):
+                    br = _bbox_rot(p, rot)
+                    if not br:
+                        continue
+                    (bx0, by0, bx1, by1), loc = br
+                    w = bx1 - bx0
+                    h = by1 - by0
+                    if w > (rx1 - rx0) or h > (ry1 - ry0):
+                        continue
+                    y = ry0
+                    while y + h <= ry1 and not posto:
+                        x = rx0
+                        while x + w <= rx1 and not posto:
+                            if _time.time() - t0 > time_budget_s:
+                                break
+                            cand_poly = [{"x": q["x"] + x - bx0, "y": q["y"] + y - by0} for q in loc]
+                            cb = polygon_bbox(cand_poly)
+                            colide = False
+                            for q, qb, _pp in polys:
+                                if cb[2] < qb[0] or cb[0] > qb[2] or cb[3] < qb[1] or cb[1] > qb[3]:
+                                    continue
+                                if polygons_collide(cand_poly, q, gap=gap_mm, bbox_a=cb, bbox_b=qb):
+                                    colide = True
+                                    break
+                            if not colide:
+                                p["x"] = float(x - bx0)
+                                p["y"] = float(y - by0)
+                                p["rotation"] = float(rot)
+                                for campo in ("poly", "bbox", "_segs"):
+                                    p.pop(campo, None)
+                                pecas.append(p)
+                                polys.append((cand_poly, cb, p))
+                                info["movidas"] += 1
+                                posto = True
+                            x += step_mm
+                        y += step_mm
+                    if posto:
+                        break
+                if not posto:
+                    restantes.append(p)
+            candidatos = restantes
+            if not candidatos:
+                break
+
+    if info["movidas"]:
+        movidas_ids = {id(p) for p in origem_pieces} - {id(p) for p in origem_pieces if p in candidatos}
+        origem["pieces"] = list(candidatos)
+        origem["num_items"] = len(candidatos)
+        if not candidatos:
+            layouts.pop()
+            info["placas_removidas"] = 1
+        logger.info("[BURACOS] %d peça(s) movidas da última placa para vãos das anteriores%s",
+                    info["movidas"], " (placa final removida)" if info["placas_removidas"] else "")
+    return layouts, info
 
 
 def nest_multi_sheet(

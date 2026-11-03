@@ -9,7 +9,7 @@ on:
       tag_name:
         description: 'Tag de versão SemVer (ex: v1.0.0)'
         required: false
-        default: 'v1.6.22'
+        default: 'v1.6.23'
 
 permissions:
   contents: write
@@ -189,7 +189,13 @@ jobs:
 
             ---
 
-            ### 🛠️ Recursos Incluídos Nesta Versão (v1.6.22):
+            ### 🛠️ Recursos Incluídos Nesta Versão (v1.6.23):
+            - **Vãos entre placas são preenchidos (menos desperdício)**:
+              - O motor deixava um bolsão no canto da placa e mandava as peças restantes para a placa seguinte.
+              - Novo passe `preencher_buracos_em_placas()`: peças de 4 camadas da última placa passam a ocupar os vãos das anteriores (0/90/180/270°, gap respeitado); se a última placa esvaziar, ela é removida.
+              - Medição (6 moldes × 101 pares, 1,37 × 2,82 m): placa 0 de 78,01% para **79,90%** (231 → 236 peças), sem criar nem perder peças.
+              - **540 testes automatizados** (539 passando, 1 skip, 0 falhas).
+            - **Novidades da v1.6.22 (mantidas)**: cabeçalho de folhas só na placa com ponta.
             - **Cabeçalho de folhas apenas na placa com a ponta**:
               - A placa 0 (sem ponta) continua com `Dimensions` + `Material Area`, exatamente como antes.
               - A placa com ponta de 2 camadas mostra `2 folhas longas ... m. 2 camadas` e `2 folhas curtas: ... m. 2 camadas`, sem `Material Area`.
