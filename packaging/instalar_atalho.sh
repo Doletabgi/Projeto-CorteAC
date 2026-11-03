@@ -25,13 +25,22 @@ ARQ="corteac-$VERSAO.desktop"
 APPS="$HOME/.local/share/applications"
 mkdir -p "$APPS"
 
-# 2. Remove atalhos de versões anteriores (mantém sempre um único ícone na mesa)
-rm -f "$APPS"/corteac.desktop "$APPS"/corteac-*.desktop 2>/dev/null || true
-DESKTOP_DIR="$(xdg-user-dir DESKTOP 2>/dev/null || echo "$HOME/Desktop")"
-if [ -d "$DESKTOP_DIR" ]; then
-    rm -f "$DESKTOP_DIR"/corteac.desktop "$DESKTOP_DIR"/corteac-*.desktop 2>/dev/null || true
-    rm -f "$DESKTOP_DIR"/CorteAC*.desktop 2>/dev/null || true
+# 2. Remove atalhos de versões anteriores (mantém sempre um único ícone na mesa).
+#    Cobre os antigos criados à mão ("CorteAC.desktop") e a pasta pt-BR do Mint.
+rm -f "$APPS"/corteac.desktop "$APPS"/corteac-*.desktop "$APPS"/CorteAC*.desktop 2>/dev/null || true
+
+DESKTOP_DIR="$(xdg-user-dir DESKTOP 2>/dev/null || true)"
+if [ -z "$DESKTOP_DIR" ] || [ ! -d "$DESKTOP_DIR" ]; then
+    for cand in "$HOME/Desktop" "$HOME/Área de Trabalho" "$HOME/Area de Trabalho"; do
+        if [ -d "$cand" ]; then DESKTOP_DIR="$cand"; break; fi
+    done
 fi
+if [ -z "$DESKTOP_DIR" ]; then DESKTOP_DIR="$HOME/Desktop"; fi
+
+for d in "$DESKTOP_DIR" "$HOME/Desktop" "$HOME/Área de Trabalho" "$HOME/Area de Trabalho"; do
+    [ -d "$d" ] || continue
+    rm -f "$d"/corteac.desktop "$d"/corteac-*.desktop "$d"/CorteAC*.desktop 2>/dev/null || true
+done
 
 # 3. Gera o .desktop (Exec= aspeado: o caminho pode conter espaços)
 DESK="$APPS/$ARQ"

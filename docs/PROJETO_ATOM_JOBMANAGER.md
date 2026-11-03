@@ -4,7 +4,7 @@
 > **Regra de ouro:** o que está marcado `[CONFIRMADO]` veio do relatório, do código ou do usuário. O que está `[NÃO CONFIRMADO]` é suposição e não deve virar "fato" sem validação. O que está `[PREENCHER]` a IA deve completar lendo o código real.
 
 <!-- AUTO:header:start -->
-**Última sincronização com o código:** 2026-11-02 21:43 (HEAD ao gerar: `3e83a15`; 130 arquivos Python, ~64465 linhas)
+**Última sincronização com o código:** 2026-11-02 21:52 (HEAD ao gerar: `0c4abda`; 131 arquivos Python, ~64678 linhas)
 <!-- AUTO:header:end -->
 **Versão deste documento:** 1
 
@@ -224,6 +224,7 @@ ui/add_shapes_dialog.py                              # JobManager 2000 (Python E
 ui/batch_nest_dialog.py                              # JobManager 2000 (Python Edition)
 ui/cad_canvas.py                                     # JobManager 2000 (Python Edition)
 ui/debug_panel.py                                    # JobManager 2000 (Python Edition)
+ui/desktop_shortcut.py                               # ui/desktop_shortcut.py
 ui/dieproc_dialog.py                                 # JobManager 2000 (Python Edition)
 ui/edit_shape_in_session_dialog.py                   # JobManager 2000 (Python Edition)
 ui/fill_user_dialog.py                               # JobManager 2000 (Python Edition)
@@ -377,6 +378,7 @@ ui/units.py                                          # ui/units.py - Formataçã
 
 ### `tests/test_desktop_shortcut.py`
 - `class TestDesktopShortcut` (linha 20, 6 métodos)
+- `class TestSincronizacaoAutomatica` (linha 103, 4 métodos): O app sincroniza o atalho existente para a versão atual ao iniciar (Linux).
 
 ### `tests/test_dual_exporter.py`
 - `class TestCZLIB` (linha 22, 4 métodos): Validação do container de compressão CZLIB da Comelz.
@@ -620,6 +622,9 @@ ui/units.py                                          # ui/units.py - Formataçã
 
 ### `ui/debug_panel.py`
 - `class DebugPanel` (linha 24, 9 métodos): Camada 4: Debug / Diagnóstico.
+
+### `ui/desktop_shortcut.py`
+- funções: `_desktop_dirs`, `_atalhos_existentes`, `_conteudo_desktop`, `sincronizar_atalho`
 
 ### `ui/dieproc_dialog.py`
 - `class DieProcDialog` (linha 12, 19 métodos)
@@ -2962,6 +2967,53 @@ Suíte: **507 testes + 1 skip**.
 
 ---
 
+
+## 8.33. Sincronização Automática do Atalho na Abertura (v1.6.12) `[CONFIRMADO]`
+
+Sintoma: mesmo após a v1.6.11, o ícone do Mint continuava com o nome/ícone antigo ("CorteAC").
+
+### 1. Causa
+
+- O atalho só era reescrito se o operador **rodasse o `instalar_atalho.sh`** — quem apenas
+  substituía o binário continuava com o `.desktop` antigo na mesa.
+- No Mint em português a pasta é **`~/Área de Trabalho`** (não `~/Desktop`); o instalador
+  dependia de `xdg-user-dir DESKTOP` e, quando ele falhava, apontava para `~/Desktop`.
+
+### 2. Correção
+
+- Novo `ui/desktop_shortcut.py::sincronizar_atalho()` chamado **no início do `main()`** (antes de
+  `--version`/`--check-db`):
+  - procura **qualquer** atalho do CorteAC no menu (`~/.local/share/applications`) e nas pastas de
+    área de trabalho (`Desktop`, `Área de Trabalho`, `Area de Trabalho`);
+  - se existir algum (inclusive o antigo `CorteAC.desktop` criado à mão), remove e recria
+    `corteac-<versão>.desktop` com `Name=CorteAC-<versão>`, `Exec=` aspeado, `Icon=` do pacote,
+    `X-CorteAC-Version` e `gio metadata::trusted`;
+  - se **não** existir atalho, não cria nada (não invade a mesa do operador).
+- `packaging/instalar_atalho.sh` ganhou o mesmo fallback de pastas pt-BR e limpeza ampliada
+  (`CorteAC*.desktop`, `corteac-*.desktop`).
+
+### 3. Validação (pacote real, HOME isolado)
+
+```
+antes : Área de Trabalho/CorteAC.desktop        (Name=CorteAC)
+exec  : ./corteac_linux --version
+saída : Atalho da Área de Trabalho atualizado para CorteAC-1.6.12
+depois: Área de Trabalho/corteac-1.6.12.desktop (Name=CorteAC-1.6.12, Exec aspeado, ícone do pacote)
+```
+
+Testes em `tests/test_desktop_shortcut.py` (5 no total): atalho versionado, versão lida do
+binário, remoção da versão anterior, sincronização automática de atalho antigo e não-criação
+quando não existe atalho. Suíte: **509 testes + 1 skip**.
+
+### 4. Se o ícone ainda não mudar (cache do ambiente)
+
+1. Rodar o binário novo uma vez (ele reescreve o atalho).
+2. Cinnamon/Mint: pressionar **F5** na Área de Trabalho; se persistir, sair e entrar na sessão
+   (`Ctrl+Alt+Backspace`) para o ambiente reler os `.desktop`.
+3. Se o ícone antigo estiver **fixado no painel**, remova o pino e fixe o novo `CorteAC-1.6.12`.
+
+---
+
 ## 9. Pendências e arquivos faltantes
 
 ### 9.1 Tarefas abertas
@@ -3119,6 +3171,7 @@ Local: `/home/dola/Documentos/clone do job/antigo/arquivos pos instalacao/Common
 <!-- AUTO:gitlog:start -->
 | Commit | Data | Autor | Mensagem |
 |---|---|---|---|
+| `0c4abda` | 2026-11-02 | Doletabgi | feat(packaging): atalho da area de trabalho com a versao no nome (v1.6.11) |
 | `3e83a15` | 2026-11-02 | Doletabgi | fix(packaging): atalho da area de trabalho com caminhos contendo espacos (v1.6.10) |
 | `8cdca5d` | 2026-11-02 | Doletabgi | feat(packaging): icone do app e atalho da area de trabalho no pacote Linux (v1.6.9) |
 | `5001039` | 2026-11-02 | Doletabgi | feat(sobras): dobra 4c->2c, divisao automatica e contadores por enfesto (v1.6.8) |
@@ -3133,7 +3186,6 @@ Local: `/home/dola/Documentos/clone do job/antigo/arquivos pos instalacao/Common
 | `7d96cb5` | 2026-10-30 | Doletabgi | fix(ui): contadores da barra lateral por placa no Layout Editor (v1.5.6) |
 | `840db6a` | 2026-10-30 | Doletabgi | feat(ui): bump magnetico interativo com mouse e auditoria do editor (v1.5.5) |
 | `c78190d` | 2026-10-30 | Doletabgi | fix(cad): cache de transformacao validava identidade reciclada (v1.5.4) |
-| `d4dbdc6` | 2026-10-30 | Doletabgi | fix(ui): leitura continua do encaixe no editor (v1.5.3) |
 <!-- AUTO:gitlog:end -->
 
 ---
@@ -3161,6 +3213,7 @@ Local: `/home/dola/Documentos/clone do job/antigo/arquivos pos instalacao/Common
 | Seg, 02/11/2026 | 18:00 | Antigravity | Blindagem da persistência de dados das sessões e eliminação de contaminação de moldes (Sessão #188): (1) Imutabilidade estrita na leitura: `SessionView.load_session` tornado 100% somente-leitura no banco, eliminando chamadas a `update_session` e configurando `persist=False` para chamadas a `set_gap_mm` e `set_margins` disparadas no carregamento; (2) Detecção e poda automática de moldes fantasmas em sessões já calculadas (moldes no JSON sem nenhuma peça física posicionada nos layouts); (3) Remoção do fallback artificial `pairs = 16` em `SessionView.set_shapes_data`, preservando os valores numéricos reais ou nulos; (4) Eliminação da contaminação pelo catálogo global (`self.current_shapes`) em `MainWindow._poll_nest_worker`, `clear_session_nesting` e `_ensure_separated_sobras_before_export`, garantindo que os cálculos e persistência manipulem apenas os moldes legítimos da sessão ativa com seus pares originais; (5) Sanitização profunda em `database.py` (`_sanitize_session_shapes`, `update_session_shapes` e `update_session`) blindando e preservando campos críticos (`pairs`, `sequence`, `rest`, `resto`, `target_pieces`); (6) Utilitário `tools/scrub_all_sessions_shapes.py` criado e executado com sucesso, higienizando sessões corrompidas no banco de dados e recuperando a grade de 15 moldes reais da Sessão #188; (7) Nova suíte de testes `tests/test_data_integrity.py` com 5 testes rigorosos cobrindo imutabilidade de load, preservação de pares, isolamento de catálogo e poda de fantasmas. | `database.py`, `ui/session_view.py`, `ui/main_window.py`, `tools/scrub_all_sessions_shapes.py`, `tests/test_data_integrity.py`, `docs/PROJETO_ATOM_JOBMANAGER.md` |
 | Seg, 02/11/2026 | 19:15 | Antigravity | Implantação da Ponta de 2 Camadas no topo da última placa (`tip_zone`) e visualização CAM no Layout Editor: (1) Reescrita do motor `_nest_sobras_on_last_sheet` em `cad/layers_split.py` com posicionamento forçado das sobras de 2 camadas no topo (maior Y) da última placa com modos `canto` e `faixa_topo` e folga de ponta de segurança (`folga_ponta`, default 15.0 mm); (2) Armazenamento estruturado de metadados `tip_zone` no dicionário do layout (`xmin`, `ymin`, `xmax`, `ymax`, `mode`, `pieces_count`); (3) Visualização no Layout Editor (`ui/layout_editor_view.py`) com linha divisória tracejada (`tip_line`), badge e rótulo indicativo `"Ponta 2 Camadas: X peças"` orientando o operador; (4) Integração com SessionView mantendo resto zero efetivo e testes unitários em `tests/test_layers_tip.py`. | `cad/layers_split.py`, `ui/layout_editor_view.py`, `ui/session_view.py`, `tests/test_layers_tip.py`, `docs/PROJETO_ATOM_JOBMANAGER.md` |
 | Seg, 02/11/2026 | 19:45 | Antigravity | Instruções explícitas de corte e enfesto misto do almoxarifado na Impressão A4 (`LayoutPrintDialog`): (1) Função `format_enfesto_operator_text` em `cad/layers_rule.py` gerando texto claro e padronizado especificando quantidade e metragem de folhas de comprimento total e folhas de ponta (ex: `CORTAR: X folhas de COMPRIMENTO TOTAL (Y mm) [4 camadas] + Y folhas de PONTA (Z mm) [2 camadas]`); (2) Renderização visual da delimitação da zona de ponta (`tip_zone`) no preview A4 (canvas Tkinter) e na exportação física/PDF de alta resolução via Pillow; (3) Exibição destacada das instruções operacionais no cabeçalho/metadados da página para conferência no almoxarifado antes do desenrolar do material; (4) Testes em `tests/test_layout_print_legend.py`. | `cad/layers_rule.py`, `ui/layout_print_dialog.py`, `tests/test_layout_print_legend.py`, `docs/PROJETO_ATOM_JOBMANAGER.md` |
+| Seg, 02/11/2026 | 23:05 | DeepSeek | Sincronização automática do atalho na abertura (v1.6.12): o atalho só era atualizado se o operador rodasse o instalador, e no Mint pt-BR a pasta é `~/Área de Trabalho` (não `~/Desktop`). Novo `ui/desktop_shortcut.py::sincronizar_atalho()` chamado no início do `main()`: procura qualquer atalho do CorteAC no menu e nas pastas Desktop/Área de Trabalho/Area de Trabalho, remove os antigos (inclusive `CorteAC.desktop` manual) e recria `corteac-<versão>.desktop` com nome versionado, `Exec=` aspeado, ícone do pacote, `X-CorteAC-Version` e `gio metadata::trusted`; se não houver atalho, não cria nada. Instalador ganhou o mesmo fallback pt-BR. Validação com pacote real e HOME isolado: `CorteAC.desktop` → `corteac-1.6.12.desktop` (Name=CorteAC-1.6.12). `tests/test_desktop_shortcut.py` com 5 testes. 509 testes + 1 skip. | `ui/desktop_shortcut.py`, `main.py`, `packaging/instalar_atalho.sh`, `tests/test_desktop_shortcut.py`, `docs/PROJETO_ATOM_JOBMANAGER.md`, `config.py`, `.github/workflows/release.yml` |
 | Seg, 02/11/2026 | 22:40 | DeepSeek | Atalho da Área de Trabalho com a versão no nome (v1.6.11): novo template único `packaging/instalar_atalho.sh` (usado pelo `build_linux.sh` e pelo CI via `sed` do `config.APP_VERSION`) que cria `corteac-<versão>.desktop` com `Name=CorteAC-<versão>`, `Exec=` aspeado, `Icon=` do pacote e `X-CorteAC-Version`, removendo os atalhos antigos (`corteac.desktop`, `corteac-*.desktop`); a versão é obtida preferencialmente perguntando ao próprio binário (`--version`). No Windows, novo `packaging/criar_atalho_windows.ps1` + `versao.txt` no ZIP (CI e `build_exe_windows.bat`) criando `CorteAC-<versão>.lnk` e removendo os atalhos antigos. `README_LINUX.txt`/`README_WINDOWS.md` atualizados. Novo `tests/test_desktop_shortcut.py` (3 testes). 507 testes + 1 skip. | `packaging/instalar_atalho.sh`, `packaging/criar_atalho_windows.ps1`, `build_linux.sh`, `build_exe_windows.bat`, `.github/workflows/release.yml`, `README_LINUX.txt`, `README_WINDOWS.md`, `tests/test_desktop_shortcut.py`, `docs/PROJETO_ATOM_JOBMANAGER.md`, `config.py` |
 | Seg, 02/11/2026 | 22:20 | DeepSeek | Atalho da área de trabalho com caminhos contendo espaços (v1.6.10): o `Exec=` gerado pelo `instalar_atalho.sh` (e pelo pacote do CI) passou a ser aspeado (`Exec="$DIR/corteac_linux"`); sem as aspas, pastas como "clone do job" faziam o atalho não abrir. Validado executando o comando do próprio `Exec=` a partir do pacote extraído (retornou `CorteAC 1.6.10`), com `Icon=` apontando para o `corteac.png` do pacote e cópia do atalho para a Área de Trabalho. | `build_linux.sh`, `.github/workflows/release.yml`, `docs/PROJETO_ATOM_JOBMANAGER.md`, `config.py` |
 | Seg, 02/11/2026 | 22:00 | DeepSeek | Ícone do aplicativo e atalho da área de trabalho (v1.6.9): auditoria confirmou que o ícone da JANELA (iconphoto/iconbitmap) e o ícone EMBUTIDO no `CorteAC.exe` (PyInstaller `--icon assets/app_icon.ico`) já são atualizados em toda release, mas NÃO existia atalho de área de trabalho (nenhum `.desktop`). O pacote Linux passou a incluir `corteac.png` e `instalar_atalho.sh`, que gera `~/.local/share/applications/corteac.desktop` com caminho absoluto, `Icon=` do pacote, `Path=`, `StartupWMClass=corteac_linux`, cópia para a Área de Trabalho via `xdg-user-dir DESKTOP`, `gio metadata::trusted` e `update-desktop-database`; `README_LINUX.txt` e `README_WINDOWS.md` documentam o passo a passo (incluindo o cache de ícones do Windows/Explorer). | `build_linux.sh`, `.github/workflows/release.yml`, `README_LINUX.txt`, `README_WINDOWS.md`, `docs/PROJETO_ATOM_JOBMANAGER.md`, `config.py` |

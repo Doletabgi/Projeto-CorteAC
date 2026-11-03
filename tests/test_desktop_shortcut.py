@@ -99,5 +99,60 @@ class TestDesktopShortcut(unittest.TestCase):
             self.assertTrue((apps / "corteac-1.6.11.desktop").exists())
 
 
+
+class TestSincronizacaoAutomatica(unittest.TestCase):
+    """O app sincroniza o atalho existente para a versão atual ao iniciar (Linux)."""
+
+    def setUp(self):
+        if not sys.platform.startswith("linux"):
+            self.skipTest("sincronização de .desktop é específica do Linux")
+
+    def _home_fake(self, tmp: Path, com_atalho_antigo: bool):
+        home = tmp / "home"
+        area = home / "Área de Trabalho"   # padrão pt-BR do Mint
+        area.mkdir(parents=True)
+        if com_atalho_antigo:
+            (area / "CorteAC.desktop").write_text("[Desktop Entry]\nName=CorteAC\n")
+        return home, area
+
+    def test_atualiza_atalho_antigo_para_a_versao(self):
+        from unittest.mock import patch
+        from ui.desktop_shortcut import sincronizar_atalho
+
+        with tempfile.TemporaryDirectory() as td:
+            tmp = Path(td)
+            home, area = self._home_fake(tmp, True)
+            exe = tmp / "CorteAC" / "corteac_linux"
+            exe.parent.mkdir(parents=True)
+            exe.write_text("#!/bin/bash\n")
+            icone = exe.parent / "corteac.png"
+            icone.write_bytes(b"\x89PNG\r\n\x1a\n")
+
+            with patch.dict(os.environ, {"HOME": str(home)}):
+                info = sincronizar_atalho("9.9.9", exe_path=str(exe), icon_path=str(icone))
+
+            self.assertEqual(info["acao"], "atualizado")
+            novo = area / "corteac-9.9.9.desktop"
+            self.assertTrue(novo.exists(), info)
+            conteudo = novo.read_text()
+            self.assertIn("Name=CorteAC-9.9.9", conteudo)
+            self.assertIn('Exec="', conteudo)
+            self.assertFalse((area / "CorteAC.desktop").exists(), "atalho antigo deveria sair")
+            apps_novo = home / ".local/share/applications" / "corteac-9.9.9.desktop"
+            self.assertTrue(apps_novo.exists(), "atalho do menu não criado")
+
+    def test_sem_atalho_nao_cria_nada(self):
+        from unittest.mock import patch
+        from ui.desktop_shortcut import sincronizar_atalho
+
+        with tempfile.TemporaryDirectory() as td:
+            tmp = Path(td)
+            home, area = self._home_fake(tmp, False)
+            with patch.dict(os.environ, {"HOME": str(home)}):
+                info = sincronizar_atalho("9.9.9", exe_path=str(tmp / "x"), icon_path=str(tmp / "y.png"))
+            self.assertEqual(info["acao"], "nenhum")
+            self.assertEqual(list(area.glob("*.desktop")), [])
+
+
 if __name__ == "__main__":
     unittest.main()

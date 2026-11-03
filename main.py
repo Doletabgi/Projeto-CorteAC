@@ -26,6 +26,18 @@ import multiprocessing
 from ui.main_window import MainWindow
 
 def main():
+    # Mantém o atalho da Área de Trabalho/Menu com a versão atual (Linux).
+    # Roda antes de qualquer saída (--version/--check-db) e só reescreve se já
+    # existir atalho do CorteAC — não cria atalho sem o operador ter um.
+    try:
+        from config import APP_VERSION
+        from ui.desktop_shortcut import sincronizar_atalho
+        info = sincronizar_atalho(APP_VERSION)
+        if info.get("acao") == "atualizado":
+            print(f"Atalho da Área de Trabalho atualizado para CorteAC-{APP_VERSION}")
+    except Exception as exc:  # noqa: BLE001
+        print(f"[AVISO] Não foi possível atualizar o atalho: {exc}")
+
     if "--version" in sys.argv or "-v" in sys.argv:
         from config import APP_NAME, APP_VERSION
         print(f"{APP_NAME} {APP_VERSION}")
