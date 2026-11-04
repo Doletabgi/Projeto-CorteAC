@@ -1388,6 +1388,23 @@ class SessionView(tk.Frame):
             })
 
         eff = lay.calculate_yield()
+        sheet_w = float(lay.ris_w) if lay.ris_w > 0 else 1380.0
+        sheet_h = float(lay.ris_l) if lay.ris_l > 0 else 1080.0
+        imported_layout = {
+            "layout_index": 0,
+            "name": lay.filename or "lay0000",
+            "code": lay.filename or "lay0000",
+            "pieces": placed_pieces,
+            "placed_pieces": placed_pieces,
+            "width_mm": sheet_w,
+            "height_mm": sheet_h,
+            "yield_percent": eff,
+            "yield_pct": eff,
+            "num_items": len(placed_pieces),
+            "layers": getattr(lay, "layers", None),
+            "status": "closed"
+        }
+        self.session_data["layouts"] = [imported_layout]
         self.session_data["placed_pieces"] = placed_pieces
         self.session_data["yield_percent"] = eff
         self.session_data["status"] = "Nested"
@@ -1412,10 +1429,16 @@ class SessionView(tk.Frame):
                 if "name" not in self.session_data["material"]:
                     self.session_data["material"]["name"] = "Material da Chapa"
 
-        # Salva no banco de dados SQLite
+        # Salva atomicamente no banco de dados SQLite substituindo os layouts anteriores
         if self.db and self.session_data.get("id"):
             try:
-                self.db.save_layout(self.session_data["id"], lay)
+                self.db.save_session_layouts(self.session_data["id"], [imported_layout])
+                self.db.update_session(
+                    self.session_data["id"],
+                    placed_pieces=placed_pieces,
+                    yield_pct=eff,
+                    status="Nested"
+                )
             except Exception as e:
                 print(f"Aviso ao persistir layout no banco: {e}")
 
@@ -2490,6 +2513,21 @@ class SessionView(tk.Frame):
         if callable(self.on_cancel_cb):
             try:
                 self.on_cancel_cb()
+            except Exception:
+                pass
+
+    def set_progress_text(self, text: str):
+        """Atualiza a mensagem descritiva da barra de progresso."""
+        if getattr(self, "_cancel_nest", False):
+            return
+        if hasattr(self, "lbl_progress") and self.lbl_progress.winfo_exists():
+            self.lbl_progress.config(text=text)
+        if hasattr(self, "frame_progress") and self.frame_progress.winfo_exists():
+            if not self.frame_progress.winfo_ismapped():
+                self.frame_progress.pack(fill="x", pady=(4, 2))
+        if hasattr(self, "progress_bar") and self.progress_bar.winfo_exists():
+            try:
+                self.progress_bar.start(10)
             except Exception:
                 pass
 

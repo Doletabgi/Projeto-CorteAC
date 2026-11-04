@@ -1746,6 +1746,12 @@ class DatabaseManager:
                 cursor.execute("REPLACE INTO settings (`key`, `value`) VALUES (?, ?)", (k, str(v)))
             conn.commit()
 
+    def delete_setting(self, key):
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("DELETE FROM settings WHERE `key` = ?", (key,))
+            conn.commit()
+
     # -------------------------------------------------------------
     # Gestão de Presets DieProc (Configuração de Rotação / dp98)
     # -------------------------------------------------------------
@@ -2370,4 +2376,69 @@ class DatabaseManager:
             """, (session_id,))
             conn.commit()
             return True
+
+    def clean_test_layouts(self) -> dict:
+        """Limpa todos os layouts de teste, reseta sessões para Stand by e apaga sessões de teste.
+        Garante que após atualizações o sistema sempre inicie com ambiente limpo e vazio."""
+        stats = {
+            "deleted_pieces": 0,
+            "deleted_layouts": 0,
+            "deleted_sessions": 0,
+            "reset_sessions": 0,
+        }
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            try:
+                # 1. Conta e remove layout_pieces
+                cursor.execute("SELECT count(*) FROM layout_pieces")
+                row = cursor.fetchone()
+                stats["deleted_pieces"] = row[0] if row else 0
+                cursor.execute("DELETE FROM layout_pieces")
+
+                # 2. Conta e remove layouts
+                cursor.execute("SELECT count(*) FROM layouts")
+                row = cursor.fetchone()
+                stats["deleted_layouts"] = row[0] if row else 0
+                cursor.execute("DELETE FROM layouts")
+
+                # 3. Remove sessões puramente de teste
+                cursor.execute("""
+                DELETE FROM sessions
+                WHERE name LIKE '%Teste%'
+                   OR name LIKE '%Test%'
+                   OR name LIKE '%Empty%'
+                   OR name LIKE '%Exclusao%'
+                   OR name LIKE '%Refazer%'
+                """)
+                stats["deleted_sessions"] = cursor.rowcount if hasattr(cursor, "rowcount") else 0
+
+                # 4. Reseta sessões restantes para Stand by e sem peças colocadas
+                cursor.execute("""
+                UPDATE sessions
+                SET placed_pieces_json = '[]',
+                    yield_percent = 0.0,
+                    cutting_time_sec = 0.0,
+                    status = 'Stand by'
+                """)
+                stats["reset_sessions"] = cursor.rowcount if hasattr(cursor, "rowcount") else 0
+
+                # 5. Aponta last_active_session_id para a última sessão remanescente (ou remove se vazia)
+                cursor.execute("SELECT id FROM sessions ORDER BY id DESC LIMIT 1")
+                last_row = cursor.fetchone()
+                if last_row:
+                    last_id = last_row[0]
+                    cursor.execute("REPLACE INTO settings (`key`, `value`) VALUES ('last_active_session_id', ?)", (str(last_id),))
+                else:
+                    cursor.execute("DELETE FROM settings WHERE `key` = 'last_active_session_id'")
+
+                # 6. Reseta sequences autoincrement se SQLite
+                if conn.backend == "sqlite":
+                    cursor.execute("DELETE FROM sqlite_sequence WHERE name IN ('layouts', 'layout_pieces')")
+
+                conn.commit()
+            except Exception as exc:
+                print(f"[ERRO] clean_test_layouts: {exc}")
+                return stats
+
+        return stats
 

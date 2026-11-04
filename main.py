@@ -70,6 +70,17 @@ def main():
             print(f"Erro ao conectar com banco: {e}", file=sys.stderr)
             sys.exit(1)
 
+    if "--clean-db" in sys.argv or "--reset-layouts" in sys.argv:
+        from database import DatabaseManager
+        db_mgr = DatabaseManager()
+        stats = db_mgr.clean_test_layouts()
+        print("Banco de dados higienizado com sucesso:")
+        print(f"  Layouts removidos: {stats.get('deleted_layouts', 0)}")
+        print(f"  Peças removidas: {stats.get('deleted_pieces', 0)}")
+        print(f"  Sessões de teste eliminadas: {stats.get('deleted_sessions', 0)}")
+        print(f"  Sessões resetadas para Stand by: {stats.get('reset_sessions', 0)}")
+        sys.exit(0)
+
     print("=" * 60)
     print("  CorteAC (Edição Python para Windows 10 / 11)")
     print("  Recriação Moderna do Sistema Jm2k & ATOM Nesting")

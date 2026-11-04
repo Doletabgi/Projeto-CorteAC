@@ -1305,8 +1305,13 @@ def preencher_buracos_em_placas(
                 break
             rx0, ry0, rx1, ry1 = regiao[1]
             restantes = []
+            failed_shapes_in_regiao = set()
             for p in candidatos:
                 if _time.time() - t0 > time_budget_s:
+                    restantes.append(p)
+                    continue
+                shape_key = (p.get("shape_id"), p.get("size"), p.get("name"))
+                if shape_key in failed_shapes_in_regiao:
                     restantes.append(p)
                     continue
                 posto = False
@@ -1386,6 +1391,7 @@ def preencher_buracos_em_placas(
                         x += step_mm
                     y += step_mm
                 if not posto:
+                    failed_shapes_in_regiao.add(shape_key)
                     restantes.append(p)
             candidatos = restantes
             if not candidatos:

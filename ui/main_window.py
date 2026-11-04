@@ -21,6 +21,7 @@ import re
 from config import THEME, APP_NAME, APP_VERSION, ATOM_MACHINE, EXPORTS_DIR
 from database import DatabaseManager
 from cad.nesting_engine import auto_nest_pieces, calculate_yield, calculate_atom_cutting_time, nest_multi_sheet, piece_matches_shape, sort_shapes_by_sequence
+from cad.project_packager import export_session
 from cad.colors import get_color_for_size
 from cad.exporter import export_gcode, export_xml_report
 from cad.die_parser import parse_die_file, save_die_file
@@ -65,8 +66,9 @@ class MainWindow(tk.Tk):
     def __init__(self):
         super().__init__()
 
-        # Título da janela exatamente no formato original
-        self.title(f"{APP_NAME} - C:\\NSDATA\\")
+        # Título da janela com versão dinâmica sincronizada de config.APP_VERSION
+        v_str = APP_VERSION if APP_VERSION.startswith("v") else f"v{APP_VERSION}"
+        self.title(f"{APP_NAME} {v_str} - C:\\NSDATA\\")
         self.geometry("1180x720")
         self.minsize(980, 600)
         self.configure(bg=THEME["bg_main"])
@@ -90,6 +92,9 @@ class MainWindow(tk.Tk):
         self.bind("<Control-T>", self.handle_ctrl_t)
         self.bind("<Control-n>", lambda e: self.on_new_session())
         self.bind("<Control-N>", lambda e: self.on_new_session())
+
+        # Interceptação segura de fechamento de janela para persistência de sessão e estado
+        self.protocol("WM_DELETE_WINDOW", self.on_app_close)
 
         # Carrega Ícones Nativos Extraídos do Sistema Original
         self.load_icons()
@@ -279,10 +284,11 @@ class MainWindow(tk.Tk):
         file_menu.add_command(label="📂 Abrir Layout (.lay)...", command=self.on_open_lay_file)
         file_menu.add_command(label="💾 Exportar Layout (.lay)...", command=self.on_export_lay_file)
         file_menu.add_command(label="⚡ Dupla Saída (.lay + .onx)...", command=self.on_export_dual_file)
+        file_menu.add_command(label="📤 Salvar Sessão para Máquina...", command=self.on_export_session_to_machine)
         file_menu.add_command(label="Exportar G-Code (ATOM)...", command=self.on_export_gcode)
         file_menu.add_command(label="Exportar Relatório XML...", command=self.on_export_xml)
         file_menu.add_separator()
-        file_menu.add_command(label="Sair", command=self.quit)
+        file_menu.add_command(label="Sair", command=self.on_app_close)
         menubar.add_cascade(label="Arquivo", menu=file_menu)
 
         # Editar
@@ -328,6 +334,8 @@ class MainWindow(tk.Tk):
         tools_menu.add_command(label="⚙️ Configuração DieProc (Encaixe Sintético)...", command=self.open_dieproc_dialog)
         tools_menu.add_command(label="Executar Auto-Nest...", command=self.on_auto_nest)
         tools_menu.add_command(label="Simular Corte na Mesa...", command=self.on_toggle_sim)
+        tools_menu.add_separator()
+        tools_menu.add_command(label="🧹 Limpar Layouts de Teste...", command=self.on_clean_test_layouts)
         menubar.add_cascade(label="Ferramentas", menu=tools_menu)
 
         # Janela
@@ -350,7 +358,6 @@ class MainWindow(tk.Tk):
 
         # Ajuda
         help_menu = tk.Menu(menubar, tearoff=0, bg=THEME["bg_surface"], fg=THEME["text_main"], activebackground=THEME["select_bg"], activeforeground=THEME["select_fg"])
-        help_menu.add_command(label="Manual do Job Manager", command=lambda: messagebox.showinfo("Ajuda", "Manual em HTML disponível na pasta antigo/Help/JM2K"))
         help_menu.add_command(label="Sobre CorteAC", command=lambda: messagebox.showinfo("Sobre", f"{APP_NAME} - {APP_VERSION}\nRecriação moderna em Python para Windows 10 / 11"))
         menubar.add_cascade(label="Ajuda", menu=help_menu)
 
@@ -876,6 +883,11 @@ class MainWindow(tk.Tk):
         self.session_view = view
         self.current_session = sess_dict
         self.current_material = sess_dict.get("material")
+        if self.db and sess_dict.get("id"):
+            try:
+                self.db.set_setting("last_active_session_id", sess_dict["id"])
+            except Exception:
+                pass
         self.lbl_status_msg.config(text=f"Sessão #{sess_dict['id']} aberta na área de trabalho.")
         return view
 
@@ -1597,6 +1609,10 @@ class MainWindow(tk.Tk):
                 self.lbl_status_msg.config(text="Aviso: Camadas não definidas, assumindo 2.")
 
             self.layout_editor_view.session = active_sess
+            try:
+                self.layout_editor_view.session_id = int(active_sess.get("id") or self.layout_editor_view.session_id)
+            except (TypeError, ValueError):
+                pass
             self.layout_editor_view.material_layers = layers_val
 
             if sess_mat:
@@ -2378,11 +2394,54 @@ class MainWindow(tk.Tk):
         if hasattr(self, "layout_editor_view") and self.layout_editor_view:
             self.layout_editor_view.export_layout_dialog(target_format="dual")
 
+    def on_export_session_to_machine(self):
+        """Abre o Layout Editor e exporta todas as placas da sessão para a máquina."""
+        if not self.current_session:
+            messagebox.showwarning(
+                "Salvar Sessão para Máquina",
+                "Selecione uma sessão com layouts calculados antes de preparar para a máquina.",
+                parent=self,
+            )
+            return
+        if not hasattr(self, "layout_editor_view") or not self.layout_editor_view:
+            return
+        active = self.current_session or {}
+        has_layout = bool(active.get("layouts") or active.get("placed_pieces"))
+        if not has_layout and getattr(self, "db", None) and active.get("id"):
+            try:
+                has_layout = bool(self.db.get_session_layouts(active["id"]))
+            except Exception:
+                has_layout = False
+        if not has_layout:
+            messagebox.showwarning(
+                "Salvar Sessão para Máquina",
+                "A sessão não tem layout calculado. Execute o encaixe antes de preparar para a máquina.",
+                parent=self,
+            )
+            return
+        try:
+            self.show_layout_editor(force=False)
+        except Exception:
+            pass
+        self.layout_editor_view.export_session_to_machine()
+
     def close_child_window(self):
         if self.active_child:
             self.close_window(self.active_child)
         else:
             self.lbl_status_msg.config(text="Job Manager está pronto")
+
+    def on_app_close(self):
+        """Salva com segurança o estado da sessão ativa e configurações antes de fechar o aplicativo."""
+        try:
+            if self.current_session and self.current_session.get("id"):
+                self.save_current_session_state()
+                if self.db:
+                    self.db.set_setting("last_active_session_id", self.current_session["id"])
+        except Exception as exc:
+            print(f"[AVISO] Falha ao salvar estado ao fechar aplicativo: {exc}")
+        finally:
+            self.destroy()
 
     # =========================================================================
     # 4. Status Bar Autêntica WinXP (idêntica ao print do usuário)
@@ -2429,16 +2488,66 @@ class MainWindow(tk.Tk):
         for sv in self.open_sessions.values():
             sv.all_shapes_catalog = self.current_shapes
 
+    def check_post_update_cleanup(self):
+        """Regra de higienização pós-atualização:
+        Quando a versão do CorteAC é atualizada, limpa automaticamente todos os layouts de teste
+        e reseta as sessões para retornar sempre vazio e limpo na primeira abertura pós-atualização.
+        Em reinicializações normais da mesma versão, preserva integralmente as sessões e layouts."""
+        if not self.db:
+            return
+        installed_ver = self.db.get_setting("installed_version")
+        if installed_ver != APP_VERSION:
+            try:
+                stats = self.db.clean_test_layouts()
+                if any(stats.values()):
+                    print(f"[CorteAC] Atualização para v{APP_VERSION} detectada. Banco higienizado: {stats}")
+            except Exception as exc:
+                print(f"[AVISO] Falha ao higienizar banco pós-atualização: {exc}")
+            self.db.set_setting("installed_version", APP_VERSION)
+
+    def on_clean_test_layouts(self):
+        """Ação manual para limpar layouts de teste e resetar sessões."""
+        ans = messagebox.askyesno(
+            "Limpar Layouts de Teste",
+            "Deseja remover todos os layouts e resetar as sessões para 'Stand by' (vazio)?\n\n"
+            "Esta ação remove resíduos de testes mantendo moldes e materiais intactos.",
+            parent=self
+        )
+        if not ans:
+            return
+        stats = self.db.clean_test_layouts() if self.db else {}
+        self.load_initial_data()
+        messagebox.showinfo(
+            "Limpeza Concluída",
+            f"Banco de dados limpo com sucesso!\n"
+            f"- Layouts removidos: {stats.get('deleted_layouts', 0)}\n"
+            f"- Peças removidas: {stats.get('deleted_pieces', 0)}\n"
+            f"- Sessões de teste eliminadas: {stats.get('deleted_sessions', 0)}\n"
+            f"- Sessões resetadas: {stats.get('reset_sessions', 0)}",
+            parent=self
+        )
+
     def load_initial_data(self):
+        self.check_post_update_cleanup()
         self.orders = self.db.get_orders()
         if self.orders:
             self.current_order = self.orders[0]
 
-        # Carrega sessões salvas no banco de dados e exibe a sessão padrão na área de trabalho
+        # Carrega sessões salvas no banco de dados e restaura a última sessão ativa
         self.sessions = self.db.get_sessions()
         if self.sessions:
-            sess_91 = next((s for s in self.sessions if s["id"] == 91), None)
-            self.current_session = sess_91 or self.sessions[0]
+            last_sid_str = self.db.get_setting("last_active_session_id") if self.db else None
+            last_sid = None
+            if last_sid_str:
+                try:
+                    last_sid = int(last_sid_str)
+                except (ValueError, TypeError):
+                    last_sid = None
+            sess_target = next((s for s in self.sessions if s["id"] == last_sid), None) if last_sid else None
+            if not sess_target:
+                # Fallback: última sessão cadastrada (mais recente)
+                sess_target = self.sessions[-1]
+            self.current_session = sess_target
             if self.current_session.get("placed_pieces"):
                 self.canvas.placed_pieces = [dict(p) for p in self.current_session["placed_pieces"]]
                 self.canvas.redraw()
@@ -4998,7 +5107,9 @@ class MainWindow(tk.Tk):
             "gap_mm": 1.0,
             "margin_mm": 10.0,
             "refile_auto": True,
-            "separar_sobras": True
+            "separar_sobras": True,
+            "export_machine": (self.db.get_setting("machine_export_auto", "0") == "1") if getattr(self, "db", None) else False,
+            "machine_target_dir": str(self.db.get_setting("machine_export_dir", "") or "") if getattr(self, "db", None) else "",
         }
         if self.current_material and self.current_material.get("gap_mm"):
             try:
@@ -5020,6 +5131,19 @@ class MainWindow(tk.Tk):
 
         self._batch_in_progress = True
         self._cancel_batch = False
+        self._machine_shape_catalog = None
+        try:
+            if getattr(self, "db", None) and config.get("export_machine"):
+                self._machine_shape_catalog = self.db.get_all_shapes()
+        except Exception:
+            self._machine_shape_catalog = None
+        try:
+            if getattr(self, "db", None):
+                self.db.set_setting("machine_export_auto", "1" if config.get("export_machine") else "0")
+                if config.get("export_machine") and config.get("machine_target_dir"):
+                    self.db.set_setting("machine_export_dir", config.get("machine_target_dir"))
+        except Exception:
+            pass
         if hasattr(self, "btn_tb_auto_nest"):
             self.btn_tb_auto_nest.config(state="disabled")
 
@@ -5043,6 +5167,88 @@ class MainWindow(tk.Tk):
         """Sinaliza cancelamento do processamento do lote."""
         self._cancel_batch = True
         self.lbl_status_msg.config(text="Cancelando cálculo em massa pelo operador...")
+
+    def _machine_shapes_roots(self):
+        """Raízes opcionais para copiar os .die originais no batch."""
+        raw = os.environ.get("CORTEAC_SHAPES_ROOT", "") or ""
+        try:
+            if getattr(self, "db", None):
+                raw = str(self.db.get_setting("machine_shapes_root", "") or "") or raw
+        except Exception:
+            pass
+        roots = []
+        for part in re.split(r"[;|]", raw):
+            p = part.strip().strip('"')
+            if p and Path(p).expanduser().is_dir():
+                roots.append(str(Path(p).expanduser()))
+        return roots
+
+    def _log_batch_machine(self, progress_dlg, text):
+        if progress_dlg is not None:
+            try:
+                if progress_dlg.winfo_exists():
+                    progress_dlg.append_log(text)
+            except Exception:
+                pass
+        if getattr(self, "lbl_status_msg", None) is not None:
+            try:
+                self.lbl_status_msg.config(text=text)
+            except Exception:
+                pass
+
+    def _batch_machine_progress(self, stage, current, total):
+        label = "moldes" if stage == "dies" else "placas"
+        text = f"📤 Exportando para máquina: {label} {current}/{total}..."
+        if getattr(self, "lbl_status_msg", None) is not None:
+            try:
+                self.lbl_status_msg.config(text=text)
+            except Exception:
+                pass
+        try:
+            self.update_idletasks()
+        except Exception:
+            pass
+
+    def _export_batch_session(self, sid, config, progress_dlg=None):
+        """Exporta uma sessão do batch para a pasta da máquina, sem abortar o lote em caso de erro."""
+        if not config.get("export_machine"):
+            return
+        target = str(config.get("machine_target_dir") or "").strip()
+        if not target and getattr(self, "db", None):
+            try:
+                target = str(self.db.get_setting("machine_export_dir", "") or "").strip()
+            except Exception:
+                target = ""
+        if not target:
+            self._log_batch_machine(progress_dlg, f"⚠️ Sessão #{sid}: destino da máquina não definido.")
+            return
+        try:
+            result = export_session(
+                self.db,
+                sid,
+                target,
+                create_subfolder=True,
+                copy_dies=True,
+                shapes_search_roots=self._machine_shapes_roots() or None,
+                shape_catalog=getattr(self, "_machine_shape_catalog", None),
+                progress=self._batch_machine_progress,
+            )
+            try:
+                self.db.set_setting("machine_export_dir", target)
+            except Exception:
+                pass
+            if result.missing:
+                self._log_batch_machine(
+                    progress_dlg,
+                    f"⚠️ Sessão #{sid}: {len(result.missing)} molde(s) ausente(s); veja o manifesto.",
+                )
+            else:
+                self._log_batch_machine(
+                    progress_dlg,
+                    f"📤 Sessão #{sid}: {len(result.layouts)} placa(s) salva(s) em {result.session_dir}",
+                )
+        except Exception as exc:
+            self._log_batch_machine(progress_dlg, f"❌ Sessão #{sid}: falha ao exportar para a máquina ({exc})")
 
     def _batch_nest_worker(self, sessions_to_run, config, q):
         """Thread trabalhadora para processamento do lote de nesting."""
@@ -5236,6 +5442,13 @@ class MainWindow(tk.Tk):
                         except Exception as e:
                             print(f"[AVISO] Falha ao atualizar moldes da sessão #{sid}: {e}")
 
+                        # Exportação opcional para a máquina, após refile/sobras e persistência.
+                        if config.get("export_machine"):
+                            try:
+                                self._export_batch_session(sid, config, progress_dlg)
+                            except Exception as e:
+                                print(f"[AVISO] Falha ao exportar sessão #{sid} para a máquina: {e}")
+
                         avg_yield = sum(float(ly.get("yield_percent", 0.0)) for ly in layouts) / max(1, len(layouts))
                         first_ly = layouts[0]
                         pieces = first_ly.get("pieces", [])
@@ -5299,6 +5512,7 @@ class MainWindow(tk.Tk):
                 elif mtype == "BATCH_CANCELLED":
                     done, total = msg[1], msg[2]
                     self._batch_in_progress = False
+                    self._machine_shape_catalog = None
                     if hasattr(self, "btn_tb_auto_nest"):
                         self.btn_tb_auto_nest.config(state="normal")
                     self.lbl_status_msg.config(text=f"Batch Auto-Nest cancelado: {done} de {total} processadas.")
@@ -5310,6 +5524,7 @@ class MainWindow(tk.Tk):
                 elif mtype == "BATCH_COMPLETE":
                     done, total = msg[1], msg[2]
                     self._batch_in_progress = False
+                    self._machine_shape_catalog = None
                     if hasattr(self, "btn_tb_auto_nest"):
                         self.btn_tb_auto_nest.config(state="normal")
                     self.lbl_status_msg.config(text=f"Batch Auto-Nest concluído: {done} de {total} sessões calculadas com sucesso.")
@@ -5552,11 +5767,14 @@ class MainWindow(tk.Tk):
         nest_q = queue.Queue()
         self._nest_progress = None
 
-        def _on_progress(current, total):
+        def _on_progress(current, total=None):
             # IMPORTANTE: esta função roda na thread de cálculo. Tkinter não é
             # thread-safe, então aqui só registramos o estado; quem atualiza a
             # interface é o _poll_nest_worker (thread principal do Tk).
-            self._nest_progress = (current, total)
+            if isinstance(current, str):
+                self._nest_progress = current
+            else:
+                self._nest_progress = (current + 1, total)
 
         def _worker():
             t_start = time.perf_counter()
@@ -5586,6 +5804,76 @@ class MainWindow(tk.Tk):
                     progress_callback=_on_progress,
                     cancel_check=lambda: getattr(self, "_cancel_nest", False)
                 )
+
+                layouts = result.get("layouts", []) if isinstance(result, dict) else []
+                if layouts and not result.get("cancelled"):
+                    # 1. Preenche os vãos das placas anteriores movendo peças da última placa
+                    _on_progress("Otimizando vãos entre chapas...")
+                    try:
+                        from cad.nesting_engine import preencher_buracos_em_placas
+                        layouts, _info_lacunas = preencher_buracos_em_placas(
+                            layouts,
+                            gap_mm=float(self.current_session.get("gap_mm", 1.0) or 1.0) if self.current_session else 1.0,
+                            time_budget_s=4.0,
+                        )
+                        if _info_lacunas.get("movidas"):
+                            print(f"[BURACOS] {_info_lacunas['movidas']} peça(s) realocadas para vãos")
+                    except Exception as exc:  # noqa: BLE001
+                        print(f"[AVISO] Falha ao preencher buracos: {exc}")
+
+                    # 2. Separação automática das sobras de 4 camadas em ponta de 2 camadas
+                    _on_progress("Separando sobras em ponta...")
+                    split_summary = None
+                    if self.current_session and layouts:
+                        for s in sorted_sess_shapes:
+                            if isinstance(s, dict):
+                                s.pop("tip_zone", None)
+                                s.pop("layers_tip", None)
+                        layouts, split_summary = separar_sobras_em_ponta(
+                            layouts=layouts,
+                            session=self.current_session,
+                            shapes=sorted_sess_shapes,
+                            params=params
+                        )
+                        result["split_summary"] = split_summary
+
+                    # 3. 2º passe de preenchimento de buracos: fecha vãos deixados pela separação de sobras
+                    _on_progress("Fechando vãos pós-separação...")
+                    try:
+                        from cad.nesting_engine import preencher_buracos_em_placas
+                        layouts, _info_lacunas2 = preencher_buracos_em_placas(
+                            layouts,
+                            gap_mm=float(self.current_session.get("gap_mm", 1.0) or 1.0) if self.current_session else 1.0,
+                            cell_mm=20.0,
+                            step_mm=5.0,
+                            time_budget_s=4.0,
+                            session=self.current_session,
+                            shapes=sorted_sess_shapes if self.current_session else None,
+                        )
+                        if _info_lacunas2.get("movidas"):
+                            print(f"[BURACOS-2] {_info_lacunas2['movidas']} peça(s) realocadas para vãos pós-separação")
+                    except Exception as exc:  # noqa: BLE001
+                        print(f"[AVISO] Falha no 2º passe de preencher buracos: {exc}")
+
+                    # 4. Refile automático dos layouts gerados se a opção estiver habilitada
+                    _on_progress("Refilando layout...")
+                    auto_trimmed = False
+                    is_refile = (
+                        is_refile_auto_enabled(params) or
+                        (getattr(self, "session_view", None) and getattr(self.session_view, "is_refile_auto_active", lambda: False)()) or
+                        is_refile_auto_enabled(self.current_session)
+                    )
+                    if is_refile and layouts:
+                        sess_mat = self.current_session.get("material") if isinstance(self.current_session, dict) else None
+                        def_w = float(sess_mat.get("width_mm") or 1350.0) if isinstance(sess_mat, dict) else 1350.0
+                        def_h = float(sess_mat.get("height_mm") or 2553.38) if isinstance(sess_mat, dict) else 2553.38
+                        for ly in layouts:
+                            orig_w = ly.get("width_mm") or def_w
+                            orig_h = ly.get("height_mm") or def_h
+                            trim_layout_dict(ly, original_w=orig_w, original_h=orig_h, gap_mm=1.0)
+                            auto_trimmed = True
+                    result["auto_trimmed"] = auto_trimmed
+                    result["layouts"] = layouts
 
                 if do_profile:
                     pr.disable()
@@ -5620,8 +5908,11 @@ class MainWindow(tk.Tk):
         if prog is not None:
             self._nest_progress = None
             try:
-                if getattr(self, "session_view", None) and hasattr(self.session_view, "update_progress_text"):
-                    self.session_view.update_progress_text(prog[0], prog[1])
+                if getattr(self, "session_view", None):
+                    if isinstance(prog, str) and hasattr(self.session_view, "set_progress_text"):
+                        self.session_view.set_progress_text(prog)
+                    elif isinstance(prog, tuple) and hasattr(self.session_view, "update_progress_text"):
+                        self.session_view.update_progress_text(prog[0], prog[1])
             except Exception:
                 pass
 
@@ -5668,76 +5959,27 @@ class MainWindow(tk.Tk):
                 self.lbl_status_msg.config(text=f"Auto-Nest: {warn}")
                 return
 
-            # Preenche os vãos das placas anteriores movendo peças da última placa
-            # (evita o "buraco" que o operador via como desperdício de material).
-            try:
-                from cad.nesting_engine import preencher_buracos_em_placas
-                layouts, _info_lacunas = preencher_buracos_em_placas(
-                    layouts,
-                    gap_mm=float(self.current_session.get("gap_mm", 1.0) or 1.0) if self.current_session else 1.0,
-                    time_budget_s=4.0,
-                )
-                if _info_lacunas.get("movidas"):
-                    print(f"[BURACOS] {_info_lacunas['movidas']} peça(s) realocadas para vãos")
-            except Exception as exc:  # noqa: BLE001
-                print(f"[AVISO] Falha ao preencher buracos: {exc}")
+            split_summary = nest_result.get("split_summary")
+            if split_summary:
+                self.lbl_status_msg.config(text=split_summary)
+                print(f"[SOBRAS] {split_summary}")
 
-            # Separação automática das sobras de 4 camadas em ponta de 2 camadas
-            split_summary = None
-            if self.current_session and layouts:
-                sess_shapes = (
-                    self.session_view.shapes_list
-                    if getattr(self, "session_view", None) and getattr(self.session_view, "shapes_list", None)
-                    else self.current_session.get("shapes", [])
+            auto_trimmed = nest_result.get("auto_trimmed", False)
+            if not auto_trimmed and layouts:
+                is_refile = (
+                    is_refile_auto_enabled(params) or
+                    (getattr(self, "session_view", None) and getattr(self.session_view, "is_refile_auto_active", lambda: False)()) or
+                    is_refile_auto_enabled(self.current_session)
                 )
-                for s in sess_shapes:
-                    if isinstance(s, dict):
-                        s.pop("tip_zone", None)
-                        s.pop("layers_tip", None)
-                layouts, split_summary = separar_sobras_em_ponta(
-                    layouts=layouts,
-                    session=self.current_session,
-                    shapes=sess_shapes,
-                    params=params
-                )
-                if split_summary:
-                    self.lbl_status_msg.config(text=split_summary)
-                    print(f"[SOBRAS] {split_summary}")
-
-            # 2º passe de preenchimento de buracos: fecha vãos deixados pela separação de sobras
-            # com grade fina (célula 20 mm, passo 5 mm) e orçamento de 4 s (§8.48).
-            try:
-                from cad.nesting_engine import preencher_buracos_em_placas
-                layouts, _info_lacunas2 = preencher_buracos_em_placas(
-                    layouts,
-                    gap_mm=float(self.current_session.get("gap_mm", 1.0) or 1.0) if self.current_session else 1.0,
-                    cell_mm=20.0,
-                    step_mm=5.0,
-                    time_budget_s=4.0,
-                    session=self.current_session,
-                    shapes=sess_shapes if self.current_session else None,
-                )
-                if _info_lacunas2.get("movidas"):
-                    print(f"[BURACOS-2] {_info_lacunas2['movidas']} peça(s) realocadas para vãos pós-separação")
-            except Exception as exc:  # noqa: BLE001
-                print(f"[AVISO] Falha no 2º passe de preencher buracos: {exc}")
-
-            # Refile automático dos layouts gerados se a opção estiver habilitada
-            auto_trimmed = False
-            is_refile = (
-                is_refile_auto_enabled(params) or
-                (getattr(self, "session_view", None) and getattr(self.session_view, "is_refile_auto_active", lambda: False)()) or
-                is_refile_auto_enabled(self.current_session)
-            )
-            if is_refile and layouts:
-                sess_mat = self.current_session.get("material") if isinstance(self.current_session, dict) else None
-                def_w = float(sess_mat.get("width_mm") or 1350.0) if isinstance(sess_mat, dict) else 1350.0
-                def_h = float(sess_mat.get("height_mm") or 2553.38) if isinstance(sess_mat, dict) else 2553.38
-                for ly in layouts:
-                    orig_w = ly.get("width_mm") or def_w
-                    orig_h = ly.get("height_mm") or def_h
-                    trim_layout_dict(ly, original_w=orig_w, original_h=orig_h, gap_mm=1.0)
-                    auto_trimmed = True
+                if is_refile:
+                    sess_mat = self.current_session.get("material") if isinstance(self.current_session, dict) else None
+                    def_w = float(sess_mat.get("width_mm") or 1350.0) if isinstance(sess_mat, dict) else 1350.0
+                    def_h = float(sess_mat.get("height_mm") or 2553.38) if isinstance(sess_mat, dict) else 2553.38
+                    for ly in layouts:
+                        orig_w = ly.get("width_mm") or def_w
+                        orig_h = ly.get("height_mm") or def_h
+                        trim_layout_dict(ly, original_w=orig_w, original_h=orig_h, gap_mm=1.0)
+                        auto_trimmed = True
 
             first_layout = layouts[0]
             pieces = first_layout.get("pieces", [])

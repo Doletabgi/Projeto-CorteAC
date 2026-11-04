@@ -4,7 +4,7 @@ ui/batch_nest_dialog.py - Diálogo de Configuração e Execução de Auto-Nest e
 """
 
 import tkinter as tk
-from tkinter import ttk, messagebox
+from tkinter import ttk, messagebox, filedialog
 from typing import List, Dict, Any, Optional, Callable
 
 from config import THEME
@@ -32,8 +32,8 @@ class BatchAutoNestDialog(tk.Toplevel):
         self.result_config = None
 
         self.title("⚡ Auto-Nest em Massa (Batch Nesting)")
-        self.geometry("740x560")
-        self.minsize(620, 480)
+        self.geometry("740x650")
+        self.minsize(620, 560)
         self.configure(bg=THEME["bg_surface"])
 
         try:
@@ -236,6 +236,35 @@ class BatchAutoNestDialog(tk.Toplevel):
         )
         chk_save.pack(side="left")
 
+        # Linha 6: Exportação automática para a máquina após o cálculo
+        r6 = tk.Frame(config_frame, bg=THEME["bg_surface"])
+        r6.pack(fill="x", pady=(6, 0))
+
+        self.var_export_machine = tk.BooleanVar(value=bool(self.initial_config.get("export_machine", False)))
+        chk_machine = tk.Checkbutton(
+            r6,
+            text="📤 Salvar cada sessão na pasta da máquina após o cálculo",
+            variable=self.var_export_machine,
+            bg=THEME["bg_surface"],
+            fg="#0f766e",
+            activebackground=THEME["bg_surface"],
+            font=("Segoe UI", 8, "bold")
+        )
+        chk_machine.pack(side="left")
+
+        r6b = tk.Frame(config_frame, bg=THEME["bg_surface"])
+        r6b.pack(fill="x", pady=(1, 0))
+        tk.Label(r6b, text="Destino:", width=8, anchor="w", bg=THEME["bg_surface"], fg=THEME["text_main"], font=("Segoe UI", 8)).pack(side="left")
+        self.var_machine_dir = tk.StringVar(value=str(self.initial_config.get("machine_target_dir", "") or ""))
+        ent_machine = tk.Entry(r6b, textvariable=self.var_machine_dir, width=48, relief="sunken", bd=1)
+        ent_machine.pack(side="left", fill="x", expand=True)
+        btn_machine = tk.Button(
+            r6b, text="...", width=3, relief="raised", bd=1,
+            bg=THEME["bg_surface"], fg=THEME["text_main"],
+            command=self._choose_machine_dir
+        )
+        btn_machine.pack(side="left", padx=(3, 0))
+
         # 4. Barra de Botões inferior
         btn_bar = tk.Frame(self, bg=THEME["bg_surface"], padx=12, pady=10)
         btn_bar.pack(fill="x", side="bottom")
@@ -268,6 +297,17 @@ class BatchAutoNestDialog(tk.Toplevel):
         )
         btn_start.pack(side="right")
 
+    def _choose_machine_dir(self):
+        initial = self.var_machine_dir.get().strip() or None
+        chosen = filedialog.askdirectory(
+            parent=self,
+            title="Pasta de destino para a máquina (rede ou pendrive)",
+            initialdir=initial,
+            mustexist=False,
+        )
+        if chosen:
+            self.var_machine_dir.set(chosen)
+
     def on_confirm(self):
         try:
             gap_val = float(self.var_gap.get().replace(",", "."))
@@ -278,6 +318,22 @@ class BatchAutoNestDialog(tk.Toplevel):
             margin_val = float(self.var_margin.get().replace(",", "."))
         except ValueError:
             margin_val = 10.0
+
+        machine_dir = self.var_machine_dir.get().strip()
+        if self.var_export_machine.get() and not machine_dir:
+            machine_dir = filedialog.askdirectory(
+                parent=self,
+                title="Escolha a pasta de destino para a máquina",
+                mustexist=False,
+            )
+            if not machine_dir:
+                messagebox.showwarning(
+                    "Destino da máquina",
+                    "Escolha a pasta de destino ou desmarque a exportação automática.",
+                    parent=self,
+                )
+                return
+            self.var_machine_dir.set(machine_dir)
 
         raw_preset = self.var_params.get().strip() or "HighYield"
         encoded_params = encode_session_params(
@@ -305,6 +361,8 @@ class BatchAutoNestDialog(tk.Toplevel):
             "refile_auto": self.var_refile.get(),
             "separar_sobras": self.var_sobras.get(),
             "save_to_db": self.var_save_db.get(),
+            "export_machine": self.var_export_machine.get(),
+            "machine_target_dir": machine_dir,
         }
 
         self.confirmed = True

@@ -49,6 +49,23 @@ Caso deseje gerar um novo arquivo executável localmente:
 
 ---
 
+## Salvar Sessão para a Máquina (rede ou pendrive)
+
+No **Layout Editor**, clique no botão **📤** da toolbar (ou use **Arquivo → 📤 Salvar Sessão para Máquina…**):
+
+1. Escolha a pasta de destino (rede ou pendrive).
+2. O CorteAC cria `<destino>\<código da sessão>\` com:
+   - todas as placas da sessão (`lay0000.lay`, `lay0001.lay`, ...);
+   - `Shapes\` contendo somente os `.die` usados;
+   - `manifest.json` com a lista de placas, moldes e avisos.
+3. O último destino fica memorizado para a próxima exportação.
+
+No **Auto-Nest em Massa**, marque **“📤 Salvar cada sessão na pasta da máquina após o cálculo”** para exportar automaticamente cada sessão do lote.
+
+> Se a máquina ATOM não encontrar as facas, verifique o `dLib` no `.lay` e a pasta `Shapes`; o `manifest.json` lista os moldes ausentes e os que foram gerados a partir do banco.
+
+---
+
 ## Suporte a Banco de Dados MySQL (Opcional)
 
 Por padrão, o CorteAC funciona 100% offline com **SQLite** sem precisar configurar nenhum servidor.

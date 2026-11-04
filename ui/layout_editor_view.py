@@ -7,6 +7,7 @@ Mesa CAD estática, fixa, sem zoom de bolinha do mouse, barra de ferramentas de 
 import copy
 import logging
 import math
+import os
 import re
 import json
 import time
@@ -16,7 +17,7 @@ import tkinter as tk
 from tkinter import ttk, messagebox, colorchooser, filedialog, simpledialog
 from pathlib import Path
 
-from config import THEME
+from config import THEME, EXPORTS_DIR
 from ui.units import format_m, format_dim_mm, format_dim_m
 from ui.tooltip import ToolTip
 from cad.geometry import transform_contour, point_in_polygon, rotate_point, polygon_bbox, polygons_collide, polygon_area, SpatialGrid, bbox_overlap
@@ -53,6 +54,7 @@ def _contour_area_mm2(cntr) -> float:
 from ui.trim_layout_dialog import TrimLayoutDialog
 from cad.lay_parser import parse_lay, export_layout_from_pieces, validate_layout_placement
 from cad.dual_exporter import DualLayoutExporter
+from cad.project_packager import PackagingError, export_session
 from db.connection import VersionConflictError
 from cad.fill_engine import (
     fill_row_pieces,
@@ -531,6 +533,35 @@ class LayoutEditorView(tk.Frame):
         self.create_tb_btn(tb_row, "btn_open", "Abrir Layout (Ctrl+O)", self.open_layout_dialog)
         self.create_tb_btn(tb_row, "btn_save", "Salvar Layout (Ctrl+S)", self.save_layout)
         self.create_tb_btn(tb_row, "btn_dual", "⚡ Dupla Saída ATOM (.lay) + Comelz (.onx)", lambda: self.export_layout_dialog(target_format="dual"))
+        self.btn_machine = tk.Button(
+            tb_row,
+            text="📤",
+            bg=THEME["bg_surface"],
+            activebackground=THEME["bg_hover"],
+            fg="#0f766e",
+            font=("Segoe UI", 8, "bold"),
+            relief="raised",
+            bd=1,
+            padx=5,
+            pady=1,
+            command=self.export_session_to_machine,
+            cursor="hand2"
+        )
+        self.btn_machine.pack(side="left", padx=1)
+        _tip_machine = "Salvar Sessão para Máquina (todas as placas em uma pasta)"
+
+        def _on_enter_machine(e):
+            if hasattr(self, "lbl_stat_pos"):
+                self._last_status_pos_text = self.lbl_stat_pos.cget("text")
+                self.lbl_stat_pos.config(text=_tip_machine)
+
+        def _on_leave_machine(e):
+            if hasattr(self, "lbl_stat_pos"):
+                self.lbl_stat_pos.config(text=getattr(self, "_last_status_pos_text", ""))
+
+        self.btn_machine.bind("<Enter>", _on_enter_machine)
+        self.btn_machine.bind("<Leave>", _on_leave_machine)
+        self.btn_machine._tooltip = ToolTip(self.btn_machine, _tip_machine)
 
         self.create_tb_sep(tb_row)
 
@@ -919,6 +950,7 @@ class LayoutEditorView(tk.Frame):
             menu_obj.add_command(label="Open Previous\tCtrl+Shift+L", command=self.open_previous_layout)
             menu_obj.add_command(label="Salvar\tCtrl+S", command=self.save_layout)
             menu_obj.add_command(label="Salvar Como...", command=self.export_layout_dialog)
+            menu_obj.add_command(label="📤 Salvar Sessão para Máquina...", command=self.export_session_to_machine)
             menu_obj.add_separator()
             menu_obj.add_command(label="Exportar ATOM (.lay)...", command=lambda: self.export_layout_dialog(target_format="lay"))
             menu_obj.add_command(label="Exportar Comelz (.onx)...", command=lambda: self.export_layout_dialog(target_format="onx"))
@@ -5191,6 +5223,263 @@ class LayoutEditorView(tk.Frame):
         except Exception as e:
             messagebox.showerror("Erro ao Exportar Layout", f"Falha ao exportar layout:\n{e}", parent=self)
 
+        return "break"
+
+    # ------------------------------------------------------------------
+    # Exportação de sessão multi-placa para a máquina ATOM
+    # ------------------------------------------------------------------
+    def _machine_session_id(self):
+        """ID da sessão ativa; o dict self.session tem prioridade sobre o default 1."""
+        sess = getattr(self, "session", None)
+        if isinstance(sess, dict) and sess.get("id") is not None:
+            try:
+                return int(sess["id"])
+            except (TypeError, ValueError):
+                pass
+        sid = getattr(self, "session_id", None)
+        try:
+            return int(sid) if sid else None
+        except (TypeError, ValueError):
+            return None
+
+    def _machine_gap_mm(self) -> float:
+        mat = getattr(self, "material", None)
+        if isinstance(mat, dict):
+            try:
+                return float(mat.get("gap_mm", 1.0) or 1.0)
+            except (TypeError, ValueError):
+                return 1.0
+        return 1.0
+
+    def _machine_export_default_dir(self) -> str:
+        last = ""
+        try:
+            if self.db:
+                last = str(self.db.get_setting("machine_export_dir", "") or "")
+        except Exception:
+            last = ""
+        if last and Path(last).expanduser().is_dir():
+            return last
+        try:
+            return str(EXPORTS_DIR)
+        except Exception:
+            return str(Path.home())
+
+    def _machine_shapes_roots(self):
+        """Raízes opcionais para copiar os .die originais (fidelidade de fio/qualidade)."""
+        raw = os.environ.get("CORTEAC_SHAPES_ROOT", "") or ""
+        try:
+            if self.db:
+                raw = str(self.db.get_setting("machine_shapes_root", "") or "") or raw
+        except Exception:
+            pass
+        roots = []
+        for part in re.split(r"[;|]", raw):
+            p = part.strip().strip('"')
+            if p and Path(p).expanduser().is_dir():
+                roots.append(str(Path(p).expanduser()))
+        return roots
+
+    def _machine_export_progress(self, stage: str, current: int, total: int) -> None:
+        label = "moldes" if stage == "dies" else "placas"
+        text = f"📤 Preparando para máquina: {label} {current}/{total}..."
+        if getattr(self, "lbl_stat_pos", None) is not None:
+            try:
+                self.lbl_stat_pos.config(text=text, fg="#0f766e")
+            except Exception:
+                pass
+        try:
+            self.update_idletasks()
+        except Exception:
+            pass
+
+    def _sync_current_layout_for_machine(self) -> bool:
+        """Garante que a placa ativa, dimensões e metadados estejam em self.layouts."""
+        self._sync_current_layout_pieces()
+        if not getattr(self, "layouts", None):
+            code = str(getattr(self, "layout_name", "") or "lay0000")
+            if code.startswith("["):
+                code = "lay0000"
+            self.layouts = [{
+                "layout_index": 0,
+                "code": code,
+                "name": code,
+                "pieces": copy.deepcopy(self.placed_pieces),
+                "placed_pieces": copy.deepcopy(self.placed_pieces),
+                "width_mm": float(self.sheet_width),
+                "height_mm": float(self.sheet_height),
+                "gap_mm": self._machine_gap_mm(),
+            }]
+        cur_idx = int(getattr(self, "current_layout_index", 0) or 0)
+        if 0 <= cur_idx < len(self.layouts):
+            ly = self.layouts[cur_idx]
+            ly["pieces"] = copy.deepcopy(self.placed_pieces)
+            ly["placed_pieces"] = copy.deepcopy(self.placed_pieces)
+            ly["width_mm"] = float(self.sheet_width)
+            ly["height_mm"] = float(self.sheet_height)
+            ly["gap_mm"] = self._machine_gap_mm()
+            ly["name"] = str(getattr(self, "layout_name", "") or ly.get("name") or ly.get("code") or "lay0000")
+            ly["layers"] = getattr(self, "material_layers", ly.get("layers"))
+            ly["tip_zone"] = copy.deepcopy(getattr(self, "tip_zone", None))
+            ly["layers_tip"] = getattr(self, "layers_tip", None)
+            ly["trim_cut_line"] = copy.deepcopy(getattr(self, "trim_cut_line", None))
+            ly["material_code"] = str(getattr(self, "material_id", "") or ly.get("material_code") or "")
+            ly["material_name"] = str(getattr(self, "material_name", "") or ly.get("material_name") or "")
+        return bool(self.layouts)
+
+    def export_session_to_machine(self, event=None):
+        """
+        Salva TODAS as placas da sessão em uma pasta pronta para a máquina ATOM:
+        <destino>/<session_code>/lay0000.lay, lay0001.lay, ..., Shapes/*.die.
+
+        O destino é escolhido pelo operador e lembrado para a próxima exportação.
+        """
+        sid = self._machine_session_id()
+        if not self.db or not sid:
+            messagebox.showwarning(
+                "Salvar Sessão para Máquina",
+                "Abra uma sessão com layouts calculados antes de preparar para a máquina.",
+                parent=self,
+            )
+            return "break"
+
+        target = filedialog.askdirectory(
+            parent=self,
+            title="Escolha a pasta de destino para a máquina (rede ou pendrive)",
+            initialdir=self._machine_export_default_dir(),
+            mustexist=False,
+        )
+        if not target:
+            return "break"
+        target = str(Path(target).expanduser())
+        try:
+            self.db.set_setting("machine_export_dir", target)
+        except Exception:
+            pass
+
+        if not self._sync_current_layout_for_machine() or not self.layouts:
+            messagebox.showwarning(
+                "Salvar Sessão para Máquina",
+                "Não há placas/peças para exportar nesta sessão.",
+                parent=self,
+            )
+            return "break"
+        if not self.placed_pieces and not any(ly.get("pieces") for ly in self.layouts):
+            messagebox.showwarning(
+                "Salvar Sessão para Máquina",
+                "A sessão não tem peças posicionadas. Calcule o encaixe antes de preparar para a máquina.",
+                parent=self,
+            )
+            return "break"
+
+        # O packager lê a sessão do banco; persistimos as placas atuais antes.
+        try:
+            callback = getattr(self, "on_save_cb", None)
+            if callback:
+                res = callback(self.placed_pieces, self.sheet_width, self.sheet_height, self.layout_name)
+                ok = res is not False
+            else:
+                ok = self.db.save_session_layouts(sid, self.layouts)
+        except Exception as exc:
+            messagebox.showerror(
+                "Salvar Sessão para Máquina",
+                f"Não foi possível persistir os layouts antes da exportação:\n{exc}",
+                parent=self,
+            )
+            return "break"
+        if not ok:
+            messagebox.showerror(
+                "Salvar Sessão para Máquina",
+                "O banco não confirmou o salvamento dos layouts. A exportação foi cancelada.",
+                parent=self,
+            )
+            return "break"
+        self.session_id = sid
+
+        old_cursor = ""
+        try:
+            old_cursor = self.cget("cursor")
+            self.config(cursor="watch")
+            self.update_idletasks()
+        except Exception:
+            pass
+
+        try:
+            result = export_session(
+                self.db,
+                sid,
+                target,
+                create_subfolder=True,
+                copy_dies=True,
+                shapes_search_roots=self._machine_shapes_roots() or None,
+                progress=self._machine_export_progress,
+            )
+        except PackagingError as exc:
+            messagebox.showerror(
+                "Salvar Sessão para Máquina",
+                f"Falha ao preparar a sessão:\n{exc}",
+                parent=self,
+            )
+            return "break"
+        except Exception as exc:
+            messagebox.showerror(
+                "Salvar Sessão para Máquina",
+                f"Erro inesperado ao preparar a sessão:\n{exc}",
+                parent=self,
+            )
+            return "break"
+        finally:
+            try:
+                self.config(cursor=old_cursor or "")
+                self.update_idletasks()
+            except Exception:
+                pass
+
+        generated = sum(1 for d in result.dies if d.source == "db")
+        summary = (
+            f"Sessão {result.session_code} (#{result.session_id}) pronta para a máquina.\n\n"
+            f"Pasta: {result.session_dir}\n"
+            f"Placas: {len(result.layouts)}\n"
+            f"Moldes: {len(result.dies)}\n"
+            f"Tempo: {result.elapsed_sec:.2f}s"
+        )
+        if result.missing:
+            missing_txt = "\n".join(
+                f"- {m.get('name')} ({m.get('code')}): {m.get('reason')}"
+                for m in result.missing[:15]
+            )
+            if len(result.missing) > 15:
+                missing_txt += f"\n... (+{len(result.missing) - 15})"
+            messagebox.showwarning(
+                "Sessão salva com moldes ausentes",
+                summary + f"\n\nMoldes ausentes ({len(result.missing)}):\n{missing_txt}",
+                parent=self,
+            )
+        elif generated:
+            messagebox.showwarning(
+                "Sessão salva - moldes gerados do banco",
+                summary + (
+                    f"\n\n{generated} molde(s) foram gerados a partir do contorno do banco. "
+                    "Fio/direção e zona de qualidade originais podem ter sido perdidos. "
+                    "Para preservar os originais, configure a pasta da biblioteca de .die."
+                ),
+                parent=self,
+            )
+        else:
+            messagebox.showinfo("Sessão pronta para a máquina", summary, parent=self)
+
+        if getattr(self, "lbl_stat_pos", None) is not None:
+            try:
+                self.lbl_stat_pos.config(
+                    text=f"📤 Sessão {result.session_code} salva em {result.session_dir}",
+                    fg="#0f766e",
+                )
+            except Exception:
+                pass
+        try:
+            self.set_modified(False)
+        except Exception:
+            pass
         return "break"
 
     def trim_layout_auto(self, event=None):

@@ -23,6 +23,12 @@ Recriação moderna em **Python** do sistema industrial **CorteAC** (evolução 
    - Geração de arquivos **G-Code / ISO CNC** prontos para máquinas de corte industrial da ATOM (série FlashCut Flex).
    - Exportação de relatórios de produção em **XML** baseados no modelo original `Report.xsl`.
 
+5. **Entrega de Sessão para a Máquina**:
+   - Botão **📤** no Layout Editor e item **Arquivo → Salvar Sessão para Máquina…**.
+   - Exporta **todas as placas** da sessão (`lay0000.lay`, `lay0001.lay`, ...) para uma pasta de rede ou pendrive.
+   - Copia somente os moldes `.die` referenciados para `Shapes/`, com manifesto de auditoria e lista de ausentes.
+   - Exportação automática opcional no **Auto-Nest em Massa**.
+
 ---
 
 ## 💻 Como Baixar e Executar no Windows 10 / 11

@@ -5,7 +5,10 @@ echo "  Compilando CorteAC para Linux (Standalone)"
 echo "========================================================"
 cd "$(dirname "$0")"
 
-pyinstaller --clean --onefile --add-data "assets:assets" --add-data "samples:samples" --add-data "jobmanager.db:." --add-data "db.example.ini:." --hidden-import pymysql --hidden-import cryptography --name "CorteAC" main.py
+echo "Higienizando banco de dados para distribuição limpa (sem layouts de teste)..."
+python3 tools/clean_database.py
+
+pyinstaller --clean --onefile --add-data "assets:assets" --add-data "samples:samples" --add-data "jobmanager.db:." --add-data "db.example.ini:." --hidden-import pymysql --hidden-import cryptography --hidden-import cad.project_packager --name "CorteAC" main.py
 
 echo "Atualizando binários executáveis centralizados..."
 cp -f dist/CorteAC corteac_linux

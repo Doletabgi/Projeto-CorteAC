@@ -403,5 +403,34 @@ class TestBatchAutoNest(unittest.TestCase):
         self.assertEqual(msg[1], 0)  # 0 concluídas
 
 
+    def test_batch_dialog_machine_export_configuration(self):
+        """O checkbox de exportação para a máquina deve entrar no config do batch."""
+        sessions_to_nest = [
+            {"id": 101, "name": "Sessão #101", "job": "ProduçãoNova", "shapes": [{"id": 1, "pairs": 10}]},
+        ]
+        received = []
+        dlg = BatchAutoNestDialog(
+            parent=self.root,
+            selected_sessions=sessions_to_nest,
+            initial_config={
+                "gap_mm": 1.0,
+                "margin_mm": 10.0,
+                "nesting_mode": "auto",
+                "machine_target_dir": "/tmp/maquina",
+                "export_machine": True,
+            },
+            on_start_batch=lambda sess, cfg: received.append((sess, cfg)),
+        )
+        dlg.var_export_machine.set(True)
+        dlg.var_machine_dir.set("/tmp/maquina")
+        dlg.on_confirm()
+
+        self.assertTrue(dlg.confirmed)
+        self.assertEqual(len(received), 1)
+        cfg = received[0][1]
+        self.assertTrue(cfg["export_machine"])
+        self.assertEqual(cfg["machine_target_dir"], "/tmp/maquina")
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -66,6 +66,24 @@ class TestSemVer(unittest.TestCase):
         self.assertEqual(str(v), config.APP_VERSION)
         self.assertGreaterEqual(v.major, 1)
 
+    def test_main_window_title_includes_app_version(self):
+        r"""O título da janela principal deve conter o nome do app e a versão (ex.: CorteAC v1.6.26 - C:\NSDATA\)."""
+        from ui.main_window import MainWindow
+        try:
+            win = MainWindow()
+            title = win.title()
+            win.destroy()
+        except Exception as exc:
+            self.skipTest(f"Display indisponível para Tkinter: {exc}")
+            return
+
+        expected_prefix = f"{config.APP_NAME} v{config.APP_VERSION}"
+        self.assertTrue(
+            title.startswith(expected_prefix),
+            f"Título esperado começando com '{expected_prefix}', obtido: '{title}'"
+        )
+        self.assertIn("C:\\NSDATA\\", title)
+
 
 if __name__ == "__main__":
     unittest.main()
