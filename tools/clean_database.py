@@ -26,11 +26,11 @@ def clean_db(db_path: str, verbose: bool = True) -> bool:
     path = Path(db_path).resolve()
     if not path.exists():
         if verbose:
-            print(f"[AVISO] Banco '{path}' não encontrado. Ignorando.")
+            print(f"[AVISO] Banco '{path}' nao encontrado. Ignorando.")
         return False
 
     if verbose:
-        print(f"🧹 Iniciando limpeza do banco: {path}")
+        print(f"[LIMPEZA] Iniciando limpeza do banco: {path}")
 
     conn = sqlite3.connect(path)
     cur = conn.cursor()
@@ -107,12 +107,12 @@ def clean_db(db_path: str, verbose: bool = True) -> bool:
         conn.commit()
 
         if verbose:
-            print(f"   ✓ Layouts removidos: {n_layouts}")
+            print(f"   [OK] Layouts removidos: {n_layouts}")
             if has_layouts:
-                print(f"   ✓ Peças em layout_pieces removidas: {n_pieces}")
-            print(f"   ✓ Sessões de teste eliminadas: {del_test_sess}")
-            print(f"   ✓ Sessões resetadas para Stand by: {reset_sess}")
-            print(f"   ✓ Banco compactado com VACUUM com sucesso.")
+                print(f"   [OK] Pecas em layout_pieces removidas: {n_pieces}")
+            print(f"   [OK] Sessoes de teste eliminadas: {del_test_sess}")
+            print(f"   [OK] Sessoes resetadas para Stand by: {reset_sess}")
+            print(f"   [OK] Banco compactado com VACUUM com sucesso.")
 
         return True
 

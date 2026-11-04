@@ -205,7 +205,7 @@ jobs:
               - Exportação automática opcional no **Auto-Nest em Massa**, com destino persistido.
               - CLI de apoio: `python tools/export_session.py --session <id> --target <pasta> [--cac arquivo.cac]`.
               - Build inclui `cad.project_packager` como hidden import no PyInstaller.
-              - Correção de build: `tools/clean_database.py` passou a ser versionado (antes era ignorado por `tools/*`, o que fazia o CI falhar no passo de limpeza).
+              - Correção de build: `tools/clean_database.py` passou a ser versionado (antes era ignorado por `tools/*`) e com saída ASCII para o console Windows, evitando falha no passo de limpeza.
               - **572 testes automatizados** (572 passando, 2 skip, 0 falhas).
             - **Novidades da v1.6.28 (mantidas)**: higienização de banco pré/pós-atualização e limpeza de layouts de teste.
             - **Novidades da v1.6.27 (mantidas)**: persistência da última sessão ativa, fechamento seguro e importação atômica de `.lay`.

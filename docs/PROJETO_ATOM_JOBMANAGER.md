@@ -6,7 +6,7 @@
 > **Regra de ouro:** o que está marcado `[CONFIRMADO]` veio do relatório, do código ou do usuário. O que está `[NÃO CONFIRMADO]` é suposição e não deve virar "fato" sem validação. O que está `[PREENCHER]` a IA deve completar lendo o código real.
 
 <!-- AUTO:header:start -->
-**Última sincronização com o código:** 2026-11-04 12:08 (HEAD ao gerar: `4f75342`; 142 arquivos Python, ~69478 linhas)
+**Última sincronização com o código:** 2026-11-04 12:12 (HEAD ao gerar: `bc09044`; 142 arquivos Python, ~69478 linhas)
 <!-- AUTO:header:end -->
 **Versão deste documento:** 2
 
@@ -3732,7 +3732,7 @@ python tools/export_session.py --session 282 --target "E:\CorteAC" --no-subfolde
   - `build_linux.sh`;
   - `.github/workflows/release.yml` (Windows e Linux).
 - Versão atualizada para **v1.6.29**.
-- Correção de release: `tools/clean_database.py` passou a ser versionado (antes era ignorado por `tools/*`, então o CI falhava no passo “Limpar Banco de Dados para Release”).
+- Correção de release: `tools/clean_database.py` passou a ser versionado (antes era ignorado por `tools/*`, então o CI falhava no passo “Limpar Banco de Dados para Release”) e sua saída de console foi convertida para ASCII, evitando `UnicodeEncodeError` no runner Windows (cp1252) com emojis/checks.
 
 ### 8. Testes
 
@@ -3922,6 +3922,7 @@ Local: `/home/dola/Documentos/clone do job/antigo/arquivos pos instalacao/Common
 <!-- AUTO:gitlog:start -->
 | Commit | Data | Autor | Mensagem |
 |---|---|---|---|
+| `bc09044` | 2026-11-04 | Doletabgi | fix(build): versiona clean_database usado pelo CI (v1.6.29) |
 | `4f75342` | 2026-11-04 | Doletabgi | feat(release): exportacao de sessao multi-placa para a maquina (v1.6.29) |
 | `b31f744` | 2026-11-03 | Doletabgi | fix(nesting): fecha buraco da placa 0 pos-separacao de sobras (v1.6.26) |
 | `a0797e9` | 2026-11-03 | Doletabgi | docs: atualiza o PROJETO_ATOM_JOBMANAGER para o estado da v1.6.25 |
@@ -3936,7 +3937,6 @@ Local: `/home/dola/Documentos/clone do job/antigo/arquivos pos instalacao/Common
 | `a081166` | 2026-11-03 | Doletabgi | fix(print): linha azul da ponta dentro da placa e almoxarifado em metros (v1.6.17) |
 | `5fa8823` | 2026-11-03 | Doletabgi | feat(print): padroniza todas as medidas da impressao em metros (v1.6.16) |
 | `9e47af8` | 2026-11-03 | Doletabgi | fix(print): Ctrl+P e o icone Imprimir voltam a abrir o dialogo (v1.6.15) |
-| `27210b3` | 2026-11-03 | Doletabgi | fix(sobras): recompacta a base apos retirar as pecas da ponta (v1.6.14) |
 <!-- AUTO:gitlog:end -->
 
 ---
