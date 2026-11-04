@@ -26,5 +26,6 @@ docs/*
 tools/*
 !tools/scrub_all_sessions_shapes.py
 !tools/export_session.py
+!tools/clean_database.py
 scratch/
 .githooks/
