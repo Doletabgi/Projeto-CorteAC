@@ -336,30 +336,65 @@ class LayoutPrintDialog(tk.Toplevel):
         self.zoom = 1.0
         self.logo_img = None
 
-        # Carrega metadados e parâmetros padrão (conforme media_1792071945871.jpg)
-        raw_name = self.layout_data.get("layout_name")
-        if not raw_name or raw_name == "[I0000]":
-            self.layout_name = "10001.lay"
-        else:
-            self.layout_name = raw_name if raw_name.lower().endswith(".lay") else f"{raw_name}.lay"
-
-        self.title(f"Print Preview - [{self.layout_name}]")
-
         self.unc_prefix = self.layout_data.get("unc_prefix", r"\\Lab-inf\NSDATAv1")
-        self.layout_path = self.layout_data.get(
-            "layout_path",
-            rf"{self.unc_prefix}\Compiti\SEM 46-UP046_2°\129.046\10100\{self.layout_name}"
-        )
         self.description = self.layout_data.get("description", "fn98 - v1.2.36 - 12.09.2012")
-        # Metadados do Material: Código, Descrição e Camadas dinâmicos
-        raw_mat_name = self.layout_data.get("material_name")
-        mat_code = self.layout_data.get("material_code")
-        mat_desc = self.layout_data.get("material_desc") or self.layout_data.get("material_description")
-        mat_layers = self.layout_data.get("material_layers")
-        if mat_layers is None:
-            mat_layers = self.layout_data.get("layers")
+        self.date_str = self.layout_data.get("date_str") or datetime.now().strftime("%A, %d %B %Y")
+        self.gap_str = self.layout_data.get("gap_str", "1.00 mm")
 
-        mat_obj = self.layout_data.get("material")
+        # Metadados de sessão e moldes para legenda
+        self.session_shapes = self.layout_data.get("session_shapes") or self.layout_data.get("shapes") or []
+
+        # Descobre layouts disponíveis da sessão
+        raw_layouts = self.layout_data.get("layouts")
+        if not raw_layouts:
+            if hasattr(parent, "layouts") and getattr(parent, "layouts", None):
+                raw_layouts = list(parent.layouts)
+            elif hasattr(parent, "session_data") and isinstance(parent.session_data, dict) and parent.session_data.get("layouts"):
+                raw_layouts = list(parent.session_data.get("layouts", []))
+            elif hasattr(parent, "current_session") and isinstance(parent.current_session, dict) and parent.current_session.get("layouts"):
+                raw_layouts = list(parent.current_session.get("layouts", []))
+
+        self.layouts = [dict(l) for l in raw_layouts] if raw_layouts else [dict(self.layout_data)]
+        self.current_layout_index = int(self.layout_data.get("current_layout_index", 0) or 0)
+        if self.current_layout_index < 0 or self.current_layout_index >= len(self.layouts):
+            self.current_layout_index = 0
+
+        # Metadados de material padrão
+        self._setup_material_metadata()
+
+        # Orientação da folha (retrato ou paisagem)
+        self.orientation = self.layout_data.get("orientation", "portrait")
+        if self.orientation == "landscape":
+            self.page_w_base = 842
+            self.page_h_base = 595
+        else:
+            self.page_w_base = 595
+            self.page_h_base = 842
+
+        # Carrega logotipo da empresa
+        self.load_company_logo()
+
+        # Monta a barra de ferramentas superior e a área de rolagem da folha
+        self.setup_ui()
+
+        # Carrega a placa/layout ativo
+        self.load_layout_index(self.current_layout_index, initial=True)
+
+        # Renderiza a página inicialmente
+        self.redraw()
+        self.after(50, self.fit_to_page)
+
+    def _setup_material_metadata(self, source=None):
+        """Carrega e formata a descrição base do material."""
+        src = source if isinstance(source, dict) else self.layout_data
+        raw_mat_name = src.get("material_name")
+        mat_code = src.get("material_code")
+        mat_desc = src.get("material_desc") or src.get("material_description")
+        mat_layers = src.get("material_layers")
+        if mat_layers is None:
+            mat_layers = src.get("layers")
+
+        mat_obj = src.get("material")
         if isinstance(mat_obj, dict):
             if mat_code is None:
                 mat_code = mat_obj.get("code") or mat_obj.get("id")
@@ -400,34 +435,89 @@ class LayoutPrintDialog(tk.Toplevel):
         else:
             self.material_name = "132011 - VELCRO 4'' ARGOLA - PRETO ( 4 layer(s) )"
 
-        self.dimensions_str = self.layout_data.get("dimensions_str", "1,50 x 2,98 m")
-        self.dimensions_lines = self.layout_data.get("dimensions_lines")
-        self.mat_area_str = self.layout_data.get("mat_area_str", "0.13 sq.M.")
-        self.used_area_str = self.layout_data.get("used_area_str", "0.11 sq.M.")
-        self.yield_pct = self.layout_data.get("yield_pct", 83.02)
-        self.shapes_count = self.layout_data.get("shapes_count", 15)
-        self.instances_count = self.layout_data.get("instances_count", 40)
-        self.gap_str = self.layout_data.get("gap_str", "1.00 mm")
-        self.date_str = self.layout_data.get("date_str") or datetime.now().strftime("%A, %d %B %Y")
+    def load_layout_index(self, index: int, initial: bool = False) -> bool:
+        """
+        Carrega todos os dados da placa/layout no índice especificado.
+        Atualiza geometrias, metadados, legenda, título e controles de navegação.
+        """
+        if not getattr(self, "layouts", None) or index < 0 or index >= len(self.layouts):
+            return False
 
-        # Dados da chapa e peças
-        self.placed_pieces = self.layout_data.get("placed_pieces", [])
-        if self.placed_pieces is None:
-            self.placed_pieces = []
+        self.current_layout_index = index
+        cur_layout = self.layouts[index]
+        self.current_layout = cur_layout if isinstance(cur_layout, dict) else {}
 
-        # Dimensões da chapa
-        if "sheet_w_mm" in self.layout_data:
-            self.sheet_w_mm = float(self.layout_data.get("sheet_w_mm", 1380.0))
-            self.sheet_h_mm = float(self.layout_data.get("sheet_h_mm", 1080.0))
-        elif not self.placed_pieces:
+        # 0. Sincroniza metadados específicos da sessão/placa (suporte a impressão em massa)
+        cur_shapes = self.current_layout.get("session_shapes") or self.current_layout.get("shapes")
+        if cur_shapes:
+            self.session_shapes = cur_shapes
+        elif self.layout_data.get("session_shapes"):
+            self.session_shapes = self.layout_data.get("session_shapes")
+
+        if any(k in self.current_layout for k in ("material", "material_code", "material_name", "material_desc")):
+            self._setup_material_metadata(source=self.current_layout)
+        else:
+            self._setup_material_metadata(source=self.layout_data)
+
+        # 1. Nome do layout e título da janela
+        raw_name = self.current_layout.get("name") or self.current_layout.get("layout_name") or self.current_layout.get("code")
+        if not raw_name and index == 0:
+            raw_name = self.layout_data.get("layout_name")
+        if not raw_name or raw_name == "[I0000]":
+            self.layout_name = f"lay{index:04d}.lay"
+        else:
+            self.layout_name = raw_name if str(raw_name).lower().endswith(".lay") else f"{raw_name}.lay"
+
+        sess_title = self.current_layout.get("session_title") or ""
+        tot_lays = len(self.layouts) if self.layouts else 1
+        if sess_title:
+            self.title(f"Print Preview - [{sess_title} - {self.layout_name}] ({index + 1}/{tot_lays})")
+        else:
+            self.title(f"Print Preview - [{self.layout_name}]")
+
+        if self.current_layout.get("layout_path"):
+            self.layout_path = self.current_layout["layout_path"]
+        elif sess_title:
+            self.layout_path = rf"{self.unc_prefix}\Compiti\{sess_title}\{self.layout_name}"
+        else:
+            self.layout_path = self.current_layout.get(
+                "layout_path",
+                rf"{self.unc_prefix}\Compiti\SEM 46-UP046_2°\129.046\10100\{self.layout_name}"
+            )
+
+        # 2. Dimensões da chapa
+        sheet_w = self.current_layout.get("width_mm") or self.current_layout.get("sheet_w_mm")
+        if sheet_w is not None:
+            self.sheet_w_mm = float(sheet_w)
+        elif "sheet_w_mm" in self.layout_data:
+            self.sheet_w_mm = float(self.layout_data["sheet_w_mm"])
+        elif index == 0 and not self.layout_data.get("placed_pieces"):
             self.sheet_w_mm = 1500.0
-            self.sheet_h_mm = 90.0
         else:
             self.sheet_w_mm = 1380.0
+
+        sheet_h = self.current_layout.get("height_mm") or self.current_layout.get("sheet_h_mm")
+        if sheet_h is not None:
+            self.sheet_h_mm = float(sheet_h)
+        elif "sheet_h_mm" in self.layout_data:
+            self.sheet_h_mm = float(self.layout_data["sheet_h_mm"])
+        elif index == 0 and not self.layout_data.get("placed_pieces"):
+            self.sheet_h_mm = 90.0
+        else:
             self.sheet_h_mm = 1080.0
 
-        # Se não foram fornecidas peças nem dimensões customizadas, usa layout de exemplo (velcro)
-        if not self.placed_pieces and "sheet_w_mm" not in self.layout_data:
+        # 3. Peças colocadas
+        pcs = self.current_layout.get("pieces") if self.current_layout.get("pieces") is not None else self.current_layout.get("placed_pieces")
+        if pcs is not None:
+            import copy
+            self.placed_pieces = copy.deepcopy(pcs)
+        elif index == 0 and "placed_pieces" in self.layout_data and self.layout_data["placed_pieces"] is not None:
+            import copy
+            self.placed_pieces = copy.deepcopy(self.layout_data["placed_pieces"])
+        else:
+            self.placed_pieces = []
+
+        if not self.placed_pieces and index == 0 and "sheet_w_mm" not in self.layout_data and (not self.layouts or len(self.layouts) <= 1):
             self.dimensions_str = "1,50 x 2,98 m"
             self.mat_area_str = "0.13 sq.M."
             self.used_area_str = "0.11 sq.M."
@@ -435,109 +525,194 @@ class LayoutPrintDialog(tk.Toplevel):
             self.shapes_count = 15
             self.instances_count = 40
             self.init_sample_pieces()
-        elif self.placed_pieces:
-            # Cálculo de aproveitamento exato com base na geometria poligonal real das peças
-            total_poly_area_mm2 = 0.0
-            unique_shape_names = set()
+        else:
             for p in self.placed_pieces:
-                cntr = p.get("contour") if isinstance(p, dict) else getattr(p, "contour", None)
-                if not cntr:
-                    shp = p.get("shape") if isinstance(p, dict) else getattr(p, "shape", None)
-                    if isinstance(shp, dict):
-                        cntr = shp.get("contour")
-                px = float(p.get("x", 0.0) if isinstance(p, dict) else getattr(p, "x", 0.0))
-                py = float(p.get("y", 0.0) if isinstance(p, dict) else getattr(p, "y", 0.0))
-                rot = float(p.get("rotation", p.get("angle", 0.0)) if isinstance(p, dict) else getattr(p, "rotation", 0.0))
-                p_nm = p.get("name") if isinstance(p, dict) else getattr(p, "name", "Molde")
-                unique_shape_names.add(p_nm)
-                if cntr and len(cntr) >= 3:
-                    poly = transform_contour(cntr, px, py, rot)
-                    total_poly_area_mm2 += polygon_area(poly)
-            if total_poly_area_mm2 > 0:
-                plate_area_mm2 = float(self.sheet_w_mm) * float(self.sheet_h_mm)
-                used_m2 = total_poly_area_mm2 / 1_000_000.0
-                mat_m2 = plate_area_mm2 / 1_000_000.0
-                self.used_area_str = f"{used_m2:.2f} sq.M."
-                self.mat_area_str = f"{mat_m2:.2f} sq.M."
-                self.yield_pct = round((used_m2 / max(1e-4, mat_m2)) * 100.0, 2)
-                self.instances_count = len(self.placed_pieces)
-                self.shapes_count = len(unique_shape_names)
+                if not isinstance(p, dict):
+                    continue
+                if not p.get("contour"):
+                    shp = p.get("shape") if isinstance(p.get("shape"), dict) else None
+                    if shp and shp.get("contour"):
+                        p["contour"] = shp.get("contour")
+                    elif self.session_shapes:
+                        sid = p.get("shape_id") or p.get("target_id") or p.get("name")
+                        for s in self.session_shapes:
+                            if isinstance(s, dict) and (s.get("id") == sid or s.get("name") == sid or s.get("shape_id") == sid):
+                                if s.get("contour"):
+                                    p["contour"] = s.get("contour")
+                                    break
 
-        # Metadados de sessão e moldes para legenda
-        self.session_shapes = self.layout_data.get("session_shapes") or self.layout_data.get("shapes") or []
-        self.layouts = self.layout_data.get("layouts", [])
-        self.current_layout_index = self.layout_data.get("current_layout_index", 0)
-
-        cur_layout = self.layout_data.get("layout")
-        if not cur_layout and self.layouts and 0 <= self.current_layout_index < len(self.layouts):
-            cur_layout = self.layouts[self.current_layout_index]
-
-        self.current_layout = cur_layout if isinstance(cur_layout, dict) else (self.layout_data if isinstance(self.layout_data, dict) else {})
+        # 4. Camadas / Enfesto
+        mat_obj = self.current_layout.get("material") or self.layout_data.get("material")
+        mat_layers = self.current_layout.get("material_layers") or self.layout_data.get("material_layers")
+        if mat_layers is None and isinstance(mat_obj, dict):
+            mat_layers = mat_obj.get("layers")
 
         self.layout_layers = resolve_layout_layers(
-            layout=cur_layout,
-            session=self.layout_data.get("session"),
+            layout=self.current_layout,
+            session=self.current_layout.get("session") or self.layout_data.get("session"),
             material=mat_obj if isinstance(mat_obj, dict) else None,
-            default=mat_layers or 2
+            default=self.current_layout.get("layers") or mat_layers or 2
         )
         self.material_layers = self.layout_layers
+        if hasattr(self, "material_name") and self.material_name:
+            self.material_name = re.sub(r"\(\s*\d+\s*layer\(s\)\s*\)", f"( {self.layout_layers} layer(s) )", self.material_name, flags=re.IGNORECASE)
 
-        # Ponta de 2 camadas
-        self.tip_zone = self.layout_data.get("tip_zone")
-        if not self.tip_zone and cur_layout and isinstance(cur_layout, dict):
-            self.tip_zone = cur_layout.get("tip_zone")
-        self.layers_tip = self.layout_data.get("layers_tip") or (cur_layout.get("layers_tip") if isinstance(cur_layout, dict) else 2)
-        self.tip_mode = self.layout_data.get("tip_mode") or (cur_layout.get("tip_mode") if isinstance(cur_layout, dict) else "canto")
+        # 5. Ponta de 2 camadas
+        self.tip_zone = self.current_layout.get("tip_zone") if isinstance(self.current_layout, dict) else None
+        if self.tip_zone is None and index == 0:
+            self.tip_zone = self.layout_data.get("tip_zone")
 
-        if self.tip_zone and isinstance(self.current_layout, dict):
-            if "tip_zone" not in self.current_layout:
-                self.current_layout["tip_zone"] = self.tip_zone
-            if "tip_mode" not in self.current_layout:
-                self.current_layout["tip_mode"] = self.tip_mode
-            if "layers" not in self.current_layout:
-                self.current_layout["layers"] = self.layout_layers
+        self.layers_tip = self.current_layout.get("layers_tip") if isinstance(self.current_layout, dict) else None
+        if self.layers_tip is None and index == 0:
+            self.layers_tip = self.layout_data.get("layers_tip")
+        if self.layers_tip is None:
+            self.layers_tip = 2
 
-        # Refile (CAM)
-        trim_cut = self.layout_data.get("trim_cut_line")
-        if not trim_cut and cur_layout and isinstance(cur_layout, dict):
-            trim_cut = cur_layout.get("trim_cut_line")
-        self.trim_cut_line = trim_cut
+        self.tip_mode = self.current_layout.get("tip_mode") if isinstance(self.current_layout, dict) else None
+        if self.tip_mode is None and index == 0:
+            self.tip_mode = self.layout_data.get("tip_mode")
+        if self.tip_mode is None:
+            self.tip_mode = "canto"
+
+        # 6. Refile (CAM)
+        self.trim_cut_line = self.current_layout.get("trim_cut_line") if isinstance(self.current_layout, dict) else None
+        if self.trim_cut_line is None and index == 0:
+            self.trim_cut_line = self.layout_data.get("trim_cut_line")
 
         refile_parts = []
-        if trim_cut and trim_cut.get("enabled", True):
-            if trim_cut.get("has_cut_y", False):
-                refile_parts.append(f"Y={format_m(trim_cut.get('y', self.sheet_h_mm))} m")
-            if trim_cut.get("has_cut_x", False):
-                refile_parts.append(f"X={format_m(trim_cut.get('x', self.sheet_w_mm))} m")
+        if self.trim_cut_line and self.trim_cut_line.get("enabled", True):
+            if self.trim_cut_line.get("has_cut_y", False):
+                refile_parts.append(f"Y={format_m(self.trim_cut_line.get('y', self.sheet_h_mm))} m")
+            if self.trim_cut_line.get("has_cut_x", False):
+                refile_parts.append(f"X={format_m(self.trim_cut_line.get('x', self.sheet_w_mm))} m")
         self.refile_display_str = ("Refilado (" + ", ".join(refile_parts) + ")") if refile_parts else "Sem refile"
 
+        # 7. Dimensões e Linhas de Dimensão
+        self.dimensions_str = format_dim_mm(self.sheet_w_mm, self.sheet_h_mm)
+        if self.tip_zone:
+            from cad.layers_rule import format_dimensions_folhas
+            self.dimensions_lines = format_dimensions_folhas(
+                self.current_layout or {}, sheet_w=self.sheet_w_mm, sheet_h=self.sheet_h_mm, layers=self.layout_layers
+            )
+        elif index == 0 and self.layout_data.get("dimensions_lines"):
+            self.dimensions_lines = self.layout_data.get("dimensions_lines")
+        else:
+            self.dimensions_lines = None
+
+        # 8. Placa N de M
         tot_lays = len(self.layouts) if self.layouts else 1
         cur_lay_idx = self.current_layout_index + 1
-        self.placa_n_de_m = f"Placa {cur_lay_idx} de {tot_lays}"
-
-        # Orientação da folha (retrato ou paisagem)
-        self.orientation = self.layout_data.get("orientation", "portrait")
-        if self.orientation == "landscape":
-            self.page_w_base = 842
-            self.page_h_base = 595
+        if sess_title:
+            self.placa_n_de_m = f"{sess_title} - Placa {cur_lay_idx} de {tot_lays}"
         else:
-            self.page_w_base = 595
-            self.page_h_base = 842
+            self.placa_n_de_m = f"Placa {cur_lay_idx} de {tot_lays}"
 
-        # Legenda calculada
-        self.legend_data = self.layout_data.get("legend_data")
-        if self.legend_data is None:
-            self.legend_data = self.build_legend_data()
+        # 9. Rendimento e Áreas
+        total_poly_area_mm2 = 0.0
+        unique_shape_names = set()
+        for p in self.placed_pieces:
+            if not isinstance(p, dict):
+                continue
+            cntr = p.get("contour")
+            if not cntr:
+                shp = p.get("shape") if isinstance(p.get("shape"), dict) else None
+                if isinstance(shp, dict):
+                    cntr = shp.get("contour")
+            px = float(p.get("x", 0.0))
+            py = float(p.get("y", 0.0))
+            rot = float(p.get("rotation", p.get("angle", 0.0)))
+            p_nm = p.get("name", "Molde")
+            unique_shape_names.add(p_nm)
+            if cntr and len(cntr) >= 3:
+                poly = transform_contour(cntr, px, py, rot)
+                total_poly_area_mm2 += polygon_area(poly)
 
-        # Carrega logotipo da empresa
-        self.load_company_logo()
+        plate_area_mm2 = float(self.sheet_w_mm) * float(self.sheet_h_mm)
+        mat_m2 = plate_area_mm2 / 1_000_000.0
+        self.mat_area_str = f"{mat_m2:.2f} sq.M."
 
-        # Monta a barra de ferramentas superior e a área de rolagem da folha
-        self.setup_ui()
+        if total_poly_area_mm2 > 0:
+            used_m2 = total_poly_area_mm2 / 1_000_000.0
+            self.used_area_str = f"{used_m2:.2f} sq.M."
+            self.yield_pct = round((used_m2 / max(1e-4, mat_m2)) * 100.0, 2)
+            self.instances_count = len(self.placed_pieces)
+            self.shapes_count = len(unique_shape_names)
+        elif self.placed_pieces:
+            eff = float(self.current_layout.get("yield_percent", 0.0) or self.current_layout.get("yield_pct", 0.0) or (self.layout_data.get("yield_pct", 0.0) if index == 0 else 0.0))
+            if eff > 0:
+                self.yield_pct = eff
+                used_m2 = mat_m2 * (eff / 100.0)
+                self.used_area_str = f"{used_m2:.2f} sq.M."
+            else:
+                self.used_area_str = self.layout_data.get("used_area_str", "0.00 sq.M.") if index == 0 else "0.00 sq.M."
+                self.yield_pct = float(self.layout_data.get("yield_pct", 0.0)) if index == 0 else 0.0
+            self.instances_count = len(self.placed_pieces)
+            self.shapes_count = len(unique_shape_names)
+        elif index == 0 and ("yield_pct" in self.layout_data or "used_area_str" in self.layout_data):
+            self.used_area_str = self.layout_data.get("used_area_str", "0.00 sq.M.")
+            self.mat_area_str = self.layout_data.get("mat_area_str", f"{mat_m2:.2f} sq.M.")
+            self.yield_pct = float(self.layout_data.get("yield_pct", 0.0))
+            self.instances_count = int(self.layout_data.get("instances_count", 0))
+            self.shapes_count = int(self.layout_data.get("shapes_count", 0))
+        else:
+            self.used_area_str = "0.00 sq.M."
+            self.yield_pct = 0.0
+            self.instances_count = 0
+            self.shapes_count = 0
 
-        # Renderiza a página inicialmente
-        self.redraw()
-        self.after(50, self.fit_to_page)
+        # 10. Legenda estruturada
+        self.legend_data = self.build_legend_data()
+
+        # 11. Atualiza controles de navegação
+        self.update_nav_controls()
+
+        if not initial:
+            self.redraw()
+            if hasattr(self, "canvas") and self.canvas.winfo_exists():
+                self.canvas.yview_moveto(0)
+                self.canvas.xview_moveto(0)
+            if hasattr(self.master, "switch_to_layout") and callable(self.master.switch_to_layout):
+                try:
+                    self.master.switch_to_layout(index, save_current=True)
+                except Exception:
+                    pass
+
+        return True
+
+    def next_page(self, event=None):
+        """Avança para a próxima página/placa de impressão."""
+        if not getattr(self, "layouts", None):
+            return "break"
+        if self.current_layout_index + 1 < len(self.layouts):
+            self.load_layout_index(self.current_layout_index + 1)
+        return "break"
+
+    def prev_page(self, event=None):
+        """Retorna para a página/placa anterior de impressão."""
+        if not getattr(self, "layouts", None):
+            return "break"
+        if self.current_layout_index - 1 >= 0:
+            self.load_layout_index(self.current_layout_index - 1)
+        return "break"
+
+    def update_nav_controls(self):
+        """Atualiza estado dos botões de navegação e texto do indicador de página."""
+        tot = len(self.layouts) if getattr(self, "layouts", None) else 1
+        cur = (self.current_layout_index + 1) if getattr(self, "layouts", None) else 1
+        sess_title = getattr(self, "current_layout", {}).get("session_title") if hasattr(self, "current_layout") else ""
+
+        if hasattr(self, "lbl_page") and self.lbl_page.winfo_exists():
+            if sess_title:
+                self.lbl_page.config(text=f"Página {cur} de {tot}  ({sess_title})")
+            else:
+                self.lbl_page.config(text=f"Página {cur} de {tot}")
+
+        if hasattr(self, "btn_prev") and self.btn_prev.winfo_exists():
+            self.btn_prev.config(state="normal" if cur > 1 else "disabled")
+
+        if hasattr(self, "btn_next") and self.btn_next.winfo_exists():
+            self.btn_next.config(state="normal" if cur < tot else "disabled")
+
 
     def load_company_logo(self):
         """Carrega a imagem de logotipo customizada da empresa se configurada."""
@@ -643,7 +818,10 @@ class LayoutPrintDialog(tk.Toplevel):
             }, ...
         ]
         """
-        if self.layout_data.get("legend_data"):
+        cur_layout = getattr(self, "current_layout", None)
+        if cur_layout and isinstance(cur_layout, dict) and cur_layout.get("legend_data"):
+            return cur_layout.get("legend_data")
+        if self.layout_data.get("legend_data") and (not self.layouts or len(self.layouts) <= 1):
             return self.layout_data.get("legend_data")
 
         session_shapes = self.session_shapes or []
@@ -820,6 +998,37 @@ class LayoutPrintDialog(tk.Toplevel):
 
         ttk.Separator(tb, orient="vertical").pack(side="left", fill="y", padx=8, pady=2)
 
+        # Navegação de Páginas / Placas de Impressão
+        self.btn_prev = tk.Button(
+            tb, text="◀ Anterior", bg=THEME["bg_surface"], fg=THEME["text_main"],
+            relief="raised", bd=2, font=("Segoe UI", 9), padx=6, command=self.prev_page
+        )
+        self.btn_prev.pack(side="left", padx=2)
+
+        tot_lays = len(self.layouts) if getattr(self, "layouts", None) else 1
+        cur_lay_idx = (getattr(self, "current_layout_index", 0) + 1) if getattr(self, "layouts", None) else 1
+        self.lbl_page = tk.Label(
+            tb, text=f"Página {cur_lay_idx} de {tot_lays}",
+            bg=THEME["bg_surface"], fg=THEME["text_main"],
+            font=("Segoe UI", 9, "bold"), padx=6
+        )
+        self.lbl_page.pack(side="left", padx=2)
+
+        self.btn_next = tk.Button(
+            tb, text="Próxima ▶", bg=THEME["bg_surface"], fg=THEME["text_main"],
+            relief="raised", bd=2, font=("Segoe UI", 9, "bold"), padx=6, command=self.next_page
+        )
+        self.btn_next.pack(side="left", padx=2)
+
+        try:
+            from ui.tooltip import ToolTip
+            ToolTip(self.btn_prev, "Página/Placa anterior (PageUp ou Alt+Esquerda)")
+            ToolTip(self.btn_next, "Próxima página/placa de impressão (PageDown ou Alt+Direita)")
+        except Exception:
+            pass
+
+        ttk.Separator(tb, orient="vertical").pack(side="left", fill="y", padx=8, pady=2)
+
         tk.Button(
             tb, text="🔍 Zoom +", bg=THEME["bg_surface"], fg=THEME["text_main"],
             relief="raised", bd=2, font=("Segoe UI", 9), padx=4, command=lambda: self.change_zoom(1.2)
@@ -886,6 +1095,10 @@ class LayoutPrintDialog(tk.Toplevel):
         self.bind("<Control-P>", lambda e: self.do_print())
         self.bind("<F11>", self.toggle_fullscreen)
         self.bind("<Escape>", self.on_escape)
+        self.bind("<Next>", self.next_page)
+        self.bind("<Prior>", self.prev_page)
+        self.bind("<Alt-Right>", self.next_page)
+        self.bind("<Alt-Left>", self.prev_page)
 
     def _on_canvas_configure(self, event):
         if not getattr(self, "_initial_fit_done", False):
@@ -1881,18 +2094,53 @@ class LayoutPrintDialog(tk.Toplevel):
         return im
 
     def save_as_pdf(self):
+        tot_lays = len(self.layouts) if getattr(self, "layouts", None) else 1
+        save_all = False
+        if tot_lays > 1:
+            ans = messagebox.askyesnocancel(
+                "Salvar PDF",
+                f"A sessão possui {tot_lays} páginas/placas de impressão.\n\n"
+                f"Deseja exportar TODAS as páginas em um único arquivo PDF?\n\n"
+                f"• 'Sim': Exporta todas as {tot_lays} páginas em um único arquivo.\n"
+                f"• 'Não': Exporta apenas a página atual ({self.layout_name}).\n"
+                f"• 'Cancelar': Cancela a exportação.",
+                parent=self
+            )
+            if ans is None:
+                return
+            save_all = ans
+
+        default_file = (
+            "relatorio_completo_sessao.pdf" if save_all
+            else f"{self.layout_name.replace('.lay', '')}_report.pdf"
+        )
         file_path = filedialog.asksaveasfilename(
             title="Salvar Layout como PDF",
             defaultextension=".pdf",
-            initialfile=f"{self.layout_name.replace('.lay', '')}_report.pdf",
+            initialfile=default_file,
             filetypes=[("Documento PDF (*.pdf)", "*.pdf"), ("Todos os Arquivos (*.*)", "*.*")],
             parent=self
         )
         if file_path:
             try:
-                im = self.render_pillow_page(dpi=200)
-                im.save(file_path, "PDF", resolution=200.0)
-                messagebox.showinfo("Exportar PDF", f"Relatório do Layout exportado com sucesso para:\n{file_path}", parent=self)
+                if save_all and tot_lays > 1:
+                    orig_idx = self.current_layout_index
+                    pages = []
+                    try:
+                        for i in range(tot_lays):
+                            self.load_layout_index(i, initial=True)
+                            pages.append(self.render_pillow_page(dpi=200))
+                    finally:
+                        self.load_layout_index(orig_idx, initial=True)
+                        self.redraw()
+
+                    if pages:
+                        pages[0].save(file_path, "PDF", resolution=200.0, save_all=True, append_images=pages[1:])
+                        messagebox.showinfo("Exportar PDF", f"Relatório completo ({tot_lays} páginas) exportado com sucesso para:\n{file_path}", parent=self)
+                else:
+                    im = self.render_pillow_page(dpi=200)
+                    im.save(file_path, "PDF", resolution=200.0)
+                    messagebox.showinfo("Exportar PDF", f"Relatório do Layout exportado com sucesso para:\n{file_path}", parent=self)
             except Exception as e:
                 messagebox.showerror("Erro ao Salvar PDF", f"Falha ao gerar arquivo PDF:\n{str(e)}", parent=self)
 
@@ -1915,9 +2163,39 @@ class LayoutPrintDialog(tk.Toplevel):
     def do_print(self):
         """Dispara a impressão física ou salva em spooler de impressão."""
         try:
-            im = self.render_pillow_page(dpi=200)
+            tot_lays = len(self.layouts) if getattr(self, "layouts", None) else 1
+            print_all = False
+            if tot_lays > 1:
+                ans = messagebox.askyesnocancel(
+                    "Imprimir Layout",
+                    f"A sessão possui {tot_lays} páginas/placas de impressão.\n\n"
+                    f"Deseja imprimir TODAS as páginas?\n\n"
+                    f"• 'Sim': Imprime todas as {tot_lays} páginas.\n"
+                    f"• 'Não': Imprime apenas a página atual ({self.layout_name}).\n"
+                    f"• 'Cancelar': Cancela a impressão.",
+                    parent=self
+                )
+                if ans is None:
+                    return
+                print_all = ans
+
             tmp_pdf = Path("/tmp") / f"print_{self.layout_name.replace('.lay', '')}.pdf"
-            im.save(str(tmp_pdf), "PDF", resolution=200.0)
+
+            if print_all and tot_lays > 1:
+                orig_idx = self.current_layout_index
+                pages = []
+                try:
+                    for i in range(tot_lays):
+                        self.load_layout_index(i, initial=True)
+                        pages.append(self.render_pillow_page(dpi=200))
+                finally:
+                    self.load_layout_index(orig_idx, initial=True)
+                    self.redraw()
+                if pages:
+                    pages[0].save(str(tmp_pdf), "PDF", resolution=200.0, save_all=True, append_images=pages[1:])
+            else:
+                im = self.render_pillow_page(dpi=200)
+                im.save(str(tmp_pdf), "PDF", resolution=200.0)
 
             if sys.platform == "win32":
                 try:
@@ -1935,3 +2213,4 @@ class LayoutPrintDialog(tk.Toplevel):
             messagebox.showinfo("Imprimir Layout", f"Relatório de impressão gerado com sucesso em:\n{tmp_pdf}\n\nVocê também pode utilizar o botão 'Salvar PDF...' para salvar onde desejar.", parent=self)
         except Exception as e:
             messagebox.showerror("Erro ao Imprimir", f"Falha no processo de impressão:\n{str(e)}", parent=self)
+

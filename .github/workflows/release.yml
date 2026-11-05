@@ -9,7 +9,7 @@ on:
       tag_name:
         description: 'Tag de versão SemVer (ex: v1.0.0)'
         required: false
-        default: 'v1.6.29'
+        default: 'v1.6.33'
 
 permissions:
   contents: write
@@ -197,7 +197,22 @@ jobs:
 
             ---
 
-            ### 🛠️ Recursos Incluídos Nesta Versão (v1.6.29):
+            ### 🛠️ Recursos Incluídos Nesta Versão (v1.6.33):
+            - **Impressão em Massa de Sessões e Pastas de Produção (v1.6.33)**:
+              - Novo botão **🖨️ Imprimir Sessões** na barra de ações em lote (`batch_action_bar`).
+              - Opções no menu de contexto da árvore: imprimir sessão individual, imprimir todas as sessões de uma pasta (e subpastas recursivamente), imprimir raiz de produção e imprimir sessões marcadas por checkbox.
+              - Novos itens no menu superior: **Arquivo ➔ 🖨️ Imprimir Sessão...** e **🖨️ Imprimir em Massa (Sessões)...**.
+              - Suporte completo no `LayoutPrintDialog` a múltiplas sessões com metadados isolados (`_setup_material_metadata`), títulos com `[Sessão #ID - layXXXX.lay]`, numeração da placa no rodapé e indicador `Página X de Y (Sessão #ID)`.
+              - Exportação unificada para PDF e impressão física em lote de todas as páginas.
+              - **590 testes automatizados** (590 passando, 2 skip, 0 falhas).
+            - **Paginação e Navegação Multi-Página na Impressão A4 (v1.6.32)**:
+              - Suporte a múltiplas páginas e navegação no diálogo de impressão (`LayoutPrintDialog`).
+              - Botões **⬅ Anterior** e **Próxima ➡** na barra de ferramentas.
+              - Atalhos de navegação por teclado: **Page Up** e **Page Down**.
+              - Indicador `Página X de Y` e sincronização imediata no preview e exportação.
+            - **Exportação em Massa e de Pastas para Máquina (v1.6.30 - v1.6.31)**:
+              - Exportação de pastas de produção completas (`export_job_folder_sessions`) com subpastas, layouts e moldes.
+              - Exportação de múltiplas sessões selecionadas via barra de ações em lote e menu de contexto.
             - **Exportação de sessão multi-placa para a máquina (v1.6.29)**:
               - Novo botão **📤** na toolbar do Layout Editor e item **Arquivo → 📤 Salvar Sessão para Máquina…**.
               - Exporta **todas as placas** da sessão (`lay0000.lay`, `lay0001.lay`, ...) para uma pasta de rede ou pendrive, com apenas os moldes realmente referenciados em `Shapes/`.

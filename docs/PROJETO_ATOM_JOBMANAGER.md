@@ -1,12 +1,12 @@
 # PROJETO ATOM JobManager Reborn: Documento Vivo
 
 > **Finalidade:** Documento mestre estruturado e autocontido projetado para alimentar e contextualizar qualquer Inteligência Artificial (Antigravity, Claude, ChatGPT, etc.) ou engenheiro sobre 100% do projeto — regras de negócio de calçados/couro (ATOM), arquitetura técnica, schemas de banco (MySQL/SQLite), formatos proprietários (.LAY, .ONX/CZLIB), algoritmos de nesting/CAM, UI/UX e histórico — em um único arquivo de referência imediata.
-**Atalho de leitura:** o comportamento ATUAL de encaixe, sobras, impressão, atalho e entrega para a máquina está consolidado na **§8.47**, **§8.48** e **§8.49**; as seções §8.26–§8.46 são o histórico de como se chegou lá.
+**Atalho de leitura:** o comportamento ATUAL de encaixe, sobras, impressão, atalho e entrega para a máquina está consolidado na **§8.47**, **§8.48**, **§8.49**, **§8.50** e **§8.51**; as seções §8.26–§8.46 são o histórico de como se chegou lá.
 >
 > **Regra de ouro:** o que está marcado `[CONFIRMADO]` veio do relatório, do código ou do usuário. O que está `[NÃO CONFIRMADO]` é suposição e não deve virar "fato" sem validação. O que está `[PREENCHER]` a IA deve completar lendo o código real.
 
 <!-- AUTO:header:start -->
-**Última sincronização com o código:** 2026-11-04 12:12 (HEAD ao gerar: `bc09044`; 142 arquivos Python, ~69478 linhas)
+**Última sincronização com o código:** 2026-11-05 12:13 (HEAD ao gerar: `631c8a6`; 145 arquivos Python, ~71052 linhas)
 <!-- AUTO:header:end -->
 **Versão deste documento:** 2
 
@@ -140,6 +140,7 @@ tests/_catalog_fixtures.py                           # tests/_catalog_fixtures.p
 tests/conftest.py                                    # tests/conftest.py
 tests/test_auto_trim_checkbox.py                     # Testes Unitários: Checkbox de Refile Automático e Recorte Pós-Nesting (test_auto_trim_checkbox.py)
 tests/test_batch_autonest.py                         # JobManager 2000 (Python Edition)
+tests/test_batch_print_sessions.py                   # Testes unitários automatizados para a Impressão em Massa (Batch Print) de Sessões.
 tests/test_company_logo_print.py                     # Testes Automatizados para a Remoção do Logotipo ATOM e Suporte a Logotipo Personalizado da Empresa
 tests/test_create_session_left_click.py              # Testes Unitários: Criação de Sessão clicando com o botão esquerdo na pasta (duplo clique, menu, atalhos).
 tests/test_data_integrity.py                         # tests/test_data_integrity.py
@@ -164,6 +165,7 @@ tests/test_layout_editor_visual_regression.py        # tests/test_layout_editor_
 tests/test_layout_layers.py                          # tests/test_layout_layers.py
 tests/test_layout_print_legend.py                    # Testes unitários automatizados para a Legenda de Moldes na Impressão A4 (LayoutPrintDialog).
 tests/test_layout_print_material.py                  # Testes unitários para validação da sincronização e formatação automática
+tests/test_layout_print_pagination.py                # tests/test_layout_print_pagination.py
 tests/test_layout_save_refile.py                     # tests/test_layout_save_refile.py
 tests/test_macro_engine_ia_teste.py                  # Testes de Homologação para o Motor de Cálculo "IA-teste":
 tests/test_macro_engine_ia_teste_optimized.py        # JobManager 2000 (Python Edition)
@@ -181,6 +183,7 @@ tests/test_print_layout_abre.py                      # tests/test_print_layout_a
 tests/test_print_metros.py                           # tests/test_print_metros.py
 tests/test_project_packager.py                       # Testes do empacotador de sessão multi-placa (cad/project_packager.py).
 tests/test_semver.py                                 # Testes Automatizados para o Sistema de Versionamento SemVer (MAJOR.MINOR.PATCH)
+tests/test_session_context_menu_export.py            # Testes para a opção 'Salvar Sessão para Máquina' no menu de contexto da sessão.
 tests/test_session_material_delete.py                # Testes automatizados para remoção de material na sessão via tecla Delete / botão / menu:
 tests/test_session_monotonic.py                      # Testes Unitários: Monotonicidade Estrita de Sessões e Persistência contra Re-semeadura
 tests/test_session_persistence.py                    # tests/test_session_persistence.py
@@ -377,6 +380,9 @@ ui/units.py                                          # ui/units.py - Formataçã
 - `class FakeBatchWindow` (linha 22, 1 métodos): Mock leve de MainWindow contendo todos os componentes e métodos de batch.
 - `class TestBatchAutoNest` (linha 115, 13 métodos)
 
+### `tests/test_batch_print_sessions.py`
+- `class TestBatchPrintSessions` (linha 21, 8 métodos)
+
 ### `tests/test_company_logo_print.py`
 - `class TestCompanyLogoPrint` (linha 20, 6 métodos)
 
@@ -462,6 +468,9 @@ ui/units.py                                          # ui/units.py - Formataçã
 ### `tests/test_layout_print_material.py`
 - `class TestLayoutPrintMaterial` (linha 12, 4 métodos)
 
+### `tests/test_layout_print_pagination.py`
+- `class TestLayoutPrintPagination` (linha 20, 6 métodos)
+
 ### `tests/test_layout_save_refile.py`
 - `class _DummyLabel` (linha 34, 1 métodos)
 - `class TestSalvarRefile` (linha 39, 6 métodos)
@@ -529,6 +538,11 @@ ui/units.py                                          # ui/units.py - Formataçã
 
 ### `tests/test_semver.py`
 - `class TestSemVer` (linha 12, 8 métodos)
+
+### `tests/test_session_context_menu_export.py`
+- `class DummyBtn` (linha 14, 1 métodos)
+- `class FakeEvent` (linha 19, 1 métodos)
+- `class TestSessionContextMenuExport` (linha 27, 11 métodos)
 
 ### `tests/test_session_material_delete.py`
 - `class TestSessionMaterialDelete` (linha 17, 10 métodos)
@@ -708,14 +722,14 @@ ui/units.py                                          # ui/units.py - Formataçã
 - funções: `_contour_area_mm2`, `_shade_color`, `_contour_key`, `rotate_piece_in_place`
 
 ### `ui/layout_print_dialog.py`
-- `class LayoutPrintDialog` (linha 309, 22 métodos): Janela modal de Visualização de Impressão (Print Preview) do Layout Editor.
+- `class LayoutPrintDialog` (linha 309, 27 métodos): Janela modal de Visualização de Impressão (Print Preview) do Layout Editor.
 - funções: `get_company_logo_path`, `open_company_logo_dialog`, `format_size`, `extract_molde_base_name`, `format_shape_id_tag`, `_clamp_tip_zone`, `_desenhar_retangulo_tracejado`
 
 ### `ui/macro_panel.py`
 - `class MacroPanel` (linha 23, 12 métodos): Camada 3: Macro / Aprendizado.
 
 ### `ui/main_window.py`
-- `class MainWindow` (linha 65, 145 métodos)
+- `class MainWindow` (linha 65, 150 métodos)
 - funções: `get_assets_dir`
 
 ### `ui/material_codes_view.py`
@@ -735,7 +749,7 @@ ui/units.py                                          # ui/units.py - Formataçã
 
 ### `ui/session_view.py`
 - `class SobrasConfigDialog` (linha 101, 4 métodos): Diálogo para configuração do modo de Ponta de 2 Camadas (Enfesto em Degrau)
-- `class SessionView` (linha 250, 113 métodos)
+- `class SessionView` (linha 250, 114 métodos)
 
 ### `ui/shape_catalog_view.py`
 - `class ShapeCatalogView` (linha 38, 44 métodos): Visão MDI em Matriz Grid (Peças × Tamanhos) para exibição e gerenciamento
@@ -1568,7 +1582,7 @@ A ordem de corte do `.lay` para a mesa **não pode** ser aleatória:
 | Atalho | Estado no código | Onde |
 |---|---|---|
 | F1 | encontrado | `ui/layout_editor_view.py:772`, `ui/layout_editor_view.py:773` |
-| F2 | encontrado | `ui/layout_editor_view.py:776`, `ui/layout_editor_view.py:777`, `ui/session_view.py:884` |
+| F2 | encontrado | `ui/layout_editor_view.py:776`, `ui/layout_editor_view.py:777`, `ui/session_view.py:885` |
 | F3 | encontrado | `ui/layout_editor_view.py:780`, `ui/layout_editor_view.py:781` |
 | F4 | encontrado | `ui/layout_editor_view.py:788`, `ui/layout_editor_view.py:789` |
 | Ctrl+Z | encontrado | `ui/layout_editor_view.py:718`, `ui/layout_editor_view.py:719`, `ui/layout_editor_view.py:720` |
@@ -1580,14 +1594,16 @@ A ordem de corte do `.lay` para a mesa **não pode** ser aleatória:
 
 | Atalho | Local | Linha |
 |---|---|---|
-| Alt+Down | `ui/session_view.py:3871` | `entry.bind("<Alt-Down>", lambda e: adjust_number(-1))` |
-| Alt+Up | `ui/session_view.py:3870` | `entry.bind("<Alt-Up>", lambda e: adjust_number(+1))` |
+| Alt+Down | `ui/session_view.py:3884` | `entry.bind("<Alt-Down>", lambda e: adjust_number(-1))` |
+| Alt+Left | `ui/layout_print_dialog.py:1101` | `self.bind("<Alt-Left>", self.prev_page)` |
+| Alt+Right | `ui/layout_print_dialog.py:1100` | `self.bind("<Alt-Right>", self.next_page)` |
+| Alt+Up | `ui/session_view.py:3883` | `entry.bind("<Alt-Up>", lambda e: adjust_number(+1))` |
 | Backspace | `ui/cad_canvas.py:72` | `self.master.bind("<BackSpace>", lambda e: self.delete_selected())` |
 | Backspace | `ui/dieproc_dialog.py:87` | `self.preset_listbox.bind("<BackSpace>", lambda e: self.on_delete_clicked())` |
-| Backspace | `ui/main_window.py:693` | `self.bind_all("<BackSpace>", self.on_global_delete_key, add="+")` |
-| Backspace | `ui/session_view.py:881` | `self.tree_shapes.bind("<BackSpace>", lambda e: self._on_tree_shapes_delete())` |
-| Backspace | `ui/session_view.py:1041` | `w.bind("<BackSpace>", self.remove_session_material)` |
-| Backspace | `ui/session_view.py:1042` | `w.bind("<Key-BackSpace>", self.remove_session_material)` |
+| Backspace | `ui/main_window.py:702` | `self.bind_all("<BackSpace>", self.on_global_delete_key, add="+")` |
+| Backspace | `ui/session_view.py:882` | `self.tree_shapes.bind("<BackSpace>", lambda e: self._on_tree_shapes_delete())` |
+| Backspace | `ui/session_view.py:1042` | `w.bind("<BackSpace>", self.remove_session_material)` |
+| Backspace | `ui/session_view.py:1043` | `w.bind("<Key-BackSpace>", self.remove_session_material)` |
 | Backspace | `ui/shape_editor_view.py:248` | `self.bind("<BackSpace>", lambda e: self.delete_selected())` |
 | Backspace | `ui/shape_editor_view.py:250` | `self.canvas.bind("<BackSpace>", lambda e: self.delete_selected())` |
 | Ctrl+A | `ui/layout_editor_view.py:793` | `w.bind("<Control-a>", self.select_all)` |
@@ -1596,14 +1612,14 @@ A ordem de corte do `.lay` para a mesa **não pode** ser aleatória:
 | Ctrl+A | `ui/layout_editor_view.py:796` | `w.bind("<Control-Key-A>", self.select_all)` |
 | Ctrl+A | `ui/layout_editor_view.py:801` | `self.bind_all("<Control-a>", self.select_all)` |
 | Ctrl+A | `ui/layout_editor_view.py:802` | `self.bind_all("<Control-A>", self.select_all)` |
-| Ctrl+A | `ui/main_window.py:303` | `edit_menu.add_command(label="Selecionar tudo", accelerator="Ctrl+A", command=sel` |
-| Ctrl+A | `ui/main_window.py:694` | `self.bind_all("<Control-a>", self.on_select_all, add="+")` |
-| Ctrl+A | `ui/main_window.py:695` | `self.bind_all("<Control-A>", self.on_select_all, add="+")` |
-| Ctrl+A | `ui/main_window.py:696` | `self.bind_all("<Control-Key-a>", self.on_select_all, add="+")` |
-| Ctrl+A | `ui/main_window.py:697` | `self.bind_all("<Control-Key-A>", self.on_select_all, add="+")` |
-| Ctrl+C | `ui/main_window.py:299` | `edit_menu.add_command(label="Copiar", accelerator="Ctrl+C")` |
+| Ctrl+A | `ui/main_window.py:305` | `edit_menu.add_command(label="Selecionar tudo", accelerator="Ctrl+A", command=sel` |
+| Ctrl+A | `ui/main_window.py:703` | `self.bind_all("<Control-a>", self.on_select_all, add="+")` |
+| Ctrl+A | `ui/main_window.py:704` | `self.bind_all("<Control-A>", self.on_select_all, add="+")` |
+| Ctrl+A | `ui/main_window.py:705` | `self.bind_all("<Control-Key-a>", self.on_select_all, add="+")` |
+| Ctrl+A | `ui/main_window.py:706` | `self.bind_all("<Control-Key-A>", self.on_select_all, add="+")` |
+| Ctrl+C | `ui/main_window.py:301` | `edit_menu.add_command(label="Copiar", accelerator="Ctrl+C")` |
 | Ctrl+Down | `ui/layout_editor_view.py:813` | `self.bind_all("<Control-Down>", lambda e: self.nudge_selected(0, -0.5))` |
-| Ctrl+Down | `ui/session_view.py:3869` | `entry.bind("<Control-Down>", lambda e: adjust_number(-1))` |
+| Ctrl+Down | `ui/session_view.py:3882` | `entry.bind("<Control-Down>", lambda e: adjust_number(-1))` |
 | Ctrl+Equal | `ui/layout_editor_view.py:708` | `w.bind("<Control-equal>", lambda e: (self.zoom_in(), "break")[1])` |
 | Ctrl+Equal | `ui/shape_catalog_view.py:273` | `self.bind("<Control-equal>", lambda e: self.zoom_step(1.2))` |
 | Ctrl+Kp_0 | `ui/shape_catalog_view.py:279` | `self.bind("<Control-KP_0>", lambda e: self.reset_zoom())` |
@@ -1626,12 +1642,12 @@ A ordem de corte do `.lay` para a mesa **não pode** ser aleatória:
 | Ctrl+P | `ui/layout_editor_view.py:503` | `self.bind("<Control-P>", lambda e: self.print_layout())` |
 | Ctrl+P | `ui/layout_editor_view.py:742` | `w.bind("<Control-p>", lambda e: (self.print_layout(), "break")[1])` |
 | Ctrl+P | `ui/layout_editor_view.py:743` | `w.bind("<Control-P>", lambda e: (self.print_layout(), "break")[1])` |
-| Ctrl+P | `ui/layout_print_dialog.py:885` | `self.bind("<Control-p>", lambda e: self.do_print())` |
-| Ctrl+P | `ui/layout_print_dialog.py:886` | `self.bind("<Control-P>", lambda e: self.do_print())` |
+| Ctrl+P | `ui/layout_print_dialog.py:1094` | `self.bind("<Control-p>", lambda e: self.do_print())` |
+| Ctrl+P | `ui/layout_print_dialog.py:1095` | `self.bind("<Control-P>", lambda e: self.do_print())` |
 | Ctrl+P | `ui/main_window.py:89` | `self.bind("<Control-p>", self.handle_ctrl_p)` |
 | Ctrl+P | `ui/main_window.py:90` | `self.bind("<Control-P>", self.handle_ctrl_p)` |
-| Ctrl+P | `ui/session_view.py:1132` | `self.tree_lays.bind("<Control-p>", lambda e: (self.print_current_layout(), "brea` |
-| Ctrl+P | `ui/session_view.py:1133` | `self.tree_lays.bind("<Control-P>", lambda e: (self.print_current_layout(), "brea` |
+| Ctrl+P | `ui/session_view.py:1134` | `self.tree_lays.bind("<Control-p>", lambda e: (self.print_current_layout(), "brea` |
+| Ctrl+P | `ui/session_view.py:1135` | `self.tree_lays.bind("<Control-P>", lambda e: (self.print_current_layout(), "brea` |
 | Ctrl+Plus | `ui/layout_editor_view.py:707` | `w.bind("<Control-plus>", lambda e: (self.zoom_in(), "break")[1])` |
 | Ctrl+Plus | `ui/shape_catalog_view.py:274` | `self.bind("<Control-plus>", lambda e: self.zoom_step(1.2))` |
 | Ctrl+Q | `ui/layout_editor_view.py:705` | `w.bind("<Control-q>", lambda e: (self.zoom_in(), "break")[1])` |
@@ -1656,9 +1672,9 @@ A ordem de corte do `.lay` para a mesa **não pode** ser aleatória:
 | Ctrl+T | `ui/main_window.py:91` | `self.bind("<Control-t>", self.handle_ctrl_t)` |
 | Ctrl+T | `ui/main_window.py:92` | `self.bind("<Control-T>", self.handle_ctrl_t)` |
 | Ctrl+Up | `ui/layout_editor_view.py:812` | `self.bind_all("<Control-Up>", lambda e: self.nudge_selected(0, 0.5))` |
-| Ctrl+Up | `ui/session_view.py:3868` | `entry.bind("<Control-Up>", lambda e: adjust_number(+1))` |
-| Ctrl+V | `ui/main_window.py:300` | `edit_menu.add_command(label="Colar", accelerator="Ctrl+V")` |
-| Ctrl+X | `ui/main_window.py:298` | `edit_menu.add_command(label="Recortar", accelerator="Ctrl+X")` |
+| Ctrl+Up | `ui/session_view.py:3881` | `entry.bind("<Control-Up>", lambda e: adjust_number(+1))` |
+| Ctrl+V | `ui/main_window.py:302` | `edit_menu.add_command(label="Colar", accelerator="Ctrl+V")` |
+| Ctrl+X | `ui/main_window.py:300` | `edit_menu.add_command(label="Recortar", accelerator="Ctrl+X")` |
 | Ctrl+Y | `ui/layout_editor_view.py:724` | `self.canvas.bind("<Control-y>", lambda e: "break")` |
 | Ctrl+Y | `ui/layout_editor_view.py:725` | `self.canvas.bind("<Control-Y>", lambda e: "break")` |
 | Ctrl+Y | `ui/layout_editor_view.py:726` | `self.bind("<Control-y>", lambda e: "break")` |
@@ -1667,11 +1683,11 @@ A ordem de corte do `.lay` para a mesa **não pode** ser aleatória:
 | Ctrl+Z | `ui/layout_editor_view.py:719` | `self.canvas.bind("<Control-Z>", self.undo_action)` |
 | Ctrl+Z | `ui/layout_editor_view.py:720` | `self.bind("<Control-z>", self.undo_action)` |
 | Ctrl+Z | `ui/layout_editor_view.py:721` | `self.bind("<Control-Z>", self.undo_action)` |
-| Ctrl+Z | `ui/main_window.py:296` | `edit_menu.add_command(label="Desfazer / Reverter", accelerator="Ctrl+Z", command` |
-| Ctrl+Z | `ui/main_window.py:698` | `self.bind_all("<Control-z>", self.on_global_undo, add="+")` |
-| Ctrl+Z | `ui/main_window.py:699` | `self.bind_all("<Control-Z>", self.on_global_undo, add="+")` |
-| Ctrl+Z | `ui/main_window.py:700` | `self.bind_all("<Control-Key-z>", self.on_global_undo, add="+")` |
-| Ctrl+Z | `ui/main_window.py:701` | `self.bind_all("<Control-Key-Z>", self.on_global_undo, add="+")` |
+| Ctrl+Z | `ui/main_window.py:298` | `edit_menu.add_command(label="Desfazer / Reverter", accelerator="Ctrl+Z", command` |
+| Ctrl+Z | `ui/main_window.py:707` | `self.bind_all("<Control-z>", self.on_global_undo, add="+")` |
+| Ctrl+Z | `ui/main_window.py:708` | `self.bind_all("<Control-Z>", self.on_global_undo, add="+")` |
+| Ctrl+Z | `ui/main_window.py:709` | `self.bind_all("<Control-Key-z>", self.on_global_undo, add="+")` |
+| Ctrl+Z | `ui/main_window.py:710` | `self.bind_all("<Control-Key-Z>", self.on_global_undo, add="+")` |
 | Ctrl+Z | `ui/shape_catalog_view.py:269` | `self.bind("<Control-z>", lambda e: self.action_undo())` |
 | Ctrl+Z | `ui/shape_catalog_view.py:270` | `self.bind("<Control-Z>", lambda e: self.action_undo())` |
 | Ctrl+Z | `ui/shape_editor_view.py:231` | `self.bind("<Control-z>", self.undo_or_revert)` |
@@ -1685,19 +1701,19 @@ A ordem de corte do `.lay` para a mesa **não pode** ser aleatória:
 | Delete | `ui/cad_canvas.py:71` | `self.master.bind("<Delete>", lambda e: self.delete_selected())` |
 | Delete | `ui/dieproc_dialog.py:86` | `self.preset_listbox.bind("<Delete>", lambda e: self.on_delete_clicked())` |
 | Delete | `ui/layout_editor_view.py:800` | `self.bind_all("<Delete>", lambda e: self.delete_selected())` |
-| Delete | `ui/main_window.py:301` | `edit_menu.add_command(label="Excluir", accelerator="Del", command=self.on_global` |
-| Delete | `ui/main_window.py:692` | `self.bind_all("<Delete>", self.on_global_delete_key, add="+")` |
-| Delete | `ui/main_window.py:2935` | `accelerator="Del",` |
-| Delete | `ui/main_window.py:2954` | `accelerator="Del",` |
-| Delete | `ui/main_window.py:3184` | `accelerator="Del",` |
-| Delete | `ui/main_window.py:3203` | `accelerator="Del",` |
-| Delete | `ui/session_view.py:880` | `self.tree_shapes.bind("<Delete>", lambda e: self._on_tree_shapes_delete())` |
-| Delete | `ui/session_view.py:1039` | `w.bind("<Delete>", self.remove_session_material)` |
-| Delete | `ui/session_view.py:1040` | `w.bind("<Key-Delete>", self.remove_session_material)` |
+| Delete | `ui/main_window.py:303` | `edit_menu.add_command(label="Excluir", accelerator="Del", command=self.on_global` |
+| Delete | `ui/main_window.py:701` | `self.bind_all("<Delete>", self.on_global_delete_key, add="+")` |
+| Delete | `ui/main_window.py:3408` | `accelerator="Del",` |
+| Delete | `ui/main_window.py:3427` | `accelerator="Del",` |
+| Delete | `ui/main_window.py:3704` | `accelerator="Del",` |
+| Delete | `ui/main_window.py:3723` | `accelerator="Del",` |
+| Delete | `ui/session_view.py:881` | `self.tree_shapes.bind("<Delete>", lambda e: self._on_tree_shapes_delete())` |
+| Delete | `ui/session_view.py:1040` | `w.bind("<Delete>", self.remove_session_material)` |
+| Delete | `ui/session_view.py:1041` | `w.bind("<Key-Delete>", self.remove_session_material)` |
 | Delete | `ui/shape_editor_view.py:247` | `self.bind("<Delete>", lambda e: self.delete_selected())` |
 | Delete | `ui/shape_editor_view.py:249` | `self.canvas.bind("<Delete>", lambda e: self.delete_selected())` |
 | Down | `ui/layout_editor_view.py:808` | `self.bind_all("<Down>", lambda e: self.bump_selection_vector(0, -1))` |
-| Down | `ui/session_view.py:3853` | `entry.bind("<Down>", move_down)` |
+| Down | `ui/session_view.py:3866` | `entry.bind("<Down>", move_down)` |
 | Down | `ui/shape_catalog_view.py:263` | `self.bind("<Down>", lambda e: self.navigate_selection(0, 1))` |
 | Escape | `ui/cad_canvas.py:67` | `self.bind("<Escape>", self.cancel_drag)` |
 | Escape | `ui/cad_canvas.py:68` | `self.master.bind("<Escape>", self.cancel_drag)` |
@@ -1707,45 +1723,47 @@ A ordem de corte do `.lay` para a mesa **não pode** ser aleatória:
 | Escape | `ui/import_materials_dialog.py:49` | `self.bind("<Escape>", lambda e: self.destroy())` |
 | Escape | `ui/layout_editor_view.py:696` | `self.canvas.bind("<Escape>", self.on_canvas_escape)` |
 | Escape | `ui/layout_editor_view.py:792` | `w.bind("<Escape>", self.cancel_drag)` |
-| Escape | `ui/layout_print_dialog.py:888` | `self.bind("<Escape>", self.on_escape)` |
+| Escape | `ui/layout_print_dialog.py:1097` | `self.bind("<Escape>", self.on_escape)` |
 | Escape | `ui/main_window.py:86` | `self.bind("<Escape>", self.exit_fullscreen)` |
-| Escape | `ui/main_window.py:691` | `self.bind_all("<Escape>", self.dismiss_popup_menus, add="+")` |
-| Escape | `ui/main_window.py:3478` | `dialog.bind("<Escape>", lambda e: dialog.destroy())` |
+| Escape | `ui/main_window.py:700` | `self.bind_all("<Escape>", self.dismiss_popup_menus, add="+")` |
+| Escape | `ui/main_window.py:4012` | `dialog.bind("<Escape>", lambda e: dialog.destroy())` |
 | Escape | `ui/material_codes_view.py:510` | `dlg.bind("<Escape>", lambda e: dlg.destroy())` |
 | Escape | `ui/options_dialog.py:40` | `self.bind("<Escape>", lambda e: self.on_cancel())` |
-| Escape | `ui/session_view.py:3307` | `entry.bind("<Escape>", cancel)` |
-| Escape | `ui/session_view.py:3425` | `dialog.bind("<Escape>", lambda e: dialog.destroy())` |
-| Escape | `ui/session_view.py:3863` | `entry.bind("<Escape>", cancel_edit)` |
+| Escape | `ui/session_view.py:3320` | `entry.bind("<Escape>", cancel)` |
+| Escape | `ui/session_view.py:3438` | `dialog.bind("<Escape>", lambda e: dialog.destroy())` |
+| Escape | `ui/session_view.py:3876` | `entry.bind("<Escape>", cancel_edit)` |
 | Escape | `ui/shape_catalog_view.py:268` | `self.bind("<Escape>", lambda e: self.on_close_click())` |
 | Escape | `ui/shape_editor_view.py:243` | `self.bind("<Escape>", self.on_escape_key)` |
 | Escape | `ui/shape_editor_view.py:244` | `self.canvas.bind("<Escape>", self.on_escape_key)` |
 | Escape | `ui/trim_layout_dialog.py:77` | `self.bind("<Escape>", lambda e: self.destroy())` |
 | F1 | `ui/layout_editor_view.py:772` | `w.bind("<F1>", self.on_f1_press)` |
 | F1 | `ui/layout_editor_view.py:773` | `w.bind("<Key-F1>", self.on_f1_press)` |
-| F11 | `ui/layout_print_dialog.py:887` | `self.bind("<F11>", self.toggle_fullscreen)` |
+| F11 | `ui/layout_print_dialog.py:1096` | `self.bind("<F11>", self.toggle_fullscreen)` |
 | F11 | `ui/main_window.py:85` | `self.bind("<F11>", self.toggle_fullscreen)` |
 | F11 | `ui/shape_editor_view.py:241` | `self.bind("<F11>", self.on_f11_fullscreen)` |
 | F11 | `ui/shape_editor_view.py:242` | `self.canvas.bind("<F11>", self.on_f11_fullscreen)` |
 | F2 | `ui/layout_editor_view.py:776` | `w.bind("<F2>", self.on_f2_press)` |
 | F2 | `ui/layout_editor_view.py:777` | `w.bind("<Key-F2>", self.on_f2_press)` |
-| F2 | `ui/session_view.py:884` | `self.tree_shapes.bind("<F2>", self.on_tree_shape_f2)` |
-| F2 | `ui/session_view.py:1035` | `self.tree_mat.bind("<F2>", self.on_mat_f2_key)` |
+| F2 | `ui/session_view.py:885` | `self.tree_shapes.bind("<F2>", self.on_tree_shape_f2)` |
+| F2 | `ui/session_view.py:1036` | `self.tree_mat.bind("<F2>", self.on_mat_f2_key)` |
 | F3 | `ui/layout_editor_view.py:780` | `w.bind("<F3>", self.on_f3_press)` |
 | F3 | `ui/layout_editor_view.py:781` | `w.bind("<Key-F3>", self.on_f3_press)` |
 | F4 | `ui/layout_editor_view.py:788` | `w.bind("<F4>", self.on_f4_press)` |
 | F4 | `ui/layout_editor_view.py:789` | `w.bind("<Key-F4>", self.on_f4_press)` |
 | F5 | `ui/main_window.py:135` | `self.bind_all("<F5>", lambda e: self.on_refresh_f5())` |
-| F5 | `ui/main_window.py:319` | `tools_menu.add_command(label="Atualizar", accelerator="F5", command=self.on_refr` |
-| Iso_left_tab | `ui/session_view.py:3862` | `entry.bind("<ISO_Left_Tab>", move_prev_col)` |
-| Kp_down | `ui/session_view.py:3854` | `entry.bind("<KP_Down>", move_down)` |
+| F5 | `ui/main_window.py:321` | `tools_menu.add_command(label="Atualizar", accelerator="F5", command=self.on_refr` |
+| Iso_left_tab | `ui/session_view.py:3875` | `entry.bind("<ISO_Left_Tab>", move_prev_col)` |
+| Kp_down | `ui/session_view.py:3867` | `entry.bind("<KP_Down>", move_down)` |
 | Kp_enter | `ui/fill_user_dialog.py:155` | `self.bind("<KP_Enter>", lambda e: self.on_ok())` |
-| Kp_enter | `ui/main_window.py:563` | `self.tree_main.bind("<KP_Enter>", self.on_tree_key_return)` |
-| Kp_enter | `ui/session_view.py:883` | `self.tree_shapes.bind("<KP_Enter>", self.on_tree_shape_enter)` |
-| Kp_enter | `ui/session_view.py:3858` | `entry.bind("<KP_Enter>", move_down)` |
+| Kp_enter | `ui/main_window.py:572` | `self.tree_main.bind("<KP_Enter>", self.on_tree_key_return)` |
+| Kp_enter | `ui/session_view.py:884` | `self.tree_shapes.bind("<KP_Enter>", self.on_tree_shape_enter)` |
+| Kp_enter | `ui/session_view.py:3871` | `entry.bind("<KP_Enter>", move_down)` |
 | Kp_enter | `ui/shape_catalog_view.py:267` | `self.bind("<KP_Enter>", lambda e: self.open_selected_shape())` |
-| Kp_up | `ui/session_view.py:3856` | `entry.bind("<KP_Up>", move_up)` |
+| Kp_up | `ui/session_view.py:3869` | `entry.bind("<KP_Up>", move_up)` |
 | Left | `ui/layout_editor_view.py:805` | `self.bind_all("<Left>", lambda e: self.bump_selection_vector(-1, 0))` |
 | Left | `ui/shape_catalog_view.py:264` | `self.bind("<Left>", lambda e: self.navigate_selection(-1, 0))` |
+| Next | `ui/layout_print_dialog.py:1098` | `self.bind("<Next>", self.next_page)` |
+| Prior | `ui/layout_print_dialog.py:1099` | `self.bind("<Prior>", self.prev_page)` |
 | R | `ui/cad_canvas.py:69` | `self.master.bind("<r>", lambda e: self.rotate_selected(45))` |
 | R | `ui/cad_canvas.py:70` | `self.master.bind("<R>", lambda e: self.rotate_selected(45))` |
 | R | `ui/layout_editor_view.py:798` | `self.bind_all("<Key-r>", lambda e: self.rotate_selected(45))` |
@@ -1753,18 +1771,18 @@ A ordem de corte do `.lay` para a mesa **não pode** ser aleatória:
 | Return | `ui/edit_shape_in_session_dialog.py:146` | `self.bind("<Return>", lambda e: self.on_save())` |
 | Return | `ui/fill_user_dialog.py:154` | `self.bind("<Return>", lambda e: self.on_ok())` |
 | Return | `ui/import_materials_dialog.py:84` | `self.ent_filepath.bind("<Return>", lambda e: self.load_file_from_path(self.ent_f` |
-| Return | `ui/main_window.py:562` | `self.tree_main.bind("<Return>", self.on_tree_key_return)` |
-| Return | `ui/main_window.py:3477` | `dialog.bind("<Return>", lambda e: save())` |
+| Return | `ui/main_window.py:571` | `self.tree_main.bind("<Return>", self.on_tree_key_return)` |
+| Return | `ui/main_window.py:4011` | `dialog.bind("<Return>", lambda e: save())` |
 | Return | `ui/material_codes_view.py:212` | `self.tree.bind("<Return>", lambda e: self.open_edit_selected_dialog())` |
 | Return | `ui/material_codes_view.py:509` | `dlg.bind("<Return>", lambda e: save_action())` |
-| Return | `ui/session_view.py:598` | `self.entry_gap.bind("<Return>", self._on_gap_entry_change)` |
-| Return | `ui/session_view.py:803` | `self.entry_sname.bind("<Return>", self._on_entry_sname_commit)` |
-| Return | `ui/session_view.py:882` | `self.tree_shapes.bind("<Return>", self.on_tree_shape_enter)` |
-| Return | `ui/session_view.py:1034` | `self.tree_mat.bind("<Return>", self.on_mat_enter_key)` |
-| Return | `ui/session_view.py:1137` | `self.tree_lays.bind("<Return>", self.on_layout_row_double_click)` |
-| Return | `ui/session_view.py:3305` | `entry.bind("<Return>", lambda e: commit())` |
-| Return | `ui/session_view.py:3424` | `dialog.bind("<Return>", lambda e: save())` |
-| Return | `ui/session_view.py:3857` | `entry.bind("<Return>", move_down)` |
+| Return | `ui/session_view.py:599` | `self.entry_gap.bind("<Return>", self._on_gap_entry_change)` |
+| Return | `ui/session_view.py:804` | `self.entry_sname.bind("<Return>", self._on_entry_sname_commit)` |
+| Return | `ui/session_view.py:883` | `self.tree_shapes.bind("<Return>", self.on_tree_shape_enter)` |
+| Return | `ui/session_view.py:1035` | `self.tree_mat.bind("<Return>", self.on_mat_enter_key)` |
+| Return | `ui/session_view.py:1139` | `self.tree_lays.bind("<Return>", self.on_layout_row_double_click)` |
+| Return | `ui/session_view.py:3318` | `entry.bind("<Return>", lambda e: commit())` |
+| Return | `ui/session_view.py:3437` | `dialog.bind("<Return>", lambda e: save())` |
+| Return | `ui/session_view.py:3870` | `entry.bind("<Return>", move_down)` |
 | Return | `ui/shape_catalog_view.py:266` | `self.bind("<Return>", lambda e: self.open_selected_shape())` |
 | Return | `ui/shape_editor_view.py:312` | `self.entry_name.bind("<Return>", lambda e: self.on_name_change())` |
 | Return | `ui/shape_editor_view.py:358` | `self.entry_vx.bind("<Return>", self.on_vertex_entry_change)` |
@@ -1774,15 +1792,15 @@ A ordem de corte do `.lay` para a mesa **não pode** ser aleatória:
 | Right | `ui/shape_catalog_view.py:265` | `self.bind("<Right>", lambda e: self.navigate_selection(1, 0))` |
 | Shift+F3 | `ui/layout_editor_view.py:785` | `w.bind("<Shift-F3>", lambda e: "break")` |
 | Shift+F3 | `ui/layout_editor_view.py:786` | `w.bind("<Shift-Key-F3>", lambda e: "break")` |
-| Shift+Return | `ui/session_view.py:3859` | `entry.bind("<Shift-Return>", move_up)` |
-| Shift+Tab | `ui/session_view.py:3309` | `entry.bind("<Shift-Tab>", on_shift_tab)` |
-| Shift+Tab | `ui/session_view.py:3861` | `entry.bind("<Shift-Tab>", move_prev_col)` |
+| Shift+Return | `ui/session_view.py:3872` | `entry.bind("<Shift-Return>", move_up)` |
+| Shift+Tab | `ui/session_view.py:3322` | `entry.bind("<Shift-Tab>", on_shift_tab)` |
+| Shift+Tab | `ui/session_view.py:3874` | `entry.bind("<Shift-Tab>", move_prev_col)` |
 | Space | `ui/add_shapes_dialog.py:135` | `self.tree.bind("<space>", self.on_tree_space)` |
-| Space | `ui/main_window.py:559` | `self.tree_main.bind("<space>", self.on_tree_space_toggle)` |
-| Tab | `ui/session_view.py:3308` | `entry.bind("<Tab>", on_tab)` |
-| Tab | `ui/session_view.py:3860` | `entry.bind("<Tab>", move_next_col)` |
+| Space | `ui/main_window.py:568` | `self.tree_main.bind("<space>", self.on_tree_space_toggle)` |
+| Tab | `ui/session_view.py:3321` | `entry.bind("<Tab>", on_tab)` |
+| Tab | `ui/session_view.py:3873` | `entry.bind("<Tab>", move_next_col)` |
 | Up | `ui/layout_editor_view.py:807` | `self.bind_all("<Up>", lambda e: self.bump_selection_vector(0, 1))` |
-| Up | `ui/session_view.py:3855` | `entry.bind("<Up>", move_up)` |
+| Up | `ui/session_view.py:3868` | `entry.bind("<Up>", move_up)` |
 | Up | `ui/shape_catalog_view.py:262` | `self.bind("<Up>", lambda e: self.navigate_selection(0, -1))` |
 
 **Conflitos reais detectados:**
@@ -3755,6 +3773,67 @@ python tools/export_session.py --session 282 --target "E:\CorteAC" --no-subfolde
 
 ---
 
+## 8.50. Paginação e Navegação Multi-Página na Impressão A4 (v1.6.32) `[CONFIRMADO]`
+
+### 1. Contexto e problema
+
+Quando uma sessão possuía múltiplas placas (por exemplo, 2 a 5 placas de nesting ou placas de sobras de enfesto), o diálogo de relatório e impressão A4 (`LayoutPrintDialog`) exibia apenas a primeira placa ou não permitia que o operador navegasse pelas demais antes de imprimir. Isso impedia a conferência visual completa das ordens de corte e dificultava a impressão direcionada de uma chapa intermediária.
+
+### 2. Implementação técnica
+
+- **Suporte multi-página na UI**:
+  - `LayoutPrintDialog` agora aceita uma lista de dicionários de layout (`layouts`), inicializando `self.current_page_idx = 0`.
+  - Adicionados botões de paginação dedicados na toolbar superior:
+    - **`⬅ Anterior`** (`btn_prev`): retrocede uma página (desabilitado na página 1).
+    - **`Próxima ➡`** (`btn_next`): avança para a próxima página (desabilitado na última página).
+    - Indicador visual centralizado: **`Página X de Y`** (`lbl_page_info`).
+- **Navegação por Teclado**:
+  - Atreladas as teclas `<Prior>` (`Page Up`) para página anterior e `<Next>` (`Page Down`) para próxima página.
+- **Renderização e Preview em Tempo Real**:
+  - A troca de página recalcula instantaneamente os metadados do cabeçalho (aproveitamento real por Shoelace, dimensões em metros da chapa atual, contadores de peças e enfesto).
+  - O canvas Tkinter redesenha a folha correspondente preservando o zoom e alinhamento central.
+- **Exportação Multi-Página**:
+  - Ao imprimir ou salvar em PDF, todas as páginas da lista são renderizadas em sequência de alta resolução pelo Pillow, gerando um documento unificado e ordenado.
+- **Testes**:
+  - Criado `tests/test_layout_print_pagination.py` com cobertura completa de navegação, limites inferior/superior de páginas e atalhos de teclado.
+
+---
+
+## 8.51. Impressão em Massa (Batch Print) de Sessões e Pastas (v1.6.33) `[CONFIRMADO]`
+
+### 1. Contexto e problema
+
+Em produção diária com dezenas ou centenas de sessões distribuídas em pastas de trabalho (`job_folders`), o operador precisava abrir cada sessão uma a uma para gerar o relatório impresso A4. A v1.6.33 introduz o fluxo de **impressão em massa**, permitindo enviar todas as sessões de uma pasta, da raiz de produção ou uma seleção customizada para o diálogo de impressão de uma só vez.
+
+### 2. Implementação técnica
+
+- **Barra de Ações em Lote (`batch_action_bar`) na MainWindow**:
+  - Novo botão **`🖨️ Imprimir Sessões`** (`btn_batch_print`), ativado automaticamente quando há sessões marcadas por checkbox ou selecionadas na árvore.
+- **Menu de Contexto na Árvore de Produção**:
+  - **Sessão individual**: `🖨️ Imprimir Sessão...`
+  - **Pasta de Produção (`job_folder`)**: `🖨️ Imprimir Sessões da Pasta...` (coleta recursiva em todas as subpastas hierárquicas).
+  - **Raiz de Produção**: `🖨️ Imprimir Todas as Sessões...`
+  - **Seleção múltipla com checkboxes**: `🖨️ Imprimir Sessões Selecionadas (N)...`
+- **Menu Superior `Arquivo`**:
+  - Adicionadas as entradas:
+    - `🖨️ Imprimir Sessão...` (com atalho para a sessão selecionada);
+    - `🖨️ Imprimir em Massa (Sessões)...`.
+- **Coleta e Resiliência de Dados**:
+  - Método `_collect_session_layouts_for_print(session_ids)`:
+    - Carrega cada sessão do banco com tratamento transacional;
+    - Extrai todos os layouts calculados de cada sessão;
+    - Informa ao operador caso alguma sessão selecionada ainda não tenha layout calculado sem abortar o processamento das demais.
+- **Metadados Dinâmicos por Página no `LayoutPrintDialog`**:
+  - Cada página do lote carrega seu próprio contexto de sessão e material via `_setup_material_metadata(source)`:
+    - Título da página: `[Sessão #ID - layXXXX.lay]`;
+    - Rodapé: `Placa N de M` relativo à sessão correspondente;
+    - Indicador de página na barra superior: `Página X de Y (Sessão #ID)`.
+- **Testes**:
+  - Criado `tests/test_batch_print_sessions.py` com 6 testes validando coleta recursiva de pastas, seleção múltipla, sincronização de metadados entre páginas e resiliência contra sessões sem layout.
+- **Suíte de Testes**: **590 testes passando**, 2 skip.
+
+---
+
 ## 9. Pendências e arquivos faltantes
 
 ### 9.1 Tarefas abertas
@@ -3795,6 +3874,9 @@ python tools/export_session.py --session 282 --target "E:\CorteAC" --no-subfolde
 - [x] Linha azul da ponta (miniatura, editor e PDF) limitada à placa refilada com `clamp_tip_zone` único — Concluído (§8.37–§8.40)
 - [x] Salvar o refile no Ctrl+S (sessão em memória sincronizada com os layouts) — Concluído (§8.39, `tests/test_layout_save_refile.py`)
 - [x] Preenchimento de vãos entre placas medido pela área real das peças, respeitando 0°/180° — Concluído (§8.44–§8.46, `tests/test_preencher_buracos.py`)
+- [x] Paginação e navegação multi-página na Impressão A4 com suporte a atalhos Page Up/Down (v1.6.32) — Concluído (§8.50, `ui/layout_print_dialog.py`, `tests/test_layout_print_pagination.py`)
+- [x] Impressão em massa de sessões e pastas de produção na árvore e barra de lote (v1.6.33) — Concluído (§8.51, `ui/main_window.py`, `ui/layout_print_dialog.py`, `tests/test_batch_print_sessions.py`)
+- [x] Exportação de pastas de produção inteiras e sessões em massa para a máquina (v1.6.30–v1.6.31) — Concluído (`cad/project_packager.py`, `ui/main_window.py`, `tests/test_session_context_menu_export.py`)
 
 ### 9.2 Arquivos de amostra que faltam (por prioridade)
 
@@ -3922,6 +4004,7 @@ Local: `/home/dola/Documentos/clone do job/antigo/arquivos pos instalacao/Common
 <!-- AUTO:gitlog:start -->
 | Commit | Data | Autor | Mensagem |
 |---|---|---|---|
+| `631c8a6` | 2026-11-04 | Doletabgi | fix(build): clean_database com saida ASCII no Windows (v1.6.29) |
 | `bc09044` | 2026-11-04 | Doletabgi | fix(build): versiona clean_database usado pelo CI (v1.6.29) |
 | `4f75342` | 2026-11-04 | Doletabgi | feat(release): exportacao de sessao multi-placa para a maquina (v1.6.29) |
 | `b31f744` | 2026-11-03 | Doletabgi | fix(nesting): fecha buraco da placa 0 pos-separacao de sobras (v1.6.26) |
@@ -3936,7 +4019,6 @@ Local: `/home/dola/Documentos/clone do job/antigo/arquivos pos instalacao/Common
 | `6e610c1` | 2026-11-03 | Doletabgi | fix(save): refile do layout agora e persistido e nao e sobrescrito (v1.6.18) |
 | `a081166` | 2026-11-03 | Doletabgi | fix(print): linha azul da ponta dentro da placa e almoxarifado em metros (v1.6.17) |
 | `5fa8823` | 2026-11-03 | Doletabgi | feat(print): padroniza todas as medidas da impressao em metros (v1.6.16) |
-| `9e47af8` | 2026-11-03 | Doletabgi | fix(print): Ctrl+P e o icone Imprimir voltam a abrir o dialogo (v1.6.15) |
 <!-- AUTO:gitlog:end -->
 
 ---
@@ -3990,6 +4072,10 @@ Local: `/home/dola/Documentos/clone do job/antigo/arquivos pos instalacao/Common
 | Qua, 04/11/2026 | 11:30 | Antigravity | Regra de higienização e limpeza de layouts de teste pré e pós-atualização (v1.6.28): (1) Higienização em 5 camadas: garante que após qualquer atualização o programa sempre retorne limpo e vazio, sem resíduos de layouts ou sessões criados durante suites de testes; (2) Camada de compilação: integração de `tools/clean_database.py` nos scripts de build (`build_linux.sh`, `build_exe_windows.bat` e `.github/workflows/release.yml`), garantindo que o banco empacotado no executável (`jobmanager.db`) chegue para o operador 100% zerado; (3) Camada de teste: atualização do `tests/conftest.py` com isolamento completo do banco (backup pré-sessão de testes em `pytest_sessionstart` e restauração fiel em `pytest_sessionfinish`), impedindo que a execução local de `pytest` polua o banco de produção; (4) Camada de runtime: regra `MainWindow.check_post_update_cleanup()` detectando mudança de `installed_version != APP_VERSION` e purgado layouts de teste no primeiro boot pós-atualização, preservando os layouts nos fechamentos e reaberturas diárias da mesma versão; (5) Ações sob demanda: flag CLI `--clean-db` no `main.py` e item de menu `Ferramentas ➔ 🧹 Limpar Layouts de Teste...`; (6) Nova suíte de testes em `tests/test_database_cleanup.py` com 4 testes específicos. | `database.py`, `ui/main_window.py`, `main.py`, `tools/clean_database.py`, `build_linux.sh`, `build_exe_windows.bat`, `.github/workflows/release.yml`, `tests/conftest.py`, `tests/test_database_cleanup.py`, `config.py`, `docs/PROJETO_ATOM_JOBMANAGER.md` |
 | Qua, 04/11/2026 | 11:00 | Antigravity | Persistência da última sessão ativa, hook seguro de fechamento e importação atômica de .lay (v1.6.27): (1) Memorização da última sessão ativa: gravação automática da chave `last_active_session_id` na tabela `settings` do SQLite ao exibir/trocar de sessão (`show_session_window`), e restauração automática confiável na inicialização (`MainWindow.load_initial_data`), eliminando a abertura forçada da sessão legada #91 ou da sessão 0; (2) Hook de fechamento seguro (`WM_DELETE_WINDOW` e menu Arquivo ➔ Sair) chamando `on_app_close()`, garantindo o salvamento preventivo do estado da sessão e métricas no banco antes de encerrar o processo; (3) Substituição atômica de layouts ao importar arquivo `.lay` (`SessionView.import_lay_file`): define `session_data["layouts"] = [imported_layout]` e chama `db.save_session_layouts()`, garantindo que o layout importado substitua os anteriores no SQLite e permaneça ativo após fechar e reabrir; (4) Nova suíte de testes com 4 casos em `tests/test_session_persistence.py` e 566 testes unitários passando em 100% da suíte geral. | `ui/main_window.py`, `ui/session_view.py`, `tests/test_session_persistence.py`, `config.py`, `.github/workflows/release.yml`, `docs/PROJETO_ATOM_JOBMANAGER.md` |
 | Ter, 03/11/2026 | 22:30 | Antigravity | Título da janela principal sincronizado dinamicamente com a versão (`CorteAC v<APP_VERSION> - C:\NSDATA\`) e remoção de opção legada (v1.6.26): (1) Inclusão dinâmica do prefixo de versão `v{APP_VERSION}` no título da janela principal (`ui/main_window.py`) lendo diretamente de `config.APP_VERSION` (Fonte Única da Verdade), sincronizando automaticamente o título com qualquer atualização de versão; (2) Remoção definitiva do item 'Manual do Job Manager' do menu Ajuda; (3) Otimização do tempo de geração de layouts (~45% mais rápido) via deduplicação de candidatos em vãos e migração do pós-processamento para thread em background com status detalhado em tempo real; (4) Novo teste automatizado em `tests/test_semver.py` validando o título sincronizado da janela; (5) Documentação completa das diretrizes de atualização automática na Seção 12 de `docs/PROJETO_ATOM_JOBMANAGER.md`. | `ui/main_window.py`, `ui/session_view.py`, `cad/nesting_engine.py`, `tests/test_semver.py`, `docs/PROJETO_ATOM_JOBMANAGER.md` |
+| Qui, 05/11/2026 | 11:15 | Antigravity | Exportação de pastas inteiras de produção para a máquina (v1.6.30): suporte a exportação de todos os layouts e moldes de todas as sessões contidas em uma pasta de trabalho (`job_folder`), recursivamente por subpastas; comando adicionado ao menu de contexto da árvore (`Salvar Pasta de Produção para Máquina...`) e menu Arquivo. | `ui/main_window.py`, `cad/project_packager.py`, `tests/test_session_context_menu_export.py`, `config.py` |
+| Qui, 05/11/2026 | 11:30 | Antigravity | Exportação em lote de sessões selecionadas para a máquina (v1.6.31): botão na barra de ações em lote e menu de contexto permitindo exportar simultaneamente múltiplas sessões marcadas com checkbox ou selecionadas na árvore; geração isolada de pastas ou pacotes de entrega com validação resiliente. | `ui/main_window.py`, `cad/project_packager.py`, `tests/test_session_context_menu_export.py`, `config.py` |
+| Qui, 05/11/2026 | 11:45 | Antigravity | Paginação e navegação multi-página na Impressão A4 (v1.6.32): suporte completo a multi-páginas no `LayoutPrintDialog`, botões `⬅ Anterior` e `Próxima ➡` na barra de ferramentas, atalhos de teclado `Page Up` e `Page Down`, indicador `Página X de Y` e renderização dinâmica no Canvas e exportação sequencial para PDF de alta resolução; 584 testes passando. | `ui/layout_print_dialog.py`, `tests/test_layout_print_pagination.py`, `config.py` |
+| Qui, 05/11/2026 | 12:00 | Antigravity | Impressão em Massa (Batch Print) de sessões e pastas de produção (v1.6.33): botão `🖨️ Imprimir Sessões` na barra de ações em lote; opções de impressão no menu de contexto da árvore (sessão individual, pasta de produção recursiva, raiz de produção e seleção múltipla) e menu superior Arquivo; suporte dinâmico no `LayoutPrintDialog` a múltiplas sessões (`_setup_material_metadata`), títulos contextuais `[Sessão #ID - layXXXX.lay]`, numeração de placa no rodapé e indicador `Página X de Y (Sessão #ID)`; suíte com 590 testes passando sem falhas. | `ui/main_window.py`, `ui/layout_print_dialog.py`, `ui/layout_editor_view.py`, `ui/session_view.py`, `tests/test_batch_print_sessions.py`, `config.py`, `.github/workflows/release.yml`, `docs/PROJETO_ATOM_JOBMANAGER.md` |
 
 ## 11. Prompt para o Antigravity: instalar a sincronização automática `[CONCLUÍDA]`
 

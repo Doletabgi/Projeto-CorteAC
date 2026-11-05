@@ -285,6 +285,8 @@ class MainWindow(tk.Tk):
         file_menu.add_command(label="💾 Exportar Layout (.lay)...", command=self.on_export_lay_file)
         file_menu.add_command(label="⚡ Dupla Saída (.lay + .onx)...", command=self.on_export_dual_file)
         file_menu.add_command(label="📤 Salvar Sessão para Máquina...", command=self.on_export_session_to_machine)
+        file_menu.add_command(label="🖨️ Imprimir Sessão...", command=self.on_print_session)
+        file_menu.add_command(label="🖨️ Imprimir em Massa (Sessões)...", command=self.on_batch_print_sessions)
         file_menu.add_command(label="Exportar G-Code (ATOM)...", command=self.on_export_gcode)
         file_menu.add_command(label="Exportar Relatório XML...", command=self.on_export_xml)
         file_menu.add_separator()
@@ -552,6 +554,13 @@ class MainWindow(tk.Tk):
             padx=4, pady=0, command=self.select_all_batch_sessions
         )
         self.btn_batch_all.pack(side="right", padx=1)
+
+        self.btn_batch_print = tk.Button(
+            self.batch_bar, text="🖨️ Imprimir Marcadas", font=("Segoe UI", 7),
+            bg=THEME["bg_surface"], fg=THEME["text_main"], relief="raised", bd=1,
+            padx=4, pady=0, command=self.on_batch_print_sessions
+        )
+        self.btn_batch_print.pack(side="right", padx=1)
 
         self.tree_main = ttk.Treeview(tree_frame, show="tree", selectmode="extended")
         self.tree_main.pack(fill="both", expand=True)
@@ -833,7 +842,8 @@ class MainWindow(tk.Tk):
             on_add_shapes=self.on_session_shapes_changed,
             all_shapes_catalog=self.current_shapes,
             db=self.db,
-            on_open_dieproc=self.open_dieproc_dialog
+            on_open_dieproc=self.open_dieproc_dialog,
+            on_export_machine=self.on_export_session_to_machine
         )
         view.set_materials_list(self.materials)
         session_shapes = sess_dict.get("shapes", [])
@@ -2394,8 +2404,15 @@ class MainWindow(tk.Tk):
         if hasattr(self, "layout_editor_view") and self.layout_editor_view:
             self.layout_editor_view.export_layout_dialog(target_format="dual")
 
-    def on_export_session_to_machine(self):
+    def on_export_session_to_machine(self, session_id=None):
         """Abre o Layout Editor e exporta todas as placas da sessão para a máquina."""
+        if session_id is not None:
+            try:
+                sess_id_int = int(session_id)
+                if not self.current_session or self.current_session.get("id") != sess_id_int:
+                    self.switch_to_session(sess_id_int)
+            except (ValueError, TypeError):
+                pass
         if not self.current_session:
             messagebox.showwarning(
                 "Salvar Sessão para Máquina",
@@ -2409,7 +2426,10 @@ class MainWindow(tk.Tk):
         has_layout = bool(active.get("layouts") or active.get("placed_pieces"))
         if not has_layout and getattr(self, "db", None) and active.get("id"):
             try:
-                has_layout = bool(self.db.get_session_layouts(active["id"]))
+                db_layouts = self.db.get_session_layouts(active["id"])
+                if db_layouts:
+                    active["layouts"] = db_layouts
+                    has_layout = True
             except Exception:
                 has_layout = False
         if not has_layout:
@@ -2420,10 +2440,463 @@ class MainWindow(tk.Tk):
             )
             return
         try:
-            self.show_layout_editor(force=False)
+            self.show_layout_editor(force=False, session_data=active)
         except Exception:
             pass
         self.layout_editor_view.export_session_to_machine()
+
+    def on_export_job_folder_to_machine(self, folder_path=""):
+        """Exporta todas as sessões com layouts de uma pasta de produção (ou da raiz) para a máquina."""
+        folder_clean = (folder_path or "").strip().strip("/")
+        disp_name = folder_clean.split("/")[-1] if folder_clean else "Raiz de Produção"
+
+        # 1. Localiza todas as sessões pertencentes à pasta (e subpastas)
+        target_sids = []
+        if folder_clean:
+            for s in getattr(self, "sessions", []):
+                s_job = (s.get("job") or "").strip().strip("/")
+                if s_job == folder_clean or s_job.startswith(folder_clean + "/"):
+                    if "id" in s and s["id"] not in target_sids:
+                        target_sids.append(s["id"])
+        else:
+            target_sids = [s["id"] for s in getattr(self, "sessions", []) if "id" in s]
+
+        if not target_sids:
+            messagebox.showinfo(
+                "Salvar Pasta para Máquina",
+                f"Nenhuma sessão encontrada na pasta de produção '{disp_name}'.",
+                parent=self,
+            )
+            return
+
+        # 2. Filtra sessões que possuem layouts calculados
+        valid_sids = []
+        for sid in target_sids:
+            s_obj = next((s for s in getattr(self, "sessions", []) if s.get("id") == sid), None)
+            has_lay = False
+            if s_obj and (s_obj.get("layouts") or s_obj.get("placed_pieces")):
+                has_lay = True
+            elif getattr(self, "db", None):
+                try:
+                    db_lays = self.db.get_session_layouts(sid)
+                    if db_lays:
+                        has_lay = True
+                        if s_obj:
+                            s_obj["layouts"] = db_lays
+                except Exception:
+                    pass
+            if has_lay:
+                valid_sids.append(sid)
+
+        if not valid_sids:
+            messagebox.showwarning(
+                "Salvar Pasta para Máquina",
+                f"Nenhuma das {len(target_sids)} sessão(ões) da pasta '{disp_name}' possui layout calculado.\n\nExecute o cálculo de encaixe (Auto-Nest) antes de exportar para a máquina.",
+                parent=self,
+            )
+            return
+
+        # 3. Solicita ao operador a pasta de destino (pendrive, rede da máquina)
+        default_dir = ""
+        if getattr(self, "db", None):
+            try:
+                default_dir = str(self.db.get_setting("machine_export_dir", "") or "").strip()
+            except Exception:
+                pass
+        if not default_dir:
+            default_dir = str(Path.home())
+
+        target = filedialog.askdirectory(
+            parent=self,
+            title=f"Escolha a pasta de destino para a produção '{disp_name}' (rede ou pendrive)",
+            initialdir=default_dir,
+            mustexist=False,
+        )
+        if not target:
+            return
+
+        target_base = Path(target).expanduser()
+        if getattr(self, "db", None):
+            try:
+                self.db.set_setting("machine_export_dir", str(target_base))
+            except Exception:
+                pass
+
+        # Subpasta com o nome da produção (ou direto no target se for a raiz)
+        prod_target = target_base / disp_name if folder_clean else target_base
+        prod_target.mkdir(parents=True, exist_ok=True)
+
+        try:
+            self.save_current_session_state()
+        except Exception:
+            pass
+
+        # 4. Executa a exportação de cada sessão
+        exported_count = 0
+        total_layouts = 0
+        all_missing = []
+        errors = []
+
+        shapes_roots = self._machine_shapes_roots() if hasattr(self, "_machine_shapes_roots") else None
+        shape_catalog = self.__dict__.get("_machine_shape_catalog", None)
+
+        for sid in valid_sids:
+            try:
+                res = export_session(
+                    self.db,
+                    sid,
+                    str(prod_target),
+                    create_subfolder=True,
+                    copy_dies=True,
+                    shapes_search_roots=shapes_roots,
+                    shape_catalog=shape_catalog,
+                )
+                exported_count += 1
+                total_layouts += len(res.layouts)
+                if res.missing:
+                    all_missing.extend([m.get("name") for m in res.missing if m.get("name")])
+            except Exception as exc:
+                errors.append(f"Sessão #{sid}: {exc}")
+
+        # 5. Exibe feedback ao operador
+        msg_lines = [
+            f"Produção '{disp_name}' exportada para a máquina com sucesso!",
+            "",
+            f"• Sessões exportadas: {exported_count} de {len(valid_sids)}",
+            f"• Placas (.lay) salvas: {total_layouts}",
+            f"• Destino: {prod_target}",
+        ]
+        if all_missing:
+            unique_missing = sorted(set(all_missing))
+            msg_lines.extend([
+                "",
+                f"⚠️ Aviso: {len(unique_missing)} molde(s) gerados a partir do banco (consulte os arquivos manifest.json):",
+                ", ".join(unique_missing[:6]) + ("..." if len(unique_missing) > 6 else "")
+            ])
+        if errors:
+            msg_lines.extend([
+                "",
+                f"❌ Falhas em {len(errors)} sessão(ões):",
+                "\n".join(errors[:5])
+            ])
+
+        lbl_s = self.__dict__.get("lbl_status_msg", None)
+        if lbl_s:
+            try:
+                lbl_s.config(
+                    text=f"📤 Produção '{disp_name}' salva para máquina ({exported_count} sessões, {total_layouts} placas)."
+                )
+            except Exception:
+                pass
+
+        if errors and exported_count == 0:
+            messagebox.showerror("Salvar Pasta para Máquina", "\n".join(msg_lines), parent=self)
+        elif errors or all_missing:
+            messagebox.showwarning("Salvar Pasta para Máquina", "\n".join(msg_lines), parent=self)
+        else:
+            messagebox.showinfo("Salvar Pasta para Máquina", "\n".join(msg_lines), parent=self)
+
+    # -------------------------------------------------------------------------
+    # Impressão de Sessão e Impressão em Massa (Batch Print)
+    # -------------------------------------------------------------------------
+    def _collect_session_layouts_for_print(self, session_id):
+        """
+        Retorna a lista de layouts formatados e enriquecidos com metadados
+        (moldes com contornos, material, dimensões, título da sessão)
+        prontos para renderização e exportação no LayoutPrintDialog.
+        """
+        try:
+            sid = int(session_id)
+        except (ValueError, TypeError):
+            return []
+
+        # 1. Busca dados da sessão em memória ou no banco
+        sess_obj = None
+        if getattr(self, "current_session", None) and self.current_session.get("id") == sid:
+            sess_obj = self.current_session
+        elif getattr(self, "sessions", None):
+            sess_obj = next((s for s in self.sessions if s.get("id") == sid), None)
+
+        if not sess_obj and getattr(self, "db", None):
+            try:
+                sess_obj = self.db.get_session(sid)
+            except Exception:
+                sess_obj = None
+
+        if not sess_obj:
+            return []
+
+        # 2. Resolução de moldes da sessão para mapeamento de contornos
+        session_shapes = sess_obj.get("shapes") or []
+        if not session_shapes and getattr(self, "db", None):
+            try:
+                session_shapes = self.db.get_session_shapes(sid) or []
+            except Exception:
+                session_shapes = []
+        if not session_shapes and getattr(self, "shapes", None):
+            session_shapes = list(self.shapes)
+
+        shapes_map = {}
+        for shp in session_shapes:
+            if isinstance(shp, dict):
+                for k in ("id", "shape_id", "name"):
+                    if shp.get(k):
+                        shapes_map[str(shp[k])] = shp
+                        shapes_map[str(shp[k]).lower()] = shp
+
+        # 3. Resolução de material e camadas
+        mat = sess_obj.get("material")
+        if not mat and getattr(self, "db", None) and sess_obj.get("material_id"):
+            try:
+                mat = self.db.get_material(sess_obj["material_id"])
+            except Exception:
+                pass
+        if not mat:
+            mat = getattr(self, "current_material", None) or {}
+
+        # 4. Resolução de layouts
+        layouts = sess_obj.get("layouts")
+        if not layouts and getattr(self, "db", None):
+            try:
+                layouts = self.db.get_session_layouts(sid)
+            except Exception:
+                layouts = []
+
+        # Se não há registros em layouts mas há placed_pieces
+        if not layouts and sess_obj.get("placed_pieces"):
+            layouts = [{
+                "name": sess_obj.get("layout_name") or "lay0000.lay",
+                "pieces": sess_obj.get("placed_pieces", []),
+                "width_mm": float(mat.get("width_mm", 1380.0) if isinstance(mat, dict) else 1380.0),
+                "height_mm": float(mat.get("height_mm", 1080.0) if isinstance(mat, dict) else 1080.0),
+                "yield_percent": float(sess_obj.get("yield_percent", 0.0) or 0.0),
+                "layers": sess_obj.get("layers", mat.get("layers", 2) if isinstance(mat, dict) else 2),
+            }]
+
+        if not layouts:
+            return []
+
+        # 5. Enriquecimento de cada layout
+        sess_name = sess_obj.get("name") or f"Sessão #{sid}"
+        sess_title = f"Sessão #{sid}"
+        job_name = str(sess_obj.get("job") or "").strip().strip("/")
+        enriched_layouts = []
+
+        for idx, ly in enumerate(layouts):
+            ly_copy = dict(ly)
+            raw_pcs = ly_copy.get("pieces") if ly_copy.get("pieces") is not None else ly_copy.get("placed_pieces")
+            if raw_pcs is None and idx == 0:
+                raw_pcs = sess_obj.get("placed_pieces")
+
+            pcs = [dict(p) for p in (raw_pcs or []) if isinstance(p, dict)]
+            # Garante contorno em cada peça
+            for p in pcs:
+                if not p.get("contour"):
+                    target_id = p.get("target_id") or p.get("shape_id") or p.get("name")
+                    if target_id and str(target_id) in shapes_map:
+                        shp_matched = shapes_map[str(target_id)]
+                        if shp_matched.get("contour"):
+                            p["contour"] = shp_matched["contour"]
+
+            ly_copy["pieces"] = pcs
+            ly_copy["placed_pieces"] = pcs
+            ly_copy["session_id"] = sid
+            ly_copy["session_name"] = sess_name
+            ly_copy["session_title"] = sess_title
+            ly_copy["session_job"] = job_name
+            ly_copy["session_shapes"] = session_shapes
+            ly_copy["material"] = mat
+            if isinstance(mat, dict):
+                ly_copy["material_code"] = mat.get("code") or mat.get("id")
+                ly_copy["material_desc"] = mat.get("name") or mat.get("description") or mat.get("desc")
+                ly_copy["material_layers"] = ly_copy.get("layers") or mat.get("layers", 2)
+
+            l_name = ly_copy.get("name") or f"lay{idx:04d}.lay"
+            ly_copy["name"] = l_name if str(l_name).lower().endswith(".lay") else f"{l_name}.lay"
+            if not ly_copy.get("layout_path"):
+                sub_path = f"{job_name}\\{sess_title}" if job_name else sess_title
+                ly_copy["layout_path"] = rf"\\Lab-inf\NSDATAv1\Compiti\{sub_path}\{ly_copy['name']}"
+
+            enriched_layouts.append(ly_copy)
+
+        return enriched_layouts
+
+    def on_print_session(self, session_id=None):
+        """Abre a visualização de impressão e relatório A4 de uma sessão específica."""
+        if session_id is None:
+            sel = self.tree_main.selection()
+            if sel:
+                vals = self.tree_main.item(sel[0], "values")
+                if vals and len(vals) >= 2 and vals[0] == "session":
+                    try:
+                        session_id = int(vals[1])
+                    except (ValueError, TypeError):
+                        pass
+            if session_id is None and getattr(self, "current_session", None):
+                session_id = self.current_session.get("id")
+
+        if session_id is None:
+            messagebox.showinfo(
+                "Imprimir Sessão",
+                "Selecione uma sessão na árvore de produção antes de imprimir.",
+                parent=self
+            )
+            return
+
+        layouts = self._collect_session_layouts_for_print(session_id)
+        if not layouts:
+            messagebox.showwarning(
+                "Imprimir Sessão",
+                f"A Sessão #{session_id} não possui layouts calculados.\nExecute o cálculo de encaixe (Auto-Nest) antes de imprimir.",
+                parent=self
+            )
+            return
+
+        from ui.layout_print_dialog import LayoutPrintDialog
+        first = layouts[0]
+        layout_data = {
+            "layout_name": first["name"],
+            "sheet_w_mm": first.get("width_mm", 1380.0),
+            "sheet_h_mm": first.get("height_mm", 1080.0),
+            "material": first.get("material"),
+            "material_code": first.get("material_code"),
+            "material_desc": first.get("material_desc"),
+            "material_layers": first.get("material_layers"),
+            "session_shapes": first.get("session_shapes", []),
+            "layouts": layouts,
+            "current_layout_index": 0,
+            "session_title": first.get("session_title"),
+            "trim_cut_line": first.get("trim_cut_line"),
+            "tip_zone": first.get("tip_zone"),
+            "layers_tip": first.get("layers_tip"),
+            "placed_pieces": first.get("pieces", []),
+        }
+        try:
+            dlg = LayoutPrintDialog(self, layout_data=layout_data)
+            dlg.focus_set()
+            self.lbl_status_msg.config(text=f"Visualização de impressão aberta: Sessão #{session_id} ({len(layouts)} placa(s)).")
+        except Exception as exc:
+            messagebox.showerror("Erro ao Imprimir Sessão", f"Falha ao abrir diálogo de impressão:\n{exc}", parent=self)
+
+    def on_print_job_folder_sessions(self, folder_path=""):
+        """Imprime em massa todas as sessões pertencentes a uma pasta de produção (ou da raiz)."""
+        folder_clean = (folder_path or "").strip().strip("/")
+        disp_name = folder_clean.split("/")[-1] if folder_clean else "Raiz de Produção"
+
+        target_sids = []
+        if folder_clean:
+            for s in getattr(self, "sessions", []):
+                s_job = (s.get("job") or "").strip().strip("/")
+                if s_job == folder_clean or s_job.startswith(folder_clean + "/"):
+                    if "id" in s and s["id"] not in target_sids:
+                        target_sids.append(s["id"])
+        else:
+            target_sids = [s["id"] for s in getattr(self, "sessions", []) if "id" in s]
+
+        if not target_sids:
+            messagebox.showinfo(
+                "Imprimir Pasta",
+                f"Nenhuma sessão encontrada na pasta de produção '{disp_name}'.",
+                parent=self,
+            )
+            return
+
+        self.on_batch_print_sessions(session_ids=target_sids, title_context=f"Pasta '{disp_name}'")
+
+    def on_batch_print_sessions(self, session_ids=None, title_context=None):
+        """
+        Dispara a impressão em massa (Batch Print) consolidando todas as placas
+        das sessões fornecidas (ou das sessões marcadas em self.batch_checked_sessions)
+        em uma única fila navegável no LayoutPrintDialog.
+        """
+        # 1. Determina as sessões alvo
+        target_sids = []
+        chk_sess = self.__dict__.get("batch_checked_sessions")
+        if session_ids is not None:
+            target_sids = list(session_ids)
+        elif chk_sess and len(chk_sess) > 0:
+            target_sids = list(chk_sess)
+        else:
+            # Tenta verificar se há seleção múltipla na árvore
+            sel = self.tree_main.selection()
+            if len(sel) > 1:
+                for it in sel:
+                    vals = self.tree_main.item(it, "values")
+                    if vals and len(vals) >= 2 and vals[0] == "session":
+                        try:
+                            s_id = int(vals[1])
+                            if s_id not in target_sids:
+                                target_sids.append(s_id)
+                        except (ValueError, TypeError):
+                            pass
+
+        if not target_sids:
+            messagebox.showinfo(
+                "Imprimir em Massa",
+                "Nenhuma sessão marcada para impressão em massa.\n\n"
+                "Para imprimir em lote:\n"
+                "• Marque as caixas de seleção [☑] das sessões desejadas;\n"
+                "• Ou utilize o botão 'Marcar Todas' na barra de seleção;\n"
+                "• Ou clique com o botão direito em uma pasta de produção e escolha 'Imprimir Todas as Sessões da Pasta'.",
+                parent=self
+            )
+            return
+
+        # Ordena sessões para garantir consistência
+        target_sids = sorted(list(set(target_sids)))
+
+        # 2. Coleta layouts de todas as sessões
+        all_batch_layouts = []
+        valid_sessions = []
+        empty_sessions = []
+
+        for sid in target_sids:
+            sess_lays = self._collect_session_layouts_for_print(sid)
+            if sess_lays:
+                all_batch_layouts.extend(sess_lays)
+                valid_sessions.append(sid)
+            else:
+                empty_sessions.append(sid)
+
+        if not all_batch_layouts:
+            messagebox.showwarning(
+                "Imprimir em Massa",
+                f"Nenhuma das {len(target_sids)} sessão(ões) selecionada(s) possui layouts calculados.\n\n"
+                "Execute o cálculo de encaixe (Auto-Nest) antes de imprimir.",
+                parent=self
+            )
+            return
+
+        ctx_str = f" ({title_context})" if title_context else ""
+        self.lbl_status_msg.config(
+            text=f"Impressão em massa: {len(all_batch_layouts)} placa(s) de {len(valid_sessions)} sessão(ões) carregada(s){ctx_str}."
+        )
+
+        from ui.layout_print_dialog import LayoutPrintDialog
+        first = all_batch_layouts[0]
+        layout_data = {
+            "layout_name": first["name"],
+            "sheet_w_mm": first.get("width_mm", 1380.0),
+            "sheet_h_mm": first.get("height_mm", 1080.0),
+            "material": first.get("material"),
+            "material_code": first.get("material_code"),
+            "material_desc": first.get("material_desc"),
+            "material_layers": first.get("material_layers"),
+            "session_shapes": first.get("session_shapes", []),
+            "layouts": all_batch_layouts,
+            "current_layout_index": 0,
+            "session_title": first.get("session_title"),
+            "trim_cut_line": first.get("trim_cut_line"),
+            "tip_zone": first.get("tip_zone"),
+            "layers_tip": first.get("layers_tip"),
+            "placed_pieces": first.get("pieces", []),
+        }
+
+        try:
+            dlg = LayoutPrintDialog(self, layout_data=layout_data)
+            dlg.focus_set()
+        except Exception as exc:
+            messagebox.showerror("Erro na Impressão em Massa", f"Falha ao abrir diálogo de impressão:\n{exc}", parent=self)
 
     def close_child_window(self):
         if self.active_child:
@@ -3065,19 +3538,40 @@ class MainWindow(tk.Tk):
             self.tree_menu.delete(0, "end")
             sel = self.tree_main.selection()
             if len(sel) > 1:
-                sess_count = sum(1 for item in sel if self.tree_main.item(item, "values") and len(self.tree_main.item(item, "values")) >= 2 and self.tree_main.item(item, "values")[0] == "session")
+                sess_items = [item for item in sel if self.tree_main.item(item, "values") and len(self.tree_main.item(item, "values")) >= 2 and self.tree_main.item(item, "values")[0] == "session"]
+                sess_count = len(sess_items)
                 lbl_del = f"Excluir ({sess_count} sessões)" if sess_count > 0 else f"Excluir ({len(sel)} selecionados)"
                 self.tree_menu.add_command(label="Abrir", state="disabled")
+                if sess_count > 0:
+                    sel_sids = [int(self.tree_main.item(it, "values")[1]) for it in sess_items]
+                    self.tree_menu.add_command(
+                        label=f"🖨️ Imprimir em Massa ({sess_count} sessões selecionadas)...",
+                        command=lambda sids=sel_sids: self.on_batch_print_sessions(session_ids=sids)
+                    )
                 self.tree_menu.add_separator()
                 self.tree_menu.add_command(label=lbl_del, command=self.on_delete_tree_item)
             else:
                 vals = self.tree_main.item(sel[0], "values") if sel else ()
                 node_type = vals[0] if vals else "root_production"
+                chk_set = self.__dict__.get("batch_checked_sessions") or set()
 
                 if node_type == "job_folder":
                     folder_path = str(vals[1])
                     disp_name = folder_path.split("/")[-1]
                     self.tree_menu.add_command(label="Abrir", command=self.on_tree_menu_open)
+                    self.tree_menu.add_command(
+                        label=f"📤 Salvar Pasta '{disp_name}' para Máquina...",
+                        command=lambda f=folder_path: self.on_export_job_folder_to_machine(f)
+                    )
+                    self.tree_menu.add_command(
+                        label="🖨️ Imprimir Todas as Sessões da Pasta...",
+                        command=lambda f=folder_path: self.on_print_job_folder_sessions(f)
+                    )
+                    if chk_set:
+                        self.tree_menu.add_command(
+                            label=f"🖨️ Imprimir em Massa ({len(chk_set)} marcadas)...",
+                            command=self.on_batch_print_sessions
+                        )
                     self.tree_menu.add_separator()
                     self.tree_menu.add_command(label="☑ Marcar todas da pasta", command=lambda f=folder_path: self.set_folder_batch_selection(f, True))
                     self.tree_menu.add_command(label="☐ Desmarcar todas da pasta", command=lambda f=folder_path: self.set_folder_batch_selection(f, False))
@@ -3100,9 +3594,22 @@ class MainWindow(tk.Tk):
 
                 elif node_type == "session":
                     sess_id = int(vals[1])
-                    is_chk = sess_id in self.batch_checked_sessions
+                    is_chk = sess_id in chk_set
                     lbl_chk = "☐ Desmarcar esta sessão" if is_chk else "☑ Marcar esta sessão"
                     self.tree_menu.add_command(label="Abrir", command=self.on_tree_menu_open)
+                    self.tree_menu.add_command(
+                        label="📤 Salvar Sessão para Máquina...",
+                        command=lambda s=sess_id: self.on_export_session_to_machine(s)
+                    )
+                    self.tree_menu.add_command(
+                        label="🖨️ Imprimir Sessão...",
+                        command=lambda s=sess_id: self.on_print_session(s)
+                    )
+                    lbl_batch = f"🖨️ Imprimir em Massa ({len(chk_set)} marcadas)..." if chk_set else "🖨️ Imprimir em Massa..."
+                    self.tree_menu.add_command(
+                        label=lbl_batch,
+                        command=self.on_batch_print_sessions
+                    )
                     self.tree_menu.add_separator()
                     self.tree_menu.add_command(label=lbl_chk, command=lambda s=sess_id: self.toggle_session_batch_selection(s))
                     self.tree_menu.add_separator()
@@ -3133,6 +3640,19 @@ class MainWindow(tk.Tk):
 
                 else:  # root_production ou outros
                     self.tree_menu.add_command(label="Abrir", state="disabled")
+                    self.tree_menu.add_command(
+                        label="📤 Salvar Todas as Sessões para Máquina...",
+                        command=lambda: self.on_export_job_folder_to_machine("")
+                    )
+                    self.tree_menu.add_command(
+                        label="🖨️ Imprimir Todas as Sessões...",
+                        command=lambda: self.on_print_job_folder_sessions("")
+                    )
+                    if chk_set:
+                        self.tree_menu.add_command(
+                            label=f"🖨️ Imprimir em Massa ({len(chk_set)} marcadas)...",
+                            command=self.on_batch_print_sessions
+                        )
                     self.tree_menu.add_separator()
                     self.tree_menu.add_command(label="☑ Marcar todas as sessões", command=self.select_all_batch_sessions)
                     self.tree_menu.add_command(label="☐ Desmarcar todas as sessões", command=self.deselect_all_batch_sessions)
@@ -3268,10 +3788,24 @@ class MainWindow(tk.Tk):
             sel = self.grid_lower.selection()
             if len(sel) > 1:
                 self.tree_menu.entryconfig("Abrir", state="disabled")
+                try:
+                    self.tree_menu.entryconfig("📤 Salvar Sessão para Máquina...", state="disabled")
+                except Exception:
+                    pass
                 self.tree_menu.entryconfig("Renomear", state="disabled")
                 self.tree_menu.entryconfig("Excluir", state="normal", label=f"Excluir ({len(sel)} sessões)", command=self.on_delete_grid_item)
             else:
                 self.tree_menu.entryconfig("Abrir", state="normal", label="Abrir", command=self.on_tree_menu_open)
+                try:
+                    gvals = self.grid_lower.item(sel[0], "values") if sel else ()
+                    sess_id_grid = int(gvals[0]) if gvals else None
+                    self.tree_menu.entryconfig(
+                        "📤 Salvar Sessão para Máquina...",
+                        state="normal",
+                        command=lambda s=sess_id_grid: self.on_export_session_to_machine(s)
+                    )
+                except Exception:
+                    pass
                 self.tree_menu.entryconfig("Renomear", state="normal")
                 self.tree_menu.entryconfig("Excluir", state="normal", label="Excluir", command=self.on_delete_grid_item)
             self.show_popup_menu(self.tree_menu, event.x_root, event.y_root)
@@ -5069,6 +5603,11 @@ class MainWindow(tk.Tk):
                 self.btn_tb_auto_nest.config(text=f"⚡ Auto-Nest ({cnt})")
             else:
                 self.btn_tb_auto_nest.config(text="⚡ Auto-Nest")
+        if hasattr(self, "btn_batch_print"):
+            if cnt > 0:
+                self.btn_batch_print.config(text=f"🖨️ Imprimir ({cnt})")
+            else:
+                self.btn_batch_print.config(text="🖨️ Imprimir Marcadas")
 
     # -------------------------------------------------------------------------
     # Execução em Massa de Nesting (Batch Auto-Nest)
@@ -5777,6 +6316,7 @@ class MainWindow(tk.Tk):
                 self._nest_progress = (current + 1, total)
 
         def _worker():
+            orig_backend = os.environ.get("CORTEAC_BACKEND")
             t_start = time.perf_counter()
             try:
                 for s in sess_shapes:
@@ -5892,6 +6432,8 @@ class MainWindow(tk.Tk):
             finally:
                 if orig_backend is not None:
                     os.environ["CORTEAC_BACKEND"] = orig_backend
+                else:
+                    os.environ.pop("CORTEAC_BACKEND", None)
 
         th = threading.Thread(target=_worker, daemon=True)
         th.start()

@@ -248,7 +248,7 @@ class SobrasConfigDialog(tk.Toplevel):
 
 
 class SessionView(tk.Frame):
-    def __init__(self, parent, session_data=None, canvas_ref=None, on_close=None, on_minimize=None, on_maximize=None, on_edit_shape=None, on_delete_shape=None, on_import_die=None, on_open_layout_editor=None, on_material_change=None, on_nest=None, on_standby=None, on_rewind=None, on_cut=None, on_strategy_change=None, on_add_shapes=None, all_shapes_catalog=None, db=None, on_open_dieproc=None, on_cancel=None, **kwargs):
+    def __init__(self, parent, session_data=None, canvas_ref=None, on_close=None, on_minimize=None, on_maximize=None, on_edit_shape=None, on_delete_shape=None, on_import_die=None, on_open_layout_editor=None, on_material_change=None, on_nest=None, on_standby=None, on_rewind=None, on_cut=None, on_strategy_change=None, on_add_shapes=None, all_shapes_catalog=None, db=None, on_open_dieproc=None, on_cancel=None, on_export_machine=None, **kwargs):
         super().__init__(parent, bg=THEME["bg_surface"], relief="ridge", bd=2, **kwargs)
         self.session_data = session_data or {
             "id": 91,
@@ -275,6 +275,7 @@ class SessionView(tk.Frame):
         self.on_cut_cb = on_cut
         self.on_strategy_change_cb = on_strategy_change
         self.on_add_shapes_cb = on_add_shapes
+        self.on_export_machine_cb = on_export_machine
         self.all_shapes_catalog = all_shapes_catalog or []
         self.shapes_list = list(self.session_data.get("shapes", []))
         self.selected_shape = None
@@ -1124,6 +1125,7 @@ class SessionView(tk.Frame):
         self.lay_menu = tk.Menu(self, tearoff=0, bg=THEME["bg_surface"], fg=THEME["text_main"])
         self.lay_menu.add_command(label="📂 Abrir / Importar .lay...", command=self.import_lay_file)
         self.lay_menu.add_command(label="💾 Exportar para .lay...", command=self.export_lay_file)
+        self.lay_menu.add_command(label="📤 Salvar Sessão para Máquina...", command=self.export_session_to_machine)
         self.lay_menu.add_separator()
         self.lay_menu.add_command(label="✏️ Abrir no Layout Editor", command=self.on_layout_row_double_click)
         self.lay_menu.add_command(label="🖨️ Visualizar / Imprimir Layout (Ctrl+P)", command=self.print_current_layout)
@@ -1487,6 +1489,17 @@ class SessionView(tk.Frame):
                 "layers_tip": self.session_data.get("layers_tip")
             }
         return None
+
+    def export_session_to_machine(self):
+        """Salva todas as placas da sessão para a máquina via callback configurado."""
+        if callable(getattr(self, "on_export_machine_cb", None)):
+            sid = self.session_data.get("id") if isinstance(self.session_data, dict) else None
+            return self.on_export_machine_cb(sid)
+        messagebox.showwarning(
+            "Salvar Sessão para Máquina",
+            "A função de exportação para a máquina não está disponível nesta janela.",
+            parent=self,
+        )
 
     def export_lay_file(self):
         """

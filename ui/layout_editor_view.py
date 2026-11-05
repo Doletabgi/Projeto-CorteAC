@@ -6194,6 +6194,9 @@ class LayoutEditorView(tk.Frame):
             mat_desc = getattr(self, "material_name", "SINT-LOGAM-PRETO")
             mat_layers = getattr(self, "material_layers", 2)
 
+        if hasattr(self, "_sync_current_layout_pieces"):
+            self._sync_current_layout_pieces()
+
         cur_idx_print = getattr(self, "current_layout_index", 0)
         cur_ly_print = None
         if getattr(self, "layouts", None) and 0 <= cur_idx_print < len(self.layouts):
