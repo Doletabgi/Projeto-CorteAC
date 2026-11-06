@@ -210,3 +210,12 @@ CREATE TABLE IF NOT EXISTS layout_pieces (
     INDEX idx_layout_pieces_mold (mold_id),
     INDEX idx_layout_pieces_shape (shape_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- 11. Usuários e Operadores do Sistema (Users)
+CREATE TABLE IF NOT EXISTS users (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    name VARCHAR(150) UNIQUE NOT NULL,
+    is_active INT DEFAULT 0,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+

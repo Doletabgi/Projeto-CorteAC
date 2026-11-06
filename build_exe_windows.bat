@@ -18,7 +18,7 @@ python tools\clean_database.py
 
 echo.
 echo Gerando executavel standalone (CorteAC.exe)...
-pyinstaller --clean --onefile --noconsole --icon "assets/app_icon.ico" --add-data "assets;assets" --add-data "samples;samples" --add-data "jobmanager.db;." --add-data "db.example.ini;." --hidden-import pymysql --hidden-import cryptography --hidden-import cad.project_packager --name "CorteAC" main.py
+pyinstaller --clean --onefile --noconsole --icon "assets/app_icon.ico" --add-data "assets;assets" --add-data "samples;samples" --add-data "jobmanager.db;." --add-data "db.example.ini;." --hidden-import pymysql --hidden-import cryptography --hidden-import cad.project_packager --hidden-import cad.barcode --hidden-import ui.user_dialog --name "CorteAC" main.py
 
 if errorlevel 1 (
     echo.

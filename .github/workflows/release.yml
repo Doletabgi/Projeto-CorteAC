@@ -9,7 +9,7 @@ on:
       tag_name:
         description: 'Tag de versão SemVer (ex: v1.0.0)'
         required: false
-        default: 'v1.6.33'
+        default: 'v1.6.35'
 
 permissions:
   contents: write
@@ -47,7 +47,7 @@ jobs:
 
       - name: Compilar Executável Standalone com PyInstaller
         run: |
-          pyinstaller --clean --onefile --noconsole --icon "assets/app_icon.ico" --add-data "assets;assets" --add-data "samples;samples" --add-data "jobmanager.db;." --add-data "db.example.ini;." --hidden-import pymysql --hidden-import cryptography --hidden-import cad.project_packager --name "CorteAC" main.py
+          pyinstaller --clean --onefile --noconsole --icon "assets/app_icon.ico" --add-data "assets;assets" --add-data "samples;samples" --add-data "jobmanager.db;." --add-data "db.example.ini;." --hidden-import pymysql --hidden-import cryptography --hidden-import cad.project_packager --hidden-import cad.barcode --hidden-import ui.user_dialog --name "CorteAC" main.py
 
       - name: Empacotar Pacote Portátil ZIP
         shell: pwsh
@@ -98,7 +98,7 @@ jobs:
 
       - name: Compilar Executável Standalone Linux com PyInstaller
         run: |
-          pyinstaller --clean --onefile --add-data "assets:assets" --add-data "samples:samples" --add-data "jobmanager.db:." --add-data "db.example.ini:." --hidden-import pymysql --hidden-import cryptography --hidden-import cad.project_packager --name "corteac_linux" main.py
+          pyinstaller --clean --onefile --add-data "assets:assets" --add-data "samples:samples" --add-data "jobmanager.db:." --add-data "db.example.ini:." --hidden-import pymysql --hidden-import cryptography --hidden-import cad.project_packager --hidden-import cad.barcode --hidden-import ui.user_dialog --name "corteac_linux" main.py
 
       - name: Empacotar Pacote Portátil TAR.GZ
         run: |
@@ -197,7 +197,23 @@ jobs:
 
             ---
 
-            ### 🛠️ Recursos Incluídos Nesta Versão (v1.6.33):
+            ### 🛠️ Recursos Incluídos Nesta Versão (v1.6.35):
+            - **Cadastro de Usuários / Operadores e Nome na Folha de Impressão (v1.6.35)**:
+              - Novo diálogo modal de cadastro e gerenciamento de operadores (`UserManagementDialog`).
+              - Suporte completo a múltiplos operadores, seleção de usuário ativo com 1 clique e persistência no banco SQLite e MySQL (`users` table e `settings`).
+              - Exibição destacada em negrito monoespaçado do **nome do operador logo abaixo do título** (`lay0000.lay (Placa 1 de 2)`) em todas as impressões físicas, visualizações e PDFs gerados.
+              - Formato configurável: `Usuário: [Nome]`, `Operador: [Nome]` ou apenas o nome direto.
+              - Acesso direto pelo menu **Ferramentas ➔ 👤 Cadastrar Usuário...**, pelo painel interativo na barra de status da janela principal e pelo botão **👤 Usuário...** na barra de ferramentas de impressão.
+            - **Código de Barras Code 128 nas Impressões e Leitura Automática (v1.6.35)**:
+              - Motor nativo em Python puro `cad/barcode.py` (Subset B, ISO/IEC 15417, 107 padrões, checksum mod 103 e margens silenciosas regulamentares).
+              - Impressão automática do código de barras no topo direito da folha A4 com payload `CAC:SESS:<id>` (ou `:LAY:<idx>`) e rótulo legível em português.
+              - Leitor global USB HID (keyboard-wedge) na `MainWindow` que captura rajadas (< 120 ms) e abre instantaneamente a sessão e placa correspondente.
+              - Atalho de teclado `<F8>` e item de menu em Arquivo para abertura manual ou via scanner.
+            - **Reorganização do Design da Folha de Impressão (v1.6.35)**:
+              - Tabela de moldes e pares (`323_PalAcb #41`, tamanhos e nota de rodapé) movida para card com borda arredondada na lateral direita da folha no espaço em branco ao lado da mesa de corte.
+              - Desenho da mesa de corte expandido verticalmente até logo abaixo do cabeçalho, com reserva lateral automática para não sobrepor a legenda.
+              - Remoção das linhas `Refile:` e `Material Area:` do cabeçalho de todas as folhas (Canvas e PDF/Pillow).
+              - **610 testes automatizados** (608 passando, 2 skip, 100% de aprovação).
             - **Impressão em Massa de Sessões e Pastas de Produção (v1.6.33)**:
               - Novo botão **🖨️ Imprimir Sessões** na barra de ações em lote (`batch_action_bar`).
               - Opções no menu de contexto da árvore: imprimir sessão individual, imprimir todas as sessões de uma pasta (e subpastas recursivamente), imprimir raiz de produção e imprimir sessões marcadas por checkbox.

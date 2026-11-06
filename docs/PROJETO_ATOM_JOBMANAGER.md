@@ -1,12 +1,12 @@
 # PROJETO ATOM JobManager Reborn: Documento Vivo
 
 > **Finalidade:** Documento mestre estruturado e autocontido projetado para alimentar e contextualizar qualquer Inteligência Artificial (Antigravity, Claude, ChatGPT, etc.) ou engenheiro sobre 100% do projeto — regras de negócio de calçados/couro (ATOM), arquitetura técnica, schemas de banco (MySQL/SQLite), formatos proprietários (.LAY, .ONX/CZLIB), algoritmos de nesting/CAM, UI/UX e histórico — em um único arquivo de referência imediata.
-**Atalho de leitura:** o comportamento ATUAL de encaixe, sobras, impressão, atalho e entrega para a máquina está consolidado na **§8.47**, **§8.48**, **§8.49**, **§8.50** e **§8.51**; as seções §8.26–§8.46 são o histórico de como se chegou lá.
+**Atalho de leitura:** o comportamento ATUAL de encaixe, sobras, impressão, atalho, entrega para a máquina, código de barras e gestão de usuários/operadores está consolidado na **§8.47**, **§8.48**, **§8.49**, **§8.50**, **§8.51**, **§8.52** e **§8.53**; as seções §8.26–§8.46 são o histórico de como se chegou lá.
 >
 > **Regra de ouro:** o que está marcado `[CONFIRMADO]` veio do relatório, do código ou do usuário. O que está `[NÃO CONFIRMADO]` é suposição e não deve virar "fato" sem validação. O que está `[PREENCHER]` a IA deve completar lendo o código real.
 
 <!-- AUTO:header:start -->
-**Última sincronização com o código:** 2026-11-05 12:13 (HEAD ao gerar: `631c8a6`; 145 arquivos Python, ~71052 linhas)
+**Última sincronização com o código:** 2026-11-06 12:59 (HEAD ao gerar: `d8156f8`; 150 arquivos Python, ~72684 linhas)
 <!-- AUTO:header:end -->
 **Versão deste documento:** 2
 
@@ -83,6 +83,7 @@ main.py                                              # CorteAC (Python Edition p
 run.bat
 run.sh
 cad/ai_learner.py                                    # JobManager 2000 (Python Edition)
+cad/barcode.py                                       # CorteAC - Barcode Engine (Code 128 Subset B)
 cad/colors.py                                        # JobManager 2000 (Python Edition)
 cad/czlib.py                                         # JobManager 2000 (Python Edition)
 cad/die_parser.py                                    # JobManager 2000 (Python Edition)
@@ -139,6 +140,7 @@ packaging/instalar_atalho.sh
 tests/_catalog_fixtures.py                           # tests/_catalog_fixtures.py
 tests/conftest.py                                    # tests/conftest.py
 tests/test_auto_trim_checkbox.py                     # Testes Unitários: Checkbox de Refile Automático e Recorte Pós-Nesting (test_auto_trim_checkbox.py)
+tests/test_barcode_print.py                          # Testes automatizados para a geração de código de barras Code 128 (Subset B)
 tests/test_batch_autonest.py                         # JobManager 2000 (Python Edition)
 tests/test_batch_print_sessions.py                   # Testes unitários automatizados para a Impressão em Massa (Batch Print) de Sessões.
 tests/test_company_logo_print.py                     # Testes Automatizados para a Remoção do Logotipo ATOM e Suporte a Logotipo Personalizado da Empresa
@@ -166,6 +168,7 @@ tests/test_layout_layers.py                          # tests/test_layout_layers.
 tests/test_layout_print_legend.py                    # Testes unitários automatizados para a Legenda de Moldes na Impressão A4 (LayoutPrintDialog).
 tests/test_layout_print_material.py                  # Testes unitários para validação da sincronização e formatação automática
 tests/test_layout_print_pagination.py                # tests/test_layout_print_pagination.py
+tests/test_layout_print_user.py
 tests/test_layout_save_refile.py                     # tests/test_layout_save_refile.py
 tests/test_macro_engine_ia_teste.py                  # Testes de Homologação para o Motor de Cálculo "IA-teste":
 tests/test_macro_engine_ia_teste_optimized.py        # JobManager 2000 (Python Edition)
@@ -201,6 +204,7 @@ tests/test_sidebar_counter.py                        # Testes unitários e de in
 tests/test_sobras_dobra.py                           # tests/test_sobras_dobra.py
 tests/test_strategy_removal.py                       # Testes automatizados para validação da remoção da estratégia flashnestroll (bobinas contínuas):
 tests/test_tooltip.py                                # tests/test_tooltip.py
+tests/test_user_management.py
 tests/test_validation_and_cancellation.py            # JobManager 2000 (Python Edition)
 tests/fixtures/ia_teste_baseline.json
 tools/bench_10k_pieces.py                            # tools/bench_10k_pieces.py
@@ -258,6 +262,7 @@ ui/sort_utils.py                                     # JobManager 2000 (Python E
 ui/tooltip.py                                        # ui/tooltip.py - Tooltip flutuante para os botões do Layout Editor.
 ui/trim_layout_dialog.py                             # JobManager 2000 (Python Edition)
 ui/units.py                                          # ui/units.py - Formatação e leitura de medidas em METROS para o operador.
+ui/user_dialog.py                                    # JobManager 2000 (Python Edition)
 ```
 <!-- AUTO:tree:end -->
 
@@ -265,7 +270,7 @@ ui/units.py                                          # ui/units.py - Formataçã
 
 <!-- AUTO:symbols:start -->
 ### `database.py`
-- `class DatabaseManager` (linha 44, 62 métodos)
+- `class DatabaseManager` (linha 44, 69 métodos)
 - funções: `get_current_operator`
 
 ### `main.py`
@@ -275,6 +280,9 @@ ui/units.py                                          # ui/units.py - Formataçã
 - `class ShapeFeatures` (linha 24, 1 métodos)
 - `class ShapeFeatureExtractor` (linha 43, 3 métodos): Extrai características geométricas normalizadas e invariantes a escala/rotação
 - `class NestingAIBrain` (linha 189, 8 métodos): Cérebro de Inteligência Artificial Local Embarcada.
+
+### `cad/barcode.py`
+- funções: `sanitize_code128_b_text`, `encode_code128_b`, `draw_code128_canvas`, `generate_code128_pillow`
 
 ### `cad/colors.py`
 - funções: `get_color_for_size`, `get_contrast_text_color`, `get_color_emoji`
@@ -376,6 +384,11 @@ ui/units.py                                          # ui/units.py - Formataçã
 - `class DummyWidget` (linha 215, 3 métodos)
 - `class TestAutoTrimMainWindowIntegration` (linha 225, 2 métodos)
 
+### `tests/test_barcode_print.py`
+- `class TestBarcodeEngine` (linha 24, 4 métodos): Testes do gerador Code 128 nativo em Python puro.
+- `class TestLayoutPrintBarcodeIntegration` (linha 76, 1 métodos): Testes de integração do código de barras no diálogo de impressão A4.
+- `class TestMainWindowScannerListener` (linha 137, 2 métodos): Testes do listener global de leitor de código de barras USB.
+
 ### `tests/test_batch_autonest.py`
 - `class FakeBatchWindow` (linha 22, 1 métodos): Mock leve de MainWindow contendo todos os componentes e métodos de batch.
 - `class TestBatchAutoNest` (linha 115, 13 métodos)
@@ -463,13 +476,16 @@ ui/units.py                                          # ui/units.py - Formataçã
 - `class TestLayoutLayers` (linha 40, 11 métodos)
 
 ### `tests/test_layout_print_legend.py`
-- `class TestLayoutPrintLegend` (linha 22, 14 métodos)
+- `class TestLayoutPrintLegend` (linha 22, 15 métodos)
 
 ### `tests/test_layout_print_material.py`
 - `class TestLayoutPrintMaterial` (linha 12, 4 métodos)
 
 ### `tests/test_layout_print_pagination.py`
 - `class TestLayoutPrintPagination` (linha 20, 6 métodos)
+
+### `tests/test_layout_print_user.py`
+- `class TestLayoutPrintUser` (linha 7, 6 métodos)
 
 ### `tests/test_layout_save_refile.py`
 - `class _DummyLabel` (linha 34, 1 métodos)
@@ -601,6 +617,9 @@ ui/units.py                                          # ui/units.py - Formataçã
 ### `tests/test_tooltip.py`
 - `class TestToolTip` (linha 13, 8 métodos)
 
+### `tests/test_user_management.py`
+- `class TestUserManagement` (linha 8, 9 métodos)
+
 ### `tests/test_validation_and_cancellation.py`
 - `class TestValidationAndCancellation` (linha 26, 11 métodos)
 
@@ -722,14 +741,14 @@ ui/units.py                                          # ui/units.py - Formataçã
 - funções: `_contour_area_mm2`, `_shade_color`, `_contour_key`, `rotate_piece_in_place`
 
 ### `ui/layout_print_dialog.py`
-- `class LayoutPrintDialog` (linha 309, 27 métodos): Janela modal de Visualização de Impressão (Print Preview) do Layout Editor.
+- `class LayoutPrintDialog` (linha 310, 31 métodos): Janela modal de Visualização de Impressão (Print Preview) do Layout Editor.
 - funções: `get_company_logo_path`, `open_company_logo_dialog`, `format_size`, `extract_molde_base_name`, `format_shape_id_tag`, `_clamp_tip_zone`, `_desenhar_retangulo_tracejado`
 
 ### `ui/macro_panel.py`
 - `class MacroPanel` (linha 23, 12 métodos): Camada 3: Macro / Aprendizado.
 
 ### `ui/main_window.py`
-- `class MainWindow` (linha 65, 150 métodos)
+- `class MainWindow` (linha 65, 155 métodos)
 - funções: `get_assets_dir`
 
 ### `ui/material_codes_view.py`
@@ -739,7 +758,7 @@ ui/units.py                                          # ui/units.py - Formataçã
 - `class NestingModeWidget` (linha 70, 6 métodos): Widget de seleção de modo de encaixe industrial (Camada 1 de UX).
 
 ### `ui/options_dialog.py`
-- `class OptionsDialog` (linha 13, 15 métodos)
+- `class OptionsDialog` (linha 13, 17 métodos)
 
 ### `ui/order_view.py`
 - `class OrderView` (linha 10, 8 métodos)
@@ -769,6 +788,10 @@ ui/units.py                                          # ui/units.py - Formataçã
 
 ### `ui/units.py`
 - funções: `format_m`, `format_dim_mm`, `format_dim_m`, `parse_m`, `parse_m_to_mm`
+
+### `ui/user_dialog.py`
+- `class UserManagementDialog` (linha 14, 10 métodos): Diálogo modal para cadastrar, remover e alternar o usuário / operador ativo.
+- funções: `open_user_management_dialog`
 <!-- AUTO:symbols:end -->
 
 ### 3.1 Módulos conhecidos pelo relatório
@@ -1014,6 +1037,14 @@ CREATE TABLE IF NOT EXISTS layout_pieces (
     INDEX idx_layout_pieces_layout (layout_id),
     INDEX idx_layout_pieces_mold (mold_id),
     INDEX idx_layout_pieces_shape (shape_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- 11. Usuários e Operadores do Sistema (Users)
+CREATE TABLE IF NOT EXISTS users (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    name VARCHAR(150) UNIQUE NOT NULL,
+    is_active INT DEFAULT 0,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- -----------------------------------------------------------------------------
@@ -1425,6 +1456,12 @@ CREATE TABLE "shapes" (
                             size TEXT DEFAULT '41',
                             FOREIGN KEY (article_id) REFERENCES articles(id) ON DELETE SET NULL
                         );
+CREATE TABLE users (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    name TEXT UNIQUE NOT NULL,
+                    is_active INTEGER DEFAULT 0,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                );
 CREATE INDEX idx_shapes_article_size_name ON shapes(article_id, size, name);
 ```
 <!-- AUTO:schema:end -->
@@ -1594,13 +1631,13 @@ A ordem de corte do `.lay` para a mesa **não pode** ser aleatória:
 
 | Atalho | Local | Linha |
 |---|---|---|
-| Alt+Down | `ui/session_view.py:3884` | `entry.bind("<Alt-Down>", lambda e: adjust_number(-1))` |
-| Alt+Left | `ui/layout_print_dialog.py:1101` | `self.bind("<Alt-Left>", self.prev_page)` |
-| Alt+Right | `ui/layout_print_dialog.py:1100` | `self.bind("<Alt-Right>", self.next_page)` |
-| Alt+Up | `ui/session_view.py:3883` | `entry.bind("<Alt-Up>", lambda e: adjust_number(+1))` |
+| Alt+Down | `ui/session_view.py:3887` | `entry.bind("<Alt-Down>", lambda e: adjust_number(-1))` |
+| Alt+Left | `ui/layout_print_dialog.py:1191` | `self.bind("<Alt-Left>", self.prev_page)` |
+| Alt+Right | `ui/layout_print_dialog.py:1190` | `self.bind("<Alt-Right>", self.next_page)` |
+| Alt+Up | `ui/session_view.py:3886` | `entry.bind("<Alt-Up>", lambda e: adjust_number(+1))` |
 | Backspace | `ui/cad_canvas.py:72` | `self.master.bind("<BackSpace>", lambda e: self.delete_selected())` |
 | Backspace | `ui/dieproc_dialog.py:87` | `self.preset_listbox.bind("<BackSpace>", lambda e: self.on_delete_clicked())` |
-| Backspace | `ui/main_window.py:702` | `self.bind_all("<BackSpace>", self.on_global_delete_key, add="+")` |
+| Backspace | `ui/main_window.py:703` | `self.bind_all("<BackSpace>", self.on_global_delete_key, add="+")` |
 | Backspace | `ui/session_view.py:882` | `self.tree_shapes.bind("<BackSpace>", lambda e: self._on_tree_shapes_delete())` |
 | Backspace | `ui/session_view.py:1042` | `w.bind("<BackSpace>", self.remove_session_material)` |
 | Backspace | `ui/session_view.py:1043` | `w.bind("<Key-BackSpace>", self.remove_session_material)` |
@@ -1612,14 +1649,14 @@ A ordem de corte do `.lay` para a mesa **não pode** ser aleatória:
 | Ctrl+A | `ui/layout_editor_view.py:796` | `w.bind("<Control-Key-A>", self.select_all)` |
 | Ctrl+A | `ui/layout_editor_view.py:801` | `self.bind_all("<Control-a>", self.select_all)` |
 | Ctrl+A | `ui/layout_editor_view.py:802` | `self.bind_all("<Control-A>", self.select_all)` |
-| Ctrl+A | `ui/main_window.py:305` | `edit_menu.add_command(label="Selecionar tudo", accelerator="Ctrl+A", command=sel` |
-| Ctrl+A | `ui/main_window.py:703` | `self.bind_all("<Control-a>", self.on_select_all, add="+")` |
-| Ctrl+A | `ui/main_window.py:704` | `self.bind_all("<Control-A>", self.on_select_all, add="+")` |
-| Ctrl+A | `ui/main_window.py:705` | `self.bind_all("<Control-Key-a>", self.on_select_all, add="+")` |
-| Ctrl+A | `ui/main_window.py:706` | `self.bind_all("<Control-Key-A>", self.on_select_all, add="+")` |
-| Ctrl+C | `ui/main_window.py:301` | `edit_menu.add_command(label="Copiar", accelerator="Ctrl+C")` |
+| Ctrl+A | `ui/main_window.py:306` | `edit_menu.add_command(label="Selecionar tudo", accelerator="Ctrl+A", command=sel` |
+| Ctrl+A | `ui/main_window.py:704` | `self.bind_all("<Control-a>", self.on_select_all, add="+")` |
+| Ctrl+A | `ui/main_window.py:705` | `self.bind_all("<Control-A>", self.on_select_all, add="+")` |
+| Ctrl+A | `ui/main_window.py:706` | `self.bind_all("<Control-Key-a>", self.on_select_all, add="+")` |
+| Ctrl+A | `ui/main_window.py:707` | `self.bind_all("<Control-Key-A>", self.on_select_all, add="+")` |
+| Ctrl+C | `ui/main_window.py:302` | `edit_menu.add_command(label="Copiar", accelerator="Ctrl+C")` |
 | Ctrl+Down | `ui/layout_editor_view.py:813` | `self.bind_all("<Control-Down>", lambda e: self.nudge_selected(0, -0.5))` |
-| Ctrl+Down | `ui/session_view.py:3882` | `entry.bind("<Control-Down>", lambda e: adjust_number(-1))` |
+| Ctrl+Down | `ui/session_view.py:3885` | `entry.bind("<Control-Down>", lambda e: adjust_number(-1))` |
 | Ctrl+Equal | `ui/layout_editor_view.py:708` | `w.bind("<Control-equal>", lambda e: (self.zoom_in(), "break")[1])` |
 | Ctrl+Equal | `ui/shape_catalog_view.py:273` | `self.bind("<Control-equal>", lambda e: self.zoom_step(1.2))` |
 | Ctrl+Kp_0 | `ui/shape_catalog_view.py:279` | `self.bind("<Control-KP_0>", lambda e: self.reset_zoom())` |
@@ -1642,8 +1679,8 @@ A ordem de corte do `.lay` para a mesa **não pode** ser aleatória:
 | Ctrl+P | `ui/layout_editor_view.py:503` | `self.bind("<Control-P>", lambda e: self.print_layout())` |
 | Ctrl+P | `ui/layout_editor_view.py:742` | `w.bind("<Control-p>", lambda e: (self.print_layout(), "break")[1])` |
 | Ctrl+P | `ui/layout_editor_view.py:743` | `w.bind("<Control-P>", lambda e: (self.print_layout(), "break")[1])` |
-| Ctrl+P | `ui/layout_print_dialog.py:1094` | `self.bind("<Control-p>", lambda e: self.do_print())` |
-| Ctrl+P | `ui/layout_print_dialog.py:1095` | `self.bind("<Control-P>", lambda e: self.do_print())` |
+| Ctrl+P | `ui/layout_print_dialog.py:1184` | `self.bind("<Control-p>", lambda e: self.do_print())` |
+| Ctrl+P | `ui/layout_print_dialog.py:1185` | `self.bind("<Control-P>", lambda e: self.do_print())` |
 | Ctrl+P | `ui/main_window.py:89` | `self.bind("<Control-p>", self.handle_ctrl_p)` |
 | Ctrl+P | `ui/main_window.py:90` | `self.bind("<Control-P>", self.handle_ctrl_p)` |
 | Ctrl+P | `ui/session_view.py:1134` | `self.tree_lays.bind("<Control-p>", lambda e: (self.print_current_layout(), "brea` |
@@ -1672,9 +1709,9 @@ A ordem de corte do `.lay` para a mesa **não pode** ser aleatória:
 | Ctrl+T | `ui/main_window.py:91` | `self.bind("<Control-t>", self.handle_ctrl_t)` |
 | Ctrl+T | `ui/main_window.py:92` | `self.bind("<Control-T>", self.handle_ctrl_t)` |
 | Ctrl+Up | `ui/layout_editor_view.py:812` | `self.bind_all("<Control-Up>", lambda e: self.nudge_selected(0, 0.5))` |
-| Ctrl+Up | `ui/session_view.py:3881` | `entry.bind("<Control-Up>", lambda e: adjust_number(+1))` |
-| Ctrl+V | `ui/main_window.py:302` | `edit_menu.add_command(label="Colar", accelerator="Ctrl+V")` |
-| Ctrl+X | `ui/main_window.py:300` | `edit_menu.add_command(label="Recortar", accelerator="Ctrl+X")` |
+| Ctrl+Up | `ui/session_view.py:3884` | `entry.bind("<Control-Up>", lambda e: adjust_number(+1))` |
+| Ctrl+V | `ui/main_window.py:303` | `edit_menu.add_command(label="Colar", accelerator="Ctrl+V")` |
+| Ctrl+X | `ui/main_window.py:301` | `edit_menu.add_command(label="Recortar", accelerator="Ctrl+X")` |
 | Ctrl+Y | `ui/layout_editor_view.py:724` | `self.canvas.bind("<Control-y>", lambda e: "break")` |
 | Ctrl+Y | `ui/layout_editor_view.py:725` | `self.canvas.bind("<Control-Y>", lambda e: "break")` |
 | Ctrl+Y | `ui/layout_editor_view.py:726` | `self.bind("<Control-y>", lambda e: "break")` |
@@ -1683,11 +1720,11 @@ A ordem de corte do `.lay` para a mesa **não pode** ser aleatória:
 | Ctrl+Z | `ui/layout_editor_view.py:719` | `self.canvas.bind("<Control-Z>", self.undo_action)` |
 | Ctrl+Z | `ui/layout_editor_view.py:720` | `self.bind("<Control-z>", self.undo_action)` |
 | Ctrl+Z | `ui/layout_editor_view.py:721` | `self.bind("<Control-Z>", self.undo_action)` |
-| Ctrl+Z | `ui/main_window.py:298` | `edit_menu.add_command(label="Desfazer / Reverter", accelerator="Ctrl+Z", command` |
-| Ctrl+Z | `ui/main_window.py:707` | `self.bind_all("<Control-z>", self.on_global_undo, add="+")` |
-| Ctrl+Z | `ui/main_window.py:708` | `self.bind_all("<Control-Z>", self.on_global_undo, add="+")` |
-| Ctrl+Z | `ui/main_window.py:709` | `self.bind_all("<Control-Key-z>", self.on_global_undo, add="+")` |
-| Ctrl+Z | `ui/main_window.py:710` | `self.bind_all("<Control-Key-Z>", self.on_global_undo, add="+")` |
+| Ctrl+Z | `ui/main_window.py:299` | `edit_menu.add_command(label="Desfazer / Reverter", accelerator="Ctrl+Z", command` |
+| Ctrl+Z | `ui/main_window.py:708` | `self.bind_all("<Control-z>", self.on_global_undo, add="+")` |
+| Ctrl+Z | `ui/main_window.py:709` | `self.bind_all("<Control-Z>", self.on_global_undo, add="+")` |
+| Ctrl+Z | `ui/main_window.py:710` | `self.bind_all("<Control-Key-z>", self.on_global_undo, add="+")` |
+| Ctrl+Z | `ui/main_window.py:711` | `self.bind_all("<Control-Key-Z>", self.on_global_undo, add="+")` |
 | Ctrl+Z | `ui/shape_catalog_view.py:269` | `self.bind("<Control-z>", lambda e: self.action_undo())` |
 | Ctrl+Z | `ui/shape_catalog_view.py:270` | `self.bind("<Control-Z>", lambda e: self.action_undo())` |
 | Ctrl+Z | `ui/shape_editor_view.py:231` | `self.bind("<Control-z>", self.undo_or_revert)` |
@@ -1701,19 +1738,19 @@ A ordem de corte do `.lay` para a mesa **não pode** ser aleatória:
 | Delete | `ui/cad_canvas.py:71` | `self.master.bind("<Delete>", lambda e: self.delete_selected())` |
 | Delete | `ui/dieproc_dialog.py:86` | `self.preset_listbox.bind("<Delete>", lambda e: self.on_delete_clicked())` |
 | Delete | `ui/layout_editor_view.py:800` | `self.bind_all("<Delete>", lambda e: self.delete_selected())` |
-| Delete | `ui/main_window.py:303` | `edit_menu.add_command(label="Excluir", accelerator="Del", command=self.on_global` |
-| Delete | `ui/main_window.py:701` | `self.bind_all("<Delete>", self.on_global_delete_key, add="+")` |
-| Delete | `ui/main_window.py:3408` | `accelerator="Del",` |
-| Delete | `ui/main_window.py:3427` | `accelerator="Del",` |
-| Delete | `ui/main_window.py:3704` | `accelerator="Del",` |
-| Delete | `ui/main_window.py:3723` | `accelerator="Del",` |
+| Delete | `ui/main_window.py:304` | `edit_menu.add_command(label="Excluir", accelerator="Del", command=self.on_global` |
+| Delete | `ui/main_window.py:702` | `self.bind_all("<Delete>", self.on_global_delete_key, add="+")` |
+| Delete | `ui/main_window.py:3578` | `accelerator="Del",` |
+| Delete | `ui/main_window.py:3597` | `accelerator="Del",` |
+| Delete | `ui/main_window.py:3874` | `accelerator="Del",` |
+| Delete | `ui/main_window.py:3893` | `accelerator="Del",` |
 | Delete | `ui/session_view.py:881` | `self.tree_shapes.bind("<Delete>", lambda e: self._on_tree_shapes_delete())` |
 | Delete | `ui/session_view.py:1040` | `w.bind("<Delete>", self.remove_session_material)` |
 | Delete | `ui/session_view.py:1041` | `w.bind("<Key-Delete>", self.remove_session_material)` |
 | Delete | `ui/shape_editor_view.py:247` | `self.bind("<Delete>", lambda e: self.delete_selected())` |
 | Delete | `ui/shape_editor_view.py:249` | `self.canvas.bind("<Delete>", lambda e: self.delete_selected())` |
 | Down | `ui/layout_editor_view.py:808` | `self.bind_all("<Down>", lambda e: self.bump_selection_vector(0, -1))` |
-| Down | `ui/session_view.py:3866` | `entry.bind("<Down>", move_down)` |
+| Down | `ui/session_view.py:3869` | `entry.bind("<Down>", move_down)` |
 | Down | `ui/shape_catalog_view.py:263` | `self.bind("<Down>", lambda e: self.navigate_selection(0, 1))` |
 | Escape | `ui/cad_canvas.py:67` | `self.bind("<Escape>", self.cancel_drag)` |
 | Escape | `ui/cad_canvas.py:68` | `self.master.bind("<Escape>", self.cancel_drag)` |
@@ -1723,22 +1760,23 @@ A ordem de corte do `.lay` para a mesa **não pode** ser aleatória:
 | Escape | `ui/import_materials_dialog.py:49` | `self.bind("<Escape>", lambda e: self.destroy())` |
 | Escape | `ui/layout_editor_view.py:696` | `self.canvas.bind("<Escape>", self.on_canvas_escape)` |
 | Escape | `ui/layout_editor_view.py:792` | `w.bind("<Escape>", self.cancel_drag)` |
-| Escape | `ui/layout_print_dialog.py:1097` | `self.bind("<Escape>", self.on_escape)` |
+| Escape | `ui/layout_print_dialog.py:1187` | `self.bind("<Escape>", self.on_escape)` |
 | Escape | `ui/main_window.py:86` | `self.bind("<Escape>", self.exit_fullscreen)` |
-| Escape | `ui/main_window.py:700` | `self.bind_all("<Escape>", self.dismiss_popup_menus, add="+")` |
-| Escape | `ui/main_window.py:4012` | `dialog.bind("<Escape>", lambda e: dialog.destroy())` |
+| Escape | `ui/main_window.py:701` | `self.bind_all("<Escape>", self.dismiss_popup_menus, add="+")` |
+| Escape | `ui/main_window.py:4182` | `dialog.bind("<Escape>", lambda e: dialog.destroy())` |
 | Escape | `ui/material_codes_view.py:510` | `dlg.bind("<Escape>", lambda e: dlg.destroy())` |
 | Escape | `ui/options_dialog.py:40` | `self.bind("<Escape>", lambda e: self.on_cancel())` |
-| Escape | `ui/session_view.py:3320` | `entry.bind("<Escape>", cancel)` |
-| Escape | `ui/session_view.py:3438` | `dialog.bind("<Escape>", lambda e: dialog.destroy())` |
-| Escape | `ui/session_view.py:3876` | `entry.bind("<Escape>", cancel_edit)` |
+| Escape | `ui/session_view.py:3323` | `entry.bind("<Escape>", cancel)` |
+| Escape | `ui/session_view.py:3441` | `dialog.bind("<Escape>", lambda e: dialog.destroy())` |
+| Escape | `ui/session_view.py:3879` | `entry.bind("<Escape>", cancel_edit)` |
 | Escape | `ui/shape_catalog_view.py:268` | `self.bind("<Escape>", lambda e: self.on_close_click())` |
 | Escape | `ui/shape_editor_view.py:243` | `self.bind("<Escape>", self.on_escape_key)` |
 | Escape | `ui/shape_editor_view.py:244` | `self.canvas.bind("<Escape>", self.on_escape_key)` |
 | Escape | `ui/trim_layout_dialog.py:77` | `self.bind("<Escape>", lambda e: self.destroy())` |
+| Escape | `ui/user_dialog.py:59` | `self.bind("<Escape>", lambda e: self.destroy())` |
 | F1 | `ui/layout_editor_view.py:772` | `w.bind("<F1>", self.on_f1_press)` |
 | F1 | `ui/layout_editor_view.py:773` | `w.bind("<Key-F1>", self.on_f1_press)` |
-| F11 | `ui/layout_print_dialog.py:1096` | `self.bind("<F11>", self.toggle_fullscreen)` |
+| F11 | `ui/layout_print_dialog.py:1186` | `self.bind("<F11>", self.toggle_fullscreen)` |
 | F11 | `ui/main_window.py:85` | `self.bind("<F11>", self.toggle_fullscreen)` |
 | F11 | `ui/shape_editor_view.py:241` | `self.bind("<F11>", self.on_f11_fullscreen)` |
 | F11 | `ui/shape_editor_view.py:242` | `self.canvas.bind("<F11>", self.on_f11_fullscreen)` |
@@ -1752,18 +1790,20 @@ A ordem de corte do `.lay` para a mesa **não pode** ser aleatória:
 | F4 | `ui/layout_editor_view.py:789` | `w.bind("<Key-F4>", self.on_f4_press)` |
 | F5 | `ui/main_window.py:135` | `self.bind_all("<F5>", lambda e: self.on_refresh_f5())` |
 | F5 | `ui/main_window.py:321` | `tools_menu.add_command(label="Atualizar", accelerator="F5", command=self.on_refr` |
-| Iso_left_tab | `ui/session_view.py:3875` | `entry.bind("<ISO_Left_Tab>", move_prev_col)` |
-| Kp_down | `ui/session_view.py:3867` | `entry.bind("<KP_Down>", move_down)` |
+| F8 | `ui/main_window.py:290` | `file_menu.add_command(label="📟 Abrir por Código de Barras / ID...", accelerator=` |
+| F8 | `ui/main_window.py:717` | `self.bind_all("<F8>", lambda e: self.on_open_by_barcode_dialog())` |
+| Iso_left_tab | `ui/session_view.py:3878` | `entry.bind("<ISO_Left_Tab>", move_prev_col)` |
+| Kp_down | `ui/session_view.py:3870` | `entry.bind("<KP_Down>", move_down)` |
 | Kp_enter | `ui/fill_user_dialog.py:155` | `self.bind("<KP_Enter>", lambda e: self.on_ok())` |
-| Kp_enter | `ui/main_window.py:572` | `self.tree_main.bind("<KP_Enter>", self.on_tree_key_return)` |
+| Kp_enter | `ui/main_window.py:573` | `self.tree_main.bind("<KP_Enter>", self.on_tree_key_return)` |
 | Kp_enter | `ui/session_view.py:884` | `self.tree_shapes.bind("<KP_Enter>", self.on_tree_shape_enter)` |
-| Kp_enter | `ui/session_view.py:3871` | `entry.bind("<KP_Enter>", move_down)` |
+| Kp_enter | `ui/session_view.py:3874` | `entry.bind("<KP_Enter>", move_down)` |
 | Kp_enter | `ui/shape_catalog_view.py:267` | `self.bind("<KP_Enter>", lambda e: self.open_selected_shape())` |
-| Kp_up | `ui/session_view.py:3869` | `entry.bind("<KP_Up>", move_up)` |
+| Kp_up | `ui/session_view.py:3872` | `entry.bind("<KP_Up>", move_up)` |
 | Left | `ui/layout_editor_view.py:805` | `self.bind_all("<Left>", lambda e: self.bump_selection_vector(-1, 0))` |
 | Left | `ui/shape_catalog_view.py:264` | `self.bind("<Left>", lambda e: self.navigate_selection(-1, 0))` |
-| Next | `ui/layout_print_dialog.py:1098` | `self.bind("<Next>", self.next_page)` |
-| Prior | `ui/layout_print_dialog.py:1099` | `self.bind("<Prior>", self.prev_page)` |
+| Next | `ui/layout_print_dialog.py:1188` | `self.bind("<Next>", self.next_page)` |
+| Prior | `ui/layout_print_dialog.py:1189` | `self.bind("<Prior>", self.prev_page)` |
 | R | `ui/cad_canvas.py:69` | `self.master.bind("<r>", lambda e: self.rotate_selected(45))` |
 | R | `ui/cad_canvas.py:70` | `self.master.bind("<R>", lambda e: self.rotate_selected(45))` |
 | R | `ui/layout_editor_view.py:798` | `self.bind_all("<Key-r>", lambda e: self.rotate_selected(45))` |
@@ -1771,8 +1811,8 @@ A ordem de corte do `.lay` para a mesa **não pode** ser aleatória:
 | Return | `ui/edit_shape_in_session_dialog.py:146` | `self.bind("<Return>", lambda e: self.on_save())` |
 | Return | `ui/fill_user_dialog.py:154` | `self.bind("<Return>", lambda e: self.on_ok())` |
 | Return | `ui/import_materials_dialog.py:84` | `self.ent_filepath.bind("<Return>", lambda e: self.load_file_from_path(self.ent_f` |
-| Return | `ui/main_window.py:571` | `self.tree_main.bind("<Return>", self.on_tree_key_return)` |
-| Return | `ui/main_window.py:4011` | `dialog.bind("<Return>", lambda e: save())` |
+| Return | `ui/main_window.py:572` | `self.tree_main.bind("<Return>", self.on_tree_key_return)` |
+| Return | `ui/main_window.py:4181` | `dialog.bind("<Return>", lambda e: save())` |
 | Return | `ui/material_codes_view.py:212` | `self.tree.bind("<Return>", lambda e: self.open_edit_selected_dialog())` |
 | Return | `ui/material_codes_view.py:509` | `dlg.bind("<Return>", lambda e: save_action())` |
 | Return | `ui/session_view.py:599` | `self.entry_gap.bind("<Return>", self._on_gap_entry_change)` |
@@ -1780,27 +1820,28 @@ A ordem de corte do `.lay` para a mesa **não pode** ser aleatória:
 | Return | `ui/session_view.py:883` | `self.tree_shapes.bind("<Return>", self.on_tree_shape_enter)` |
 | Return | `ui/session_view.py:1035` | `self.tree_mat.bind("<Return>", self.on_mat_enter_key)` |
 | Return | `ui/session_view.py:1139` | `self.tree_lays.bind("<Return>", self.on_layout_row_double_click)` |
-| Return | `ui/session_view.py:3318` | `entry.bind("<Return>", lambda e: commit())` |
-| Return | `ui/session_view.py:3437` | `dialog.bind("<Return>", lambda e: save())` |
-| Return | `ui/session_view.py:3870` | `entry.bind("<Return>", move_down)` |
+| Return | `ui/session_view.py:3321` | `entry.bind("<Return>", lambda e: commit())` |
+| Return | `ui/session_view.py:3440` | `dialog.bind("<Return>", lambda e: save())` |
+| Return | `ui/session_view.py:3873` | `entry.bind("<Return>", move_down)` |
 | Return | `ui/shape_catalog_view.py:266` | `self.bind("<Return>", lambda e: self.open_selected_shape())` |
 | Return | `ui/shape_editor_view.py:312` | `self.entry_name.bind("<Return>", lambda e: self.on_name_change())` |
 | Return | `ui/shape_editor_view.py:358` | `self.entry_vx.bind("<Return>", self.on_vertex_entry_change)` |
 | Return | `ui/shape_editor_view.py:363` | `self.entry_vy.bind("<Return>", self.on_vertex_entry_change)` |
 | Return | `ui/trim_layout_dialog.py:76` | `self.bind("<Return>", lambda e: self.on_confirm())` |
+| Return | `ui/user_dialog.py:92` | `self.entry_name.bind("<Return>", lambda e: self.on_add_user())` |
 | Right | `ui/layout_editor_view.py:806` | `self.bind_all("<Right>", lambda e: self.bump_selection_vector(1, 0))` |
 | Right | `ui/shape_catalog_view.py:265` | `self.bind("<Right>", lambda e: self.navigate_selection(1, 0))` |
 | Shift+F3 | `ui/layout_editor_view.py:785` | `w.bind("<Shift-F3>", lambda e: "break")` |
 | Shift+F3 | `ui/layout_editor_view.py:786` | `w.bind("<Shift-Key-F3>", lambda e: "break")` |
-| Shift+Return | `ui/session_view.py:3872` | `entry.bind("<Shift-Return>", move_up)` |
-| Shift+Tab | `ui/session_view.py:3322` | `entry.bind("<Shift-Tab>", on_shift_tab)` |
-| Shift+Tab | `ui/session_view.py:3874` | `entry.bind("<Shift-Tab>", move_prev_col)` |
+| Shift+Return | `ui/session_view.py:3875` | `entry.bind("<Shift-Return>", move_up)` |
+| Shift+Tab | `ui/session_view.py:3325` | `entry.bind("<Shift-Tab>", on_shift_tab)` |
+| Shift+Tab | `ui/session_view.py:3877` | `entry.bind("<Shift-Tab>", move_prev_col)` |
 | Space | `ui/add_shapes_dialog.py:135` | `self.tree.bind("<space>", self.on_tree_space)` |
-| Space | `ui/main_window.py:568` | `self.tree_main.bind("<space>", self.on_tree_space_toggle)` |
-| Tab | `ui/session_view.py:3321` | `entry.bind("<Tab>", on_tab)` |
-| Tab | `ui/session_view.py:3873` | `entry.bind("<Tab>", move_next_col)` |
+| Space | `ui/main_window.py:569` | `self.tree_main.bind("<space>", self.on_tree_space_toggle)` |
+| Tab | `ui/session_view.py:3324` | `entry.bind("<Tab>", on_tab)` |
+| Tab | `ui/session_view.py:3876` | `entry.bind("<Tab>", move_next_col)` |
 | Up | `ui/layout_editor_view.py:807` | `self.bind_all("<Up>", lambda e: self.bump_selection_vector(0, 1))` |
-| Up | `ui/session_view.py:3868` | `entry.bind("<Up>", move_up)` |
+| Up | `ui/session_view.py:3871` | `entry.bind("<Up>", move_up)` |
 | Up | `ui/shape_catalog_view.py:262` | `self.bind("<Up>", lambda e: self.navigate_selection(0, -1))` |
 
 **Conflitos reais detectados:**
@@ -3834,6 +3875,90 @@ Em produção diária com dezenas ou centenas de sessões distribuídas em pasta
 
 ---
 
+## 8.52. Código de Barras Code 128 nas Impressões e Leitura Automática (v1.6.34) `[CONFIRMADO]`
+
+### 1. Contexto e problema
+
+No ambiente industrial de corte de calçados, os operadores recebem as ordens de corte e fichas técnicas impressas em papel A4 e precisam localizar a sessão correspondente no computador para carregar os moldes na mesa de corte (ATOM FlashCut). A digitação manual do número da sessão ou código do pedido estava sujeita a atrasos e erros operacionais (ex.: confundir ordens com números parecidos).
+
+A v1.6.34 implementa o fluxo de **código de barras padrão industrial Code 128**:
+1. Geração e impressão automática do código de barras na folha A4;
+2. Escuta global (*scanner listener*) que detecta leitores de código de barras USB (padrão HID / emulação de teclado) e abre a sessão na tela sem nenhum clique.
+
+### 2. Implementação técnica
+
+- **Motor Nativo Code 128 (`cad/barcode.py`)**:
+  - Implementado em **Python puro**, sem dependências externas nem pacotes C adicionais.
+  - Tabela oficial de 107 padrões Code 128 (Subset B, ISO/IEC 15417), cálculo de checksum módulo 103, zonas de silêncio e barra de terminação.
+  - Funções de renderização:
+    - `draw_code128_canvas`: desenha barras agrupadas em retângulos no Canvas Tkinter com legenda textual;
+    - `generate_code128_pillow`: gera imagem vetorial precisa via Pillow para PDF e impressão física.
+- **Integração no Diálogo de Impressão (`ui/layout_print_dialog.py`)**:
+  - O código de barras é posicionado no canto superior direito do cabeçalho da folha A4 (ao lado da data, equilibrando visualmente com o logotipo da empresa no canto esquerdo).
+  - Payload gerado: `CAC:SESS:<id>` (ou `CAC:SESS:<id>:LAY:<layout_index>` em sessões multi-placa).
+  - Legenda textual humana abaixo das barras: `Sessão #ID (Placa N)` ou `Sessão #ID`.
+  - Renderizado dinamicamente no preview Tkinter (`redraw`) e na exportação de alta resolução (`render_pillow_page`).
+- **Escuta Global do Leitor USB (`ui/main_window.py`)**:
+  - Leitores de código de barras USB operam como teclados digitando caracteres em rajadas ultrarrápidas (< 50 ms) seguidas de `<Return>`.
+  - `MainWindow` implementa buffer de eventos `<Key>` global (`_on_global_key_scanner`):
+    - Acúmulo de caracteres com janela de tolerância de leitor (< 120 ms);
+    - Detecção de `<Return>` com payload `CAC:SESS:<id>`;
+    - Execução automática de `show_session_window(session_id)`;
+    - Se a leitura contiver indicação de placa (`LAY:<idx>`), a árvore de layouts seleciona a placa correspondente;
+    - Limpeza de segurança caso o leitor tenha digitado dentro de um `Entry` em foco;
+    - Mensagem de confirmação na barra de status: `📟 Leitor de Código de Barras: Sessão #X aberta com sucesso.`
+- **Entrada Manual e Tecla de Atalho**:
+  - Atalho `<F8>` e item no menu **Arquivo ➔ 📟 Abrir por Código de Barras / ID...** para inserção manual ou bip manual.
+- **Testes**:
+  - `tests/test_barcode_print.py`: 7 testes cobrindo codificação, paridade, imagem Pillow, canvas, integração no diálogo de impressão e listener de leitor.
+- **Suíte de Testes**: **597 testes passando**, 2 skip.
+
+---
+
+## 8.53. Cadastro de Usuário / Operador e Reorganização do Layout de Impressão (v1.6.35) `[CONFIRMADO]`
+
+### 1. Contexto e problema
+
+No chão de fábrica de corte industrial de calçados, os operadores e preparadores de placas precisam ser identificados formalmente nas fichas e impressões emitidas para rastreabilidade de produção. Cada folha impressa deve conter o nome do operador responsável logo abaixo da identificação da placa (`lay0000.lay`). Além disso, a folha de impressão A4 acumulava a tabela de moldes e pares diretamente sobre a mesa de corte, comprimindo a altura do desenho técnico e poluindo a leitura com campos não utilizados no dia a dia da fábrica (`Refile:` e `Material Area:`).
+
+A v1.6.35 introduz o sistema completo de **Cadastro e Gestão de Usuários / Operadores** e a **Reorganização Estrutural da Folha de Impressão A4**.
+
+### 2. Implementação técnica
+
+- **Persistência Central de Usuários (`database.py` e `db/schema_mysql.sql`)**:
+  - Tabela `users` criada de forma idempotente em SQLite e MySQL (`id`, `name`, `is_active`, `created_at`).
+  - Sincronização automática e redundância na tabela `settings` (`active_user`, `system_users`, `user_print_prefix`).
+  - Métodos da classe `DatabaseManager`:
+    - `get_users()`: lista de operadores ordenados alfabeticamente;
+    - `add_user(name)`: cadastra novo operador (o primeiro torna-se ativo automaticamente);
+    - `delete_user(name)`: remove operador e transfere o status ativo se necessário;
+    - `get_active_user()` / `set_active_user(name)`: consulta e alteração rápida do operador ativo;
+    - `get_user_print_prefix()` / `set_user_print_prefix(prefix)`: prefixo configurável (`"Usuário"`, `"Operador"` ou `""`).
+- **Interface de Cadastro e Gerenciamento (`ui/user_dialog.py`)**:
+  - Diálogo modal clássico `UserManagementDialog` integrado ao tema nativo da aplicação (`THEME`).
+  - Cadastro rápido com suporte a tecla `<Enter>`, listagem com indicador `✓ Ativo`, botão de ativação com 1 clique e exclusão.
+  - Seletor de formato do rótulo (`Usuário: [Nome]`, `Operador: [Nome]` ou sem prefixo).
+  - Caixa de prévia ao vivo exibindo exatamente como o cabeçalho sairá na folha.
+- **Acesso em Toda a Aplicação**:
+  - Menu principal: **Ferramentas ➔ 👤 Cadastrar Usuário...**;
+  - Barra de status inferior: painel interativo exibindo `👤 <Usuário Ativo>` no canto inferior direito, com clique direto para troca/cadastro;
+  - Janela de Opções (`ui/options_dialog.py`): aba "Geral" com o usuário ativo e botão de gerenciamento;
+  - Diálogo de impressão (`LayoutPrintDialog`): botão **👤 Usuário...** na barra de ferramentas superior para alteração ou cadastro imediato antes da impressão.
+- **Exibição do Nome do Usuário na Folha de Impressão (`ui/layout_print_dialog.py`)**:
+  - Impresso em fonte monoespaçada negrito (`f_mono_bold`) **logo abaixo do título** `lay0000.lay (Placa 1 de 2)` e de seu traço sublinhado.
+  - Cálculo dinâmico do espaçamento vertical (`meta_y`), garantindo que o nome do operador nunca colida com os parâmetros da placa.
+  - Renderização 100% idêntica no Canvas Tkinter e no Pillow (impressão física, PDFs e imagens exportadas).
+- **Reorganização do Layout de Impressão**:
+  - Remoção definitiva de `Refile:` e `Material Area:` de todas as folhas (Canvas e Pillow/PDF).
+  - Tabela de moldes e pares (`323_PalAcb #41`, tamanhos e nota de rodapé) movida para um card com borda arredondada na lateral direita da folha no espaço em branco ao lado da mesa de corte.
+  - Desenho da mesa de corte expandido verticalmente até logo abaixo do cabeçalho, com reserva lateral automática para não sobrepor a legenda.
+- **Testes**:
+  - `tests/test_user_management.py`: 6 testes de CRUD, seleção de usuário ativo, prefixos e ciclo completo da interface.
+  - `tests/test_layout_print_user.py`: 4 testes de renderização Canvas/Pillow, coordenadas e opções de prefixo.
+- **Suíte de Testes**: **608 testes passando**, 2 skip (100% de sucesso).
+
+---
+
 ## 9. Pendências e arquivos faltantes
 
 ### 9.1 Tarefas abertas
@@ -3877,6 +4002,8 @@ Em produção diária com dezenas ou centenas de sessões distribuídas em pasta
 - [x] Paginação e navegação multi-página na Impressão A4 com suporte a atalhos Page Up/Down (v1.6.32) — Concluído (§8.50, `ui/layout_print_dialog.py`, `tests/test_layout_print_pagination.py`)
 - [x] Impressão em massa de sessões e pastas de produção na árvore e barra de lote (v1.6.33) — Concluído (§8.51, `ui/main_window.py`, `ui/layout_print_dialog.py`, `tests/test_batch_print_sessions.py`)
 - [x] Exportação de pastas de produção inteiras e sessões em massa para a máquina (v1.6.30–v1.6.31) — Concluído (`cad/project_packager.py`, `ui/main_window.py`, `tests/test_session_context_menu_export.py`)
+- [x] Código de barras Code 128 nas impressões A4 e abertura automática de sessões via leitor USB (v1.6.34) — Concluído (§8.52, `cad/barcode.py`, `ui/layout_print_dialog.py`, `ui/main_window.py`, `tests/test_barcode_print.py`)
+- [x] Cadastro e gestão de usuários/operadores com exibição do nome abaixo da identificação da placa na folha A4 e reorganização do layout de impressão (v1.6.35) — Concluído (§8.53, `database.py`, `db/schema_mysql.sql`, `ui/user_dialog.py`, `ui/layout_print_dialog.py`, `ui/main_window.py`, `ui/options_dialog.py`, `tests/test_user_management.py`, `tests/test_layout_print_user.py`)
 
 ### 9.2 Arquivos de amostra que faltam (por prioridade)
 
@@ -4004,6 +4131,7 @@ Local: `/home/dola/Documentos/clone do job/antigo/arquivos pos instalacao/Common
 <!-- AUTO:gitlog:start -->
 | Commit | Data | Autor | Mensagem |
 |---|---|---|---|
+| `d8156f8` | 2026-11-05 | Doletabgi | feat(release): impressao em massa e paginacao no print preview (v1.6.33) |
 | `631c8a6` | 2026-11-04 | Doletabgi | fix(build): clean_database com saida ASCII no Windows (v1.6.29) |
 | `bc09044` | 2026-11-04 | Doletabgi | fix(build): versiona clean_database usado pelo CI (v1.6.29) |
 | `4f75342` | 2026-11-04 | Doletabgi | feat(release): exportacao de sessao multi-placa para a maquina (v1.6.29) |
@@ -4018,7 +4146,6 @@ Local: `/home/dola/Documentos/clone do job/antigo/arquivos pos instalacao/Common
 | `5d85d8b` | 2026-11-03 | Doletabgi | fix(tip): clamp unico da ponta — linha azul nao vaza na miniatura nem no refile (v1.6.19) |
 | `6e610c1` | 2026-11-03 | Doletabgi | fix(save): refile do layout agora e persistido e nao e sobrescrito (v1.6.18) |
 | `a081166` | 2026-11-03 | Doletabgi | fix(print): linha azul da ponta dentro da placa e almoxarifado em metros (v1.6.17) |
-| `5fa8823` | 2026-11-03 | Doletabgi | feat(print): padroniza todas as medidas da impressao em metros (v1.6.16) |
 <!-- AUTO:gitlog:end -->
 
 ---
@@ -4076,6 +4203,8 @@ Local: `/home/dola/Documentos/clone do job/antigo/arquivos pos instalacao/Common
 | Qui, 05/11/2026 | 11:30 | Antigravity | Exportação em lote de sessões selecionadas para a máquina (v1.6.31): botão na barra de ações em lote e menu de contexto permitindo exportar simultaneamente múltiplas sessões marcadas com checkbox ou selecionadas na árvore; geração isolada de pastas ou pacotes de entrega com validação resiliente. | `ui/main_window.py`, `cad/project_packager.py`, `tests/test_session_context_menu_export.py`, `config.py` |
 | Qui, 05/11/2026 | 11:45 | Antigravity | Paginação e navegação multi-página na Impressão A4 (v1.6.32): suporte completo a multi-páginas no `LayoutPrintDialog`, botões `⬅ Anterior` e `Próxima ➡` na barra de ferramentas, atalhos de teclado `Page Up` e `Page Down`, indicador `Página X de Y` e renderização dinâmica no Canvas e exportação sequencial para PDF de alta resolução; 584 testes passando. | `ui/layout_print_dialog.py`, `tests/test_layout_print_pagination.py`, `config.py` |
 | Qui, 05/11/2026 | 12:00 | Antigravity | Impressão em Massa (Batch Print) de sessões e pastas de produção (v1.6.33): botão `🖨️ Imprimir Sessões` na barra de ações em lote; opções de impressão no menu de contexto da árvore (sessão individual, pasta de produção recursiva, raiz de produção e seleção múltipla) e menu superior Arquivo; suporte dinâmico no `LayoutPrintDialog` a múltiplas sessões (`_setup_material_metadata`), títulos contextuais `[Sessão #ID - layXXXX.lay]`, numeração de placa no rodapé e indicador `Página X de Y (Sessão #ID)`; suíte com 590 testes passando sem falhas. | `ui/main_window.py`, `ui/layout_print_dialog.py`, `ui/layout_editor_view.py`, `ui/session_view.py`, `tests/test_batch_print_sessions.py`, `config.py`, `.github/workflows/release.yml`, `docs/PROJETO_ATOM_JOBMANAGER.md` |
+| Qui, 05/11/2026 | 14:15 | Antigravity | Código de barras padrão industrial Code 128 nas impressões A4, abertura automática via leitor USB e remoção de Material Area (v1.6.34): motor nativo em Python puro `cad/barcode.py` (Subset B, 107 padrões, checksum modulo 103); inclusão automática no canto superior direito do cabeçalho da folha A4 no `LayoutPrintDialog` (Canvas e exportação Pillow/PDF) com payload `CAC:SESS:<id>` (ou `CAC:SESS:<id>:LAY:<idx>`) e legenda textual humana; listener global de teclado na `MainWindow` (`_on_global_key_scanner`) capturando rajadas USB HID (< 120 ms) com `<Return>`, abrindo a sessão e placa instantaneamente sem cliques; comando de inserção manual e atalho `<F8>` no menu Arquivo; remoção definitiva da linha `Material Area:` de todas as folhas de impressão (Canvas e PDF/Pillow); 7 novos testes unitários (597 testes passando). | `cad/barcode.py`, `ui/layout_print_dialog.py`, `ui/layout_editor_view.py`, `ui/session_view.py`, `ui/main_window.py`, `tests/test_barcode_print.py`, `tests/test_print_metros.py`, `CorteAC.spec`, `build_linux.sh`, `build_exe_windows.bat`, `.github/workflows/release.yml`, `config.py`, `docs/PROJETO_ATOM_JOBMANAGER.md` |
+| Sex, 06/11/2026 | 12:45 | Antigravity | Cadastro de usuário/operador, exibição na folha de impressão e reorganização do layout A4 (v1.6.35): (1) Gestão centralizada de operadores no banco (`database.py`, `db/schema_mysql.sql`) com persistência em SQLite e MySQL (tabela `users`); (2) Diálogo visual `UserManagementDialog` (`ui/user_dialog.py`) com CRUD, ativação instantânea, escolha de prefixo (`Usuário:`, `Operador:` ou nenhum) e prévia ao vivo do cabeçalho; (3) Acesso integrado no menu Ferramentas, na barra de status da janela principal (`👤 <Operador>`), na janela de opções e no diálogo de impressão; (4) Exibição do nome do operador logo abaixo do título `layXXXX.lay (Placa X de Y)` na folha A4 (Canvas e Pillow/PDF); (5) Reorganização do layout de impressão: remoção de `Refile:` e `Material Area:`, deslocamento da tabela de moldes/pares para um card com cantos arredondados no espaço em branco à direita da placa e aproveitamento total da altura para a mesa de corte; (6) 10 novos testes unitários (608 testes passando com 100% de sucesso). | `database.py`, `db/schema_mysql.sql`, `ui/user_dialog.py`, `ui/layout_print_dialog.py`, `ui/main_window.py`, `ui/options_dialog.py`, `tests/test_user_management.py`, `tests/test_layout_print_user.py`, `build_linux.sh`, `build_exe_windows.bat`, `.github/workflows/release.yml`, `config.py`, `docs/PROJETO_ATOM_JOBMANAGER.md` |
 
 ## 11. Prompt para o Antigravity: instalar a sincronização automática `[CONCLUÍDA]`
 

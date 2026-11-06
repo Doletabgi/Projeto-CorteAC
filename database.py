@@ -559,12 +559,20 @@ class DatabaseManager:
                 if "quality_zone" not in lp_cols:
                     cursor.execute("ALTER TABLE layout_pieces ADD COLUMN quality_zone INTEGER DEFAULT 1")
 
-            # Tabela de pastas de produção (job_folders) para MySQL e SQLite
+            # Tabela de pastas de produção (job_folders) e usuários (users) para MySQL e SQLite
             if conn.backend == "mysql":
                 cursor.execute("""
                 CREATE TABLE IF NOT EXISTS job_folders (
                     id INT AUTO_INCREMENT PRIMARY KEY,
                     name VARCHAR(150) UNIQUE NOT NULL
+                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+                """)
+                cursor.execute("""
+                CREATE TABLE IF NOT EXISTS users (
+                    id INT AUTO_INCREMENT PRIMARY KEY,
+                    name VARCHAR(150) UNIQUE NOT NULL,
+                    is_active INT DEFAULT 0,
+                    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
                 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
                 """)
                 try:
@@ -603,6 +611,14 @@ class DatabaseManager:
                 CREATE TABLE IF NOT EXISTS job_folders (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     name TEXT UNIQUE NOT NULL
+                )
+                """)
+                cursor.execute("""
+                CREATE TABLE IF NOT EXISTS users (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    name TEXT UNIQUE NOT NULL,
+                    is_active INTEGER DEFAULT 0,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 )
                 """)
 
@@ -1751,6 +1767,145 @@ class DatabaseManager:
             cursor = conn.cursor()
             cursor.execute("DELETE FROM settings WHERE `key` = ?", (key,))
             conn.commit()
+
+    # -------------------------------------------------------------
+    # Gestão de Usuários / Operadores
+    # -------------------------------------------------------------
+    def get_users(self) -> List[Dict[str, Any]]:
+        """Retorna a lista de usuários cadastrados ordenados por nome."""
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            try:
+                cursor.execute("SELECT id, name, is_active, created_at FROM users ORDER BY name ASC")
+                rows = cursor.fetchall()
+                if rows:
+                    if isinstance(rows[0], dict):
+                        return [dict(r) for r in rows]
+                    return [{"id": r[0], "name": r[1], "is_active": r[2], "created_at": r[3]} for r in rows]
+            except Exception:
+                pass
+            # Fallback para settings se tabela users não estiver disponível
+            users_json = self.get_setting("system_users", "[]")
+            try:
+                user_list = json.loads(users_json)
+                act = self.get_active_user()
+                return [{"id": i, "name": u, "is_active": 1 if u == act else 0} for i, u in enumerate(user_list, 1)]
+            except Exception:
+                return []
+
+    def add_user(self, name: str, set_active: bool = False) -> bool:
+        """Cadastra um novo usuário no sistema."""
+        name = (name or "").strip()
+        if not name:
+            return False
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            try:
+                cursor.execute("SELECT COUNT(*) FROM users")
+                cnt_row = cursor.fetchone()
+                cnt = cnt_row[0] if cnt_row else 0
+                is_first = (cnt == 0)
+
+                cursor.execute("INSERT OR IGNORE INTO users (name, is_active) VALUES (?, ?)", (name, 1 if (set_active or is_first) else 0))
+                conn.commit()
+
+                if set_active or is_first:
+                    self.set_active_user(name)
+
+                # Mantém espelho na tabela settings
+                u_list = [u["name"] for u in self.get_users()]
+                if name not in u_list:
+                    u_list.append(name)
+                self.set_setting("system_users", json.dumps(u_list))
+                return True
+            except Exception:
+                # Fallback puro para settings
+                users_json = self.get_setting("system_users", "[]")
+                try:
+                    u_list = json.loads(users_json)
+                except Exception:
+                    u_list = []
+                if name not in u_list:
+                    u_list.append(name)
+                    self.set_setting("system_users", json.dumps(u_list))
+                if set_active or len(u_list) == 1:
+                    self.set_active_user(name)
+                return True
+
+    def delete_user(self, name: str) -> bool:
+        """Remove um usuário cadastrado."""
+        name = (name or "").strip()
+        if not name:
+            return False
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            was_active = False
+            try:
+                cursor.execute("SELECT is_active FROM users WHERE name = ?", (name,))
+                r = cursor.fetchone()
+                if r:
+                    was_active = bool(r[0] if not isinstance(r, dict) else r.get("is_active"))
+                cursor.execute("DELETE FROM users WHERE name = ?", (name,))
+                conn.commit()
+            except Exception:
+                pass
+
+            # Atualiza lista em settings
+            users_json = self.get_setting("system_users", "[]")
+            try:
+                u_list = json.loads(users_json)
+                if name in u_list:
+                    u_list.remove(name)
+                    self.set_setting("system_users", json.dumps(u_list))
+            except Exception:
+                pass
+
+            # Se o usuário apagado era o ativo, escolhe o próximo ou limpa
+            cur_active = self.get_active_user()
+            if was_active or cur_active == name:
+                rem = self.get_users()
+                if rem:
+                    self.set_active_user(rem[0]["name"])
+                else:
+                    self.set_setting("active_user", "")
+            return True
+
+    def get_active_user(self) -> str:
+        """Retorna o nome do usuário ativo atual."""
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            try:
+                cursor.execute("SELECT name FROM users WHERE is_active = 1 LIMIT 1")
+                r = cursor.fetchone()
+                if r:
+                    return str(r[0] if not isinstance(r, dict) else r.get("name", "")).strip()
+            except Exception:
+                pass
+        return str(self.get_setting("active_user", "") or "").strip()
+
+    def set_active_user(self, name: str) -> bool:
+        """Define o usuário ativo no sistema."""
+        name = (name or "").strip()
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            try:
+                cursor.execute("UPDATE users SET is_active = 0")
+                if name:
+                    cursor.execute("UPDATE users SET is_active = 1 WHERE name = ?", (name,))
+                conn.commit()
+            except Exception:
+                pass
+        self.set_setting("active_user", name)
+        return True
+
+    def get_user_print_prefix(self) -> str:
+        """Retorna o prefixo do usuário na impressão (padrão: 'Usuário')."""
+        return str(self.get_setting("user_print_prefix", "Usuário") or "").strip()
+
+    def set_user_print_prefix(self, prefix: str) -> bool:
+        """Define o prefixo do usuário na impressão ('Usuário', 'Operador' ou '')."""
+        self.set_setting("user_print_prefix", (prefix or "").strip())
+        return True
 
     # -------------------------------------------------------------
     # Gestão de Presets DieProc (Configuração de Rotação / dp98)

@@ -329,7 +329,8 @@ class TestCabecalhoSomenteNaPlacaComPonta(unittest.TestCase):
         textos = [dlg.canvas.itemcget(i, "text") for i in dlg.canvas.find_all()
                   if dlg.canvas.type(i) == "text"]
         self.assertTrue(any(t.startswith("Dimensions:") for t in textos), textos[:10])
-        self.assertTrue(any(t.startswith("Material Area:") for t in textos), textos[:10])
+        self.assertFalse(any(t.startswith("Material Area:") for t in textos), "Material Area não deve constar na folha")
+        self.assertFalse(any(t.startswith("Refile:") for t in textos), "Refile não deve constar na folha")
         self.assertFalse(any("folhas longas" in t for t in textos))
         dlg.destroy()
         root.destroy()
@@ -361,5 +362,6 @@ class TestCabecalhoSomenteNaPlacaComPonta(unittest.TestCase):
         self.assertTrue(any("folhas longas" in t for t in textos), textos[:10])
         self.assertTrue(any("folhas curtas" in t for t in textos), textos[:10])
         self.assertFalse(any(t.startswith("Material Area:") for t in textos))
+        self.assertFalse(any(t.startswith("Refile:") for t in textos), "Refile não deve constar na folha")
         dlg.destroy()
         root.destroy()

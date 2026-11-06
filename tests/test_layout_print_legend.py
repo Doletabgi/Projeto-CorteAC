@@ -379,6 +379,30 @@ class TestLayoutPrintLegend(unittest.TestCase):
 
         dlg.destroy()
 
+    def test_12_legend_box_located_in_sidebar_beside_bed(self):
+        """Valida que a legenda fica posicionada ao lado do desenho (no espaço em branco à direita)."""
+        dlg = LayoutPrintDialog(self.root, layout_data={
+            "placed_pieces": [{"name": "MoldeX", "size": "38"}],
+            "sheet_w_mm": 1380.0,
+            "sheet_h_mm": 2820.0,
+            "material_layers": 2
+        })
+        dlg.update_idletasks()
+        dlg.redraw()
+
+        box_items = dlg.canvas.find_withtag("print_legend_box")
+        self.assertTrue(len(box_items) > 0, "Caixa print_legend_box deve existir no canvas")
+        box_bbox = dlg.canvas.bbox(box_items[0])
+
+        bed_items = dlg.canvas.find_withtag("print_bed")
+        self.assertTrue(len(bed_items) > 0)
+        bed_bbox = dlg.canvas.bbox(bed_items[0])
+
+        # Caixa da legenda deve começar à direita do leito de corte (bed)
+        self.assertGreater(box_bbox[0], bed_bbox[2], f"Caixa ({box_bbox[0]}) deve ficar à direita do bed ({bed_bbox[2]})")
+
+        dlg.destroy()
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -11,6 +11,7 @@ import math
 import re
 from datetime import datetime
 from pathlib import Path
+from typing import Tuple, Optional, List, Dict
 import tkinter as tk
 from tkinter import ttk, messagebox, filedialog
 import tkinter.font as tkfont
@@ -374,6 +375,32 @@ class LayoutPrintDialog(tk.Toplevel):
         # Carrega logotipo da empresa
         self.load_company_logo()
 
+        # Conexão com banco e usuário ativo para impressão
+        self.db = self.layout_data.get("db") or getattr(parent, "db", None)
+        if self.db is None:
+            try:
+                from database import DatabaseManager
+                self.db = DatabaseManager()
+            except Exception:
+                self.db = None
+
+        self.active_user = self.layout_data.get("active_user")
+        if self.active_user is None and self.db:
+            try:
+                self.active_user = self.db.get_active_user()
+            except Exception:
+                self.active_user = ""
+        self.active_user = self.active_user or ""
+
+        self.user_print_prefix = self.layout_data.get("user_print_prefix")
+        if self.user_print_prefix is None and self.db:
+            try:
+                self.user_print_prefix = self.db.get_user_print_prefix()
+            except Exception:
+                self.user_print_prefix = "Usuário"
+        if self.user_print_prefix is None:
+            self.user_print_prefix = "Usuário"
+
         # Monta a barra de ferramentas superior e a área de rolagem da folha
         self.setup_ui()
 
@@ -714,6 +741,37 @@ class LayoutPrintDialog(tk.Toplevel):
             self.btn_next.config(state="normal" if cur < tot else "disabled")
 
 
+    def get_barcode_payload_and_label(self) -> Tuple[str, str]:
+        """
+        Retorna (payload, label) para o código de barras Code 128.
+        Formato do payload: 'CAC:SESS:<id>' ou 'CAC:SESS:<id>:LAY:<index>'
+        """
+        cur_layout = getattr(self, "current_layout", {}) or {}
+        sid = (
+            cur_layout.get("session_id")
+            or self.layout_data.get("session_id")
+            or getattr(self, "session_id", None)
+            or getattr(self.master, "session_id", None)
+            or (self.master.session_data.get("id") if hasattr(self.master, "session_data") and isinstance(self.master.session_data, dict) else None)
+        )
+        lay_idx = getattr(self, "current_layout_index", 0)
+        tot_lays = len(self.layouts) if getattr(self, "layouts", None) else 1
+
+        if sid is not None and str(sid).strip() and str(sid).strip().lower() not in ("none", "null"):
+            sid_str = str(sid).strip()
+            if tot_lays > 1:
+                payload = f"CAC:SESS:{sid_str}:LAY:{lay_idx}"
+                label = f"Sessão #{sid_str} (Placa {lay_idx + 1})"
+            else:
+                payload = f"CAC:SESS:{sid_str}"
+                label = f"Sessão #{sid_str}"
+        else:
+            l_name = self.layout_name or "layout"
+            payload = f"CAC:LAY:{l_name}"
+            label = l_name
+
+        return payload, label
+
     def load_company_logo(self):
         """Carrega a imagem de logotipo customizada da empresa se configurada."""
         self.company_logo_raw = None
@@ -762,6 +820,33 @@ class LayoutPrintDialog(tk.Toplevel):
 
     def _on_logo_updated(self):
         self.load_company_logo()
+        self.redraw()
+
+    def get_user_display_text(self) -> str:
+        """Formata o texto do usuário ativo a ser exibido na folha de impressão."""
+        user = str(getattr(self, "active_user", "") or "").strip()
+        if not user:
+            return ""
+        pref = str(getattr(self, "user_print_prefix", "Usuário") or "").strip()
+        if pref:
+            if user.lower().startswith((pref.lower() + ":", "usuário:", "usuario:", "operador:")):
+                return user
+            return f"{pref}: {user}"
+        return user
+
+    def open_user_manager_dialog(self):
+        """Abre diálogo para cadastrar ou selecionar o operador / usuário ativo."""
+        from ui.user_dialog import open_user_management_dialog
+        open_user_management_dialog(self, db=self.db, on_update_callback=self._on_user_updated)
+
+    def _on_user_updated(self):
+        """Callback executado ao cadastrar ou alterar o usuário ativo."""
+        if self.db:
+            try:
+                self.active_user = self.db.get_active_user()
+                self.user_print_prefix = self.db.get_user_print_prefix()
+            except Exception:
+                pass
         self.redraw()
 
     def init_sample_pieces(self):
@@ -994,6 +1079,11 @@ class LayoutPrintDialog(tk.Toplevel):
         tk.Button(
             tb, text="🏢 Logotipo...", bg=THEME["bg_surface"], fg=THEME["text_main"],
             relief="raised", bd=2, font=("Segoe UI", 9, "bold"), padx=6, command=self.open_logo_manager_dialog
+        ).pack(side="left", padx=2)
+
+        tk.Button(
+            tb, text="👤 Usuário...", bg=THEME["bg_surface"], fg=THEME["text_main"],
+            relief="raised", bd=2, font=("Segoe UI", 9, "bold"), padx=6, command=self.open_user_manager_dialog
         ).pack(side="left", padx=2)
 
         ttk.Separator(tb, orient="vertical").pack(side="left", fill="y", padx=8, pady=2)
@@ -1229,36 +1319,81 @@ class LayoutPrintDialog(tk.Toplevel):
         if logo_photo:
             self.canvas.create_image(margin_left, logo_y, image=logo_photo, anchor="nw")
 
-        # Título centralizado e sublinhado: <layout_name>.lay (Placa N de M)
-        title_x = px + page_w // 2
-        title_y = margin_top + int(36 * self.zoom)
+        # Título alinhado ao canto esquerdo para não sobrepor o código de barras
+        logo_offset = (max_logo_w + int(14 * self.zoom)) if logo_photo else 0
+        title_x = margin_left + logo_offset
+        title_y = margin_top + int(22 * self.zoom)
         t_id = self.canvas.create_text(
             title_x, title_y,
             text=f"{self.layout_name} ({self.placa_n_de_m})",
-            anchor="center", font=f_title, fill="#000000"
+            anchor="nw", font=f_title, fill="#000000"
         )
         tb_box = self.canvas.bbox(t_id)
+        user_end_y = title_y + int(18 * self.zoom)
         if tb_box:
+            line_bottom = tb_box[3] + 1
             self.canvas.create_line(
-                tb_box[0] - 2, tb_box[3] + 1, tb_box[2] + 2, tb_box[3] + 1,
+                tb_box[0] - 2, line_bottom, tb_box[2] + 2, line_bottom,
                 fill="#000000", width=max(1, int(1.5 * self.zoom))
             )
+            user_end_y = line_bottom
 
-        # Data alinhada à direita
+        # Nome de Usuário / Operador abaixo do título (conforme solicitação)
+        user_display = self.get_user_display_text()
+        if user_display:
+            user_y = user_end_y + int(5 * self.zoom)
+            u_id = self.canvas.create_text(
+                title_x, user_y,
+                text=user_display,
+                anchor="nw", font=f_mono_bold, fill="#000000",
+                tags="print_user_name"
+            )
+            u_box = self.canvas.bbox(u_id)
+            if u_box:
+                user_end_y = u_box[3]
+
+        # Data alinhada à direita no topo (alinhada com o caminho de rede à esquerda)
         self.canvas.create_text(
-            margin_right, margin_top + int(60 * self.zoom),
+            margin_right, margin_top,
             text=self.date_str,
-            anchor="ne", font=f_date, fill="#000000"
+            anchor="ne", font=f_date, fill="#000000",
+            tags="print_date"
         )
+
+        # Código de Barras Code 128 no canto superior direito (abaixo da data, isolado)
+        try:
+            from cad.barcode import draw_code128_canvas, encode_code128_b
+            bc_payload, bc_label = self.get_barcode_payload_and_label()
+            bc_mw = max(0.55, 0.72 * self.zoom)
+            bc_h = max(18.0, 22.0 * self.zoom)
+            bc_bits = encode_code128_b(bc_payload)
+            bc_w = len(bc_bits) * bc_mw
+            bc_x = margin_right - bc_w
+            bc_y = margin_top + int(18 * self.zoom)
+            f_bc_txt = ("Courier", max(5, int(6.0 * self.zoom)))
+            draw_code128_canvas(
+                self.canvas,
+                x=bc_x,
+                y=bc_y,
+                text=bc_payload,
+                height=bc_h,
+                module_width=bc_mw,
+                show_text=True,
+                label=bc_label,
+                tags="print_barcode",
+                font=f_bc_txt,
+            )
+        except Exception:
+            pass
 
         # =====================================================================
         # 2. Bloco de Metadados em Courier Monospace
         # =====================================================================
-        meta_y = margin_top + int(82 * self.zoom)
+        meta_y = max(margin_top + int(82 * self.zoom), user_end_y + int(12 * self.zoom))
         line_h = int(17 * self.zoom)
 
         # Placa COM ponta de 2 camadas: duas linhas de folhas (longas/curtas).
-        # Placa sem ponta: cabeçalho clássico (Dimensions + Material Area).
+        # Placa sem ponta: cabeçalho clássico (Dimensions).
         lines = [
             f"Layout: {self.layout_path}",
             f"Material: {self.material_name}",
@@ -1268,11 +1403,9 @@ class LayoutPrintDialog(tk.Toplevel):
         else:
             lines += [
                 f"Dimensions:  {self.dimensions_str}",
-                f"Material Area: {self.mat_area_str}",
             ]
         lines += [
             f"Used Area: {self.used_area_str} - Yield:  {self.yield_pct:.2f}%",
-            f"Refile: {self.refile_display_str}",
         ]
 
         for line_txt in lines:
@@ -1341,176 +1474,33 @@ class LayoutPrintDialog(tk.Toplevel):
                 meta_y += line_h
 
         # =====================================================================
-        # 2.5. Tabela de Legenda por Molde (com ShapeId e contagem n/m)
+        # 3. Gráfico do Encaixe / Chapa de Corte (Proporcional à Folha A4)
         # =====================================================================
         meta_end_y = meta_y + int(18 * self.zoom)
         footer_y = py + page_h - int(24 * self.zoom)
+
+        avail_top = meta_end_y + int(12 * self.zoom)
+        avail_bottom = footer_y - int(12 * self.zoom)
+        avail_w = max(50.0, float(margin_right - margin_left))
+        avail_h = max(50.0, float(avail_bottom - avail_top))
 
         legend_rows = getattr(self, "legend_data", None)
         if legend_rows is None:
             self.legend_data = self.build_legend_data()
             legend_rows = self.legend_data
 
-        f_legend_name = ("Courier", f_size_md, "bold")
-        f_size_sub = max(5, int(f_size_md * 0.72))
-        f_legend_sub = ("Courier", f_size_sub)
-        f_footnote = ("Courier", max(5, int(f_size_sub * 0.92)))
-        line_step = max(10, int(13 * self.zoom))
+        reserved_sidebar_w = int(240 * self.zoom) if legend_rows else 0
+        avail_bed_w = max(50.0, avail_w - reserved_sidebar_w)
 
-        table_end_y = meta_end_y
-        if legend_rows:
-            table_y = meta_end_y + int(6 * self.zoom)
-
-            # Fonte Tkinter para medição precisa de texto
-            try:
-                tk_sub_font = tkfont.Font(family="Courier", size=f_size_sub)
-                tk_name_font = tkfont.Font(family="Courier", size=f_size_md, weight="bold")
-            except Exception:
-                tk_sub_font = None
-                tk_name_font = None
-
-            def _measure_sub(txt):
-                if tk_sub_font:
-                    try:
-                        return tk_sub_font.measure(txt)
-                    except Exception:
-                        pass
-                return int(len(txt) * max(3.5, f_size_sub * 0.62))
-
-            def _measure_name(txt):
-                if tk_name_font:
-                    try:
-                        return tk_name_font.measure(txt)
-                    except Exception:
-                        pass
-                return int(len(txt) * max(4.0, f_size_md * 0.62))
-
-            max_left_w = 0
-            for row in legend_rows:
-                m_name = row.get("molde_name", "")
-                s_id = row.get("shape_id")
-                w_est = _measure_name(m_name)
-                sid_txt = format_shape_id_tag(s_id)
-                if sid_txt:
-                    w_est += _measure_sub(sid_txt)
-                if w_est > max_left_w:
-                    max_left_w = w_est
-
-            left_col_w = max(int(140 * self.zoom), min(int(240 * self.zoom), max_left_w + int(12 * self.zoom)))
-            col2_x = margin_left + left_col_w
-            avail_right_w = max(50, margin_right - col2_x)
-
-            for row in legend_rows:
-                m_name = row.get("molde_name", "")
-                s_id = row.get("shape_id")
-                row_start_y = table_y
-
-                # Coluna Esquerda: Nome do Molde
-                self.canvas.create_text(
-                    margin_left, row_start_y,
-                    text=m_name, anchor="nw",
-                    font=f_legend_name, fill="#000000",
-                    tags="print_legend_name"
-                )
-
-                # ShapeId ao lado em fonte menor e cinza escuro
-                sid_txt = format_shape_id_tag(s_id)
-                if sid_txt:
-                    name_w = _measure_name(m_name)
-                    self.canvas.create_text(
-                        margin_left + name_w + int(4 * self.zoom), row_start_y + int(1.5 * self.zoom),
-                        text=sid_txt, anchor="nw",
-                        font=f_legend_sub, fill="#555555",
-                        tags="print_legend_shape_id"
-                    )
-
-                # Coluna Direita: Lista por tamanho no formato tamanho: n/m
-                size_items = row.get("sizes", [])
-                tokens = []
-                for s_item in size_items:
-                    sz_str = str(s_item["size"])
-                    n_val = s_item["n"]
-                    m_val = s_item["m"]
-                    if m_val == 0:
-                        tok_str = f"{sz_str}: {n_val}"
-                    else:
-                        tok_str = f"{sz_str}: {n_val}/{m_val}"
-                    tokens.append((tok_str, bool(s_item.get("is_error", False))))
-
-                # Quebra de linha entre tamanhos (nunca no meio de um token)
-                lines_of_tokens = []
-                cur_line = []
-                cur_w = 0
-                sep_w = _measure_sub(", ")
-
-                for tok_txt, is_err in tokens:
-                    tok_w = _measure_sub(tok_txt)
-                    extra = sep_w if cur_line else 0
-                    if cur_line and (cur_w + extra + tok_w > avail_right_w):
-                        lines_of_tokens.append(cur_line)
-                        cur_line = [(tok_txt, is_err)]
-                        cur_w = tok_w
-                    else:
-                        cur_line.append((tok_txt, is_err))
-                        cur_w += extra + tok_w
-
-                if cur_line:
-                    lines_of_tokens.append(cur_line)
-
-                # Renderiza linhas da coluna direita
-                cur_y = row_start_y
-                for tok_line in lines_of_tokens:
-                    cur_x = col2_x
-                    for t_idx, (tok_txt, is_err) in enumerate(tok_line):
-                        if t_idx > 0:
-                            self.canvas.create_text(
-                                cur_x, cur_y + int(1.5 * self.zoom),
-                                text=", ", anchor="nw",
-                                font=f_legend_sub, fill="#444444",
-                                tags="print_legend_size"
-                            )
-                            cur_x += sep_w
-
-                        tok_fill = "#dc2626" if is_err else "#333333"
-                        self.canvas.create_text(
-                            cur_x, cur_y + int(1.5 * self.zoom),
-                            text=tok_txt, anchor="nw",
-                            font=f_legend_sub, fill=tok_fill,
-                            tags="print_legend_size"
-                        )
-                        cur_x += _measure_sub(tok_txt)
-
-                    cur_y += line_step
-
-                row_h = max(line_step, len(lines_of_tokens) * line_step)
-                table_y += row_h + int(2 * self.zoom)
-
-            # Rodapé explicativo da legenda
-            self.canvas.create_text(
-                margin_left, table_y,
-                text="n/m = pares nesta placa / pedido total",
-                anchor="nw", font=f_footnote, fill="#666666",
-                tags="print_legend_footnote"
-            )
-            table_y += int(11 * self.zoom)
-            table_end_y = table_y
-
-        # =====================================================================
-        # 3. Gráfico do Encaixe / Chapa de Corte (Proporcional à Folha A4)
-        # =====================================================================
-        avail_top = table_end_y + int(10 * self.zoom)
-        avail_bottom = footer_y - int(12 * self.zoom)
-        avail_w = max(50.0, float(margin_right - margin_left))
-        avail_h = max(50.0, float(avail_bottom - avail_top))
-
-        scale_bed_x = avail_w / max(1.0, float(self.sheet_w_mm))
+        scale_bed_x = avail_bed_w / max(1.0, float(self.sheet_w_mm))
         scale_bed_y = avail_h / max(1.0, float(self.sheet_h_mm))
         bed_scale = min(scale_bed_x, scale_bed_y)
 
         bed_w = max(10, int(round(self.sheet_w_mm * bed_scale)))
         bed_h = max(10, int(round(self.sheet_h_mm * bed_scale)))
 
-        bed_x = margin_left + (int(avail_w) - bed_w) // 2
+        # Alinhamento do desenho do layout à esquerda (conforme padrão de impressão/referência)
+        bed_x = margin_left
         bed_y = avail_top + (int(avail_h) - bed_h) // 2
 
         # Retângulo do Material / Chapa
@@ -1692,6 +1682,150 @@ class LayoutPrintDialog(tk.Toplevel):
             )
 
         # =====================================================================
+        # 3.5. Legenda dos Moldes / Pares no Espaço em Branco ao Lado do Desenho
+        # =====================================================================
+        if legend_rows:
+            f_legend_name = ("Courier", f_size_md, "bold")
+            f_size_sub = max(5, int(f_size_md * 0.72))
+            f_legend_sub = ("Courier", f_size_sub)
+            f_footnote = ("Courier", max(5, int(f_size_sub * 0.92)))
+            line_step_box = max(11, int(13 * self.zoom))
+
+            # Fonte Tkinter para medição precisa de texto
+            try:
+                tk_sub_font = tkfont.Font(family="Courier", size=f_size_sub)
+                tk_name_font = tkfont.Font(family="Courier", size=f_size_md, weight="bold")
+            except Exception:
+                tk_sub_font = None
+                tk_name_font = None
+
+            def _measure_sub(txt):
+                if tk_sub_font:
+                    try:
+                        return tk_sub_font.measure(txt)
+                    except Exception:
+                        pass
+                return int(len(txt) * max(3.5, f_size_sub * 0.62))
+
+            def _measure_name(txt):
+                if tk_name_font:
+                    try:
+                        return tk_name_font.measure(txt)
+                    except Exception:
+                        pass
+                return int(len(txt) * max(4.0, f_size_md * 0.62))
+
+            ruler_end_x = bed_x + bed_w + tick_len + int(28 * self.zoom)
+            box_x = max(ruler_end_x + int(10 * self.zoom), margin_right - int(250 * self.zoom))
+            box_y = bed_y
+            box_w = margin_right - box_x
+            pad_x = int(8 * self.zoom)
+            pad_y = int(6 * self.zoom)
+            inner_w = max(40, box_w - pad_x * 2)
+            sep_w = _measure_sub(", ")
+
+            # Prepara tokens e calcula altura necessária da caixa
+            rows_prepared = []
+            total_box_h = pad_y * 2
+            for row in legend_rows:
+                m_name = row.get("molde_name", "")
+                s_id = row.get("shape_id")
+                sid_txt = format_shape_id_tag(s_id)
+
+                size_items = row.get("sizes", [])
+                tokens = []
+                for s_item in size_items:
+                    sz_str = str(s_item["size"])
+                    n_val = s_item["n"]
+                    m_val = s_item["m"]
+                    if m_val == 0:
+                        tok_str = f"{sz_str}: {n_val}"
+                    else:
+                        tok_str = f"{sz_str}: {n_val}/{m_val}"
+                    tokens.append((tok_str, bool(s_item.get("is_error", False))))
+
+                lines_of_tokens = []
+                cur_line = []
+                cur_w = 0
+                for tok_txt, is_err in tokens:
+                    tok_w = _measure_sub(tok_txt)
+                    extra = sep_w if cur_line else 0
+                    if cur_line and (cur_w + extra + tok_w > inner_w):
+                        lines_of_tokens.append(cur_line)
+                        cur_line = [(tok_txt, is_err)]
+                        cur_w = tok_w
+                    else:
+                        cur_line.append((tok_txt, is_err))
+                        cur_w += extra + tok_w
+
+                if cur_line:
+                    lines_of_tokens.append(cur_line)
+
+                row_h = line_step_box + max(1, len(lines_of_tokens)) * line_step_box + int(4 * self.zoom)
+                total_box_h += row_h
+                rows_prepared.append((m_name, sid_txt, lines_of_tokens))
+
+            total_box_h += line_step_box  # Espaço para rodapé explicativo
+
+            # Desenha o retângulo com borda no canvas (como no mockup do usuário)
+            self.canvas.create_rectangle(
+                box_x, box_y, margin_right, box_y + total_box_h,
+                fill="#ffffff", outline="#000000", width=1,
+                tags="print_legend_box"
+            )
+
+            # Renderiza os textos dentro da caixa
+            cy = box_y + pad_y
+            for m_name, sid_txt, lines_of_tokens in rows_prepared:
+                self.canvas.create_text(
+                    box_x + pad_x, cy,
+                    text=m_name, anchor="nw",
+                    font=f_legend_name, fill="#000000",
+                    tags="print_legend_name"
+                )
+                if sid_txt:
+                    nw = _measure_name(m_name)
+                    self.canvas.create_text(
+                        box_x + pad_x + nw + int(4 * self.zoom), cy + int(1.5 * self.zoom),
+                        text=sid_txt, anchor="nw",
+                        font=f_legend_sub, fill="#555555",
+                        tags="print_legend_shape_id"
+                    )
+                cy += line_step_box
+
+                for tok_line in lines_of_tokens:
+                    cur_x = box_x + pad_x
+                    for t_idx, (tok_txt, is_err) in enumerate(tok_line):
+                        if t_idx > 0:
+                            self.canvas.create_text(
+                                cur_x, cy + int(1.5 * self.zoom),
+                                text=", ", anchor="nw",
+                                font=f_legend_sub, fill="#444444",
+                                tags="print_legend_size"
+                            )
+                            cur_x += sep_w
+
+                        tok_fill = "#dc2626" if is_err else "#333333"
+                        self.canvas.create_text(
+                            cur_x, cy + int(1.5 * self.zoom),
+                            text=tok_txt, anchor="nw",
+                            font=f_legend_sub, fill=tok_fill,
+                            tags="print_legend_size"
+                        )
+                        cur_x += _measure_sub(tok_txt)
+
+                    cy += line_step_box
+
+                cy += int(4 * self.zoom)
+
+            self.canvas.create_text(
+                box_x + pad_x, cy,
+                text="n/m = pares nesta placa / pedido total",
+                anchor="nw", font=f_footnote, fill="#666666",
+                tags="print_legend_footnote"
+            )
+
+        # =====================================================================
         # 4. Rodapé da Página: Placa N de M - Pages 1-1
         # =====================================================================
         footer_y = py + page_h - int(24 * self.zoom)
@@ -1762,25 +1896,58 @@ class LayoutPrintDialog(tk.Toplevel):
             except Exception:
                 pass
 
-        # Título
+        # Título alinhado ao canto esquerdo para não sobrepor o código de barras
         full_title = f"{self.layout_name} ({self.placa_n_de_m})"
         title_bbox = draw.textbbox((0, 0), full_title, font=f_title)
         tw = title_bbox[2] - title_bbox[0]
-        tx = (pw - tw) // 2
-        ty = m_top + int(36 * scale)
+        th = title_bbox[3] - title_bbox[1]
+        logo_offset_pillow = (int(140 * scale) + int(14 * scale)) if self.company_logo_raw else 0
+        tx = m_left + logo_offset_pillow
+        ty = m_top + int(22 * scale)
         draw.text((tx, ty), full_title, fill="black", font=f_title)
-        draw.line([tx - 4, ty + (title_bbox[3] - title_bbox[1]) + 2, tx + tw + 4, ty + (title_bbox[3] - title_bbox[1]) + 2], fill="black", width=int(1.5 * scale))
+        line_y = ty + th + 3
+        draw.line([tx - 2, line_y, tx + tw + 2, line_y], fill="black", width=int(1.5 * scale))
 
-        # Data
+        # Nome de Usuário / Operador abaixo do título (conforme solicitação)
+        user_display = self.get_user_display_text()
+        user_end_y = line_y
+        if user_display:
+            user_ty = line_y + int(5 * scale)
+            draw.text((tx, user_ty), user_display, fill="black", font=f_mono_bold)
+            u_bbox = draw.textbbox((tx, user_ty), user_display, font=f_mono_bold)
+            user_end_y = u_bbox[3]
+
+        # Data alinhada à direita no topo (mesma linha da rede à esquerda)
         date_bbox = draw.textbbox((0, 0), self.date_str, font=f_small)
         dx = m_right - (date_bbox[2] - date_bbox[0])
-        draw.text((dx, m_top + int(60 * scale)), self.date_str, fill="black", font=f_small)
+        draw.text((dx, m_top), self.date_str, fill="black", font=f_small)
+
+        # Código de Barras Code 128 (Pillow / PDF / Alta Resolução, isolado abaixo da data)
+        try:
+            from cad.barcode import generate_code128_pillow
+            bc_payload, bc_label = self.get_barcode_payload_and_label()
+            bc_mw = max(1, int(1.2 * (dpi / 150.0)))
+            bc_h = int(22 * scale)
+            bc_img = generate_code128_pillow(
+                bc_payload,
+                height=bc_h,
+                module_width=bc_mw,
+                show_text=True,
+                label=bc_label
+            )
+            if bc_img:
+                bw, bh = bc_img.size
+                bx = m_right - bw
+                by = m_top + int(18 * scale)
+                im.paste(bc_img, (bx, by))
+        except Exception:
+            pass
 
         # Metadados
-        meta_y = m_top + int(82 * scale)
+        meta_y = max(m_top + int(82 * scale), user_end_y + int(12 * scale))
         line_h = int(17 * scale)
         # Placa COM ponta de 2 camadas: duas linhas de folhas (longas/curtas).
-        # Placa sem ponta: cabeçalho clássico (Dimensions + Material Area).
+        # Placa sem ponta: cabeçalho clássico (Dimensions).
         lines = [
             f"Layout: {self.layout_path}",
             f"Material: {self.material_name}",
@@ -1790,11 +1957,9 @@ class LayoutPrintDialog(tk.Toplevel):
         else:
             lines += [
                 f"Dimensions:  {self.dimensions_str}",
-                f"Material Area: {self.mat_area_str}",
             ]
         lines += [
             f"Used Area: {self.used_area_str} - Yield:  {self.yield_pct:.2f}%",
-            f"Refile: {self.refile_display_str}",
         ]
         for l_txt in lines:
             draw.text((m_left, meta_y), l_txt, fill="black", font=f_mono)
@@ -1847,128 +2012,33 @@ class LayoutPrintDialog(tk.Toplevel):
                 meta_y += (bb[3] - bb[1]) + int(3 * scale)
 
         # =====================================================================
-        # 2.5. Tabela de Legenda por Molde no Pillow (com ShapeId e n/m)
+        # 3. Gráfico do Encaixe Proporcional à Folha A4
         # =====================================================================
         meta_end_y = meta_y + int(18 * scale)
         footer_y = ph - int(36 * scale)
+
+        avail_top = meta_end_y + int(12 * scale)
+        avail_bottom = footer_y - int(12 * scale)
+        avail_w = max(50.0, float(m_right - m_left))
+        avail_h = max(50.0, float(avail_bottom - avail_top))
 
         legend_rows = getattr(self, "legend_data", None)
         if legend_rows is None:
             self.legend_data = self.build_legend_data()
             legend_rows = self.legend_data
 
-        table_end_y = meta_end_y
-        line_step = max(11, int(13 * scale))
+        reserved_sidebar_w = int(240 * scale) if legend_rows else 0
+        avail_bed_w = max(50.0, avail_w - reserved_sidebar_w)
 
-        if legend_rows:
-            table_y = meta_end_y + int(6 * scale)
-
-            def _measure_pillow(txt, font):
-                bb = draw.textbbox((0, 0), txt, font=font)
-                return bb[2] - bb[0]
-
-            max_left_w = 0
-            for row in legend_rows:
-                m_name = row.get("molde_name", "")
-                s_id = row.get("shape_id")
-                w_est = _measure_pillow(m_name, f_mono_bold)
-                sid_txt = format_shape_id_tag(s_id)
-                if sid_txt:
-                    w_est += _measure_pillow(sid_txt, f_legend_sub)
-                if w_est > max_left_w:
-                    max_left_w = w_est
-
-            left_col_w = max(int(140 * scale), min(int(240 * scale), max_left_w + int(12 * scale)))
-            col2_x = m_left + left_col_w
-            avail_right_w = max(50, m_right - col2_x)
-
-            sep_w = _measure_pillow(", ", f_legend_sub)
-
-            for row in legend_rows:
-                m_name = row.get("molde_name", "")
-                s_id = row.get("shape_id")
-                row_start_y = table_y
-
-                # Coluna Esquerda: Nome do Molde
-                draw.text((m_left, row_start_y), m_name, fill="black", font=f_mono_bold)
-
-                # ShapeId ao lado em fonte menor e cinza escuro
-                sid_txt = format_shape_id_tag(s_id)
-                if sid_txt:
-                    name_w = _measure_pillow(m_name, f_mono_bold)
-                    draw.text(
-                        (m_left + name_w + int(4 * scale), row_start_y + int(1.5 * scale)),
-                        sid_txt, fill="#555555", font=f_legend_sub
-                    )
-
-                # Coluna Direita: Lista por tamanho
-                size_items = row.get("sizes", [])
-                tokens = []
-                for s_item in size_items:
-                    sz_str = str(s_item["size"])
-                    n_val = s_item["n"]
-                    m_val = s_item["m"]
-                    if m_val == 0:
-                        tok_str = f"{sz_str}: {n_val}"
-                    else:
-                        tok_str = f"{sz_str}: {n_val}/{m_val}"
-                    tokens.append((tok_str, bool(s_item.get("is_error", False))))
-
-                lines_of_tokens = []
-                cur_line = []
-                cur_w = 0
-
-                for tok_txt, is_err in tokens:
-                    tok_w = _measure_pillow(tok_txt, f_legend_sub)
-                    extra = sep_w if cur_line else 0
-                    if cur_line and (cur_w + extra + tok_w > avail_right_w):
-                        lines_of_tokens.append(cur_line)
-                        cur_line = [(tok_txt, is_err)]
-                        cur_w = tok_w
-                    else:
-                        cur_line.append((tok_txt, is_err))
-                        cur_w += extra + tok_w
-
-                if cur_line:
-                    lines_of_tokens.append(cur_line)
-
-                cur_y = row_start_y
-                for tok_line in lines_of_tokens:
-                    cur_x = col2_x
-                    for t_idx, (tok_txt, is_err) in enumerate(tok_line):
-                        if t_idx > 0:
-                            draw.text((cur_x, cur_y + int(1.5 * scale)), ", ", fill="#444444", font=f_legend_sub)
-                            cur_x += sep_w
-
-                        tok_fill = "#dc2626" if is_err else "#333333"
-                        draw.text((cur_x, cur_y + int(1.5 * scale)), tok_txt, fill=tok_fill, font=f_legend_sub)
-                        cur_x += _measure_pillow(tok_txt, f_legend_sub)
-
-                    cur_y += line_step
-
-                row_h = max(line_step, len(lines_of_tokens) * line_step)
-                table_y += row_h + int(2 * scale)
-
-            draw.text((m_left, table_y), "n/m = pares nesta placa / pedido total", fill="#666666", font=f_footnote)
-            table_y += int(11 * scale)
-            table_end_y = table_y
-
-        # =====================================================================
-        # 3. Gráfico do Encaixe Proporcional à Folha A4
-        # =====================================================================
-        avail_top = table_end_y + int(10 * scale)
-        avail_bottom = footer_y - int(12 * scale)
-        avail_w = max(50.0, float(m_right - m_left))
-        avail_h = max(50.0, float(avail_bottom - avail_top))
-
-        scale_bed_x = avail_w / max(1.0, float(self.sheet_w_mm))
+        scale_bed_x = avail_bed_w / max(1.0, float(self.sheet_w_mm))
         scale_bed_y = avail_h / max(1.0, float(self.sheet_h_mm))
         scale_bed = min(scale_bed_x, scale_bed_y)
 
         bed_w = max(10, int(round(self.sheet_w_mm * scale_bed)))
         bed_h = max(10, int(round(self.sheet_h_mm * scale_bed)))
 
-        bed_x = m_left + (int(avail_w) - bed_w) // 2
+        # Alinhamento do desenho do layout à esquerda (conforme padrão de impressão/referência)
+        bed_x = m_left
         bed_y = avail_top + (int(avail_h) - bed_h) // 2
 
         draw.rectangle([bed_x, bed_y, bed_x + bed_w, bed_y + bed_h], outline="black", width=max(1, int(scale)))
@@ -2085,7 +2155,112 @@ class LayoutPrintDialog(tk.Toplevel):
             else:
                 base_lbl_y = bed_y + int(6 * scale)
 
-            draw.text((bed_x + int(6 * scale), base_lbl_y), f"{self.layout_layers} camadas", fill="#059669", font=f_small)
+        # =====================================================================
+        # 3.5. Legenda dos Moldes / Pares no Espaço em Branco ao Lado do Desenho
+        # =====================================================================
+        if legend_rows:
+            try:
+                f_legend_sub = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSansMono.ttf", max(6, int(6.5 * scale)))
+                f_footnote = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSansMono.ttf", max(6, int(6.0 * scale)))
+            except Exception:
+                try:
+                    f_legend_sub = ImageFont.truetype("cour.ttf", max(6, int(6.5 * scale)))
+                    f_footnote = ImageFont.truetype("cour.ttf", max(6, int(6.0 * scale)))
+                except Exception:
+                    f_legend_sub = f_mono
+                    f_footnote = f_small
+
+            ruler_end_x = bed_x + bed_w + tick_px + int(28 * scale)
+            box_x = max(ruler_end_x + int(10 * scale), m_right - int(250 * scale))
+            box_y = bed_y
+            box_w = m_right - box_x
+            pad_x = int(8 * scale)
+            pad_y = int(6 * scale)
+            inner_w = max(40, box_w - pad_x * 2)
+
+            def _measure_pillow(txt, font):
+                bb = draw.textbbox((0, 0), txt, font=font)
+                return bb[2] - bb[0]
+
+            sep_w = _measure_pillow(", ", f_legend_sub)
+            line_step_box = max(11, int(13 * scale))
+
+            # Prepara tokens e calcula altura necessária da caixa
+            rows_prepared = []
+            total_box_h = pad_y * 2
+            for row in legend_rows:
+                m_name = row.get("molde_name", "")
+                s_id = row.get("shape_id")
+                sid_txt = format_shape_id_tag(s_id)
+
+                size_items = row.get("sizes", [])
+                tokens = []
+                for s_item in size_items:
+                    sz_str = str(s_item["size"])
+                    n_val = s_item["n"]
+                    m_val = s_item["m"]
+                    if m_val == 0:
+                        tok_str = f"{sz_str}: {n_val}"
+                    else:
+                        tok_str = f"{sz_str}: {n_val}/{m_val}"
+                    tokens.append((tok_str, bool(s_item.get("is_error", False))))
+
+                lines_of_tokens = []
+                cur_line = []
+                cur_w = 0
+                for tok_txt, is_err in tokens:
+                    tok_w = _measure_pillow(tok_txt, f_legend_sub)
+                    extra = sep_w if cur_line else 0
+                    if cur_line and (cur_w + extra + tok_w > inner_w):
+                        lines_of_tokens.append(cur_line)
+                        cur_line = [(tok_txt, is_err)]
+                        cur_w = tok_w
+                    else:
+                        cur_line.append((tok_txt, is_err))
+                        cur_w += extra + tok_w
+
+                if cur_line:
+                    lines_of_tokens.append(cur_line)
+
+                row_h = line_step_box + max(1, len(lines_of_tokens)) * line_step_box + int(4 * scale)
+                total_box_h += row_h
+                rows_prepared.append((m_name, sid_txt, lines_of_tokens))
+
+            total_box_h += line_step_box
+
+            draw.rounded_rectangle(
+                [box_x, box_y, m_right, box_y + total_box_h],
+                radius=int(4 * scale), outline="black",
+                width=max(1, int(scale)), fill="white"
+            )
+
+            cy = box_y + pad_y
+            for m_name, sid_txt, lines_of_tokens in rows_prepared:
+                draw.text((box_x + pad_x, cy), m_name, fill="black", font=f_mono_bold)
+                if sid_txt:
+                    nw = _measure_pillow(m_name, f_mono_bold)
+                    draw.text(
+                        (box_x + pad_x + nw + int(4 * scale), cy + int(1.5 * scale)),
+                        sid_txt, fill="#555555", font=f_legend_sub
+                    )
+                cy += line_step_box
+
+                for tok_line in lines_of_tokens:
+                    cur_x = box_x + pad_x
+                    for t_idx, (tok_txt, is_err) in enumerate(tok_line):
+                        if t_idx > 0:
+                            draw.text((cur_x, cy + int(1.5 * scale)), ", ", fill="#444444", font=f_legend_sub)
+                            cur_x += sep_w
+
+                        tok_fill = "#dc2626" if is_err else "#333333"
+                        draw.text((cur_x, cy + int(1.5 * scale)), tok_txt, fill=tok_fill, font=f_legend_sub)
+                        cur_x += _measure_pillow(tok_txt, f_legend_sub)
+
+                    cy += line_step_box
+
+                cy += int(4 * scale)
+
+            draw.text((box_x + pad_x, cy), "n/m = pares nesta placa / pedido total", fill="#666666", font=f_footnote)
 
         # Rodapé
         footer_y = ph - int(36 * scale)

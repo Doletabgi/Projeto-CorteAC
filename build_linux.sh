@@ -8,7 +8,7 @@ cd "$(dirname "$0")"
 echo "Higienizando banco de dados para distribuição limpa (sem layouts de teste)..."
 python3 tools/clean_database.py
 
-pyinstaller --clean --onefile --add-data "assets:assets" --add-data "samples:samples" --add-data "jobmanager.db:." --add-data "db.example.ini:." --hidden-import pymysql --hidden-import cryptography --hidden-import cad.project_packager --name "CorteAC" main.py
+pyinstaller --clean --onefile --add-data "assets:assets" --add-data "samples:samples" --add-data "jobmanager.db:." --add-data "db.example.ini:." --hidden-import pymysql --hidden-import cryptography --hidden-import cad.project_packager --hidden-import cad.barcode --hidden-import ui.user_dialog --name "CorteAC" main.py
 
 echo "Atualizando binários executáveis centralizados..."
 cp -f dist/CorteAC corteac_linux

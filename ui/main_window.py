@@ -287,6 +287,7 @@ class MainWindow(tk.Tk):
         file_menu.add_command(label="📤 Salvar Sessão para Máquina...", command=self.on_export_session_to_machine)
         file_menu.add_command(label="🖨️ Imprimir Sessão...", command=self.on_print_session)
         file_menu.add_command(label="🖨️ Imprimir em Massa (Sessões)...", command=self.on_batch_print_sessions)
+        file_menu.add_command(label="📟 Abrir por Código de Barras / ID...", accelerator="F8", command=self.on_open_by_barcode_dialog)
         file_menu.add_command(label="Exportar G-Code (ATOM)...", command=self.on_export_gcode)
         file_menu.add_command(label="Exportar Relatório XML...", command=self.on_export_xml)
         file_menu.add_separator()
@@ -315,11 +316,11 @@ class MainWindow(tk.Tk):
         view_menu.add_command(label="Códigos materiais...", command=self.show_material_codes_window)
         menubar.add_cascade(label="Exibir", menu=view_menu)
 
-        # Ferramentas (conforme media_1792065456571.jpg)
         self.tools_menu = tk.Menu(menubar, tearoff=0, bg=THEME["bg_surface"], fg=THEME["text_main"], activebackground=THEME["select_bg"], activeforeground=THEME["select_fg"])
         tools_menu = self.tools_menu
         tools_menu.add_command(label="Atualizar", accelerator="F5", command=self.on_refresh_f5)
         tools_menu.add_command(label="Opções", command=self.show_options_dialog)
+        tools_menu.add_command(label="👤 Cadastrar Usuário...", command=self.show_user_dialog)
         tools_menu.add_separator()
         tools_menu.add_command(label="🧩 Layout Editor (Nesting)...", command=self.show_layout_editor)
         tools_menu.add_command(label="Shape Editor (Editor de Moldes)...", command=self.show_shape_editor)
@@ -708,6 +709,12 @@ class MainWindow(tk.Tk):
         self.bind_all("<Control-Z>", self.on_global_undo, add="+")
         self.bind_all("<Control-Key-z>", self.on_global_undo, add="+")
         self.bind_all("<Control-Key-Z>", self.on_global_undo, add="+")
+
+        # Buffer e escuta global para leitor de código de barras USB (Keyboard Wedge)
+        self._scanner_buffer = []
+        self._scanner_last_key_time = 0.0
+        self.bind_all("<Key>", self._on_global_key_scanner, add="+")
+        self.bind_all("<F8>", lambda e: self.on_open_by_barcode_dialog())
 
     def setup_cad_in_session(self):
         # CADCanvas para gestão em segundo plano de peças, simulação e exportação
@@ -1729,6 +1736,20 @@ class MainWindow(tk.Tk):
     def show_options_dialog(self):
         """Abre a janela modal de Opções do sistema (Ferramentas -> Opções)."""
         OptionsDialog(self, self.db, on_apply=self.on_apply_options)
+
+    def show_user_dialog(self):
+        """Abre a janela modal de cadastro e gerenciamento de usuários/operadores."""
+        from ui.user_dialog import open_user_management_dialog
+        open_user_management_dialog(self, db=self.db, on_update_callback=self._on_user_updated)
+
+    def _on_user_updated(self):
+        """Atualiza a indicação do usuário ativo na barra de status da janela principal."""
+        active = self.db.get_active_user() if hasattr(self, "db") and self.db else ""
+        if hasattr(self, "lbl_status_user") and self.lbl_status_user:
+            self.lbl_status_user.config(text=f"👤 {active}" if active else "👤 (Sem usuário)")
+        if hasattr(self, "lbl_status_msg") and self.lbl_status_msg:
+            if active:
+                self.lbl_status_msg.config(text=f"Usuário ativo definido: {active}")
 
     def on_apply_options(self, settings):
         """Aplica as configurações do sistema imediatamente."""
@@ -2898,6 +2919,143 @@ class MainWindow(tk.Tk):
         except Exception as exc:
             messagebox.showerror("Erro na Impressão em Massa", f"Falha ao abrir diálogo de impressão:\n{exc}", parent=self)
 
+    def _on_global_key_scanner(self, event):
+        """
+        Escuta global de teclado para detecção de leitores de código de barras USB (HID).
+        Leitores enviam uma rajada de caracteres em altíssima velocidade (< 50ms)
+        seguida de <Return> ou <KP_Enter>.
+        """
+        if not event:
+            return
+
+        keysym = getattr(event, "keysym", "")
+        char = getattr(event, "char", "")
+
+        # Se for tecla Enter / Return
+        if keysym in ("Return", "KP_Enter"):
+            if getattr(self, "_scanner_buffer", None):
+                raw_payload = "".join(self._scanner_buffer).strip()
+                self._scanner_buffer.clear()
+                if (
+                    raw_payload.startswith("CAC:SESS:")
+                    or raw_payload.startswith("SESS:")
+                    or raw_payload.startswith("CAC:")
+                ):
+                    self.on_barcode_scanned(raw_payload)
+                    return "break"
+            return
+
+        # Se for caractere imprimível
+        if char and len(char) == 1 and 32 <= ord(char) <= 126:
+            import time
+            now = time.monotonic()
+            last_t = getattr(self, "_scanner_last_key_time", 0.0)
+            elapsed = now - last_t
+
+            if not hasattr(self, "_scanner_buffer"):
+                self._scanner_buffer = []
+
+            current_str = "".join(self._scanner_buffer)
+            # Se o intervalo entre teclas for muito longo (> 120ms) e o buffer NÃO começar com prefixo conhecido,
+            # reseta o buffer (trata-se de digitação humana lenta).
+            if elapsed > 0.12 and not (current_str.startswith("CAC:") or current_str.startswith("SESS:")):
+                self._scanner_buffer.clear()
+
+            self._scanner_buffer.append(char)
+            self._scanner_last_key_time = now
+
+    def on_barcode_scanned(self, payload: str) -> bool:
+        """
+        Processa o código de barras lido pelo scanner USB ou inserido manualmente.
+        Padrões aceitos:
+        - CAC:SESS:<session_id>
+        - CAC:SESS:<session_id>:LAY:<layout_idx>
+        - SESS:<session_id>
+        - <session_id> (numérico puro)
+        """
+        if not payload:
+            return False
+
+        payload = str(payload).strip()
+        session_id = None
+        target_lay_idx = None
+
+        if payload.startswith("CAC:SESS:"):
+            parts = payload.replace("CAC:SESS:", "").split(":")
+            if parts and parts[0].isdigit():
+                session_id = int(parts[0])
+            if len(parts) >= 3 and parts[1] == "LAY" and parts[2].isdigit():
+                target_lay_idx = int(parts[2])
+        elif payload.startswith("SESS:"):
+            sub = payload.replace("SESS:", "").strip()
+            if sub.isdigit():
+                session_id = int(sub)
+        elif payload.isdigit():
+            session_id = int(payload)
+        elif payload.startswith("CAC:LAY:"):
+            lay_name = payload.replace("CAC:LAY:", "").strip()
+            # Tenta encontrar a sessão que contém este layout
+            if getattr(self, "sessions", None):
+                for s in self.sessions:
+                    s_lays = s.get("layouts", [])
+                    if any(l.get("name") == lay_name for l in s_lays if isinstance(l, dict)):
+                        session_id = s.get("id")
+                        break
+
+        # Limpa o texto do scanner caso tenha caído em um Entry com foco
+        try:
+            focused = self.focus_get()
+            if focused and hasattr(focused, "get") and hasattr(focused, "delete") and hasattr(focused, "insert"):
+                cur_val = str(focused.get())
+                if payload in cur_val:
+                    cleaned = cur_val.replace(payload, "").strip()
+                    focused.delete(0, tk.END)
+                    focused.insert(0, cleaned)
+        except Exception:
+            pass
+
+        if session_id is not None:
+            # 1. Abre / ativa a sessão na área MDI
+            self.show_session_window(session_id)
+
+            # 2. Se especificado índice de placa/layout, seleciona no SessionView
+            if target_lay_idx is not None and getattr(self, "session_view", None):
+                if hasattr(self.session_view, "tree_lays"):
+                    item_id = f"lay_{target_lay_idx}"
+                    if self.session_view.tree_lays.exists(item_id):
+                        self.session_view.tree_lays.selection_set(item_id)
+                        self.session_view.tree_lays.focus(item_id)
+                        if hasattr(self.session_view, "on_layout_tree_select"):
+                            self.session_view.on_layout_tree_select(None)
+
+            # 3. Notifica o operador na barra de status
+            msg = f"📟 Leitor de Código de Barras: Sessão #{session_id}"
+            if target_lay_idx is not None:
+                msg += f" (Placa {target_lay_idx + 1})"
+            msg += " aberta com sucesso."
+            self.lbl_status_msg.config(text=msg)
+            return True
+        else:
+            self.lbl_status_msg.config(text=f"📟 Código de barras desconhecido: '{payload}'")
+            return False
+
+    def on_open_by_barcode_dialog(self):
+        """Abre diálogo para bipar ou digitar manualmente o código de barras / ID da sessão."""
+        from tkinter import simpledialog
+        code = simpledialog.askstring(
+            "Leitor de Código de Barras (F8)",
+            "Passe o leitor de código de barras ou digite o código/ID da sessão:\n(Exemplo: CAC:SESS:188 ou 188)",
+            parent=self
+        )
+        if code and code.strip():
+            success = self.on_barcode_scanned(code.strip())
+            if not success:
+                messagebox.showwarning(
+                    "Código de Barras",
+                    f"Não foi possível localizar a sessão correspondente ao código:\n'{code.strip()}'",
+                    parent=self
+                )
+
     def close_child_window(self):
         if self.active_child:
             self.close_window(self.active_child)
@@ -2950,6 +3108,18 @@ class MainWindow(tk.Tk):
         # Painel 8: Espaçador rebaixado no final da barra
         p8 = tk.Frame(sbar, relief="sunken", bd=1, bg=THEME["bg_surface"], width=20, pady=1)
         p8.pack(side="right", padx=1)
+
+        # Painel do Usuário / Operador Ativo
+        p_user = tk.Frame(sbar, relief="sunken", bd=1, bg=THEME["bg_surface"], padx=8, pady=1)
+        p_user.pack(side="right", padx=1)
+        act_user = self.db.get_active_user() if hasattr(self, "db") and self.db else ""
+        self.lbl_status_user = tk.Label(
+            p_user, text=f"👤 {act_user}" if act_user else "👤 (Sem usuário)",
+            bg=THEME["bg_surface"], fg=THEME["text_main"], font=("Segoe UI", 8), cursor="hand2"
+        )
+        self.lbl_status_user.pack()
+        self.lbl_status_user.bind("<Button-1>", lambda e: self.show_user_dialog())
+        self.bind_tooltip(self.lbl_status_user, "Clique para cadastrar ou trocar o operador / usuário ativo")
 
     # =========================================================================
     # Lógica de Carregamento e Alternância de Modos (Prints 1, 2 e 3)

@@ -160,6 +160,26 @@ class OptionsDialog(tk.Toplevel):
         )
         cb4.pack(anchor="w", pady=2)
 
+        # Seção Usuário / Operador Ativo
+        user_box = tk.LabelFrame(
+            left_box, text="Operador / Usuário Ativo", bg=THEME["bg_surface"], fg=THEME["text_main"],
+            font=("Segoe UI", 9), padx=8, pady=6, relief="groove", bd=1
+        )
+        user_box.pack(fill="x", pady=(14, 0))
+
+        cur_u = self.db.get_active_user() if hasattr(self, "db") and self.db else ""
+        self.lbl_active_user_disp = tk.Label(
+            user_box, text=f"👤 {cur_u}" if cur_u else "(Nenhum usuário ativo)",
+            bg=THEME["bg_surface"], fg=THEME["text_main"], font=("Segoe UI", 9, "bold"), anchor="w"
+        )
+        self.lbl_active_user_disp.pack(anchor="w", pady=(0, 4))
+
+        tk.Button(
+            user_box, text="👤 Cadastrar / Gerenciar...", bg=THEME["bg_surface"], fg=THEME["text_main"],
+            font=("Segoe UI", 8), relief="raised", bd=1, padx=6, pady=2, cursor="hand2",
+            command=self._open_user_management
+        ).pack(anchor="w")
+
         # Painel direito (Materiais horizontais + Groupbox Xfer)
         right_box = tk.Frame(pane, bg=THEME["bg_surface"])
         right_box.pack(side="right", fill="both", expand=True)
@@ -595,5 +615,16 @@ class OptionsDialog(tk.Toplevel):
             self.on_apply_cb(data)
         self.destroy()
 
+    def _open_user_management(self):
+        from ui.user_dialog import open_user_management_dialog
+        open_user_management_dialog(self, db=self.db, on_update_callback=self._on_user_updated)
+
+    def _on_user_updated(self):
+        cur_u = self.db.get_active_user() if hasattr(self, "db") and self.db else ""
+        if hasattr(self, "lbl_active_user_disp"):
+            self.lbl_active_user_disp.config(text=f"👤 {cur_u}" if cur_u else "(Nenhum usuário ativo)")
+        self.mark_changed()
+
     def on_cancel(self):
         self.destroy()
+

@@ -6243,6 +6243,8 @@ class LayoutEditorView(tk.Frame):
             "session_shapes": getattr(self, "session_shapes", []),
             "layouts": getattr(self, "layouts", []),
             "current_layout_index": cur_idx_print,
+            "session_id": getattr(self, "session_id", None) or (self.session.get("id") if getattr(self, "session", None) else None),
+            "session_name": getattr(self, "session_name", None) or (self.session.get("name") if getattr(self, "session", None) else None),
         }
 
         try:

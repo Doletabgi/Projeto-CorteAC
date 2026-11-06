@@ -1348,6 +1348,9 @@ class SessionView(tk.Frame):
             "layouts": layouts,
             "current_layout_index": target_layout_idx,
             "trim_cut_line": (target_layout.get("trim_cut_line") if target_layout else None) or (self.session_data.get("trim_cut_line") if isinstance(self.session_data, dict) else None),
+            "session_id": self.session_data.get("id") if isinstance(self.session_data, dict) else None,
+            "session_name": self.session_data.get("name") if isinstance(self.session_data, dict) else None,
+            "session_code": self.session_data.get("code") if isinstance(self.session_data, dict) else None,
         }
 
         dlg = LayoutPrintDialog(self, layout_data=layout_data)
