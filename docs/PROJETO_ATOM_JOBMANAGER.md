@@ -6,7 +6,7 @@
 > **Regra de ouro:** o que está marcado `[CONFIRMADO]` veio do relatório, do código ou do usuário. O que está `[NÃO CONFIRMADO]` é suposição e não deve virar "fato" sem validação. O que está `[PREENCHER]` a IA deve completar lendo o código real.
 
 <!-- AUTO:header:start -->
-**Última sincronização com o código:** 2026-11-07 20:22 (HEAD ao gerar: `7f5f845`; 156 arquivos Python, ~75711 linhas)
+**Última sincronização com o código:** 2026-11-07 20:37 (HEAD ao gerar: `f73e52f`; 156 arquivos Python, ~75721 linhas)
 <!-- AUTO:header:end -->
 **Versão deste documento:** 2
 
@@ -769,7 +769,7 @@ ui/user_dialog.py                                    # JobManager 2000 (Python E
 - funções: `_contour_area_mm2`, `_shade_color`, `_contour_key`, `rotate_piece_in_place`
 
 ### `ui/layout_print_dialog.py`
-- `class LayoutPrintDialog` (linha 310, 31 métodos): Janela modal de Visualização de Impressão (Print Preview) do Layout Editor.
+- `class LayoutPrintDialog` (linha 310, 32 métodos): Janela modal de Visualização de Impressão (Print Preview) do Layout Editor.
 - funções: `get_company_logo_path`, `open_company_logo_dialog`, `format_size`, `extract_molde_base_name`, `format_shape_id_tag`, `_clamp_tip_zone`, `_desenhar_retangulo_tracejado`
 
 ### `ui/macro_panel.py`
@@ -1669,8 +1669,8 @@ A ordem de corte do `.lay` para a mesa **não pode** ser aleatória:
 | Atalho | Local | Linha |
 |---|---|---|
 | Alt+Down | `ui/session_view.py:3887` | `entry.bind("<Alt-Down>", lambda e: adjust_number(-1))` |
-| Alt+Left | `ui/layout_print_dialog.py:1191` | `self.bind("<Alt-Left>", self.prev_page)` |
-| Alt+Right | `ui/layout_print_dialog.py:1190` | `self.bind("<Alt-Right>", self.next_page)` |
+| Alt+Left | `ui/layout_print_dialog.py:1198` | `self.bind("<Alt-Left>", self.prev_page)` |
+| Alt+Right | `ui/layout_print_dialog.py:1197` | `self.bind("<Alt-Right>", self.next_page)` |
 | Alt+Up | `ui/session_view.py:3886` | `entry.bind("<Alt-Up>", lambda e: adjust_number(+1))` |
 | Backspace | `ui/cad_canvas.py:72` | `self.master.bind("<BackSpace>", lambda e: self.delete_selected())` |
 | Backspace | `ui/dieproc_dialog.py:87` | `self.preset_listbox.bind("<BackSpace>", lambda e: self.on_delete_clicked())` |
@@ -1720,8 +1720,8 @@ A ordem de corte do `.lay` para a mesa **não pode** ser aleatória:
 | Ctrl+P | `ui/layout_editor_view.py:505` | `self.bind("<Control-P>", lambda e: self.print_layout())` |
 | Ctrl+P | `ui/layout_editor_view.py:749` | `w.bind("<Control-p>", lambda e: (self.print_layout(), "break")[1])` |
 | Ctrl+P | `ui/layout_editor_view.py:750` | `w.bind("<Control-P>", lambda e: (self.print_layout(), "break")[1])` |
-| Ctrl+P | `ui/layout_print_dialog.py:1184` | `self.bind("<Control-p>", lambda e: self.do_print())` |
-| Ctrl+P | `ui/layout_print_dialog.py:1185` | `self.bind("<Control-P>", lambda e: self.do_print())` |
+| Ctrl+P | `ui/layout_print_dialog.py:1191` | `self.bind("<Control-p>", lambda e: self.do_print())` |
+| Ctrl+P | `ui/layout_print_dialog.py:1192` | `self.bind("<Control-P>", lambda e: self.do_print())` |
 | Ctrl+P | `ui/main_window.py:90` | `self.bind("<Control-p>", self.handle_ctrl_p)` |
 | Ctrl+P | `ui/main_window.py:91` | `self.bind("<Control-P>", self.handle_ctrl_p)` |
 | Ctrl+P | `ui/session_view.py:1134` | `self.tree_lays.bind("<Control-p>", lambda e: (self.print_current_layout(), "brea` |
@@ -1808,7 +1808,7 @@ A ordem de corte do `.lay` para a mesa **não pode** ser aleatória:
 | Escape | `ui/layout_converter_dialog.py:70` | `self.bind("<Escape>", lambda e: self.destroy())` |
 | Escape | `ui/layout_editor_view.py:703` | `self.canvas.bind("<Escape>", self.on_canvas_escape)` |
 | Escape | `ui/layout_editor_view.py:799` | `w.bind("<Escape>", self.cancel_drag)` |
-| Escape | `ui/layout_print_dialog.py:1187` | `self.bind("<Escape>", self.on_escape)` |
+| Escape | `ui/layout_print_dialog.py:1194` | `self.bind("<Escape>", self.on_escape)` |
 | Escape | `ui/main_window.py:87` | `self.bind("<Escape>", self.exit_fullscreen)` |
 | Escape | `ui/main_window.py:703` | `self.bind_all("<Escape>", self.dismiss_popup_menus, add="+")` |
 | Escape | `ui/main_window.py:4248` | `dialog.bind("<Escape>", lambda e: dialog.destroy())` |
@@ -1824,7 +1824,7 @@ A ordem de corte do `.lay` para a mesa **não pode** ser aleatória:
 | Escape | `ui/user_dialog.py:59` | `self.bind("<Escape>", lambda e: self.destroy())` |
 | F1 | `ui/layout_editor_view.py:779` | `w.bind("<F1>", self.on_f1_press)` |
 | F1 | `ui/layout_editor_view.py:780` | `w.bind("<Key-F1>", self.on_f1_press)` |
-| F11 | `ui/layout_print_dialog.py:1186` | `self.bind("<F11>", self.toggle_fullscreen)` |
+| F11 | `ui/layout_print_dialog.py:1193` | `self.bind("<F11>", self.toggle_fullscreen)` |
 | F11 | `ui/main_window.py:86` | `self.bind("<F11>", self.toggle_fullscreen)` |
 | F11 | `ui/shape_editor_view.py:561` | `self.bind("<F11>", self.on_f11_fullscreen)` |
 | F11 | `ui/shape_editor_view.py:562` | `self.canvas.bind("<F11>", self.on_f11_fullscreen)` |
@@ -1850,8 +1850,8 @@ A ordem de corte do `.lay` para a mesa **não pode** ser aleatória:
 | Kp_up | `ui/session_view.py:3872` | `entry.bind("<KP_Up>", move_up)` |
 | Left | `ui/layout_editor_view.py:812` | `self.bind_all("<Left>", lambda e: self.bump_selection_vector(-1, 0))` |
 | Left | `ui/shape_catalog_view.py:264` | `self.bind("<Left>", lambda e: self.navigate_selection(-1, 0))` |
-| Next | `ui/layout_print_dialog.py:1188` | `self.bind("<Next>", self.next_page)` |
-| Prior | `ui/layout_print_dialog.py:1189` | `self.bind("<Prior>", self.prev_page)` |
+| Next | `ui/layout_print_dialog.py:1195` | `self.bind("<Next>", self.next_page)` |
+| Prior | `ui/layout_print_dialog.py:1196` | `self.bind("<Prior>", self.prev_page)` |
 | R | `ui/cad_canvas.py:69` | `self.master.bind("<r>", lambda e: self.rotate_selected(45))` |
 | R | `ui/cad_canvas.py:70` | `self.master.bind("<R>", lambda e: self.rotate_selected(45))` |
 | R | `ui/layout_editor_view.py:805` | `self.bind_all("<Key-r>", lambda e: self.rotate_selected(45))` |
@@ -4101,7 +4101,27 @@ Operadores e modelistas trabalham frequentemente com múltiplos ecossistemas de 
   - Inclusão do comando `🔄 Conversor de Arquivos (.lay ⇄ .onx)...` no menu Ferramentas e método `open_converter_dialog`.
 - **Testes Automatizados (`tests/test_converter.py`)**:
   - 8 testes cobrindo conversão bidirecional, detecção automática, processamento em lote, tratamento de erros e arquivos reais (`SESS-188/lay0000.lay` e `AS74467.onx`).
-- **Suíte de Testes**: **641 testes passando** (643 total, 2 skip, 100% de sucesso).
+- **Suíte de Testes**: **649 testes passando** (651 total, 2 skip, 16 subtests, 100% de sucesso).
+
+## 8.57. Ajuste no Título da Folha de Impressão — Remoção da extensão .lay (v1.6.39) `[CONFIRMADO]`
+
+### 1. Contexto e problema
+Na folha de impressão técnica em tamanho A4 (gerada tanto para visualização em tela quanto para impressão física ou PDF via `LayoutPrintDialog`), o cabeçalho principal exibia o nome do arquivo com a extensão `.lay` repetida junto à contagem de placas, no formato `lay0000.lay (Placa 1 de 2)`. O usuário solicitou que fosse corrigido para exibir de forma limpa apenas `lay0000 (Placa 1 de 2)`, apagando o sufixo `.lay` do título visual principal.
+
+### 2. Implementação técnica
+- **Método `get_display_layout_name()` (`ui/layout_print_dialog.py`)**:
+  - Implementado helper centralizado na classe `LayoutPrintDialog` que higieniza `self.layout_name` removendo o sufixo `.lay` (case-insensitive) se presente.
+- **Renderização Visual em Tela (Tkinter Canvas)**:
+  - Na função `draw_header`, a chamada de criação do texto principal passou a utilizar `disp_title = self.get_display_layout_name()`, compondo a string `f"{disp_title} ({self.placa_n_de_m})"`.
+- **Renderização de Alta Definição (Pillow / Impressora / PDF)**:
+  - Na função `render_pillow_page`, a composição do título principal em vetor e imagem de alta resolução passou a utilizar igualmente `f"{disp_title} ({self.placa_n_de_m})"`.
+  - O cálculo de largura e posicionamento da linha sublinhada (`draw.line`) acompanha perfeitamente a nova extensão sem distorções visuais.
+- **Diálogo de Usuários / Operadores (`ui/user_dialog.py`)**:
+  - Atualizada a prévia visual interativa do cabeçalho da folha de impressão para `lay0000 (Placa 1 de 2)`.
+- **Preservação de Integridade de Caminhos**:
+  - `self.layout_name` original (`lay0000.lay`) e `self.layout_path` (`\\...\\Compiti\\...\\lay0000.lay`) foram rigorosamente preservados para não quebrar a linha de metadados, a barra de título da janela e os nomes padrão de exportação de arquivos.
+- **Testes Automatizados (`tests/test_layout_print_user.py`)**:
+  - Atualizadas as asserções de cabeçalho garantindo que `lay0000 (` é exibido e que `lay0000.lay (` não está presente na renderização.
 
 ---
 
@@ -4155,6 +4175,7 @@ Operadores e modelistas trabalham frequentemente com múltiplos ecossistemas de 
 - [x] Limpeza de opções de criação de pasta de produção no menu Ferramentas, remoção da caixa Xfer/Remoto e de idiomas não utilizados (v1.6.36) — Concluído (§8.54, `ui/main_window.py`, `ui/options_dialog.py`)
 - [x] Formato do Molde (1x1, 4x1, 6x1), fator multiplicador no Shape Editor e migração no banco de dados (v1.6.37) — Concluído (§8.55, `ui/shape_editor_view.py`, `cad/layers_rule.py`, `database.py`, `db/migrations/008_add_shape_format.sql`, `tests/test_shape_format_multiplier.py`)
 - [x] Conversor de Arquivos de Corte (.lay ⇄ .onx) integrado ao Menu Ferramentas (v1.6.38) — Concluído (§8.56, `cad/layout_converter.py`, `ui/layout_converter_dialog.py`, `ui/main_window.py`, `tests/test_converter.py`)
+- [x] Ajuste no Título da Folha de Impressão — Remoção da extensão .lay (v1.6.39) — Concluído (§8.57, `ui/layout_print_dialog.py`, `ui/user_dialog.py`, `tests/test_layout_print_user.py`)
 
 ### 9.2 Arquivos de amostra que faltam (por prioridade)
 
@@ -4282,6 +4303,7 @@ Local: `/home/dola/Documentos/clone do job/antigo/arquivos pos instalacao/Common
 <!-- AUTO:gitlog:start -->
 | Commit | Data | Autor | Mensagem |
 |---|---|---|---|
+| `f73e52f` | 2026-11-07 | Doletabgi | chore(release): limpeza das notas de release removendo recursos anteriores |
 | `7f5f845` | 2026-11-07 | Doletabgi | feat(release): conversor de arquivos de corte lay para onx e onx para lay no menu ferramentas (v1.6.38) |
 | `f5de209` | 2026-11-07 | Doletabgi | feat(release): formato do molde (1x1, 4x1, 6x1) e multiplicador no Shape Editor (v1.6.37) |
 | `a148721` | 2026-11-07 | Doletabgi | feat(release): multi-moldes, adicao de shapes externos e limpeza de menus (v1.6.36) |
@@ -4296,7 +4318,6 @@ Local: `/home/dola/Documentos/clone do job/antigo/arquivos pos instalacao/Common
 | `b92200c` | 2026-11-03 | Doletabgi | fix(nesting): peca nunca e deitada — apenas 0/180 graus (v1.6.24) |
 | `10514da` | 2026-11-03 | Doletabgi | feat(nesting): preenche os vaos entre placas com pecas da ultima placa (v1.6.23) |
 | `b53c1bc` | 2026-11-03 | Doletabgi | fix(print): cabecalho de folhas apenas na placa com ponta (v1.6.22) |
-| `504c073` | 2026-11-03 | Doletabgi | feat(print): folhas longas/curtas no cabecalho e sem Material Area (v1.6.21) |
 <!-- AUTO:gitlog:end -->
 
 ---
@@ -4359,6 +4380,7 @@ Local: `/home/dola/Documentos/clone do job/antigo/arquivos pos instalacao/Common
 | Sáb, 07/11/2026 | 11:30 | Antigravity | Multi-moldes com rotação simultânea no Shape Editor, adição de moldes externos por pasta no Layout Editor e limpeza de menus (v1.6.36): (1) Multi-moldes no Shape Editor (`ui/shape_editor_view.py`): barra de abas (`tabs_bar`) com fechar aba, modo de sobreposição (`👁️ Sobrepor`) para comparação de graduações e ferramenta de rotação sincronizada (`🔄 Girar`) que rotaciona todos os moldes abertos/selecionados em torno do baricentro unificado; (2) Adição de moldes de fora do layout no Layout Editor (`ui/layout_editor_view.py`, `ui/add_shapes_dialog.py`): botão (+) configurado para abrir o diálogo `AddShapesDialog` com seleção de pasta do catálogo/banco (`faca`, `807266`, etc.), botão `📂 Do Disco (.die)...` para importar moldes diretamente do computador, menu de contexto com botão direito no (+) e colocação imediata das peças na mesa de corte com retenção de contorno, furos, costuras e recortes internos; (3) Limpeza de menus legados: remoção de `📁 Criar Subpasta de Produção...` de Ferramentas (`ui/main_window.py`) e remoção da caixa Xfer/Remoto e de 3 idiomas de `ui/options_dialog.py`; (4) 20 novos testes automatizados (628 testes passando, 630 no total com 100% de sucesso). | `ui/shape_editor_view.py`, `ui/layout_editor_view.py`, `ui/add_shapes_dialog.py`, `ui/main_window.py`, `ui/options_dialog.py`, `tests/test_shape_editor_multishape.py`, `tests/test_layout_editor_add_shape.py`, `config.py`, `.github/workflows/release.yml`, `docs/PROJETO_ATOM_JOBMANAGER.md` |
 | Sáb, 07/11/2026 | 17:15 | Antigravity | Formato do Molde (1x1, 4x1, 6x1) e fator multiplicador no Shape Editor com persistência e migração no banco (v1.6.37): (1) Banco de dados (`database.py`, `db/schema_mysql.sql`, migração `db/migrations/008_add_shape_format.sql`): coluna `shape_format VARCHAR(8) NOT NULL DEFAULT '1x1'` na tabela `shapes` com auto-migração idempotente em SQLite e MySQL, fallback transparente `'1x1'` para moldes legados e suporte em `create_shape`, `update_shape`, `get_shape`, `get_shapes_by_article`, `get_article_shape_catalog` e `MainWindow.on_shape_saved`; (2) Função pura `shape_multiplier` em `cad/layers_rule.py` mapeando `1x1 -> 1`, `4x1 -> 2`, `6x1 -> 3` com tolerância a espaços, maiúsculas e caracteres de multiplicação unicode (`×`); (3) Interface no Shape Editor (`ui/shape_editor_view.py`): Combobox `Formato:` e label `× N` na barra de ferramentas, controle de ativação respeitando `geometry_locked` (desabilitado em modo seguro, `readonly` quando liberado), histórico de desfazer (Ctrl+Z), indicador de modificado `*` no título da janela e nas abas; (4) 13 novos testes automatizados em `tests/test_shape_format_multiplier.py` (641 testes passando com 100% de sucesso). | `ui/shape_editor_view.py`, `ui/main_window.py`, `cad/layers_rule.py`, `database.py`, `db/schema_mysql.sql`, `db/migrations/008_add_shape_format.sql`, `tests/test_shape_format_multiplier.py`, `config.py`, `docs/PROJETO_ATOM_JOBMANAGER.md` |
 | Sáb, 07/11/2026 | 19:50 | Antigravity | Conversor de Arquivos de Corte (.lay ⇄ .onx) integrado ao Menu Ferramentas com suporte a lotes e detecção automática (v1.6.38): (1) Motor CAD (`cad/layout_converter.py`): conversão bidirecional individual e em lote entre ATOM FlashCut (`.lay`, `$$LAYOUT.v3$$`) e Comelz CNC (`.onx`, Schema 1.1 comprimido no container `CZLIB\x02` bzip2), preservando peças, contornos, coordenadas X/Y, rotações angulares, dimensões e gaps; detecção automática por extensão e assinatura mágica binária; interface CLI `python -m cad.layout_converter`; (2) Interface visual (`ui/layout_converter_dialog.py`): diálogo modal no padrão CorteAC / Windows XP com seleção múltipla de arquivos (`*.lay;*.onx`), pasta completa, modo de conversão automático ou forçado, tabela Treeview com status em tempo real, escolha de diretório de destino, barra de progresso suave, log de execução detalhado e botão direto para abrir a pasta de destino; (3) Menu Ferramentas (`ui/main_window.py`): nova opção `🔄 Conversor de Arquivos (.lay ⇄ .onx)...` adicionada à barra de menus com acionamento modal; (4) Empacotamento e builds (`CorteAC.spec`, `build_linux.sh`, `build_exe_windows.bat`): inclusão de hidden imports para módulos do conversor (`cad.layout_converter`, `ui.layout_converter_dialog`, `cad.czlib`, `cad.onx_exporter`, `cad.dual_exporter`); (5) 8 novos testes automatizados em `tests/test_converter.py` com 100% de sucesso (649 testes passando). | `cad/layout_converter.py`, `ui/layout_converter_dialog.py`, `ui/main_window.py`, `CorteAC.spec`, `build_linux.sh`, `build_exe_windows.bat`, `tests/test_converter.py`, `config.py`, `.github/workflows/release.yml`, `docs/PROJETO_ATOM_JOBMANAGER.md` |
+| Sáb, 07/11/2026 | 20:35 | Antigravity | Ajuste no Título da Folha de Impressão — Remoção da extensão .lay (v1.6.39): (1) Remoção da extensão `.lay` no título principal da folha de impressão através do novo helper `LayoutPrintDialog.get_display_layout_name()`, formatando como `lay0000 (Placa 1 de 2)`; (2) Sincronização idêntica tanto na pré-visualização em tela (Canvas Tkinter) quanto na impressão física e exportação para PDF/PNG (Pillow); (3) Atualização do card de pré-visualização em `ui/user_dialog.py`; (4) Preservação intacta de caminhos de rede e identificadores de arquivo originais; (5) Atualização dos testes unitários em `tests/test_layout_print_user.py` com 649 testes passando. | `ui/layout_print_dialog.py`, `ui/user_dialog.py`, `tests/test_layout_print_user.py`, `config.py`, `.github/workflows/release.yml`, `docs/PROJETO_ATOM_JOBMANAGER.md` |
 
 ## 11. Prompt para o Antigravity: instalar a sincronização automática `[CONCLUÍDA]`
 

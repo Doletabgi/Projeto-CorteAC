@@ -772,6 +772,13 @@ class LayoutPrintDialog(tk.Toplevel):
 
         return payload, label
 
+    def get_display_layout_name(self) -> str:
+        """Retorna o nome do layout sem a extensão .lay para exibição no título da folha de impressão."""
+        name = str(self.layout_name or "").strip()
+        if name.lower().endswith(".lay"):
+            return name[:-4]
+        return name
+
     def load_company_logo(self):
         """Carrega a imagem de logotipo customizada da empresa se configurada."""
         self.company_logo_raw = None
@@ -1323,9 +1330,10 @@ class LayoutPrintDialog(tk.Toplevel):
         logo_offset = (max_logo_w + int(14 * self.zoom)) if logo_photo else 0
         title_x = margin_left + logo_offset
         title_y = margin_top + int(22 * self.zoom)
+        disp_title = self.get_display_layout_name()
         t_id = self.canvas.create_text(
             title_x, title_y,
-            text=f"{self.layout_name} ({self.placa_n_de_m})",
+            text=f"{disp_title} ({self.placa_n_de_m})",
             anchor="nw", font=f_title, fill="#000000"
         )
         tb_box = self.canvas.bbox(t_id)
@@ -1897,7 +1905,8 @@ class LayoutPrintDialog(tk.Toplevel):
                 pass
 
         # Título alinhado ao canto esquerdo para não sobrepor o código de barras
-        full_title = f"{self.layout_name} ({self.placa_n_de_m})"
+        disp_title = self.get_display_layout_name()
+        full_title = f"{disp_title} ({self.placa_n_de_m})"
         title_bbox = draw.textbbox((0, 0), full_title, font=f_title)
         tw = title_bbox[2] - title_bbox[0]
         th = title_bbox[3] - title_bbox[1]

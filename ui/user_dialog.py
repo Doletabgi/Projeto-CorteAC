@@ -185,7 +185,7 @@ class UserManagementDialog(tk.Toplevel):
         card.pack(fill="x")
 
         self.lbl_prev_title = tk.Label(
-            card, text="lay0000.lay (Placa 1 de 2)", bg="#ffffff", fg="#000000",
+            card, text="lay0000 (Placa 1 de 2)", bg="#ffffff", fg="#000000",
             font=("Courier", 10, "bold"), anchor="w"
         )
         self.lbl_prev_title.pack(anchor="w")

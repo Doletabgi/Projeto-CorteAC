@@ -9,7 +9,7 @@ on:
       tag_name:
         description: 'Tag de versão SemVer (ex: v1.0.0)'
         required: false
-        default: 'v1.6.38'
+        default: 'v1.6.39'
 
 permissions:
   contents: write
@@ -197,7 +197,11 @@ jobs:
 
             ---
 
-            ### 🛠️ Recursos Incluídos Nesta Versão (v1.6.38):
+            ### 🛠️ Recursos Incluídos Nesta Versão (v1.6.39):
+            - **Ajuste no Título da Folha de Impressão (Remoção da extensão `.lay`)**:
+              - O título principal do cabeçalho da folha de impressão agora exibe `layXXXX (Placa X de Y)` em vez de `layXXXX.lay (Placa X de Y)`.
+              - A extensão `.lay` é limpa de forma consistente tanto no preview em tela (Canvas Tkinter) quanto na renderização de alta definição para impressão física e exportação em PDF/PNG (Pillow).
+              - Preservação intacta do caminho completo do layout na linha de metadados (`Layout: \\...\lay0000.lay`).
             - **Conversor de Arquivos de Corte (.lay ⇄ .onx) no Menu Ferramentas**:
               - Conversão bidirecional entre os padrões industriais **ATOM FlashCut (`.lay`)** e **Comelz CNC (`.onx`)**.
               - Detecção automática de formato baseada na extensão e na assinatura binária (`CZLIB\x02` e `$$LAYOUT.v3$$`).

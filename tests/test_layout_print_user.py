@@ -69,9 +69,10 @@ class TestLayoutPrintUser(unittest.TestCase):
         # Posição Y do topo do nome de usuário
         user_top_y = u_box[1]
 
-        # Busca texto do título
+        # Busca texto do título (deve exibir 'lay0000 (Placa ...)' sem '.lay')
         all_texts = [dlg.canvas.itemcget(item, "text") for item in dlg.canvas.find_all() if dlg.canvas.type(item) == "text"]
-        self.assertTrue(any("lay0000.lay" in t for t in all_texts))
+        self.assertTrue(any("lay0000 (" in t for t in all_texts), f"Esperava encontrar 'lay0000 (' nos textos: {all_texts}")
+        self.assertFalse(any("lay0000.lay (" in t for t in all_texts), f"Não deve conter 'lay0000.lay (' nos textos: {all_texts}")
 
         # O nome do usuário deve estar acima do bloco de metadados ("Layout: ...")
         layout_items = [i for i in dlg.canvas.find_all() if dlg.canvas.type(i) == "text" and "Layout:" in dlg.canvas.itemcget(i, "text")]
