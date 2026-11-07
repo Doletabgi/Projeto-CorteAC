@@ -6,7 +6,7 @@
 > **Regra de ouro:** o que está marcado `[CONFIRMADO]` veio do relatório, do código ou do usuário. O que está `[NÃO CONFIRMADO]` é suposição e não deve virar "fato" sem validação. O que está `[PREENCHER]` a IA deve completar lendo o código real.
 
 <!-- AUTO:header:start -->
-**Última sincronização com o código:** 2026-11-07 20:37 (HEAD ao gerar: `f73e52f`; 156 arquivos Python, ~75721 linhas)
+**Última sincronização com o código:** 2026-11-07 20:45 (HEAD ao gerar: `b4d724d`; 157 arquivos Python, ~75776 linhas)
 <!-- AUTO:header:end -->
 **Versão deste documento:** 2
 
@@ -209,6 +209,7 @@ tests/test_shapes_resto.py                           # Testes unitários e de in
 tests/test_sidebar_counter.py                        # Testes unitários e de integração para o contador de peças da barra lateral,
 tests/test_sobras_dobra.py                           # tests/test_sobras_dobra.py
 tests/test_strategy_removal.py                       # Testes automatizados para validação da remoção da estratégia flashnestroll (bobinas contínuas):
+tests/test_tools_menu_items.py                       # Testes Automatizados para validação dos itens do menu Ferramentas na MainWindow.
 tests/test_tooltip.py                                # tests/test_tooltip.py
 tests/test_user_management.py
 tests/test_validation_and_cancellation.py            # JobManager 2000 (Python Edition)
@@ -638,6 +639,9 @@ ui/user_dialog.py                                    # JobManager 2000 (Python E
 
 ### `tests/test_strategy_removal.py`
 - `class TestStrategyRemoval` (linha 19, 9 métodos)
+
+### `tests/test_tools_menu_items.py`
+- `class TestToolsMenuItems` (linha 10, 3 métodos)
 
 ### `tests/test_tooltip.py`
 - `class TestToolTip` (linha 13, 8 métodos)
@@ -1674,7 +1678,7 @@ A ordem de corte do `.lay` para a mesa **não pode** ser aleatória:
 | Alt+Up | `ui/session_view.py:3886` | `entry.bind("<Alt-Up>", lambda e: adjust_number(+1))` |
 | Backspace | `ui/cad_canvas.py:72` | `self.master.bind("<BackSpace>", lambda e: self.delete_selected())` |
 | Backspace | `ui/dieproc_dialog.py:87` | `self.preset_listbox.bind("<BackSpace>", lambda e: self.on_delete_clicked())` |
-| Backspace | `ui/main_window.py:705` | `self.bind_all("<BackSpace>", self.on_global_delete_key, add="+")` |
+| Backspace | `ui/main_window.py:702` | `self.bind_all("<BackSpace>", self.on_global_delete_key, add="+")` |
 | Backspace | `ui/session_view.py:882` | `self.tree_shapes.bind("<BackSpace>", lambda e: self._on_tree_shapes_delete())` |
 | Backspace | `ui/session_view.py:1042` | `w.bind("<BackSpace>", self.remove_session_material)` |
 | Backspace | `ui/session_view.py:1043` | `w.bind("<Key-BackSpace>", self.remove_session_material)` |
@@ -1687,10 +1691,10 @@ A ordem de corte do `.lay` para a mesa **não pode** ser aleatória:
 | Ctrl+A | `ui/layout_editor_view.py:808` | `self.bind_all("<Control-a>", self.select_all)` |
 | Ctrl+A | `ui/layout_editor_view.py:809` | `self.bind_all("<Control-A>", self.select_all)` |
 | Ctrl+A | `ui/main_window.py:307` | `edit_menu.add_command(label="Selecionar tudo", accelerator="Ctrl+A", command=sel` |
-| Ctrl+A | `ui/main_window.py:706` | `self.bind_all("<Control-a>", self.on_select_all, add="+")` |
-| Ctrl+A | `ui/main_window.py:707` | `self.bind_all("<Control-A>", self.on_select_all, add="+")` |
-| Ctrl+A | `ui/main_window.py:708` | `self.bind_all("<Control-Key-a>", self.on_select_all, add="+")` |
-| Ctrl+A | `ui/main_window.py:709` | `self.bind_all("<Control-Key-A>", self.on_select_all, add="+")` |
+| Ctrl+A | `ui/main_window.py:703` | `self.bind_all("<Control-a>", self.on_select_all, add="+")` |
+| Ctrl+A | `ui/main_window.py:704` | `self.bind_all("<Control-A>", self.on_select_all, add="+")` |
+| Ctrl+A | `ui/main_window.py:705` | `self.bind_all("<Control-Key-a>", self.on_select_all, add="+")` |
+| Ctrl+A | `ui/main_window.py:706` | `self.bind_all("<Control-Key-A>", self.on_select_all, add="+")` |
 | Ctrl+C | `ui/main_window.py:303` | `edit_menu.add_command(label="Copiar", accelerator="Ctrl+C")` |
 | Ctrl+Down | `ui/layout_editor_view.py:820` | `self.bind_all("<Control-Down>", lambda e: self.nudge_selected(0, -0.5))` |
 | Ctrl+Down | `ui/session_view.py:3885` | `entry.bind("<Control-Down>", lambda e: adjust_number(-1))` |
@@ -1768,10 +1772,10 @@ A ordem de corte do `.lay` para a mesa **não pode** ser aleatória:
 | Ctrl+Z | `ui/layout_editor_view.py:727` | `self.bind("<Control-z>", self.undo_action)` |
 | Ctrl+Z | `ui/layout_editor_view.py:728` | `self.bind("<Control-Z>", self.undo_action)` |
 | Ctrl+Z | `ui/main_window.py:300` | `edit_menu.add_command(label="Desfazer / Reverter", accelerator="Ctrl+Z", command` |
-| Ctrl+Z | `ui/main_window.py:710` | `self.bind_all("<Control-z>", self.on_global_undo, add="+")` |
-| Ctrl+Z | `ui/main_window.py:711` | `self.bind_all("<Control-Z>", self.on_global_undo, add="+")` |
-| Ctrl+Z | `ui/main_window.py:712` | `self.bind_all("<Control-Key-z>", self.on_global_undo, add="+")` |
-| Ctrl+Z | `ui/main_window.py:713` | `self.bind_all("<Control-Key-Z>", self.on_global_undo, add="+")` |
+| Ctrl+Z | `ui/main_window.py:707` | `self.bind_all("<Control-z>", self.on_global_undo, add="+")` |
+| Ctrl+Z | `ui/main_window.py:708` | `self.bind_all("<Control-Z>", self.on_global_undo, add="+")` |
+| Ctrl+Z | `ui/main_window.py:709` | `self.bind_all("<Control-Key-z>", self.on_global_undo, add="+")` |
+| Ctrl+Z | `ui/main_window.py:710` | `self.bind_all("<Control-Key-Z>", self.on_global_undo, add="+")` |
 | Ctrl+Z | `ui/shape_catalog_view.py:269` | `self.bind("<Control-z>", lambda e: self.action_undo())` |
 | Ctrl+Z | `ui/shape_catalog_view.py:270` | `self.bind("<Control-Z>", lambda e: self.action_undo())` |
 | Ctrl+Z | `ui/shape_editor_view.py:551` | `self.bind("<Control-z>", self.undo_or_revert)` |
@@ -1786,11 +1790,11 @@ A ordem de corte do `.lay` para a mesa **não pode** ser aleatória:
 | Delete | `ui/dieproc_dialog.py:86` | `self.preset_listbox.bind("<Delete>", lambda e: self.on_delete_clicked())` |
 | Delete | `ui/layout_editor_view.py:807` | `self.bind_all("<Delete>", lambda e: self.delete_selected())` |
 | Delete | `ui/main_window.py:305` | `edit_menu.add_command(label="Excluir", accelerator="Del", command=self.on_global` |
-| Delete | `ui/main_window.py:704` | `self.bind_all("<Delete>", self.on_global_delete_key, add="+")` |
-| Delete | `ui/main_window.py:3625` | `accelerator="Del",` |
-| Delete | `ui/main_window.py:3644` | `accelerator="Del",` |
-| Delete | `ui/main_window.py:3921` | `accelerator="Del",` |
-| Delete | `ui/main_window.py:3940` | `accelerator="Del",` |
+| Delete | `ui/main_window.py:701` | `self.bind_all("<Delete>", self.on_global_delete_key, add="+")` |
+| Delete | `ui/main_window.py:3622` | `accelerator="Del",` |
+| Delete | `ui/main_window.py:3641` | `accelerator="Del",` |
+| Delete | `ui/main_window.py:3918` | `accelerator="Del",` |
+| Delete | `ui/main_window.py:3937` | `accelerator="Del",` |
 | Delete | `ui/session_view.py:881` | `self.tree_shapes.bind("<Delete>", lambda e: self._on_tree_shapes_delete())` |
 | Delete | `ui/session_view.py:1040` | `w.bind("<Delete>", self.remove_session_material)` |
 | Delete | `ui/session_view.py:1041` | `w.bind("<Key-Delete>", self.remove_session_material)` |
@@ -1810,8 +1814,8 @@ A ordem de corte do `.lay` para a mesa **não pode** ser aleatória:
 | Escape | `ui/layout_editor_view.py:799` | `w.bind("<Escape>", self.cancel_drag)` |
 | Escape | `ui/layout_print_dialog.py:1194` | `self.bind("<Escape>", self.on_escape)` |
 | Escape | `ui/main_window.py:87` | `self.bind("<Escape>", self.exit_fullscreen)` |
-| Escape | `ui/main_window.py:703` | `self.bind_all("<Escape>", self.dismiss_popup_menus, add="+")` |
-| Escape | `ui/main_window.py:4248` | `dialog.bind("<Escape>", lambda e: dialog.destroy())` |
+| Escape | `ui/main_window.py:700` | `self.bind_all("<Escape>", self.dismiss_popup_menus, add="+")` |
+| Escape | `ui/main_window.py:4245` | `dialog.bind("<Escape>", lambda e: dialog.destroy())` |
 | Escape | `ui/material_codes_view.py:510` | `dlg.bind("<Escape>", lambda e: dlg.destroy())` |
 | Escape | `ui/options_dialog.py:40` | `self.bind("<Escape>", lambda e: self.on_cancel())` |
 | Escape | `ui/session_view.py:3323` | `entry.bind("<Escape>", cancel)` |
@@ -1839,11 +1843,11 @@ A ordem de corte do `.lay` para a mesa **não pode** ser aleatória:
 | F5 | `ui/main_window.py:136` | `self.bind_all("<F5>", lambda e: self.on_refresh_f5())` |
 | F5 | `ui/main_window.py:322` | `tools_menu.add_command(label="Atualizar", accelerator="F5", command=self.on_refr` |
 | F8 | `ui/main_window.py:291` | `file_menu.add_command(label="📟 Abrir por Código de Barras / ID...", accelerator=` |
-| F8 | `ui/main_window.py:719` | `self.bind_all("<F8>", lambda e: self.on_open_by_barcode_dialog())` |
+| F8 | `ui/main_window.py:716` | `self.bind_all("<F8>", lambda e: self.on_open_by_barcode_dialog())` |
 | Iso_left_tab | `ui/session_view.py:3878` | `entry.bind("<ISO_Left_Tab>", move_prev_col)` |
 | Kp_down | `ui/session_view.py:3870` | `entry.bind("<KP_Down>", move_down)` |
 | Kp_enter | `ui/fill_user_dialog.py:155` | `self.bind("<KP_Enter>", lambda e: self.on_ok())` |
-| Kp_enter | `ui/main_window.py:574` | `self.tree_main.bind("<KP_Enter>", self.on_tree_key_return)` |
+| Kp_enter | `ui/main_window.py:571` | `self.tree_main.bind("<KP_Enter>", self.on_tree_key_return)` |
 | Kp_enter | `ui/session_view.py:884` | `self.tree_shapes.bind("<KP_Enter>", self.on_tree_shape_enter)` |
 | Kp_enter | `ui/session_view.py:3874` | `entry.bind("<KP_Enter>", move_down)` |
 | Kp_enter | `ui/shape_catalog_view.py:267` | `self.bind("<KP_Enter>", lambda e: self.open_selected_shape())` |
@@ -1859,9 +1863,9 @@ A ordem de corte do `.lay` para a mesa **não pode** ser aleatória:
 | Return | `ui/edit_shape_in_session_dialog.py:146` | `self.bind("<Return>", lambda e: self.on_save())` |
 | Return | `ui/fill_user_dialog.py:154` | `self.bind("<Return>", lambda e: self.on_ok())` |
 | Return | `ui/import_materials_dialog.py:84` | `self.ent_filepath.bind("<Return>", lambda e: self.load_file_from_path(self.ent_f` |
-| Return | `ui/main_window.py:573` | `self.tree_main.bind("<Return>", self.on_tree_key_return)` |
-| Return | `ui/main_window.py:620` | `self.grid_lower.bind("<Return>", self.on_grid_double_click)` |
-| Return | `ui/main_window.py:4247` | `dialog.bind("<Return>", lambda e: save())` |
+| Return | `ui/main_window.py:570` | `self.tree_main.bind("<Return>", self.on_tree_key_return)` |
+| Return | `ui/main_window.py:617` | `self.grid_lower.bind("<Return>", self.on_grid_double_click)` |
+| Return | `ui/main_window.py:4244` | `dialog.bind("<Return>", lambda e: save())` |
 | Return | `ui/material_codes_view.py:212` | `self.tree.bind("<Return>", lambda e: self.open_edit_selected_dialog())` |
 | Return | `ui/material_codes_view.py:509` | `dlg.bind("<Return>", lambda e: save_action())` |
 | Return | `ui/session_view.py:599` | `self.entry_gap.bind("<Return>", self._on_gap_entry_change)` |
@@ -1886,7 +1890,7 @@ A ordem de corte do `.lay` para a mesa **não pode** ser aleatória:
 | Shift+Tab | `ui/session_view.py:3325` | `entry.bind("<Shift-Tab>", on_shift_tab)` |
 | Shift+Tab | `ui/session_view.py:3877` | `entry.bind("<Shift-Tab>", move_prev_col)` |
 | Space | `ui/add_shapes_dialog.py:156` | `self.tree.bind("<space>", self.on_tree_space)` |
-| Space | `ui/main_window.py:570` | `self.tree_main.bind("<space>", self.on_tree_space_toggle)` |
+| Space | `ui/main_window.py:567` | `self.tree_main.bind("<space>", self.on_tree_space_toggle)` |
 | Tab | `ui/session_view.py:3324` | `entry.bind("<Tab>", on_tab)` |
 | Tab | `ui/session_view.py:3876` | `entry.bind("<Tab>", move_next_col)` |
 | Up | `ui/layout_editor_view.py:814` | `self.bind_all("<Up>", lambda e: self.bump_selection_vector(0, 1))` |
@@ -4123,6 +4127,23 @@ Na folha de impressão técnica em tamanho A4 (gerada tanto para visualização 
 - **Testes Automatizados (`tests/test_layout_print_user.py`)**:
   - Atualizadas as asserções de cabeçalho garantindo que `lay0000 (` é exibido e que `lay0000.lay (` não está presente na renderização.
 
+## 8.58. Limpeza do Menu Ferramentas — Remoção de Criação de Produção e Pastas de Moldes (v1.6.40) `[CONFIRMADO]`
+
+### 1. Contexto e solicitação do usuário
+O usuário solicitou via print da interface (`media_1794094761246.png`) a remoção das seguintes opções do menu suspenso **Ferramentas**:
+1. `Criar Produção...`
+2. `Criar Pasta de Moldes...`
+3. `Criar Subpasta de Moldes...`
+
+O objetivo foi limpar o menu Ferramentas, tornando-o focado em utilitários de sistema e editores (Nesting, Shape Editor, Catálogo, Materiais, Conversor, etc.), visto que a criação e organização de pastas e produções é naturalmente realizada no menu Arquivo e com o botão direito diretamente na árvore de produção.
+
+### 2. Implementação técnica
+- **Menu Ferramentas (`ui/main_window.py`)**:
+  - Removidos os comandos `tools_menu.add_command(label="📁 Criar Produção...", command=self.on_create_production)`, `tools_menu.add_command(label="📁 Criar Pasta de Moldes...", command=self.on_create_shape_folder)` e `tools_menu.add_command(label="📁 Criar Subpasta de Moldes...", command=self.on_create_subfolder_menu_action)`.
+  - Preservados todos os métodos de ação e callbacks no menu Arquivo e no menu de contexto da árvore (`tree_menu`).
+- **Testes Automatizados (`tests/test_tools_menu_items.py`)**:
+  - Criado teste unitário específico que percorre todos os comandos de `tools_menu` e valida estritamente a ausência das opções proibidas e a presença das opções legítimas mantidas.
+
 ---
 
 ## 9. Pendências e arquivos faltantes
@@ -4176,6 +4197,7 @@ Na folha de impressão técnica em tamanho A4 (gerada tanto para visualização 
 - [x] Formato do Molde (1x1, 4x1, 6x1), fator multiplicador no Shape Editor e migração no banco de dados (v1.6.37) — Concluído (§8.55, `ui/shape_editor_view.py`, `cad/layers_rule.py`, `database.py`, `db/migrations/008_add_shape_format.sql`, `tests/test_shape_format_multiplier.py`)
 - [x] Conversor de Arquivos de Corte (.lay ⇄ .onx) integrado ao Menu Ferramentas (v1.6.38) — Concluído (§8.56, `cad/layout_converter.py`, `ui/layout_converter_dialog.py`, `ui/main_window.py`, `tests/test_converter.py`)
 - [x] Ajuste no Título da Folha de Impressão — Remoção da extensão .lay (v1.6.39) — Concluído (§8.57, `ui/layout_print_dialog.py`, `ui/user_dialog.py`, `tests/test_layout_print_user.py`)
+- [x] Limpeza do Menu Ferramentas — Remoção de Criação de Produção e Pastas de Moldes (v1.6.40) — Concluído (§8.58, `ui/main_window.py`, `tests/test_tools_menu_items.py`)
 
 ### 9.2 Arquivos de amostra que faltam (por prioridade)
 
@@ -4303,6 +4325,7 @@ Local: `/home/dola/Documentos/clone do job/antigo/arquivos pos instalacao/Common
 <!-- AUTO:gitlog:start -->
 | Commit | Data | Autor | Mensagem |
 |---|---|---|---|
+| `b4d724d` | 2026-11-07 | Doletabgi | fix(print): remover extensao .lay do titulo principal na folha de impressao (v1.6.39) |
 | `f73e52f` | 2026-11-07 | Doletabgi | chore(release): limpeza das notas de release removendo recursos anteriores |
 | `7f5f845` | 2026-11-07 | Doletabgi | feat(release): conversor de arquivos de corte lay para onx e onx para lay no menu ferramentas (v1.6.38) |
 | `f5de209` | 2026-11-07 | Doletabgi | feat(release): formato do molde (1x1, 4x1, 6x1) e multiplicador no Shape Editor (v1.6.37) |
@@ -4317,7 +4340,6 @@ Local: `/home/dola/Documentos/clone do job/antigo/arquivos pos instalacao/Common
 | `2d5cfe7` | 2026-11-03 | Doletabgi | fix(nesting): preenchimento de vaos mede a area real das pecas (v1.6.25) |
 | `b92200c` | 2026-11-03 | Doletabgi | fix(nesting): peca nunca e deitada — apenas 0/180 graus (v1.6.24) |
 | `10514da` | 2026-11-03 | Doletabgi | feat(nesting): preenche os vaos entre placas com pecas da ultima placa (v1.6.23) |
-| `b53c1bc` | 2026-11-03 | Doletabgi | fix(print): cabecalho de folhas apenas na placa com ponta (v1.6.22) |
 <!-- AUTO:gitlog:end -->
 
 ---
@@ -4381,6 +4403,7 @@ Local: `/home/dola/Documentos/clone do job/antigo/arquivos pos instalacao/Common
 | Sáb, 07/11/2026 | 17:15 | Antigravity | Formato do Molde (1x1, 4x1, 6x1) e fator multiplicador no Shape Editor com persistência e migração no banco (v1.6.37): (1) Banco de dados (`database.py`, `db/schema_mysql.sql`, migração `db/migrations/008_add_shape_format.sql`): coluna `shape_format VARCHAR(8) NOT NULL DEFAULT '1x1'` na tabela `shapes` com auto-migração idempotente em SQLite e MySQL, fallback transparente `'1x1'` para moldes legados e suporte em `create_shape`, `update_shape`, `get_shape`, `get_shapes_by_article`, `get_article_shape_catalog` e `MainWindow.on_shape_saved`; (2) Função pura `shape_multiplier` em `cad/layers_rule.py` mapeando `1x1 -> 1`, `4x1 -> 2`, `6x1 -> 3` com tolerância a espaços, maiúsculas e caracteres de multiplicação unicode (`×`); (3) Interface no Shape Editor (`ui/shape_editor_view.py`): Combobox `Formato:` e label `× N` na barra de ferramentas, controle de ativação respeitando `geometry_locked` (desabilitado em modo seguro, `readonly` quando liberado), histórico de desfazer (Ctrl+Z), indicador de modificado `*` no título da janela e nas abas; (4) 13 novos testes automatizados em `tests/test_shape_format_multiplier.py` (641 testes passando com 100% de sucesso). | `ui/shape_editor_view.py`, `ui/main_window.py`, `cad/layers_rule.py`, `database.py`, `db/schema_mysql.sql`, `db/migrations/008_add_shape_format.sql`, `tests/test_shape_format_multiplier.py`, `config.py`, `docs/PROJETO_ATOM_JOBMANAGER.md` |
 | Sáb, 07/11/2026 | 19:50 | Antigravity | Conversor de Arquivos de Corte (.lay ⇄ .onx) integrado ao Menu Ferramentas com suporte a lotes e detecção automática (v1.6.38): (1) Motor CAD (`cad/layout_converter.py`): conversão bidirecional individual e em lote entre ATOM FlashCut (`.lay`, `$$LAYOUT.v3$$`) e Comelz CNC (`.onx`, Schema 1.1 comprimido no container `CZLIB\x02` bzip2), preservando peças, contornos, coordenadas X/Y, rotações angulares, dimensões e gaps; detecção automática por extensão e assinatura mágica binária; interface CLI `python -m cad.layout_converter`; (2) Interface visual (`ui/layout_converter_dialog.py`): diálogo modal no padrão CorteAC / Windows XP com seleção múltipla de arquivos (`*.lay;*.onx`), pasta completa, modo de conversão automático ou forçado, tabela Treeview com status em tempo real, escolha de diretório de destino, barra de progresso suave, log de execução detalhado e botão direto para abrir a pasta de destino; (3) Menu Ferramentas (`ui/main_window.py`): nova opção `🔄 Conversor de Arquivos (.lay ⇄ .onx)...` adicionada à barra de menus com acionamento modal; (4) Empacotamento e builds (`CorteAC.spec`, `build_linux.sh`, `build_exe_windows.bat`): inclusão de hidden imports para módulos do conversor (`cad.layout_converter`, `ui.layout_converter_dialog`, `cad.czlib`, `cad.onx_exporter`, `cad.dual_exporter`); (5) 8 novos testes automatizados em `tests/test_converter.py` com 100% de sucesso (649 testes passando). | `cad/layout_converter.py`, `ui/layout_converter_dialog.py`, `ui/main_window.py`, `CorteAC.spec`, `build_linux.sh`, `build_exe_windows.bat`, `tests/test_converter.py`, `config.py`, `.github/workflows/release.yml`, `docs/PROJETO_ATOM_JOBMANAGER.md` |
 | Sáb, 07/11/2026 | 20:35 | Antigravity | Ajuste no Título da Folha de Impressão — Remoção da extensão .lay (v1.6.39): (1) Remoção da extensão `.lay` no título principal da folha de impressão através do novo helper `LayoutPrintDialog.get_display_layout_name()`, formatando como `lay0000 (Placa 1 de 2)`; (2) Sincronização idêntica tanto na pré-visualização em tela (Canvas Tkinter) quanto na impressão física e exportação para PDF/PNG (Pillow); (3) Atualização do card de pré-visualização em `ui/user_dialog.py`; (4) Preservação intacta de caminhos de rede e identificadores de arquivo originais; (5) Atualização dos testes unitários em `tests/test_layout_print_user.py` com 649 testes passando. | `ui/layout_print_dialog.py`, `ui/user_dialog.py`, `tests/test_layout_print_user.py`, `config.py`, `.github/workflows/release.yml`, `docs/PROJETO_ATOM_JOBMANAGER.md` |
+| Sáb, 07/11/2026 | 20:45 | Antigravity | Limpeza do Menu Ferramentas — Remoção de Criação de Produção e Pastas de Moldes (v1.6.40): (1) Removidos os comandos 'Criar Produção...', 'Criar Pasta de Moldes...' e 'Criar Subpasta de Moldes...' do menu suspenso Ferramentas (`ui/main_window.py`) atendendo à solicitação do usuário para despoluir e simplificar a interface; (2) Mantidas as opções no menu Arquivo e no menu de contexto de clique direito da árvore de produção (`tree_menu`); (3) Novo teste automatizado `tests/test_tools_menu_items.py` cobrindo a integridade dos itens do menu Ferramentas; 650 testes passando com 100% de sucesso. | `ui/main_window.py`, `tests/test_tools_menu_items.py`, `config.py`, `.github/workflows/release.yml`, `docs/PROJETO_ATOM_JOBMANAGER.md` |
 
 ## 11. Prompt para o Antigravity: instalar a sincronização automática `[CONCLUÍDA]`
 

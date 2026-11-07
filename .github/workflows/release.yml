@@ -9,7 +9,7 @@ on:
       tag_name:
         description: 'Tag de versão SemVer (ex: v1.0.0)'
         required: false
-        default: 'v1.6.39'
+        default: 'v1.6.40'
 
 permissions:
   contents: write
@@ -197,7 +197,10 @@ jobs:
 
             ---
 
-            ### 🛠️ Recursos Incluídos Nesta Versão (v1.6.39):
+            ### 🛠️ Recursos Incluídos Nesta Versão (v1.6.40):
+            - **Limpeza e Otimização do Menu Ferramentas**:
+              - Remoção das opções redundantes "Criar Produção...", "Criar Pasta de Moldes..." e "Criar Subpasta de Moldes..." do menu suspenso Ferramentas, tornando o menu mais ágil e intuitivo.
+              - As operações de criação e gestão de pastas continuam plenamente disponíveis no menu Arquivo e com botão direito diretamente na árvore de produção.
             - **Ajuste no Título da Folha de Impressão (Remoção da extensão `.lay`)**:
               - O título principal do cabeçalho da folha de impressão agora exibe `layXXXX (Placa X de Y)` em vez de `layXXXX.lay (Placa X de Y)`.
               - A extensão `.lay` é limpa de forma consistente tanto no preview em tela (Canvas Tkinter) quanto na renderização de alta definição para impressão física e exportação em PDF/PNG (Pillow).
