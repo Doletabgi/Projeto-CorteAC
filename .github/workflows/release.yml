@@ -9,7 +9,7 @@ on:
       tag_name:
         description: 'Tag de versão SemVer (ex: v1.0.0)'
         required: false
-        default: 'v1.6.40'
+        default: 'v1.6.41'
 
 permissions:
   contents: write
@@ -197,7 +197,10 @@ jobs:
 
             ---
 
-            ### 🛠️ Recursos Incluídos Nesta Versão (v1.6.40):
+            ### 🛠️ Recursos Incluídos Nesta Versão (v1.6.41):
+            - **Deslocamento de Exportar G-Code da Toolbar para o Menu Ferramentas**:
+              - Remoção do botão `💾 Exportar G-Code` da barra de ferramentas superior da tela principal, deixando a barra mais organizada e compacta.
+              - Inclusão da opção `💾 Exportar G-Code (ATOM)...` no menu suspenso **Ferramentas**, mantendo acesso rápido e centralizado junto às ferramentas de corte e nesting.
             - **Limpeza e Otimização do Menu Ferramentas**:
               - Remoção das opções redundantes "Criar Produção...", "Criar Pasta de Moldes..." e "Criar Subpasta de Moldes..." do menu suspenso Ferramentas, tornando o menu mais ágil e intuitivo.
               - As operações de criação e gestão de pastas continuam plenamente disponíveis no menu Arquivo e com botão direito diretamente na árvore de produção.

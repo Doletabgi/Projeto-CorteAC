@@ -51,6 +51,14 @@ class TestToolsMenuItems(unittest.TestCase):
         self.assertTrue(any("Shape Editor" in lbl for lbl in labels))
         self.assertTrue(any("Conversor de Arquivos" in lbl for lbl in labels))
         self.assertTrue(any("Importar Shape (.die)" in lbl for lbl in labels))
+        self.assertTrue(any("Exportar G-Code" in lbl for lbl in labels), f"'Exportar G-Code' deve estar presente no menu Ferramentas: {labels}")
+
+    def test_export_gcode_removed_from_toolbar(self):
+        """Garante que o botão Exportar G-Code não está mais presente na barra de ferramentas da MainWindow."""
+        if not self.root:
+            self.skipTest("MainWindow indisponível no ambiente de teste")
+
+        self.assertIsNone(self.root.btn_tb_export_gcode)
 
 
 if __name__ == "__main__":

@@ -334,6 +334,7 @@ class MainWindow(tk.Tk):
         tools_menu.add_command(label="⚙️ Configuração DieProc (Encaixe Sintético)...", command=self.open_dieproc_dialog)
         tools_menu.add_command(label="Executar Auto-Nest...", command=self.on_auto_nest)
         tools_menu.add_command(label="Simular Corte na Mesa...", command=self.on_toggle_sim)
+        tools_menu.add_command(label="💾 Exportar G-Code (ATOM)...", command=self.on_export_gcode)
         tools_menu.add_separator()
         tools_menu.add_command(label="🔄 Conversor de Arquivos (.lay ⇄ .onx)...", command=self.open_converter_dialog)
         tools_menu.add_command(label="🧹 Limpar Layouts de Teste...", command=self.on_clean_test_layouts)
@@ -470,12 +471,7 @@ class MainWindow(tk.Tk):
         self.btn_tb_auto_nest.pack(side="left", padx=2)
         self.bind_tooltip(self.btn_tb_auto_nest, "Auto-Nest (Encaixe Automático)", "Executa o algoritmo de encaixe automático de peças")
 
-        self.btn_tb_export_gcode = tk.Button(
-            tbar, text="💾 Exportar G-Code", bg=THEME["bg_surface"], fg="#000080",
-            relief="raised", bd=2, padx=8, font=("Segoe UI", 8), command=self.on_export_gcode
-        )
-        self.btn_tb_export_gcode.pack(side="left", padx=2)
-        self.bind_tooltip(self.btn_tb_export_gcode, "Exportar G-Code", "Exporta arquivo de código de corte para a máquina ATOM")
+        self.btn_tb_export_gcode = None
 
     # =========================================================================
     # 3. Main Split Layout: Esquerda (Árvore + Grid) | Direita (Área MDI Cinza)

@@ -120,7 +120,6 @@ class TestCreateSessionLeftClick(unittest.TestCase):
             self.win.btn_tb_import_die,
             self.win.btn_tb_params,
             self.win.btn_tb_auto_nest,
-            self.win.btn_tb_export_gcode,
             self.win.btn_mode_jobs,
             self.win.btn_mode_shapes,
             self.win.btn_mode_materials,
