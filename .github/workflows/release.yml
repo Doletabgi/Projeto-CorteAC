@@ -9,7 +9,7 @@ on:
       tag_name:
         description: 'Tag de versão SemVer (ex: v1.0.0)'
         required: false
-        default: 'v1.6.35'
+        default: 'v1.6.36'
 
 permissions:
   contents: write
@@ -197,7 +197,25 @@ jobs:
 
             ---
 
-            ### 🛠️ Recursos Incluídos Nesta Versão (v1.6.35):
+            ### 🛠️ Recursos Incluídos Nesta Versão (v1.6.36):
+            - **Adição de Moldes de Pastas Externas no Layout Editor (v1.6.36)**:
+              - Botão **(+)** (`btn_add`) na barra de ferramentas do Layout Editor para adicionar moldes que estão fora do layout.
+              - Seleção de pasta no catálogo ou banco de dados via combobox `Pasta:` (`faca`, `807266`, etc.) com filtragem instantânea na árvore de moldes.
+              - Importação direta de moldes do computador através do botão `📂 Do Disco (.die)...` com suporte a arquivos `.die` e `.d` de qualquer diretório.
+              - Menu de contexto no clique com botão direito do mouse no botão **(+)** para acesso rápido (*📁 Escolher Shape por Pasta (Catálogo)...* ou *📂 Escolher Arquivo(s) .die no Disco...*).
+              - Inserção imediata da peça na mesa de corte (`placed_pieces`), registro nos alvos da barra lateral (`sidebar_targets`) e preservação integral de contornos, furos (`holes`), costuras (`stitching`) e recortes internos (`internal_cuts`).
+            - **Suporte a Múltiplos Moldes e Rotação Sincronizada no Shape Editor (v1.6.36)**:
+              - Abertura simultânea de múltiplos moldes no Shape Editor com barra de abas (`tabs_bar`) e fechamento de aba individual.
+              - Modo de sobreposição (`👁️ Sobrepor`) para visualização simultânea de todos os moldes abertos.
+              - Ferramenta de rotação sincronizada (`🔄 Girar`): rotaciona todos os moldes abertos/selecionados simultaneamente em torno do baricentro conjunto, com exibição do ponto pivô e ângulo contínuo na barra de status.
+            - **Limpeza de Menus e Opções Legadas (v1.6.36)**:
+              - Remoção de `📁 Criar Subpasta de Produção...` do menu Ferramentas.
+              - Remoção da caixa Xfer/Remoto (`Login`, `Password`, `Remote root folder`) e dos 3 idiomas não utilizados do diálogo de Opções.
+            - **630 testes automatizados** (628 passando, 2 skip, 100% de sucesso).
+
+            ---
+
+            ### 📦 Recursos Anteriores:
             - **Cadastro de Usuários / Operadores e Nome na Folha de Impressão (v1.6.35)**:
               - Novo diálogo modal de cadastro e gerenciamento de operadores (`UserManagementDialog`).
               - Suporte completo a múltiplos operadores, seleção de usuário ativo com 1 clique e persistência no banco SQLite e MySQL (`users` table e `settings`).

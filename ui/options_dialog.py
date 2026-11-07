@@ -180,7 +180,7 @@ class OptionsDialog(tk.Toplevel):
             command=self._open_user_management
         ).pack(anchor="w")
 
-        # Painel direito (Materiais horizontais + Groupbox Xfer)
+        # Painel direito (Materiais horizontais)
         right_box = tk.Frame(pane, bg=THEME["bg_surface"])
         right_box.pack(side="right", fill="both", expand=True)
 
@@ -192,28 +192,6 @@ class OptionsDialog(tk.Toplevel):
             anchor="w", command=self.mark_changed
         )
         cb_mat.pack(anchor="w", pady=(0, 10))
-
-        # GroupBox Xfer clássico com borda rebaixada
-        xfer_box = tk.LabelFrame(
-            right_box, text="Xfer", bg=THEME["bg_surface"], fg=THEME["text_main"],
-            font=("Segoe UI", 9), padx=10, pady=6, relief="groove", bd=1
-        )
-        xfer_box.pack(fill="x", pady=5)
-
-        tk.Label(xfer_box, text="Login", bg=THEME["bg_surface"], fg=THEME["text_main"], font=("Segoe UI", 9), anchor="w").pack(anchor="w")
-        self.entry_xfer_login = tk.Entry(xfer_box, font=("Segoe UI", 9), relief="sunken", bd=2)
-        self.entry_xfer_login.pack(fill="x", pady=(2, 6))
-        self.entry_xfer_login.bind("<KeyRelease>", self.mark_changed)
-
-        tk.Label(xfer_box, text="Password", bg=THEME["bg_surface"], fg=THEME["text_main"], font=("Segoe UI", 9), anchor="w").pack(anchor="w")
-        self.entry_xfer_pass = tk.Entry(xfer_box, font=("Segoe UI", 9), relief="sunken", bd=2, show="*")
-        self.entry_xfer_pass.pack(fill="x", pady=(2, 6))
-        self.entry_xfer_pass.bind("<KeyRelease>", self.mark_changed)
-
-        tk.Label(xfer_box, text="Remote root folder", bg=THEME["bg_surface"], fg=THEME["text_main"], font=("Segoe UI", 9), anchor="w").pack(anchor="w")
-        self.entry_xfer_root = tk.Entry(xfer_box, font=("Segoe UI", 9), relief="sunken", bd=2)
-        self.entry_xfer_root.pack(fill="x", pady=(2, 6))
-        self.entry_xfer_root.bind("<KeyRelease>", self.mark_changed)
 
     # =========================================================================
     # ABA 2: Moldes (media_1792065478208.jpg)
@@ -515,9 +493,6 @@ class OptionsDialog(tk.Toplevel):
         self.var_language = tk.StringVar(value="Português (Brasil)")
         langs = [
             ("Português (Brasil)", "Português (Brasil)"),
-            ("English (United States)", "English"),
-            ("Italiano (Italia)", "Italiano"),
-            ("Español (España)", "Español")
         ]
         for text, val in langs:
             rb = tk.Radiobutton(
@@ -537,15 +512,6 @@ class OptionsDialog(tk.Toplevel):
         self.var_allow_article_hiding.set(st.get("allow_article_hiding", "1") == "1")
         self.var_show_hidden_articles.set(st.get("show_hidden_articles", "1") == "1")
         self.var_materials_horizontal.set(st.get("materials_horizontal", "0") == "1")
-
-        self.entry_xfer_login.delete(0, "end")
-        self.entry_xfer_login.insert(0, st.get("xfer_login", ""))
-
-        self.entry_xfer_pass.delete(0, "end")
-        self.entry_xfer_pass.insert(0, st.get("xfer_password", ""))
-
-        self.entry_xfer_root.delete(0, "end")
-        self.entry_xfer_root.insert(0, st.get("xfer_remote_root", ""))
 
         self.var_mold_count_mode.set(st.get("mold_count_mode", "pairs"))
         self.var_mold_view_pairs.set(st.get("mold_view_mode", "pairs"))
@@ -567,7 +533,10 @@ class OptionsDialog(tk.Toplevel):
         self.cb_u_lays_len.set(st.get("unit_layouts_length", "metre (m)"))
         self.cb_u_lays_area.set(st.get("unit_layouts_area", "metre (m)"))
 
-        self.var_language.set(st.get("language", "Português (Brasil)"))
+        cur_lang = st.get("language", "Português (Brasil)")
+        if cur_lang != "Português (Brasil)":
+            cur_lang = "Português (Brasil)"
+        self.var_language.set(cur_lang)
 
         self._has_changes = False
         self.btn_apply.config(state="disabled")
@@ -579,9 +548,9 @@ class OptionsDialog(tk.Toplevel):
             "allow_article_hiding": "1" if self.var_allow_article_hiding.get() else "0",
             "show_hidden_articles": "1" if self.var_show_hidden_articles.get() else "0",
             "materials_horizontal": "1" if self.var_materials_horizontal.get() else "0",
-            "xfer_login": self.entry_xfer_login.get().strip(),
-            "xfer_password": self.entry_xfer_pass.get().strip(),
-            "xfer_remote_root": self.entry_xfer_root.get().strip(),
+            "xfer_login": self.settings.get("xfer_login", ""),
+            "xfer_password": self.settings.get("xfer_password", ""),
+            "xfer_remote_root": self.settings.get("xfer_remote_root", ""),
             "mold_count_mode": self.var_mold_count_mode.get(),
             "mold_view_mode": self.var_mold_view_pairs.get() if self.var_mold_count_mode.get() == "pairs" else self.var_mold_view_ind.get(),
             "default_strategy": self.cb_strategy.get(),

@@ -328,7 +328,6 @@ class MainWindow(tk.Tk):
         tools_menu.add_command(label="📋 Códigos materiais (Listagem)...", command=self.show_material_codes_window)
         tools_menu.add_command(label="📥 Importar lista de materiais...", command=self.open_import_materials_dialog)
         tools_menu.add_command(label="📁 Criar Produção...", command=self.on_create_production)
-        tools_menu.add_command(label="📁 Criar Subpasta de Produção...", command=self.on_create_job_subfolder_menu_action)
         tools_menu.add_command(label="📁 Criar Pasta de Moldes...", command=self.on_create_shape_folder)
         tools_menu.add_command(label="📁 Criar Subpasta de Moldes...", command=self.on_create_subfolder_menu_action)
         tools_menu.add_command(label="📂 Importar Shape (.die)...", command=self.on_import_die)
@@ -616,6 +615,7 @@ class MainWindow(tk.Tk):
         self.grid_lower = ttk.Treeview(grid_frame, show="headings", height=5, selectmode="extended")
         self.grid_lower.pack(fill="both", expand=True)
         self.grid_lower.bind("<Double-1>", self.on_grid_double_click)
+        self.grid_lower.bind("<Return>", self.on_grid_double_click)
         self.grid_lower.bind("<Button-3>", self.show_grid_context_menu)
         self.grid_lower.bind("<ButtonPress-1>", self.on_grid_drag_start, add="+")
         self.grid_lower.bind("<B1-Motion>", self.on_tree_drag_motion, add="+")
@@ -1489,36 +1489,76 @@ class MainWindow(tk.Tk):
         return False
 
     def show_shape_editor(self, shape_id_or_data=None):
-        target_shape = None
-        if isinstance(shape_id_or_data, dict):
-            target_shape = shape_id_or_data
+        target_shapes = []
+
+        if isinstance(shape_id_or_data, (list, tuple)):
+            for item in shape_id_or_data:
+                if isinstance(item, dict):
+                    target_shapes.append(item)
+                elif isinstance(item, int):
+                    s = self.db.get_shape(item)
+                    if s:
+                        target_shapes.append(s)
+        elif isinstance(shape_id_or_data, dict):
+            target_shapes = [shape_id_or_data]
         elif isinstance(shape_id_or_data, int):
-            target_shape = self.db.get_shape(shape_id_or_data)
+            s = self.db.get_shape(shape_id_or_data)
+            if s:
+                target_shapes = [s]
         elif shape_id_or_data is None:
-            sel = self.tree_main.selection()
-            if sel:
-                val = self.tree_main.item(sel[0], "values")
-                if val and len(val) >= 2 and val[0] == "shape":
-                    try:
-                        target_shape = self.db.get_shape(int(val[1]))
-                    except (ValueError, TypeError):
-                        pass
-            if not target_shape and self.current_shapes:
-                target_shape = self.current_shapes[0]
+            # 1. Se estiver no modo 'shapes', verifica seleção múltipla na grade inferior (grid_lower)
+            if getattr(self, "current_mode", "") == "shapes" and hasattr(self, "grid_lower"):
+                grid_sel = self.grid_lower.selection()
+                if grid_sel:
+                    for g_item in grid_sel:
+                        vals = self.grid_lower.item(g_item, "values")
+                        if vals and len(vals) >= 1:
+                            try:
+                                s_id = int(vals[0])
+                                s = self.db.get_shape(s_id)
+                                if s:
+                                    target_shapes.append(s)
+                            except (ValueError, TypeError):
+                                pass
 
-        if not target_shape and self.current_shapes:
-            target_shape = self.current_shapes[0]
+            # 2. Se não encontrou na grade, verifica tree_main
+            if not target_shapes:
+                sel = self.tree_main.selection()
+                if sel:
+                    for t_item in sel:
+                        val = self.tree_main.item(t_item, "values")
+                        if val and len(val) >= 2 and val[0] == "shape":
+                            try:
+                                s = self.db.get_shape(int(val[1]))
+                                if s:
+                                    target_shapes.append(s)
+                            except (ValueError, TypeError):
+                                pass
 
-        if target_shape:
-            self.shape_editor_view.load_shape(target_shape)
+            # 3. Fallback para moldes atuais se nada estiver selecionado
+            if not target_shapes and self.current_shapes:
+                target_shapes = [self.current_shapes[0]]
+
+        if not target_shapes and self.current_shapes:
+            target_shapes = [self.current_shapes[0]]
+
+        if target_shapes:
+            if len(target_shapes) > 1:
+                self.shape_editor_view.load_shapes(target_shapes)
+            else:
+                self.shape_editor_view.load_shape(target_shapes[0])
 
         if self.shape_editor_view in self.minimized_windows:
             self.restore_window(self.shape_editor_view)
         self.maximize_window(self.shape_editor_view)
         self.after(50, lambda: self.shape_editor_view.reset_view() if hasattr(self, "shape_editor_view") else None)
 
-        shp_name = target_shape.get("name", "Molde") if target_shape else ""
-        self.lbl_status_msg.config(text=f"Shape Editor: [{shp_name}] aberto em tela cheia.")
+        if target_shapes:
+            if len(target_shapes) > 1:
+                self.lbl_status_msg.config(text=f"Shape Editor: {len(target_shapes)} moldes abertos em tela cheia.")
+            else:
+                shp_name = target_shapes[0].get("name", "Molde")
+                self.lbl_status_msg.config(text=f"Shape Editor: [{shp_name}] aberto em tela cheia.")
 
     def show_shape_catalog(self, article_id=None):
         target_article_id = 1
@@ -3916,43 +3956,62 @@ class MainWindow(tk.Tk):
         elif self.current_mode == "shapes":
             sel = self.grid_lower.selection()
             if sel:
-                gvals = self.grid_lower.item(sel[0], "values")
-                if gvals:
-                    try:
-                        shp_id = int(gvals[0])
-                        self.moldes_menu.delete(0, "end")
-                        self.moldes_menu.add_command(
-                            label="📐 Abrir no Shape Editor",
-                            command=lambda s=shp_id: self.show_shape_editor(s)
-                        )
-                        self.moldes_menu.add_command(
-                            label="📤 Exportar como .die...",
-                            command=lambda s=shp_id: self.on_export_shape_die(s)
-                        )
-                        self.moldes_menu.add_separator()
-                        self.moldes_menu.add_command(
-                            label="📁 Mover para Pasta...",
-                            command=lambda s=shp_id: self.on_move_shape_to_folder(s)
-                        )
-                        self.moldes_menu.add_command(
-                            label="✏️ Renomear Molde...",
-                            command=lambda s=shp_id: self.on_rename_shape(s)
-                        )
-                        self.moldes_menu.add_command(
-                            label="🗑️ Excluir Molde...",
-                            command=lambda s=shp_id: self.on_delete_shape(s)
-                        )
-                        self.moldes_menu.add_command(
-                            label="Excluir\tDel",
-                            command=lambda s=shp_id: self.on_delete_shape(s)
-                        )
-                        self.moldes_menu.add_separator()
-                        self.moldes_menu.add_command(
-                            label="🔄 Atualizar Moldes",
-                            command=lambda: self.switch_tree_mode("shapes")
-                        )
-                    except Exception:
-                        pass
+                selected_shape_ids = []
+                for s_item in sel:
+                    vals = self.grid_lower.item(s_item, "values")
+                    if vals and len(vals) >= 1:
+                        try:
+                            selected_shape_ids.append(int(vals[0]))
+                        except (ValueError, TypeError):
+                            pass
+
+                self.moldes_menu.delete(0, "end")
+                if len(selected_shape_ids) > 1:
+                    self.moldes_menu.add_command(
+                        label=f"📐 Abrir {len(selected_shape_ids)} Moldes no Shape Editor",
+                        command=lambda ids=selected_shape_ids: self.show_shape_editor(ids)
+                    )
+                    self.moldes_menu.add_separator()
+                    self.moldes_menu.add_command(
+                        label=f"🗑️ Excluir ({len(selected_shape_ids)} moldes)...",
+                        command=self.on_delete_grid_item
+                    )
+                    self.moldes_menu.add_command(
+                        label="Excluir\tDel",
+                        command=self.on_delete_grid_item
+                    )
+                elif selected_shape_ids:
+                    shp_id = selected_shape_ids[0]
+                    self.moldes_menu.add_command(
+                        label="📐 Abrir no Shape Editor",
+                        command=lambda s=shp_id: self.show_shape_editor(s)
+                    )
+                    self.moldes_menu.add_command(
+                        label="📤 Exportar como .die...",
+                        command=lambda s=shp_id: self.on_export_shape_die(s)
+                    )
+                    self.moldes_menu.add_separator()
+                    self.moldes_menu.add_command(
+                        label="📁 Mover para Pasta...",
+                        command=lambda s=shp_id: self.on_move_shape_to_folder(s)
+                    )
+                    self.moldes_menu.add_command(
+                        label="✏️ Renomear Molde...",
+                        command=lambda s=shp_id: self.on_rename_shape(s)
+                    )
+                    self.moldes_menu.add_command(
+                        label="🗑️ Excluir Molde...",
+                        command=lambda s=shp_id: self.on_delete_shape(s)
+                    )
+                    self.moldes_menu.add_command(
+                        label="Excluir\tDel",
+                        command=lambda s=shp_id: self.on_delete_shape(s)
+                    )
+                self.moldes_menu.add_separator()
+                self.moldes_menu.add_command(
+                    label="🔄 Atualizar Moldes",
+                    command=lambda: self.switch_tree_mode("shapes")
+                )
             self.show_popup_menu(self.moldes_menu, event.x_root, event.y_root)
         elif self.current_mode == "jobs":
             sel = self.grid_lower.selection()
@@ -5542,14 +5601,20 @@ class MainWindow(tk.Tk):
         if not sel:
             return
         if self.current_mode == "shapes":
-            vals = self.grid_lower.item(sel[0], "values")
-            if vals and len(vals) >= 1:
-                try:
-                    shape_id = int(vals[0])
-                    self.show_shape_editor(shape_id)
-                    return
-                except (ValueError, TypeError):
-                    pass
+            selected_ids = []
+            for s_item in sel:
+                vals = self.grid_lower.item(s_item, "values")
+                if vals and len(vals) >= 1:
+                    try:
+                        selected_ids.append(int(vals[0]))
+                    except (ValueError, TypeError):
+                        pass
+            if len(selected_ids) > 1:
+                self.show_shape_editor(selected_ids)
+                return
+            elif len(selected_ids) == 1:
+                self.show_shape_editor(selected_ids[0])
+                return
             self.show_shape_editor()
             return
         elif self.current_mode == "materials":

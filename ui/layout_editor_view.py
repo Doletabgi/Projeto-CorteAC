@@ -22,7 +22,9 @@ from ui.units import format_m, format_dim_mm, format_dim_m
 from ui.tooltip import ToolTip
 from cad.geometry import transform_contour, point_in_polygon, rotate_point, polygon_bbox, polygons_collide, polygon_area, SpatialGrid, bbox_overlap
 from cad.colors import get_color_for_size, get_contrast_text_color
+from cad.die_parser import parse_die_file
 from ui.layout_print_dialog import LayoutPrintDialog
+from ui.add_shapes_dialog import AddShapesDialog
 
 
 def _contour_area_mm2(cntr) -> float:
@@ -587,7 +589,12 @@ class LayoutEditorView(tk.Frame):
 
         # Grupo 5: Modos CAD e Seleção (Move, + Adicionar, Grade)
         self.create_tb_btn(tb_row, "btn_move", "Modo Mover Peça", lambda: None)
-        self.create_tb_btn(tb_row, "btn_add", "Adicionar Peça (+)", self.add_active_target)
+        self.btn_add_shape = self.create_tb_btn(
+            tb_row, "btn_add",
+            "Adicionar Shape ao Layout (+): clique para escolher pasta no catálogo ou importar do disco",
+            self.open_add_shape_dialog
+        )
+        self.btn_add_shape.bind("<Button-3>", self.show_add_shape_context_menu)
         self.create_tb_btn(tb_row, "btn_grid", "Grade Milimétrica", self.toggle_grid)
 
         self.create_tb_sep(tb_row)
@@ -1077,6 +1084,27 @@ class LayoutEditorView(tk.Frame):
                 if not s_contour:
                     s_contour = CONTOUR_CON
 
+                s_holes = shp.get("holes")
+                if not s_holes and shp.get("holes_json"):
+                    try:
+                        s_holes = json.loads(shp["holes_json"])
+                    except Exception:
+                        s_holes = []
+
+                s_stitching = shp.get("stitching")
+                if not s_stitching and shp.get("stitching_json"):
+                    try:
+                        s_stitching = json.loads(shp["stitching_json"])
+                    except Exception:
+                        s_stitching = []
+
+                s_internal_cuts = shp.get("internal_cuts")
+                if not s_internal_cuts and shp.get("internal_cuts_json"):
+                    try:
+                        s_internal_cuts = json.loads(shp["internal_cuts_json"])
+                    except Exception:
+                        s_internal_cuts = []
+
                 # Pares requeridos e resto conforme tabela da sessão
                 req_pairs = int(shp.get("pairs") or (shp.get("required_qty", 2) // 2) or 1)
                 resto = int(shp.get("resto") if shp.get("resto") is not None else (shp.get("rest") if shp.get("rest") is not None else 0))
@@ -1087,6 +1115,9 @@ class LayoutEditorView(tk.Frame):
                     "size": s_size,
                     "color": s_color,
                     "contour": s_contour,
+                    "holes": s_holes or [],
+                    "stitching": s_stitching or [],
+                    "internal_cuts": s_internal_cuts or [],
                     "required": req_pairs,
                     "pairs": req_pairs,
                     "resto": resto
@@ -1436,6 +1467,141 @@ class LayoutEditorView(tk.Frame):
             self.redraw()
             self.update_status()
 
+    def _get_all_catalog_shapes(self) -> List[Dict[str, Any]]:
+        """Recupera moldes do banco de dados/catálogo para seleção de pasta."""
+        shapes = []
+        db_inst = getattr(self, "db", None)
+        if not db_inst and hasattr(self, "master") and hasattr(self.master, "db"):
+            db_inst = getattr(self.master, "db", None)
+        if not db_inst:
+            try:
+                from database.db import Database
+                db_inst = Database()
+            except Exception:
+                db_inst = None
+        if db_inst and hasattr(db_inst, "get_shapes"):
+            try:
+                shapes = db_inst.get_shapes() or []
+            except Exception as e:
+                logging.getLogger("LayoutEditor").warning(f"Erro ao buscar shapes do banco: {e}")
+        if not shapes:
+            shapes = list(getattr(self, "session_shapes", []) or [])
+        return shapes
+
+    def open_add_shape_dialog(self):
+        """Abre a caixa de diálogo para escolher em qual pasta o shape está e adicioná-lo ao layout."""
+        catalog_shapes = self._get_all_catalog_shapes()
+        db_inst = getattr(self, "db", None)
+        if not db_inst and hasattr(self, "master") and hasattr(self.master, "db"):
+            db_inst = getattr(self.master, "db", None)
+
+        AddShapesDialog(
+            self,
+            all_shapes=catalog_shapes,
+            current_session_shapes=getattr(self, "session_shapes", []),
+            on_add_callback=self._on_shapes_added_to_layout,
+            title_text="Adicionar Shape ao Layout",
+            action_button_text="➕ Adicionar ao Layout",
+            header_instruction="Selecione o shape para adicionar ao layout (escolha a pasta abaixo ou importe do disco):",
+            db=db_inst,
+        )
+
+    def show_add_shape_context_menu(self, event):
+        """Menu rápido no botão direito do (+) para escolher entre catálogo por pasta ou arquivo .die direto no disco."""
+        menu = tk.Menu(self, tearoff=0)
+        menu.add_command(
+            label="📁 Escolher Shape por Pasta (Catálogo)...",
+            command=self.open_add_shape_dialog
+        )
+        menu.add_command(
+            label="📂 Escolher Arquivo(s) .die no Disco...",
+            command=self.open_add_shape_file_dialog
+        )
+        try:
+            menu.tk_popup(event.x_root, event.y_root)
+        finally:
+            menu.grab_release()
+
+    def open_add_shape_file_dialog(self):
+        """Abre seletor de arquivos do sistema operacional para escolher arquivos de moldes (.die / .d)."""
+        initial_dir = os.path.expanduser("~")
+        if os.path.exists("/home/dola/Documentos/clone do job"):
+            initial_dir = "/home/dola/Documentos/clone do job"
+
+        files = filedialog.askopenfilenames(
+            title="Escolher Shape(s) fora do Layout (.die / .d)",
+            filetypes=[
+                ("Arquivos de Molde / CAD (*.die, *.d)", "*.die *.d *.DIE *.D"),
+                ("Todos os Arquivos (*.*)", "*.*")
+            ],
+            initialdir=initial_dir
+        )
+        if not files:
+            return
+
+        new_shapes = []
+        for fp in files:
+            try:
+                parsed = parse_die_file(fp)
+                name = parsed.get("name") or Path(fp).stem
+                contour = parsed.get("contour") or []
+                holes = parsed.get("holes") or []
+                stitching = parsed.get("stitching") or []
+                internal_cuts = parsed.get("internal_cuts") or []
+                folder_name = Path(fp).parent.name
+                shape_dict = {
+                    "id": f"die_{int(time.time()*1000)}_{Path(fp).stem}",
+                    "name": name,
+                    "size": parsed.get("size") or "41",
+                    "folder": folder_name,
+                    "contour": contour,
+                    "holes": holes,
+                    "stitching": stitching,
+                    "internal_cuts": internal_cuts,
+                    "filepath": fp,
+                    "pairs": 1,
+                    "resto": 0,
+                    "required": 1,
+                }
+                new_shapes.append(shape_dict)
+            except Exception as e:
+                logging.getLogger("LayoutEditor").error(f"Erro ao importar {fp}: {e}")
+
+        if new_shapes:
+            self._on_shapes_added_to_layout(new_shapes)
+
+    def _on_shapes_added_to_layout(self, selected_shapes):
+        """Callback executado ao confirmar moldes na caixa de diálogo de adição ao layout."""
+        if not selected_shapes:
+            return
+        # 1. Registra novos moldes na lista de moldes da sessão e atualiza alvos da barra lateral
+        self.add_session_shapes(selected_shapes)
+
+        # 2. Para cada shape selecionado, insere uma peça na mesa de corte
+        for shp in selected_shapes:
+            tgt = None
+            shp_id = shp.get("id")
+            if hasattr(self, "sidebar_targets") and self.sidebar_targets:
+                for t in self.sidebar_targets:
+                    if t.get("id") == shp_id:
+                        tgt = t
+                        break
+            if not tgt:
+                tgt = shp
+            self.add_piece_for_target(tgt)
+
+        if hasattr(self, "placed_pieces") and self.placed_pieces:
+            n_new = len(selected_shapes)
+            new_indices = list(range(max(0, len(self.placed_pieces) - n_new), len(self.placed_pieces)))
+            if new_indices:
+                self.selected_indices = new_indices
+                self.selected_index = new_indices[-1]
+
+        self.redraw()
+        self.update_status()
+        msg = f"{len(selected_shapes)} molde(s) adicionado(s) com sucesso ao layout!"
+        logging.getLogger("LayoutEditor").info(msg)
+
     def add_active_target(self):
         """Adiciona peça do molde ativo atualmente na barra lateral (+)."""
         if hasattr(self, "sidebar_targets") and self.sidebar_targets:
@@ -1475,11 +1641,16 @@ class LayoutEditorView(tk.Frame):
             "size": size_str,
             "color": color,
             "contour": copy.deepcopy(contour),
+            "holes": copy.deepcopy(target.get("holes") or []),
+            "stitching": copy.deepcopy(target.get("stitching") or []),
+            "internal_cuts": copy.deepcopy(target.get("internal_cuts") or []),
             "x": new_x,
             "y": new_y,
             "rotation": 0.0,
+            "is_mirrored": bool(target.get("is_mirrored", False)),
         })
         self.selected_index = len(self.placed_pieces) - 1
+        self.selected_indices = [self.selected_index]
         self._sync_current_layout_pieces()
         self.set_modified(True)
         self.redraw()

@@ -25,9 +25,24 @@ class ShapeEditorView(tk.Frame):
         self.on_save_cb = on_save
         self.on_import_die_cb = on_import_die
 
-        # Dados do molde (cópia profunda para permitir cancelamento/reversão)
-        self.original_shape = shape_data or self._default_shape()
-        self.shape = copy.deepcopy(self.original_shape)
+        # Suporte a múltiplos moldes / abas no Shape Editor
+        self.open_shapes = []
+        self.active_shape_index = 0
+        self.var_overlay_all = tk.BooleanVar(value=False)
+        self.var_rotate_all = tk.BooleanVar(value=True)
+        self._undo_op_counter = 0
+
+        # Dados do molde inicial (cópia profunda para permitir cancelamento/reversão)
+        if isinstance(shape_data, list) and shape_data:
+            for s in shape_data:
+                self.open_shapes.append(self._make_shape_entry(s))
+            self.original_shape = self.open_shapes[0]["original_shape"]
+            self.shape = self.open_shapes[0]["shape"]
+        else:
+            base_s = shape_data or self._default_shape()
+            self.original_shape = copy.deepcopy(base_s)
+            self.shape = copy.deepcopy(base_s)
+            self.open_shapes.append(self._make_shape_entry(self.shape))
 
         # Estado da edição CAD
         self.tool_mode = "select"  # "select", "add_point", "add_hole", "rotate"
@@ -92,24 +107,256 @@ class ShapeEditorView(tk.Frame):
             "stitching": []
         }
 
-    def load_shape(self, shape_data):
-        """Carrega um novo molde no editor."""
-        self.original_shape = copy.deepcopy(shape_data)
-        self.shape = copy.deepcopy(shape_data)
-        self.undo_stack.clear()
-        self.redo_stack.clear()
-        self._pre_drag_state = None
-        self.selected_vertex_idx = -1
-        self.selected_hole_idx = -1
-        self._initial_fit_needed = True
-        self.lbl_title.config(text=f"📐 Shape Editor - [{self.shape.get('name', 'Novo')}.die]")
-        self.entry_name.delete(0, tk.END)
-        self.entry_name.insert(0, self.shape.get("name", ""))
-        self.reset_view()
-        self.geometry_locked.set(True)
+    def _make_shape_entry(self, shape_data):
+        return {
+            "shape": copy.deepcopy(shape_data),
+            "original_shape": copy.deepcopy(shape_data),
+            "undo_stack": [],
+            "redo_stack": [],
+            "selected_vertex_idx": -1,
+            "selected_hole_idx": -1,
+            "geometry_locked": True,
+            "zoom": 1.8,
+            "pan_x": 220.0,
+            "pan_y": 180.0,
+            "_initial_fit_needed": True,
+            "is_dirty": False
+        }
+
+    def _save_current_shape_state(self):
+        """Salva o estado atual do molde ativo na lista de abas abertas."""
+        if 0 <= self.active_shape_index < len(self.open_shapes):
+            entry = self.open_shapes[self.active_shape_index]
+            entry["shape"] = self.shape
+            entry["original_shape"] = self.original_shape
+            entry["undo_stack"] = self.undo_stack
+            entry["redo_stack"] = self.redo_stack
+            entry["selected_vertex_idx"] = self.selected_vertex_idx
+            entry["selected_hole_idx"] = self.selected_hole_idx
+            entry["geometry_locked"] = self.geometry_locked.get()
+            entry["zoom"] = self.zoom
+            entry["pan_x"] = self.pan_x
+            entry["pan_y"] = self.pan_y
+            entry["_initial_fit_needed"] = self._initial_fit_needed
+
+    def load_shapes(self, shapes_list, active_index=0):
+        """Carrega múltiplos moldes no editor como abas."""
+        if not shapes_list:
+            return
+        self.open_shapes.clear()
+        for s in shapes_list:
+            if isinstance(s, dict):
+                self.open_shapes.append(self._make_shape_entry(s))
+
+        if not self.open_shapes:
+            self.open_shapes.append(self._make_shape_entry(self._default_shape()))
+
+        active_index = max(0, min(active_index, len(self.open_shapes) - 1))
+        self.active_shape_index = active_index
+
+        entry = self.open_shapes[self.active_shape_index]
+        self.original_shape = entry["original_shape"]
+        self.shape = entry["shape"]
+        self.undo_stack = entry["undo_stack"]
+        self.redo_stack = entry["redo_stack"]
+        self.selected_vertex_idx = entry["selected_vertex_idx"]
+        self.selected_hole_idx = entry["selected_hole_idx"]
+        self.geometry_locked.set(entry["geometry_locked"])
         self._update_lock_ui()
+        self._pre_drag_state = None
+        self._initial_fit_needed = True
+
+        shp_name = self.shape.get("name", "Molde")
+        shp_size = self.shape.get("size", "")
+        disp_title = f"{shp_name} (Tam: {shp_size})" if shp_size else shp_name
+        total_open = len(self.open_shapes)
+        count_suffix = f" [{active_index+1} de {total_open}]" if total_open > 1 else ""
+        self.lbl_title.config(text=f"📐 Shape Editor - [{disp_title}.die]{count_suffix}")
+
+        self.entry_name.delete(0, tk.END)
+        self.entry_name.insert(0, shp_name)
+        self._update_tab_bar()
+        self.reset_view()
         self.update_info_panel()
         self.redraw()
+
+    def load_shape(self, shape_data, replace=True):
+        """Carrega um molde (ou lista de moldes) no editor."""
+        if isinstance(shape_data, (list, tuple)):
+            self.load_shapes(list(shape_data))
+            return
+
+        if not isinstance(shape_data, dict):
+            return
+
+        if replace:
+            self.load_shapes([shape_data])
+            return
+
+        for idx, entry in enumerate(self.open_shapes):
+            s = entry["shape"]
+            if (s.get("id") and s.get("id") == shape_data.get("id")) or s.get("name") == shape_data.get("name"):
+                self.switch_to_shape(idx, fit=True)
+                return
+
+        self._save_current_shape_state()
+        self.open_shapes.append(self._make_shape_entry(shape_data))
+        self.switch_to_shape(len(self.open_shapes) - 1, fit=True)
+
+    def switch_to_shape(self, index, fit=False):
+        """Alterna para o molde no índice especificado."""
+        if not (0 <= index < len(self.open_shapes)):
+            return
+        if index == self.active_shape_index and self.shape == self.open_shapes[index]["shape"]:
+            return
+
+        self._save_current_shape_state()
+        self.active_shape_index = index
+        entry = self.open_shapes[index]
+
+        self.shape = entry["shape"]
+        self.original_shape = entry["original_shape"]
+        self.undo_stack = entry["undo_stack"]
+        self.redo_stack = entry["redo_stack"]
+        self.selected_vertex_idx = entry.get("selected_vertex_idx", -1)
+        self.selected_hole_idx = entry.get("selected_hole_idx", -1)
+        self.drag_target = None
+        self._pre_drag_state = None
+
+        self.geometry_locked.set(entry.get("geometry_locked", True))
+        self._update_lock_ui()
+
+        self.zoom = entry.get("zoom", 1.8)
+        self.pan_x = entry.get("pan_x", 220.0)
+        self.pan_y = entry.get("pan_y", 180.0)
+        self._initial_fit_needed = entry.get("_initial_fit_needed", True)
+
+        shp_name = self.shape.get("name", "Molde")
+        shp_size = self.shape.get("size", "")
+        disp_title = f"{shp_name} (Tam: {shp_size})" if shp_size else shp_name
+        total_open = len(self.open_shapes)
+        count_suffix = f" [{index+1} de {total_open}]" if total_open > 1 else ""
+        self.lbl_title.config(text=f"📐 Shape Editor - [{disp_title}.die]{count_suffix}")
+
+        self.entry_name.delete(0, tk.END)
+        self.entry_name.insert(0, shp_name)
+        self._update_tab_bar()
+
+        if fit or self._initial_fit_needed:
+            self.reset_view()
+        self.update_info_panel()
+        self.redraw()
+
+    def close_shape_tab(self, index):
+        """Fecha a aba do molde no índice especificado."""
+        if not (0 <= index < len(self.open_shapes)):
+            return
+        if len(self.open_shapes) <= 1:
+            self.on_close_click()
+            return
+
+        self._save_current_shape_state()
+        self.open_shapes.pop(index)
+
+        if self.active_shape_index >= len(self.open_shapes):
+            new_idx = len(self.open_shapes) - 1
+        elif index < self.active_shape_index:
+            new_idx = self.active_shape_index - 1
+        elif index == self.active_shape_index:
+            new_idx = min(index, len(self.open_shapes) - 1)
+        else:
+            new_idx = self.active_shape_index
+
+        self.active_shape_index = -1
+        self.switch_to_shape(new_idx, fit=True)
+
+    def next_shape(self, event=None):
+        if len(self.open_shapes) > 1:
+            nxt = (self.active_shape_index + 1) % len(self.open_shapes)
+            self.switch_to_shape(nxt)
+        return "break"
+
+    def prev_shape(self, event=None):
+        if len(self.open_shapes) > 1:
+            prv = (self.active_shape_index - 1) % len(self.open_shapes)
+            self.switch_to_shape(prv)
+        return "break"
+
+    def _on_combobox_shape_selected(self, event=None):
+        if hasattr(self, "cbo_shapes"):
+            idx = self.cbo_shapes.current()
+            if idx >= 0:
+                self.switch_to_shape(idx)
+
+    def _update_tab_bar(self):
+        """Atualiza visualmente as abas e o combobox de moldes abertos."""
+        if not hasattr(self, "tabs_container"):
+            return
+
+        for w in self.tabs_container.winfo_children():
+            w.destroy()
+
+        names = []
+        max_visible_tabs = 8
+        n_shapes = len(self.open_shapes)
+
+        for idx, entry in enumerate(self.open_shapes):
+            s = entry["shape"]
+            s_name = s.get("name", f"Molde_{idx+1}")
+            s_size = s.get("size", "")
+            disp = f"[{idx+1}] {s_name}" + (f" ({s_size})" if s_size else "")
+            names.append(disp)
+
+        if hasattr(self, "cbo_shapes"):
+            self.cbo_shapes["values"] = names
+            if 0 <= self.active_shape_index < len(names):
+                self.cbo_shapes.current(self.active_shape_index)
+
+        if hasattr(self, "cb_rotate_all"):
+            self.cb_rotate_all.config(state="normal" if n_shapes > 1 else "disabled")
+        if hasattr(self, "cb_overlay"):
+            self.cb_overlay.config(state="normal" if n_shapes > 1 else "disabled")
+
+        if n_shapes > max_visible_tabs:
+            start_tab = max(0, min(self.active_shape_index - (max_visible_tabs // 2), n_shapes - max_visible_tabs))
+            end_tab = start_tab + max_visible_tabs
+        else:
+            start_tab = 0
+            end_tab = n_shapes
+
+        if start_tab > 0:
+            tk.Label(self.tabs_container, text=f"... +{start_tab}", bg="#d4d0c8", fg="#555555", font=("Segoe UI", 7)).pack(side="left", padx=1)
+
+        for i in range(start_tab, end_tab):
+            entry = self.open_shapes[i]
+            s = entry["shape"]
+            is_active = (i == self.active_shape_index)
+            s_name = s.get("name", f"Molde_{i+1}")
+            s_size = s.get("size", "")
+            label_text = f"📐 {s_name}" + (f" [{s_size}]" if s_size else "")
+
+            tab_bg = "#ffffff" if is_active else "#ece9d8"
+            tab_fg = "#000080" if is_active else "#222222"
+            tab_relief = "sunken" if is_active else "raised"
+            tab_font = ("Segoe UI", 8, "bold") if is_active else ("Segoe UI", 8)
+
+            tab_btn_frame = tk.Frame(self.tabs_container, bg=tab_bg, relief=tab_relief, bd=2)
+            tab_btn_frame.pack(side="left", padx=1, pady=1)
+
+            btn_lbl = tk.Label(tab_btn_frame, text=label_text, bg=tab_bg, fg=tab_fg, font=tab_font, cursor="hand2")
+            btn_lbl.pack(side="left", padx=(4, 2), pady=1)
+            btn_lbl.bind("<Button-1>", lambda e, idx=i: self.switch_to_shape(idx))
+            tab_btn_frame.bind("<Button-1>", lambda e, idx=i: self.switch_to_shape(idx))
+
+            btn_x = tk.Label(tab_btn_frame, text="✕", bg=tab_bg, fg="#666666", font=("Segoe UI", 7, "bold"), cursor="hand2")
+            btn_x.pack(side="left", padx=(0, 4), pady=1)
+            btn_x.bind("<Enter>", lambda e, w=btn_x: w.config(fg="#cc0000"))
+            btn_x.bind("<Leave>", lambda e, w=btn_x: w.config(fg="#666666"))
+            btn_x.bind("<Button-1>", lambda e, idx=i: self.close_shape_tab(idx))
+
+        if end_tab < n_shapes:
+            rem = n_shapes - end_tab
+            tk.Label(self.tabs_container, text=f"+{rem} ...", bg="#d4d0c8", fg="#555555", font=("Segoe UI", 7)).pack(side="left", padx=1)
 
     def setup_ui(self):
         # 1. Barra de Título MDI Clássica Windows XP (#0a246a)
@@ -149,6 +396,8 @@ class ShapeEditorView(tk.Frame):
 
         # Ações de Arquivo
         tk.Button(toolbar, text="💾 Salvar", bg=THEME["bg_surface"], fg=THEME["text_main"], relief="raised", bd=2, font=("Segoe UI", 8, "bold"), command=self.save_changes).pack(side="left", padx=1)
+        self.btn_save_all = tk.Button(toolbar, text="💾 Salvar Todos", bg=THEME["bg_surface"], fg=THEME["text_main"], relief="raised", bd=1, font=("Segoe UI", 8), command=self.save_all_changes)
+        self.btn_save_all.pack(side="left", padx=1)
         tk.Button(toolbar, text="🔄 Reverter (Ctrl+Z)", bg=THEME["bg_surface"], fg=THEME["text_main"], relief="raised", bd=1, font=("Segoe UI", 8), command=self.undo_or_revert).pack(side="left", padx=1)
         tk.Button(toolbar, text="📂 Importar .die", bg=THEME["bg_surface"], fg=THEME["text_main"], relief="raised", bd=1, font=("Segoe UI", 8), command=self.import_die_file).pack(side="left", padx=1)
         tk.Button(toolbar, text="📤 Exportar .die", bg=THEME["bg_surface"], fg=THEME["text_main"], relief="raised", bd=1, font=("Segoe UI", 8), command=self.export_die_file).pack(side="left", padx=1)
@@ -196,6 +445,49 @@ class ShapeEditorView(tk.Frame):
 
         # Botão para alternar painel de informações
         tk.Checkbutton(toolbar, text="📋 Info", variable=self.show_info_panel, bg=THEME["bg_surface"], font=("Segoe UI", 8), command=self.toggle_info_panel).pack(side="right", padx=2)
+
+        # 2.5 Barra de Abas de Moldes Abertos (Tabs Bar)
+        self.tab_bar_frame = tk.Frame(self, bg="#d4d0c8", relief="groove", bd=1)
+        self.tab_bar_frame.pack(fill="x")
+
+        # Container esquerdo: botões de abas
+        self.tabs_container = tk.Frame(self.tab_bar_frame, bg="#d4d0c8")
+        self.tabs_container.pack(side="left", fill="x", expand=True, padx=2, pady=1)
+
+        # Container direito: Navegação rápida e Sobreposição
+        right_tab_ctrls = tk.Frame(self.tab_bar_frame, bg="#d4d0c8")
+        right_tab_ctrls.pack(side="right", padx=4, pady=1)
+
+        # Checkbox "Sobrepor Todos (Grade)"
+        self.cb_overlay = tk.Checkbutton(
+            right_tab_ctrls, text="👁️ Sobrepor Todos (Grade)",
+            variable=self.var_overlay_all,
+            bg="#d4d0c8", fg="#000000", font=("Segoe UI", 8, "bold"),
+            command=self.redraw
+        )
+        self.cb_overlay.pack(side="right", padx=(4, 2))
+
+        # Checkbox "Girar Todos"
+        self.cb_rotate_all = tk.Checkbutton(
+            right_tab_ctrls, text="🔄 Girar Todos",
+            variable=self.var_rotate_all,
+            bg="#d4d0c8", fg="#000000", font=("Segoe UI", 8, "bold")
+        )
+        self.cb_rotate_all.pack(side="right", padx=(4, 2))
+
+        # Botões de navegação rápida
+        self.btn_next_tab = tk.Button(right_tab_ctrls, text="▶", font=("Segoe UI", 8, "bold"), width=2, height=1, relief="raised", bd=1, command=self.next_shape)
+        self.btn_next_tab.pack(side="right", padx=1)
+
+        self.btn_prev_tab = tk.Button(right_tab_ctrls, text="◀", font=("Segoe UI", 8, "bold"), width=2, height=1, relief="raised", bd=1, command=self.prev_shape)
+        self.btn_prev_tab.pack(side="right", padx=1)
+
+        # Seletor rápido Combobox
+        self.cbo_shapes = ttk.Combobox(right_tab_ctrls, state="readonly", width=22, font=("Segoe UI", 8))
+        self.cbo_shapes.pack(side="right", padx=4)
+        self.cbo_shapes.bind("<<ComboboxSelected>>", self._on_combobox_shape_selected)
+
+        self._update_tab_bar()
 
         # 3. Área de Trabalho Principal (Canvas CAD à esquerda, Painel de Info à direita)
         self.work_split = tk.PanedWindow(self, orient="horizontal", bg=THEME["bg_workspace"], bd=0, sashwidth=4, sashrelief="raised")
@@ -248,6 +540,18 @@ class ShapeEditorView(tk.Frame):
         self.bind("<BackSpace>", lambda e: self.delete_selected())
         self.canvas.bind("<Delete>", lambda e: self.delete_selected())
         self.canvas.bind("<BackSpace>", lambda e: self.delete_selected())
+
+        # Atalhos de Navegação entre Moldes Abertos (Abas)
+        self.bind("<Control-Tab>", self.next_shape)
+        self.bind("<Control-ISO_Left_Tab>", self.prev_shape)
+        self.bind("<Control-Shift-Tab>", self.prev_shape)
+        self.bind("<Control-Prior>", self.prev_shape)
+        self.bind("<Control-Next>", self.next_shape)
+        self.canvas.bind("<Control-Tab>", self.next_shape)
+        self.canvas.bind("<Control-ISO_Left_Tab>", self.prev_shape)
+        self.canvas.bind("<Control-Shift-Tab>", self.prev_shape)
+        self.canvas.bind("<Control-Prior>", self.prev_shape)
+        self.canvas.bind("<Control-Next>", self.next_shape)
 
         # Menu de Contexto CAD (Botão Direito)
         self.ctx_menu = tk.Menu(self, tearoff=0, bg=THEME["bg_surface"], fg=THEME["text_main"])
@@ -441,7 +745,10 @@ class ShapeEditorView(tk.Frame):
             if hasattr(self, "btn_tool_rotate"):
                 self.btn_tool_rotate.config(relief="sunken", bg=THEME["bg_hover"])
             self.canvas.config(cursor="exchange")
-            self.lbl_sbar_status.config(text="Ferramenta: Clique e arraste para Girar o molde")
+            if getattr(self, "var_rotate_all", None) and self.var_rotate_all.get() and len(self.open_shapes) > 1:
+                self.lbl_sbar_status.config(text=f"Ferramenta: Clique e arraste para Girar todos os {len(self.open_shapes)} moldes")
+            else:
+                self.lbl_sbar_status.config(text="Ferramenta: Clique e arraste para Girar o molde")
 
     def toggle_info_panel(self):
         if self.show_info_panel.get():
@@ -524,10 +831,32 @@ class ShapeEditorView(tk.Frame):
     # =========================================================================
     def save_changes(self):
         self.on_name_change()
+        self._save_current_shape_state()
         if self.on_save_cb:
             self.on_save_cb(self.shape)
-        self.lbl_sbar_status.config(text=f"Molde '{self.shape.get('name')}' salvo com sucesso!")
-        messagebox.showinfo("Shape Editor", f"Molde '{self.shape.get('name')}' salvo com sucesso!", parent=self)
+        self.original_shape = copy.deepcopy(self.shape)
+        if 0 <= self.active_shape_index < len(self.open_shapes):
+            self.open_shapes[self.active_shape_index]["original_shape"] = copy.deepcopy(self.shape)
+            self.open_shapes[self.active_shape_index]["is_dirty"] = False
+        shp_name = self.shape.get("name", "Molde")
+        self.lbl_sbar_status.config(text=f"Molde '{shp_name}' salvo com sucesso!")
+        messagebox.showinfo("Shape Editor", f"Molde '{shp_name}' salvo com sucesso!", parent=self)
+
+    def save_all_changes(self):
+        """Salva todos os moldes abertos."""
+        self.on_name_change()
+        self._save_current_shape_state()
+        count = 0
+        for entry in self.open_shapes:
+            s = entry["shape"]
+            if self.on_save_cb:
+                self.on_save_cb(s)
+            entry["original_shape"] = copy.deepcopy(s)
+            entry["is_dirty"] = False
+            count += 1
+        self.original_shape = copy.deepcopy(self.shape)
+        self.lbl_sbar_status.config(text=f"Todos os {count} moldes foram salvos com sucesso!")
+        messagebox.showinfo("Shape Editor", f"Todos os {count} moldes abertos foram salvos com sucesso!", parent=self)
 
     def push_undo(self):
         """Salva uma cópia do molde atual na pilha de desfazer (Ctrl+Z)."""
@@ -536,17 +865,75 @@ class ShapeEditorView(tk.Frame):
             self.undo_stack.pop(0)
         self.redo_stack.clear()
 
+    def push_multi_undo(self, pre_states_dict):
+        """Registra uma operação que modificou múltiplos moldes para desfazer unificado (Ctrl+Z)."""
+        self._undo_op_counter = getattr(self, "_undo_op_counter", 0) + 1
+        op_id = self._undo_op_counter
+        all_snapshots = copy.deepcopy(pre_states_dict)
+        for idx, entry in enumerate(self.open_shapes):
+            if idx in all_snapshots:
+                record = {
+                    "_type": "all_shapes",
+                    "op_id": op_id,
+                    "all_shapes": all_snapshots
+                }
+                entry["undo_stack"].append(record)
+                if len(entry["undo_stack"]) > 50:
+                    entry["undo_stack"].pop(0)
+                entry["redo_stack"].clear()
+                entry["is_dirty"] = True
+
     def undo_or_revert(self, event=None):
         """Atalho Ctrl+Z: desfaz/reverte a última alteração ou volta o molde ao original."""
         if self.undo_stack:
             prev_state = self.undo_stack.pop()
-            self.redo_stack.append(copy.deepcopy(self.shape))
-            self.shape = prev_state
-            self.selected_vertex_idx = -1
-            self.selected_hole_idx = -1
-            self.update_info_panel()
-            self.redraw()
-            self.lbl_sbar_status.config(text="Alteração desfeita (Ctrl+Z).")
+            if isinstance(prev_state, dict) and prev_state.get("_type") == "all_shapes":
+                op_id = prev_state.get("op_id")
+                all_pre = prev_state.get("all_shapes", {})
+                current_all = {i: copy.deepcopy(entry["shape"]) for i, entry in enumerate(self.open_shapes)}
+
+                # Adiciona no redo para o molde ativo
+                self.redo_stack.append({
+                    "_type": "all_shapes",
+                    "op_id": op_id,
+                    "all_shapes": current_all
+                })
+
+                # Sincroniza pilhas dos outros moldes abertos
+                for idx, entry in enumerate(self.open_shapes):
+                    if idx != self.active_shape_index:
+                        if entry["undo_stack"] and isinstance(entry["undo_stack"][-1], dict) and entry["undo_stack"][-1].get("op_id") == op_id:
+                            entry["undo_stack"].pop()
+                        entry["redo_stack"].append({
+                            "_type": "all_shapes",
+                            "op_id": op_id,
+                            "all_shapes": current_all
+                        })
+
+                # Restaura todos os moldes
+                for idx, s_data in all_pre.items():
+                    if 0 <= idx < len(self.open_shapes):
+                        self.open_shapes[idx]["shape"] = copy.deepcopy(s_data)
+
+                if 0 <= self.active_shape_index < len(self.open_shapes):
+                    self.shape = self.open_shapes[self.active_shape_index]["shape"]
+                self.selected_vertex_idx = -1
+                self.selected_hole_idx = -1
+                self.update_info_panel()
+                self.redraw()
+                self.lbl_sbar_status.config(text=f"Alteração desfeita em todos os {len(all_pre)} moldes (Ctrl+Z).")
+                return "break"
+            else:
+                self.redo_stack.append(copy.deepcopy(self.shape))
+                self.shape = prev_state
+                if 0 <= self.active_shape_index < len(self.open_shapes):
+                    self.open_shapes[self.active_shape_index]["shape"] = prev_state
+                self.selected_vertex_idx = -1
+                self.selected_hole_idx = -1
+                self.update_info_panel()
+                self.redraw()
+                self.lbl_sbar_status.config(text="Alteração desfeita (Ctrl+Z).")
+                return "break"
         elif self.shape != self.original_shape:
             self.push_undo()
             self.shape = copy.deepcopy(self.original_shape)
@@ -710,8 +1097,59 @@ class ShapeEditorView(tk.Frame):
         self.redraw()
         self.lbl_sbar_status.config(text="Molde alinhado na origem (20, 20).")
 
-    def rotate_shape(self, angle_deg: float, center=None):
-        """Aplica uma rotação em graus em torno do centro do molde (ou centro informado)."""
+    def _apply_rotation_to_shape_dict(self, target_shape, base_shape, cx, cy, cos_a, sin_a):
+        """Aplica rotação em torno de (cx, cy) a partir de base_shape para target_shape."""
+        # 1. Contorno
+        new_contour = []
+        for pt in base_shape.get("contour", []):
+            dx = pt["x"] - cx
+            dy = pt["y"] - cy
+            new_pt = copy.copy(pt)
+            new_pt["x"] = round(cx + dx * cos_a - dy * sin_a, 2)
+            new_pt["y"] = round(cy + dx * sin_a + dy * cos_a, 2)
+            new_contour.append(new_pt)
+        target_shape["contour"] = new_contour
+
+        # 2. Furos
+        new_holes = []
+        for h in base_shape.get("holes", []):
+            dx = h["x"] - cx
+            dy = h["y"] - cy
+            new_h = copy.copy(h)
+            new_h["x"] = round(cx + dx * cos_a - dy * sin_a, 2)
+            new_h["y"] = round(cy + dx * sin_a + dy * cos_a, 2)
+            new_holes.append(new_h)
+        target_shape["holes"] = new_holes
+
+        # 3. Costuras
+        new_stitching = []
+        for polyline in base_shape.get("stitching", []):
+            if not isinstance(polyline, list):
+                continue
+            new_poly = []
+            for pt in polyline:
+                if isinstance(pt, dict) and "x" in pt and "y" in pt:
+                    dx = pt["x"] - cx
+                    dy = pt["y"] - cy
+                    new_pt = copy.copy(pt)
+                    new_pt["x"] = round(cx + dx * cos_a - dy * sin_a, 2)
+                    new_pt["y"] = round(cy + dx * sin_a + dy * cos_a, 2)
+                    new_poly.append(new_pt)
+                elif isinstance(pt, (list, tuple)) and len(pt) >= 2:
+                    dx = pt[0] - cx
+                    dy = pt[1] - cy
+                    new_poly.append([
+                        round(cx + dx * cos_a - dy * sin_a, 2),
+                        round(cy + dx * sin_a + dy * cos_a, 2)
+                    ])
+            new_stitching.append(new_poly)
+        target_shape["stitching"] = new_stitching
+
+    def rotate_shape(self, angle_deg: float, center=None, all_shapes=None):
+        """Aplica uma rotação em graus em torno do centro do molde (ou centro informado).
+        Se all_shapes for True (ou None quando var_rotate_all estiver ativo com múltiplos moldes abertos),
+        a rotação é aplicada a todos os moldes abertos em torno do centro comum.
+        """
         contour = self.shape.get("contour", [])
         if not contour:
             return
@@ -723,40 +1161,30 @@ class ShapeEditorView(tk.Frame):
         cos_a = math.cos(rad)
         sin_a = math.sin(rad)
 
-        self.push_undo()
+        if all_shapes is None:
+            all_shapes = getattr(self, "var_rotate_all", None) and self.var_rotate_all.get() and len(self.open_shapes) > 1
 
-        # Contorno
-        for pt in self.shape.get("contour", []):
-            dx = pt["x"] - cx
-            dy = pt["y"] - cy
-            pt["x"] = round(cx + dx * cos_a - dy * sin_a, 2)
-            pt["y"] = round(cy + dx * sin_a + dy * cos_a, 2)
-
-        # Furos
-        for h in self.shape.get("holes", []):
-            dx = h["x"] - cx
-            dy = h["y"] - cy
-            h["x"] = round(cx + dx * cos_a - dy * sin_a, 2)
-            h["y"] = round(cy + dx * sin_a + dy * cos_a, 2)
-
-        # Costuras
-        for polyline in self.shape.get("stitching", []):
-            if isinstance(polyline, list):
-                for pt in polyline:
-                    if isinstance(pt, dict) and "x" in pt and "y" in pt:
-                        dx = pt["x"] - cx
-                        dy = pt["y"] - cy
-                        pt["x"] = round(cx + dx * cos_a - dy * sin_a, 2)
-                        pt["y"] = round(cy + dx * sin_a + dy * cos_a, 2)
-                    elif isinstance(pt, (list, tuple)) and len(pt) >= 2:
-                        dx = pt[0] - cx
-                        dy = pt[1] - cy
-                        pt[0] = round(cx + dx * cos_a - dy * sin_a, 2)
-                        pt[1] = round(cy + dx * sin_a + dy * cos_a, 2)
-
-        self.update_info_panel()
-        self.redraw()
-        self.lbl_sbar_status.config(text=f"Molde rotacionado em {angle_deg:.1f}°.")
+        if all_shapes and len(self.open_shapes) > 1:
+            pre_states = {i: copy.deepcopy(entry["shape"]) for i, entry in enumerate(self.open_shapes)}
+            self.push_multi_undo(pre_states)
+            for idx, entry in enumerate(self.open_shapes):
+                s = entry["shape"]
+                self._apply_rotation_to_shape_dict(s, s, cx, cy, cos_a, sin_a)
+                entry["is_dirty"] = True
+            if 0 <= self.active_shape_index < len(self.open_shapes):
+                self.shape = self.open_shapes[self.active_shape_index]["shape"]
+            self.update_info_panel()
+            self.redraw()
+            self.lbl_sbar_status.config(text=f"Todos os {len(self.open_shapes)} moldes rotacionados em {angle_deg:.1f}°.")
+        else:
+            self.push_undo()
+            self._apply_rotation_to_shape_dict(self.shape, self.shape, cx, cy, cos_a, sin_a)
+            if 0 <= self.active_shape_index < len(self.open_shapes):
+                self.open_shapes[self.active_shape_index]["shape"] = self.shape
+                self.open_shapes[self.active_shape_index]["is_dirty"] = True
+            self.update_info_panel()
+            self.redraw()
+            self.lbl_sbar_status.config(text=f"Molde rotacionado em {angle_deg:.1f}°.")
 
     def delete_selected(self):
         """Exclui o vértice ou furo selecionado."""
@@ -1003,12 +1431,27 @@ class ShapeEditorView(tk.Frame):
             cx = (min_x + max_x) / 2.0
             cy = (min_y + max_y) / 2.0
             self._rotate_center = (cx, cy)
-            self._rotate_base_shape = copy.deepcopy(self.shape)
-            self._pre_drag_state = copy.deepcopy(self.shape)
             self._rotate_start_angle = math.atan2(wy - cy, wx - cx)
             self._rotate_current_deg = 0.0
             self.drag_target = ("rotate", 0)
-            self.lbl_sbar_status.config(text="Rotação: 0.0°")
+
+            rotate_all = getattr(self, "var_rotate_all", None) and self.var_rotate_all.get() and len(self.open_shapes) > 1
+            if rotate_all:
+                self._rotate_base_shapes = {
+                    i: copy.deepcopy(entry["shape"]) for i, entry in enumerate(self.open_shapes)
+                }
+                self._pre_drag_multi = {
+                    i: copy.deepcopy(entry["shape"]) for i, entry in enumerate(self.open_shapes)
+                }
+                self._rotate_base_shape = copy.deepcopy(self.shape)
+                self._pre_drag_state = copy.deepcopy(self.shape)
+                self.lbl_sbar_status.config(text=f"Girando todos os {len(self.open_shapes)} moldes: 0.0°")
+            else:
+                self._rotate_base_shapes = None
+                self._pre_drag_multi = None
+                self._rotate_base_shape = copy.deepcopy(self.shape)
+                self._pre_drag_state = copy.deepcopy(self.shape)
+                self.lbl_sbar_status.config(text="Rotação: 0.0°")
 
     def _find_best_edge_insertion(self, wx, wy):
         """Determina a melhor posição no array do contorno para inserir o novo ponto."""
@@ -1071,7 +1514,7 @@ class ShapeEditorView(tk.Frame):
                 self.update_info_panel()
                 self.redraw()
         elif target_type == "rotate":
-            if not hasattr(self, "_rotate_center") or not hasattr(self, "_rotate_base_shape"):
+            if not hasattr(self, "_rotate_center") or (not hasattr(self, "_rotate_base_shape") and not hasattr(self, "_rotate_base_shapes")):
                 return
             cx, cy = self._rotate_center
             curr_angle = math.atan2(wy - cy, wx - cx)
@@ -1082,53 +1525,20 @@ class ShapeEditorView(tk.Frame):
             cos_a = math.cos(delta_rad)
             sin_a = math.sin(delta_rad)
 
-            # 1. Rotaciona contorno
-            new_contour = []
-            for pt in self._rotate_base_shape.get("contour", []):
-                dx = pt["x"] - cx
-                dy = pt["y"] - cy
-                new_pt = copy.copy(pt)
-                new_pt["x"] = round(cx + dx * cos_a - dy * sin_a, 2)
-                new_pt["y"] = round(cy + dx * sin_a + dy * cos_a, 2)
-                new_contour.append(new_pt)
-            self.shape["contour"] = new_contour
+            if getattr(self, "_rotate_base_shapes", None):
+                for idx, base_s in self._rotate_base_shapes.items():
+                    if 0 <= idx < len(self.open_shapes):
+                        target_s = self.open_shapes[idx]["shape"]
+                        self._apply_rotation_to_shape_dict(target_s, base_s, cx, cy, cos_a, sin_a)
+                if 0 <= self.active_shape_index < len(self.open_shapes):
+                    self.shape = self.open_shapes[self.active_shape_index]["shape"]
+                self.lbl_sbar_status.config(text=f"Girando todos os {len(self.open_shapes)} moldes: {delta_deg:.1f}°")
+            elif hasattr(self, "_rotate_base_shape"):
+                self._apply_rotation_to_shape_dict(self.shape, self._rotate_base_shape, cx, cy, cos_a, sin_a)
+                if 0 <= self.active_shape_index < len(self.open_shapes):
+                    self.open_shapes[self.active_shape_index]["shape"] = self.shape
+                self.lbl_sbar_status.config(text=f"Rotação: {delta_deg:.1f}°")
 
-            # 2. Rotaciona furos
-            new_holes = []
-            for h in self._rotate_base_shape.get("holes", []):
-                dx = h["x"] - cx
-                dy = h["y"] - cy
-                new_h = copy.copy(h)
-                new_h["x"] = round(cx + dx * cos_a - dy * sin_a, 2)
-                new_h["y"] = round(cy + dx * sin_a + dy * cos_a, 2)
-                new_holes.append(new_h)
-            self.shape["holes"] = new_holes
-
-            # 3. Rotaciona costuras
-            new_stitching = []
-            for polyline in self._rotate_base_shape.get("stitching", []):
-                if not isinstance(polyline, list):
-                    continue
-                new_poly = []
-                for pt in polyline:
-                    if isinstance(pt, dict) and "x" in pt and "y" in pt:
-                        dx = pt["x"] - cx
-                        dy = pt["y"] - cy
-                        new_pt = copy.copy(pt)
-                        new_pt["x"] = round(cx + dx * cos_a - dy * sin_a, 2)
-                        new_pt["y"] = round(cy + dx * sin_a + dy * cos_a, 2)
-                        new_poly.append(new_pt)
-                    elif isinstance(pt, (list, tuple)) and len(pt) >= 2:
-                        dx = pt[0] - cx
-                        dy = pt[1] - cy
-                        new_poly.append([
-                            round(cx + dx * cos_a - dy * sin_a, 2),
-                            round(cy + dx * sin_a + dy * cos_a, 2)
-                        ])
-                new_stitching.append(new_poly)
-            self.shape["stitching"] = new_stitching
-
-            self.lbl_sbar_status.config(text=f"Rotação: {delta_deg:.1f}°")
             self.update_info_panel()
             self.redraw()
 
@@ -1136,19 +1546,37 @@ class ShapeEditorView(tk.Frame):
         is_rotate = self.drag_target and self.drag_target[0] == "rotate"
         final_deg = getattr(self, "_rotate_current_deg", 0.0)
 
-        if self._pre_drag_state is not None:
+        if getattr(self, "_pre_drag_multi", None) is not None:
+            pre_multi = self._pre_drag_multi
+            has_changes = any(
+                0 <= i < len(self.open_shapes) and self.open_shapes[i]["shape"] != pre_multi[i]
+                for i in pre_multi
+            )
+            if has_changes:
+                self.push_multi_undo(pre_multi)
+            self._pre_drag_multi = None
+            self._pre_drag_state = None
+        elif self._pre_drag_state is not None:
             if self.shape != self._pre_drag_state:
                 self.undo_stack.append(self._pre_drag_state)
                 if len(self.undo_stack) > 50:
                     self.undo_stack.pop(0)
                 self.redo_stack.clear()
+                if 0 <= self.active_shape_index < len(self.open_shapes):
+                    self.open_shapes[self.active_shape_index]["is_dirty"] = True
             self._pre_drag_state = None
+
         self.drag_target = None
         if hasattr(self, "_rotate_base_shape"):
             del self._rotate_base_shape
+        if hasattr(self, "_rotate_base_shapes"):
+            del self._rotate_base_shapes
 
         if is_rotate:
-            self.lbl_sbar_status.config(text=f"Rotação aplicada: {final_deg:.1f}°")
+            if getattr(self, "var_rotate_all", None) and self.var_rotate_all.get() and len(self.open_shapes) > 1:
+                self.lbl_sbar_status.config(text=f"Rotação aplicada em todos os {len(self.open_shapes)} moldes: {final_deg:.1f}°")
+            else:
+                self.lbl_sbar_status.config(text=f"Rotação aplicada: {final_deg:.1f}°")
 
     def on_pan_start(self, event):
         self.is_panning = True
@@ -1278,6 +1706,51 @@ class ShapeEditorView(tk.Frame):
         if self.show_grid.get():
             self._draw_grid(w, h)
 
+        # 1.5 Moldes Secundários Sobrepostos (Modo Grade/Escalonamento ou durante rotação de todos)
+        show_all = (getattr(self, "var_overlay_all", None) and self.var_overlay_all.get()) or \
+                   (bool(self.drag_target and self.drag_target[0] == "rotate") and getattr(self, "var_rotate_all", None) and self.var_rotate_all.get())
+        if show_all and len(self.open_shapes) > 1:
+            overlay_palette = [
+                "#9333ea", "#06b6d4", "#f97316", "#10b981", "#ec4899",
+                "#eab308", "#6366f1", "#14b8a6", "#84cc16", "#f43f5e"
+            ]
+            for idx, entry in enumerate(self.open_shapes):
+                if idx == self.active_shape_index:
+                    continue
+                o_shape = entry["shape"]
+                o_contour = o_shape.get("contour", [])
+                if len(o_contour) < 3:
+                    continue
+
+                col = overlay_palette[idx % len(overlay_palette)]
+                o_pts = []
+                for pt in o_contour:
+                    sx, sy = self.world_to_screen(pt["x"], pt["y"])
+                    o_pts.extend([sx, sy])
+
+                # Contorno do molde secundário tracejado
+                self.canvas.create_polygon(
+                    o_pts, fill="", outline=col, width=1, dash=(4, 2), tags=("overlay_shapes",)
+                )
+
+                # Rótulo com identificação do tamanho/nome
+                s_size = o_shape.get("size", "")
+                s_name = o_shape.get("name", "")
+                tag_label = f"[{s_size}] {s_name}" if s_size else f"{s_name}"
+                if len(o_pts) >= 2:
+                    self.canvas.create_text(
+                        o_pts[0] + 6, o_pts[1] - 6, text=tag_label, fill=col,
+                        font=("Segoe UI", 8, "bold"), anchor="sw", tags=("overlay_shapes",)
+                    )
+
+                # Furos do molde secundário
+                for h in o_shape.get("holes", []):
+                    hx, hy = self.world_to_screen(h["x"], h["y"])
+                    hr = max(2, h.get("r", 3.0) * self.zoom)
+                    self.canvas.create_oval(
+                        hx - hr, hy - hr, hx + hr, hy + hr, outline=col, width=1, dash=(2, 2), tags=("overlay_shapes",)
+                    )
+
         contour = self.shape.get("contour", [])
         holes = self.shape.get("holes", [])
 
@@ -1359,6 +1832,14 @@ class ShapeEditorView(tk.Frame):
                 if self.show_coords.get():
                     coord_str = f"({pt['x']:.0f},{pt['y']:.0f})"
                     self.canvas.create_text(sx + 8, sy + 10, text=coord_str, fill="#666666", font=("Segoe UI", 6), anchor="nw")
+
+        # 5. Indicador de centro de rotação (pivô)
+        if self.drag_target and self.drag_target[0] == "rotate" and hasattr(self, "_rotate_center"):
+            cx, cy = self._rotate_center
+            scx, scy = self.world_to_screen(cx, cy)
+            self.canvas.create_oval(scx - 5, scy - 5, scx + 5, scy + 5, fill="#f59e0b", outline="#b45309", width=2, tags=("rotate_ui",))
+            self.canvas.create_line(scx - 10, scy, scx + 10, scy, fill="#b45309", width=1, tags=("rotate_ui",))
+            self.canvas.create_line(scx, scy - 10, scx, scy + 10, fill="#b45309", width=1, tags=("rotate_ui",))
 
     def show_stitching(self):
         """

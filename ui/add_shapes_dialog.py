@@ -4,17 +4,26 @@ Diálogo para Seleção e Adição de Moldes à Sessão de Corte (Aba Moldes)
 """
 
 import copy
+from pathlib import Path
 import tkinter as tk
-from tkinter import ttk, messagebox
+from tkinter import ttk, messagebox, filedialog
 from config import THEME
 from ui.sort_utils import natural_sort_key, size_sort_key
+from cad.die_parser import parse_die_file
 
 
 class AddShapesDialog(tk.Toplevel):
-    def __init__(self, parent, all_shapes, current_session_shapes=None, on_add_callback=None, **kwargs):
+    def __init__(self, parent, all_shapes, current_session_shapes=None, on_add_callback=None,
+                 title_text="Adicionar Moldes à Sessão", action_button_text="➕ Adicionar à Sessão",
+                 header_instruction="Selecione os moldes do catálogo que deseja adicionar à sessão de corte:",
+                 db=None, **kwargs):
         super().__init__(parent, bg=THEME["bg_surface"], **kwargs)
-        self.title("Adicionar Moldes à Sessão")
-        self.geometry("720x540")
+        self.title_text = title_text
+        self.action_button_text = action_button_text
+        self.header_instruction = header_instruction
+        self.db = db
+        self.title(self.title_text)
+        self.geometry("740x540")
         self.minsize(580, 420)
         self.transient(parent)
         self.grab_set()
@@ -50,7 +59,7 @@ class AddShapesDialog(tk.Toplevel):
 
         tk.Label(
             top_frame,
-            text="Selecione os moldes do catálogo que deseja adicionar à sessão de corte:",
+            text=self.header_instruction,
             bg=THEME["bg_surface"],
             fg=THEME["text_main"],
             font=("Segoe UI", 9, "bold")
@@ -65,12 +74,24 @@ class AddShapesDialog(tk.Toplevel):
         self.entry_search.bind("<KeyRelease>", lambda e: self.filter_tree())
 
         # Filtro de Pasta
-        tk.Label(filter_bar, text="Pasta:", bg=THEME["bg_surface"], fg=THEME["text_main"], font=("Segoe UI", 9)).pack(side="left", padx=(0, 4))
+        tk.Label(filter_bar, text="Pasta:", bg=THEME["bg_surface"], fg=THEME["text_main"], font=("Segoe UI", 9, "bold")).pack(side="left", padx=(0, 4))
         folders = ["(Todas as Pastas)"] + sorted(list({s.get("folder") or "Raiz" for s in self.all_shapes}))
         self.cb_folder = ttk.Combobox(filter_bar, values=folders, state="readonly", width=18, font=("Segoe UI", 9))
         self.cb_folder.set("(Todas as Pastas)")
         self.cb_folder.pack(side="left")
         self.cb_folder.bind("<<ComboboxSelected>>", lambda e: self.filter_tree())
+
+        # Botão para escolher pasta / arquivos .die do disco
+        self.btn_import_disk = tk.Button(
+            filter_bar,
+            text="📂 Do Disco (.die)...",
+            relief="raised", bd=1,
+            bg=THEME["bg_surface"], fg=THEME["text_main"],
+            font=("Segoe UI", 8, "bold"),
+            command=self.import_die_files,
+            cursor="hand2"
+        )
+        self.btn_import_disk.pack(side="left", padx=(6, 0))
 
         # 2. Barra de Seleção Rápida e Pares Padrão
         bar_actions = tk.Frame(self, bg=THEME["bg_card"], padx=10, pady=6, relief="groove", bd=1)
@@ -150,11 +171,12 @@ class AddShapesDialog(tk.Toplevel):
             command=self.destroy
         ).pack(side="right", padx=(6, 0))
 
-        tk.Button(
-            bot_bar, text="➕ Adicionar à Sessão", relief="raised", bd=2, width=22,
+        self.btn_confirm = tk.Button(
+            bot_bar, text=self.action_button_text, relief="raised", bd=2, width=22,
             bg="#2563eb", fg="#ffffff", font=("Segoe UI", 9, "bold"),
             command=self.confirm_add
-        ).pack(side="right", padx=4)
+        )
+        self.btn_confirm.pack(side="right", padx=4)
 
     def populate_tree(self):
         query = self.entry_search.get().strip().lower()
@@ -328,3 +350,67 @@ class AddShapesDialog(tk.Toplevel):
             self.on_add_callback(selected_shapes)
 
         self.destroy()
+
+    def import_die_files(self):
+        """Abre caixa para escolher arquivos .die/.d em qualquer pasta do computador."""
+        file_paths = filedialog.askopenfilenames(
+            parent=self,
+            title="Escolher Shape(s) ATOM (.die / .d)",
+            filetypes=[
+                ("Arquivos Shape ATOM (*.die, *.d)", ("*.die", "*.Die", "*.DIE", "*.d", "*.D")),
+                ("Moldes ATOM (.die)", ("*.die", "*.Die", "*.DIE")),
+                ("Todos os Arquivos (*.*)", "*.*")
+            ]
+        )
+        if not file_paths:
+            return
+
+        added_count = 0
+        for fp in file_paths:
+            try:
+                shape_data = parse_die_file(fp)
+                folder_name = Path(fp).parent.name or "Disco"
+                shape_name = shape_data.get("name") or Path(fp).stem
+                s_size = str(shape_data.get("size") or "41")
+
+                shp_id = None
+                if getattr(self, "db", None):
+                    try:
+                        shp_id = self.db.create_shape(
+                            name=shape_name,
+                            contour=shape_data.get("contour", []),
+                            holes=shape_data.get("holes", []),
+                            stitching=shape_data.get("stitching", []),
+                            size=s_size,
+                            folder=folder_name
+                        )
+                    except Exception:
+                        shp_id = None
+
+                if not shp_id:
+                    shp_id = f"ext_{Path(fp).stem}_{len(self.all_shapes)+1}"
+
+                new_shape = {
+                    "id": shp_id,
+                    "name": shape_name,
+                    "folder": folder_name,
+                    "size": s_size,
+                    "contour": shape_data.get("contour", []),
+                    "holes": shape_data.get("holes", []),
+                    "stitching": shape_data.get("stitching", []),
+                    "color": shape_data.get("color"),
+                    "pairs": 24,
+                    "file_path": fp
+                }
+                self.all_shapes.append(new_shape)
+                self.selected_map[shp_id] = True
+                self.pairs_map[shp_id] = 24
+                added_count += 1
+            except Exception as e:
+                messagebox.showerror("Erro ao Importar Shape", f"Falha ao ler '{Path(fp).name}':\n{e}", parent=self)
+
+        if added_count > 0:
+            folders = ["(Todas as Pastas)"] + sorted(list({s.get("folder") or "Raiz" for s in self.all_shapes}))
+            self.cb_folder["values"] = folders
+            self.populate_tree()
+            self.update_count_label()
