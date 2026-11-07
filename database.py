@@ -143,6 +143,16 @@ class DatabaseManager:
                 except Exception:
                     pass
                 try:
+                    cursor.execute("""
+                    SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS
+                    WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'shapes' AND COLUMN_NAME = 'shape_format'
+                    """)
+                    if not cursor.fetchone():
+                        cursor.execute("ALTER TABLE shapes ADD COLUMN shape_format VARCHAR(8) NOT NULL DEFAULT '1x1'")
+                        conn.commit()
+                except Exception:
+                    pass
+                try:
                     conn.commit()
                 except Exception:
                     pass
@@ -209,6 +219,7 @@ class DatabaseManager:
                     holes_json TEXT DEFAULT '[]',
                     stitching_json TEXT DEFAULT '[]',
                     folder TEXT DEFAULT '',
+                    shape_format TEXT NOT NULL DEFAULT '1x1',
                     FOREIGN KEY (article_id) REFERENCES articles(id)
                 )
                 """)
@@ -219,6 +230,8 @@ class DatabaseManager:
                     cursor.execute("ALTER TABLE shapes ADD COLUMN folder TEXT DEFAULT ''")
                 if "size" not in cols:
                     cursor.execute("ALTER TABLE shapes ADD COLUMN size TEXT DEFAULT '41'")
+                if "shape_format" not in cols:
+                    cursor.execute("ALTER TABLE shapes ADD COLUMN shape_format TEXT NOT NULL DEFAULT '1x1'")
 
                 # Migração 004: Índice Composto para Performance do Catálogo de Moldes (Grid View Matrix)
                 cursor.execute("""
@@ -940,6 +953,7 @@ class DatabaseManager:
                 d["folder"] = d.get("folder", "") or ""
                 d["size"] = str(d.get("size") or "41")
                 d["color"] = get_color_for_size(d.get("size") or d.get("name") or "41")
+                d["shape_format"] = str(d.get("shape_format") or "1x1")
                 shapes.append(d)
             return shapes
 
@@ -951,7 +965,7 @@ class DatabaseManager:
         with self.get_connection() as conn:
             cursor = conn.cursor()
             cursor.execute(
-                "SELECT id, article_id, name, color, contour_json, holes_json, stitching_json, folder, size "
+                "SELECT id, article_id, name, color, contour_json, holes_json, stitching_json, folder, size, shape_format "
                 "FROM shapes WHERE article_id = ? ORDER BY size ASC, name ASC",
                 (article_id,)
             )
@@ -966,6 +980,7 @@ class DatabaseManager:
                 d["color"] = get_color_for_size(d.get("size") or d.get("name") or "41")
                 # TODO: Fase 6.2 — ler de shapes.pairs_per_shape se coluna existir
                 d["pairs_per_shape"] = int(d.get("pairs_per_shape", 2) or 2)
+                d["shape_format"] = str(d.get("shape_format") or "1x1")
                 shapes.append(d)
             return shapes
 
@@ -982,6 +997,7 @@ class DatabaseManager:
                 d["folder"] = d.get("folder", "") or ""
                 d["size"] = str(d.get("size") or "41")
                 d["color"] = get_color_for_size(d.get("size") or d.get("name") or "41")
+                d["shape_format"] = str(d.get("shape_format") or "1x1")
                 shapes.append(d)
             return shapes
 
@@ -1079,9 +1095,10 @@ class DatabaseManager:
             d["folder"] = d.get("folder", "") or ""
             d["size"] = str(d.get("size") or "41")
             d["color"] = get_color_for_size(d.get("size") or d.get("name") or "41")
+            d["shape_format"] = str(d.get("shape_format") or "1x1")
             return d
 
-    def update_shape(self, shape_id, name, contour, holes=None, stitching=None, folder=None, size=None, color=None):
+    def update_shape(self, shape_id, name, contour, holes=None, stitching=None, folder=None, size=None, color=None, shape_format=None):
         with self.get_connection() as conn:
             cursor = conn.cursor()
             updates = ["name = ?", "contour_json = ?", "holes_json = ?", "stitching_json = ?"]
@@ -1095,11 +1112,14 @@ class DatabaseManager:
             if color is not None:
                 updates.append("color = ?")
                 params.append(str(color))
+            if shape_format is not None:
+                updates.append("shape_format = ?")
+                params.append(str(shape_format))
             params.append(shape_id)
             cursor.execute(f"UPDATE shapes SET {', '.join(updates)} WHERE id = ?", tuple(params))
             conn.commit()
 
-    def create_shape(self, article_id=None, name="Shape", color="#000080", contour=None, holes=None, stitching=None, folder="", size="41"):
+    def create_shape(self, article_id=None, name="Shape", color="#000080", contour=None, holes=None, stitching=None, folder="", size="41", shape_format="1x1"):
         s_size = str(size or name or "41")
         color = get_color_for_size(s_size)
         with self.get_connection() as conn:
@@ -1145,8 +1165,8 @@ class DatabaseManager:
                     valid_article_id = cursor.lastrowid or 1
 
             cursor.execute("""
-            INSERT INTO shapes (article_id, name, color, contour_json, holes_json, stitching_json, folder, size)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO shapes (article_id, name, color, contour_json, holes_json, stitching_json, folder, size, shape_format)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
             """, (
                 valid_article_id,
                 name,
@@ -1155,7 +1175,8 @@ class DatabaseManager:
                 json.dumps(holes or []),
                 json.dumps(stitching or []),
                 folder or "",
-                s_size
+                s_size,
+                str(shape_format or "1x1")
             ))
             conn.commit()
             return cursor.lastrowid

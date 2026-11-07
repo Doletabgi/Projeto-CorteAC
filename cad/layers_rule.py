@@ -6,6 +6,7 @@ import math
 from typing import Any, Dict, List, Optional, Union
 
 __all__ = [
+    "shape_multiplier",
     "resolve_session_layers",
     "resolve_layout_layers",
     "layers_for_piece",
@@ -21,6 +22,25 @@ __all__ = [
     "trim_layout_dict",
     "calculate_layout_trim_bounds",
 ]
+
+
+def shape_multiplier(shape_format: Optional[str]) -> int:
+    """
+    Retorna o fator multiplicador do molde com base no formato:
+    - '1x1' -> 1
+    - '4x1' -> 2 (fator = 4/2)
+    - '6x1' -> 3 (fator = 6/2)
+    - qualquer outro / nulo / vazio -> 1
+    Tolerante a maiúsculas/minúsculas, espaços extras e variações de 'x', 'X' ou '×'.
+    """
+    if not shape_format or not isinstance(shape_format, str):
+        return 1
+    norm = shape_format.strip().lower().replace("×", "x").replace(" ", "")
+    if norm == "4x1":
+        return 2
+    elif norm == "6x1":
+        return 3
+    return 1
 
 
 

@@ -6,7 +6,7 @@
 > **Regra de ouro:** o que está marcado `[CONFIRMADO]` veio do relatório, do código ou do usuário. O que está `[NÃO CONFIRMADO]` é suposição e não deve virar "fato" sem validação. O que está `[PREENCHER]` a IA deve completar lendo o código real.
 
 <!-- AUTO:header:start -->
-**Última sincronização com o código:** 2026-11-07 11:40 (HEAD ao gerar: `8e3bb5f`; 152 arquivos Python, ~74005 linhas)
+**Última sincronização com o código:** 2026-11-07 17:13 (HEAD ao gerar: `a148721`; 153 arquivos Python, ~74460 linhas)
 <!-- AUTO:header:end -->
 **Versão deste documento:** 2
 
@@ -114,6 +114,7 @@ db/migrations/004_add_shapes_index.sql
 db/migrations/005_add_session_layers.sql
 db/migrations/006_add_layout_layers.sql
 db/migrations/007_add_layout_trim_and_tip.sql
+db/migrations/008_add_shape_format.sql
 docs/fases/FASE4_RELATORIO_PRODUCAO.md
 docs/fases/FASE5B_FRESH_LEARNING.md
 docs/fases/FASE5_1_OTIMIZACAO_IA_TESTE.md
@@ -200,6 +201,7 @@ tests/test_shape_editor_fullscreen.py                # tests/test_shape_editor_f
 tests/test_shape_editor_multishape.py                # tests/test_shape_editor_multishape.py
 tests/test_shape_editor_security.py                  # tests/test_shape_editor_security.py
 tests/test_shape_editor_stitching.py
+tests/test_shape_format_multiplier.py                # tests/test_shape_format_multiplier.py
 tests/test_shape_sorting.py                          # Testes Unitários: Classificação e Ordenação de Moldes e Tamanhos (Maior para Menor / Menor para Maior)
 tests/test_shapes_resto.py                           # Testes unitários e de integração para a coluna 'Resto' na grade de Moldes da SessionView.
 tests/test_sidebar_counter.py                        # Testes unitários e de integração para o contador de peças da barra lateral,
@@ -317,7 +319,7 @@ ui/user_dialog.py                                    # JobManager 2000 (Python E
 - funções: `_parse_float`, `_parse_int`, `parse_lay`, `link_layout_items_to_db`, `generate_lay_content`, `validate_layout_placement`, `export_layout_from_pieces`
 
 ### `cad/layers_rule.py`
-- funções: `resolve_layout_layers`, `layers_for_piece`, `format_dimensions_folhas`, `clamp_tip_zone`, `format_enfesto_operator_text`, `resolve_session_layers`, `is_layers_defined`, `pecas_na_mesa`, `calc_resto`, `calc_resto_efetivo`, `parse_session_params`, `encode_session_params`, `is_separar_sobras_enabled`, `is_refile_auto_enabled`
+- funções: `shape_multiplier`, `resolve_layout_layers`, `layers_for_piece`, `format_dimensions_folhas`, `clamp_tip_zone`, `format_enfesto_operator_text`, `resolve_session_layers`, `is_layers_defined`, `pecas_na_mesa`, `calc_resto`, `calc_resto_efetivo`, `parse_session_params`, `encode_session_params`, `is_separar_sobras_enabled`, `is_refile_auto_enabled`
 
 ### `cad/layers_split.py`
 - funções: `log_sobras`, `_recompact_plate`, `separar_sobras_camadas`, `_cluster_pieces_by_y`, `_place_sobra_piece`, `_nest_sobras_on_last_sheet`, `_escolher_divisao_otima`, `separar_sobras_em_ponta`, `desfazer_separacao_sobras`
@@ -602,6 +604,11 @@ ui/user_dialog.py                                    # JobManager 2000 (Python E
 ### `tests/test_shape_editor_stitching.py`
 - `class TestShapeEditorStitching` (linha 6, 11 métodos)
 
+### `tests/test_shape_format_multiplier.py`
+- `class TestShapeMultiplierPureFunction` (linha 37, 4 métodos)
+- `class TestShapeFormatDatabase` (linha 65, 5 métodos)
+- `class TestShapeEditorViewFormatUI` (linha 160, 10 métodos)
+
 ### `tests/test_shape_sorting.py`
 - `class TestShapeSorting` (linha 14, 6 métodos)
 - `class DummyKeyEvent` (linha 105, 1 métodos)
@@ -783,7 +790,7 @@ ui/user_dialog.py                                    # JobManager 2000 (Python E
 - funções: `extract_piece_base_name`
 
 ### `ui/shape_editor_view.py`
-- `class ShapeEditorView` (linha 19, 67 métodos)
+- `class ShapeEditorView` (linha 21, 71 métodos)
 
 ### `ui/sort_utils.py`
 - funções: `natural_sort_key`, `size_sort_key`, `shape_area_sort_key`, `clean_session_display_name`, `resto_sort_key`
@@ -907,6 +914,7 @@ CREATE TABLE IF NOT EXISTS shapes (
     stitching_json LONGTEXT NULL,
     folder VARCHAR(150) DEFAULT '',
     size VARCHAR(50) DEFAULT '41',
+    shape_format VARCHAR(8) NOT NULL DEFAULT '1x1',
     FOREIGN KEY (article_id) REFERENCES articles(id) ON DELETE SET NULL,
     INDEX idx_shapes_article (article_id),
     INDEX idx_shapes_name (name),
@@ -1317,6 +1325,14 @@ ALTER TABLE layouts ADD COLUMN trim_cut_line_json TEXT NULL;
 ALTER TABLE layouts ADD COLUMN tip_zone_json TEXT NULL;
 ALTER TABLE layouts ADD COLUMN layers_tip INT NULL DEFAULT NULL;
 
+-- -----------------------------------------------------------------------------
+-- Migração: db/migrations/008_add_shape_format.sql
+-- -----------------------------------------------------------------------------
+-- Migração 008: Formato e multiplicador do molde (1x1, 4x1, 6x1)
+-- Compatível com MySQL 8.0 Central
+
+ALTER TABLE shapes ADD COLUMN IF NOT EXISTS shape_format VARCHAR(8) NOT NULL DEFAULT '1x1';
+
 ```
 
 ### 4.2 Schema SQLite (Reserva Local / Legado)
@@ -1327,6 +1343,7 @@ Origem: `jobmanager.db` (banco de contingência offline local)
 > **Aviso de desatualização do arquivo local `jobmanager.db`:**
 > O arquivo `jobmanager.db` versionado no repositório está desatualizado em relação às tabelas e colunas criadas dinamicamente pelo código (`database.py`):
 > - **Tabelas ausentes no `.db`:** `articles_migration_tmp`, `sessions_migration_tmp`, `shapes_migration_tmp`
+> - **Colunas ausentes na tabela `shapes`:** `shape_format`
 > *(Nota: Em tempo de execução, o `database.py` aplica as migrações automaticamente no SQLite via `_migrate_layouts_table()` e `CREATE TABLE IF NOT EXISTS`).*
 
 ```sql
@@ -1649,8 +1666,8 @@ A ordem de corte do `.lay` para a mesa **não pode** ser aleatória:
 | Backspace | `ui/session_view.py:882` | `self.tree_shapes.bind("<BackSpace>", lambda e: self._on_tree_shapes_delete())` |
 | Backspace | `ui/session_view.py:1042` | `w.bind("<BackSpace>", self.remove_session_material)` |
 | Backspace | `ui/session_view.py:1043` | `w.bind("<Key-BackSpace>", self.remove_session_material)` |
-| Backspace | `ui/shape_editor_view.py:540` | `self.bind("<BackSpace>", lambda e: self.delete_selected())` |
-| Backspace | `ui/shape_editor_view.py:542` | `self.canvas.bind("<BackSpace>", lambda e: self.delete_selected())` |
+| Backspace | `ui/shape_editor_view.py:568` | `self.bind("<BackSpace>", lambda e: self.delete_selected())` |
+| Backspace | `ui/shape_editor_view.py:570` | `self.canvas.bind("<BackSpace>", lambda e: self.delete_selected())` |
 | Ctrl+A | `ui/layout_editor_view.py:800` | `w.bind("<Control-a>", self.select_all)` |
 | Ctrl+A | `ui/layout_editor_view.py:801` | `w.bind("<Control-A>", self.select_all)` |
 | Ctrl+A | `ui/layout_editor_view.py:802` | `w.bind("<Control-Key-a>", self.select_all)` |
@@ -1667,8 +1684,8 @@ A ordem de corte do `.lay` para a mesa **não pode** ser aleatória:
 | Ctrl+Down | `ui/session_view.py:3885` | `entry.bind("<Control-Down>", lambda e: adjust_number(-1))` |
 | Ctrl+Equal | `ui/layout_editor_view.py:715` | `w.bind("<Control-equal>", lambda e: (self.zoom_in(), "break")[1])` |
 | Ctrl+Equal | `ui/shape_catalog_view.py:273` | `self.bind("<Control-equal>", lambda e: self.zoom_step(1.2))` |
-| Ctrl+Iso_left_tab | `ui/shape_editor_view.py:546` | `self.bind("<Control-ISO_Left_Tab>", self.prev_shape)` |
-| Ctrl+Iso_left_tab | `ui/shape_editor_view.py:551` | `self.canvas.bind("<Control-ISO_Left_Tab>", self.prev_shape)` |
+| Ctrl+Iso_left_tab | `ui/shape_editor_view.py:574` | `self.bind("<Control-ISO_Left_Tab>", self.prev_shape)` |
+| Ctrl+Iso_left_tab | `ui/shape_editor_view.py:579` | `self.canvas.bind("<Control-ISO_Left_Tab>", self.prev_shape)` |
 | Ctrl+Kp_0 | `ui/shape_catalog_view.py:279` | `self.bind("<Control-KP_0>", lambda e: self.reset_zoom())` |
 | Ctrl+Kp_add | `ui/shape_catalog_view.py:275` | `self.bind("<Control-KP_Add>", lambda e: self.zoom_step(1.2))` |
 | Ctrl+Kp_subtract | `ui/shape_catalog_view.py:277` | `self.bind("<Control-KP_Subtract>", lambda e: self.zoom_step(1.0 / 1.2))` |
@@ -1681,8 +1698,8 @@ A ordem de corte do `.lay` para a mesa **não pode** ser aleatória:
 | Ctrl+Minus | `ui/shape_catalog_view.py:276` | `self.bind("<Control-minus>", lambda e: self.zoom_step(1.0 / 1.2))` |
 | Ctrl+N | `ui/main_window.py:93` | `self.bind("<Control-n>", lambda e: self.on_new_session())` |
 | Ctrl+N | `ui/main_window.py:94` | `self.bind("<Control-N>", lambda e: self.on_new_session())` |
-| Ctrl+Next | `ui/shape_editor_view.py:549` | `self.bind("<Control-Next>", self.next_shape)` |
-| Ctrl+Next | `ui/shape_editor_view.py:554` | `self.canvas.bind("<Control-Next>", self.next_shape)` |
+| Ctrl+Next | `ui/shape_editor_view.py:577` | `self.bind("<Control-Next>", self.next_shape)` |
+| Ctrl+Next | `ui/shape_editor_view.py:582` | `self.canvas.bind("<Control-Next>", self.next_shape)` |
 | Ctrl+O | `ui/layout_editor_view.py:742` | `self.canvas.bind("<Control-o>", self.open_layout_dialog)` |
 | Ctrl+O | `ui/layout_editor_view.py:743` | `self.canvas.bind("<Control-O>", self.open_layout_dialog)` |
 | Ctrl+O | `ui/layout_editor_view.py:744` | `self.bind("<Control-o>", self.open_layout_dialog)` |
@@ -1699,8 +1716,8 @@ A ordem de corte do `.lay` para a mesa **não pode** ser aleatória:
 | Ctrl+P | `ui/session_view.py:1135` | `self.tree_lays.bind("<Control-P>", lambda e: (self.print_current_layout(), "brea` |
 | Ctrl+Plus | `ui/layout_editor_view.py:714` | `w.bind("<Control-plus>", lambda e: (self.zoom_in(), "break")[1])` |
 | Ctrl+Plus | `ui/shape_catalog_view.py:274` | `self.bind("<Control-plus>", lambda e: self.zoom_step(1.2))` |
-| Ctrl+Prior | `ui/shape_editor_view.py:548` | `self.bind("<Control-Prior>", self.prev_shape)` |
-| Ctrl+Prior | `ui/shape_editor_view.py:553` | `self.canvas.bind("<Control-Prior>", self.prev_shape)` |
+| Ctrl+Prior | `ui/shape_editor_view.py:576` | `self.bind("<Control-Prior>", self.prev_shape)` |
+| Ctrl+Prior | `ui/shape_editor_view.py:581` | `self.canvas.bind("<Control-Prior>", self.prev_shape)` |
 | Ctrl+Q | `ui/layout_editor_view.py:712` | `w.bind("<Control-q>", lambda e: (self.zoom_in(), "break")[1])` |
 | Ctrl+Q | `ui/layout_editor_view.py:713` | `w.bind("<Control-Q>", lambda e: (self.zoom_in(), "break")[1])` |
 | Ctrl+Right | `ui/layout_editor_view.py:818` | `self.bind_all("<Control-Right>", lambda e: self.nudge_selected(0.5, 0))` |
@@ -1716,16 +1733,16 @@ A ordem de corte do `.lay` para a mesa **não pode** ser aleatória:
 | Ctrl+Shift+L | `ui/layout_editor_view.py:773` | `w.bind("<Control-Shift-L>", self._on_ctrl_shift_l)` |
 | Ctrl+Shift+L | `ui/layout_editor_view.py:774` | `w.bind("<Control-Shift-Key-l>", self._on_ctrl_shift_l)` |
 | Ctrl+Shift+L | `ui/layout_editor_view.py:775` | `w.bind("<Control-Shift-Key-L>", self._on_ctrl_shift_l)` |
-| Ctrl+Shift+Tab | `ui/shape_editor_view.py:547` | `self.bind("<Control-Shift-Tab>", self.prev_shape)` |
-| Ctrl+Shift+Tab | `ui/shape_editor_view.py:552` | `self.canvas.bind("<Control-Shift-Tab>", self.prev_shape)` |
+| Ctrl+Shift+Tab | `ui/shape_editor_view.py:575` | `self.bind("<Control-Shift-Tab>", self.prev_shape)` |
+| Ctrl+Shift+Tab | `ui/shape_editor_view.py:580` | `self.canvas.bind("<Control-Shift-Tab>", self.prev_shape)` |
 | Ctrl+T | `ui/layout_editor_view.py:761` | `w.bind("<Control-t>", _on_ctrl_t)` |
 | Ctrl+T | `ui/layout_editor_view.py:762` | `w.bind("<Control-T>", _on_ctrl_t)` |
 | Ctrl+T | `ui/layout_editor_view.py:763` | `w.bind("<Control-Key-t>", _on_ctrl_t)` |
 | Ctrl+T | `ui/layout_editor_view.py:764` | `w.bind("<Control-Key-T>", _on_ctrl_t)` |
 | Ctrl+T | `ui/main_window.py:91` | `self.bind("<Control-t>", self.handle_ctrl_t)` |
 | Ctrl+T | `ui/main_window.py:92` | `self.bind("<Control-T>", self.handle_ctrl_t)` |
-| Ctrl+Tab | `ui/shape_editor_view.py:545` | `self.bind("<Control-Tab>", self.next_shape)` |
-| Ctrl+Tab | `ui/shape_editor_view.py:550` | `self.canvas.bind("<Control-Tab>", self.next_shape)` |
+| Ctrl+Tab | `ui/shape_editor_view.py:573` | `self.bind("<Control-Tab>", self.next_shape)` |
+| Ctrl+Tab | `ui/shape_editor_view.py:578` | `self.canvas.bind("<Control-Tab>", self.next_shape)` |
 | Ctrl+Up | `ui/layout_editor_view.py:819` | `self.bind_all("<Control-Up>", lambda e: self.nudge_selected(0, 0.5))` |
 | Ctrl+Up | `ui/session_view.py:3884` | `entry.bind("<Control-Up>", lambda e: adjust_number(+1))` |
 | Ctrl+V | `ui/main_window.py:303` | `edit_menu.add_command(label="Colar", accelerator="Ctrl+V")` |
@@ -1745,28 +1762,28 @@ A ordem de corte do `.lay` para a mesa **não pode** ser aleatória:
 | Ctrl+Z | `ui/main_window.py:711` | `self.bind_all("<Control-Key-Z>", self.on_global_undo, add="+")` |
 | Ctrl+Z | `ui/shape_catalog_view.py:269` | `self.bind("<Control-z>", lambda e: self.action_undo())` |
 | Ctrl+Z | `ui/shape_catalog_view.py:270` | `self.bind("<Control-Z>", lambda e: self.action_undo())` |
-| Ctrl+Z | `ui/shape_editor_view.py:523` | `self.bind("<Control-z>", self.undo_or_revert)` |
-| Ctrl+Z | `ui/shape_editor_view.py:524` | `self.bind("<Control-Z>", self.undo_or_revert)` |
-| Ctrl+Z | `ui/shape_editor_view.py:525` | `self.bind("<Control-Key-z>", self.undo_or_revert)` |
-| Ctrl+Z | `ui/shape_editor_view.py:526` | `self.bind("<Control-Key-Z>", self.undo_or_revert)` |
-| Ctrl+Z | `ui/shape_editor_view.py:527` | `self.canvas.bind("<Control-z>", self.undo_or_revert)` |
-| Ctrl+Z | `ui/shape_editor_view.py:528` | `self.canvas.bind("<Control-Z>", self.undo_or_revert)` |
-| Ctrl+Z | `ui/shape_editor_view.py:529` | `self.canvas.bind("<Control-Key-z>", self.undo_or_revert)` |
-| Ctrl+Z | `ui/shape_editor_view.py:530` | `self.canvas.bind("<Control-Key-Z>", self.undo_or_revert)` |
+| Ctrl+Z | `ui/shape_editor_view.py:551` | `self.bind("<Control-z>", self.undo_or_revert)` |
+| Ctrl+Z | `ui/shape_editor_view.py:552` | `self.bind("<Control-Z>", self.undo_or_revert)` |
+| Ctrl+Z | `ui/shape_editor_view.py:553` | `self.bind("<Control-Key-z>", self.undo_or_revert)` |
+| Ctrl+Z | `ui/shape_editor_view.py:554` | `self.bind("<Control-Key-Z>", self.undo_or_revert)` |
+| Ctrl+Z | `ui/shape_editor_view.py:555` | `self.canvas.bind("<Control-z>", self.undo_or_revert)` |
+| Ctrl+Z | `ui/shape_editor_view.py:556` | `self.canvas.bind("<Control-Z>", self.undo_or_revert)` |
+| Ctrl+Z | `ui/shape_editor_view.py:557` | `self.canvas.bind("<Control-Key-z>", self.undo_or_revert)` |
+| Ctrl+Z | `ui/shape_editor_view.py:558` | `self.canvas.bind("<Control-Key-Z>", self.undo_or_revert)` |
 | Delete | `ui/cad_canvas.py:71` | `self.master.bind("<Delete>", lambda e: self.delete_selected())` |
 | Delete | `ui/dieproc_dialog.py:86` | `self.preset_listbox.bind("<Delete>", lambda e: self.on_delete_clicked())` |
 | Delete | `ui/layout_editor_view.py:807` | `self.bind_all("<Delete>", lambda e: self.delete_selected())` |
 | Delete | `ui/main_window.py:304` | `edit_menu.add_command(label="Excluir", accelerator="Del", command=self.on_global` |
 | Delete | `ui/main_window.py:702` | `self.bind_all("<Delete>", self.on_global_delete_key, add="+")` |
-| Delete | `ui/main_window.py:3618` | `accelerator="Del",` |
-| Delete | `ui/main_window.py:3637` | `accelerator="Del",` |
-| Delete | `ui/main_window.py:3914` | `accelerator="Del",` |
-| Delete | `ui/main_window.py:3933` | `accelerator="Del",` |
+| Delete | `ui/main_window.py:3619` | `accelerator="Del",` |
+| Delete | `ui/main_window.py:3638` | `accelerator="Del",` |
+| Delete | `ui/main_window.py:3915` | `accelerator="Del",` |
+| Delete | `ui/main_window.py:3934` | `accelerator="Del",` |
 | Delete | `ui/session_view.py:881` | `self.tree_shapes.bind("<Delete>", lambda e: self._on_tree_shapes_delete())` |
 | Delete | `ui/session_view.py:1040` | `w.bind("<Delete>", self.remove_session_material)` |
 | Delete | `ui/session_view.py:1041` | `w.bind("<Key-Delete>", self.remove_session_material)` |
-| Delete | `ui/shape_editor_view.py:539` | `self.bind("<Delete>", lambda e: self.delete_selected())` |
-| Delete | `ui/shape_editor_view.py:541` | `self.canvas.bind("<Delete>", lambda e: self.delete_selected())` |
+| Delete | `ui/shape_editor_view.py:567` | `self.bind("<Delete>", lambda e: self.delete_selected())` |
+| Delete | `ui/shape_editor_view.py:569` | `self.canvas.bind("<Delete>", lambda e: self.delete_selected())` |
 | Down | `ui/layout_editor_view.py:815` | `self.bind_all("<Down>", lambda e: self.bump_selection_vector(0, -1))` |
 | Down | `ui/session_view.py:3869` | `entry.bind("<Down>", move_down)` |
 | Down | `ui/shape_catalog_view.py:263` | `self.bind("<Down>", lambda e: self.navigate_selection(0, 1))` |
@@ -1781,23 +1798,23 @@ A ordem de corte do `.lay` para a mesa **não pode** ser aleatória:
 | Escape | `ui/layout_print_dialog.py:1187` | `self.bind("<Escape>", self.on_escape)` |
 | Escape | `ui/main_window.py:86` | `self.bind("<Escape>", self.exit_fullscreen)` |
 | Escape | `ui/main_window.py:701` | `self.bind_all("<Escape>", self.dismiss_popup_menus, add="+")` |
-| Escape | `ui/main_window.py:4241` | `dialog.bind("<Escape>", lambda e: dialog.destroy())` |
+| Escape | `ui/main_window.py:4242` | `dialog.bind("<Escape>", lambda e: dialog.destroy())` |
 | Escape | `ui/material_codes_view.py:510` | `dlg.bind("<Escape>", lambda e: dlg.destroy())` |
 | Escape | `ui/options_dialog.py:40` | `self.bind("<Escape>", lambda e: self.on_cancel())` |
 | Escape | `ui/session_view.py:3323` | `entry.bind("<Escape>", cancel)` |
 | Escape | `ui/session_view.py:3441` | `dialog.bind("<Escape>", lambda e: dialog.destroy())` |
 | Escape | `ui/session_view.py:3879` | `entry.bind("<Escape>", cancel_edit)` |
 | Escape | `ui/shape_catalog_view.py:268` | `self.bind("<Escape>", lambda e: self.on_close_click())` |
-| Escape | `ui/shape_editor_view.py:535` | `self.bind("<Escape>", self.on_escape_key)` |
-| Escape | `ui/shape_editor_view.py:536` | `self.canvas.bind("<Escape>", self.on_escape_key)` |
+| Escape | `ui/shape_editor_view.py:563` | `self.bind("<Escape>", self.on_escape_key)` |
+| Escape | `ui/shape_editor_view.py:564` | `self.canvas.bind("<Escape>", self.on_escape_key)` |
 | Escape | `ui/trim_layout_dialog.py:77` | `self.bind("<Escape>", lambda e: self.destroy())` |
 | Escape | `ui/user_dialog.py:59` | `self.bind("<Escape>", lambda e: self.destroy())` |
 | F1 | `ui/layout_editor_view.py:779` | `w.bind("<F1>", self.on_f1_press)` |
 | F1 | `ui/layout_editor_view.py:780` | `w.bind("<Key-F1>", self.on_f1_press)` |
 | F11 | `ui/layout_print_dialog.py:1186` | `self.bind("<F11>", self.toggle_fullscreen)` |
 | F11 | `ui/main_window.py:85` | `self.bind("<F11>", self.toggle_fullscreen)` |
-| F11 | `ui/shape_editor_view.py:533` | `self.bind("<F11>", self.on_f11_fullscreen)` |
-| F11 | `ui/shape_editor_view.py:534` | `self.canvas.bind("<F11>", self.on_f11_fullscreen)` |
+| F11 | `ui/shape_editor_view.py:561` | `self.bind("<F11>", self.on_f11_fullscreen)` |
+| F11 | `ui/shape_editor_view.py:562` | `self.canvas.bind("<F11>", self.on_f11_fullscreen)` |
 | F2 | `ui/layout_editor_view.py:783` | `w.bind("<F2>", self.on_f2_press)` |
 | F2 | `ui/layout_editor_view.py:784` | `w.bind("<Key-F2>", self.on_f2_press)` |
 | F2 | `ui/session_view.py:885` | `self.tree_shapes.bind("<F2>", self.on_tree_shape_f2)` |
@@ -1831,7 +1848,7 @@ A ordem de corte do `.lay` para a mesa **não pode** ser aleatória:
 | Return | `ui/import_materials_dialog.py:84` | `self.ent_filepath.bind("<Return>", lambda e: self.load_file_from_path(self.ent_f` |
 | Return | `ui/main_window.py:571` | `self.tree_main.bind("<Return>", self.on_tree_key_return)` |
 | Return | `ui/main_window.py:618` | `self.grid_lower.bind("<Return>", self.on_grid_double_click)` |
-| Return | `ui/main_window.py:4240` | `dialog.bind("<Return>", lambda e: save())` |
+| Return | `ui/main_window.py:4241` | `dialog.bind("<Return>", lambda e: save())` |
 | Return | `ui/material_codes_view.py:212` | `self.tree.bind("<Return>", lambda e: self.open_edit_selected_dialog())` |
 | Return | `ui/material_codes_view.py:509` | `dlg.bind("<Return>", lambda e: save_action())` |
 | Return | `ui/session_view.py:599` | `self.entry_gap.bind("<Return>", self._on_gap_entry_change)` |
@@ -1843,9 +1860,9 @@ A ordem de corte do `.lay` para a mesa **não pode** ser aleatória:
 | Return | `ui/session_view.py:3440` | `dialog.bind("<Return>", lambda e: save())` |
 | Return | `ui/session_view.py:3873` | `entry.bind("<Return>", move_down)` |
 | Return | `ui/shape_catalog_view.py:266` | `self.bind("<Return>", lambda e: self.open_selected_shape())` |
-| Return | `ui/shape_editor_view.py:616` | `self.entry_name.bind("<Return>", lambda e: self.on_name_change())` |
-| Return | `ui/shape_editor_view.py:662` | `self.entry_vx.bind("<Return>", self.on_vertex_entry_change)` |
-| Return | `ui/shape_editor_view.py:667` | `self.entry_vy.bind("<Return>", self.on_vertex_entry_change)` |
+| Return | `ui/shape_editor_view.py:644` | `self.entry_name.bind("<Return>", lambda e: self.on_name_change())` |
+| Return | `ui/shape_editor_view.py:690` | `self.entry_vx.bind("<Return>", self.on_vertex_entry_change)` |
+| Return | `ui/shape_editor_view.py:695` | `self.entry_vy.bind("<Return>", self.on_vertex_entry_change)` |
 | Return | `ui/trim_layout_dialog.py:76` | `self.bind("<Return>", lambda e: self.on_confirm())` |
 | Return | `ui/user_dialog.py:92` | `self.entry_name.bind("<Return>", lambda e: self.on_add_user())` |
 | Right | `ui/layout_editor_view.py:813` | `self.bind_all("<Right>", lambda e: self.bump_selection_vector(1, 0))` |
@@ -4020,6 +4037,41 @@ No fluxo de modelagem e encaixe de calçados, os operadores e preparadores de pr
 
 ---
 
+## 8.55. Formato do Molde (1x1, 4x1, 6x1) e Fator Multiplicador no Shape Editor (v1.6.37) `[CONFIRMADO]`
+
+### 1. Contexto e problema
+
+No processo de corte de calçados, determinados componentes e moldes são produzidos em múltiplos simultâneos ou matrizes multiplicadoras (como facas duplas ou triplas no mesmo corte, ex.: formatos 4x1 com fator 2 e 6x1 com fator 3, onde $\text{fator} = N / 2$). Era necessário associar essa propriedade intrinsicamente a cada molde no Shape Editor, permitindo ao modelador/operador:
+1. Definir o formato do molde (`1x1`, `4x1` ou `6x1`) diretamente na barra de ferramentas.
+2. Visualizar instantaneamente o fator multiplicador correspondente (`× 1`, `× 2` ou `× 3`).
+3. Respeitar o bloqueio seguro de geometria: enquanto o molde estiver bloqueado contra edição acidental (`geometry_locked=True`), o combobox permanece desabilitado; liberando a geometria, o combobox torna-se editável.
+4. Integrar ao sistema de histórico de desfazer (Ctrl+Z) e marcação visual de alteração não salva (`*` no título e abas).
+5. Persistir o dado no banco de dados centralizado (MySQL 8.0) e local (SQLite), garantindo compatibilidade reversa com moldes legados existentes.
+
+### 2. Implementação técnica
+
+- **Banco de Dados e Migração**:
+  - Nova coluna `shape_format VARCHAR(8) NOT NULL DEFAULT '1x1'` na tabela `shapes`.
+  - Migração versionada [`db/migrations/008_add_shape_format.sql`](file:///home/dola/Documentos/clone%20do%20job/jobmanager-win10-python/db/migrations/008_add_shape_format.sql) e DDL central em `db/schema_mysql.sql`.
+  - Auto-migração idempotente em tempo de execução via `DatabaseManager.init_db()` tanto no SQLite quanto no MySQL 8.0.
+  - Métodos `create_shape`, `update_shape`, `get_shape`, `get_shapes_by_article`, `get_article_shape_catalog` e `get_all_shapes` atualizados para persistência e leitura com fallback automático `'1x1'`.
+  - Callback de persistência `MainWindow.on_shape_saved` repassa `shape_format` para `update_shape`.
+- **Função Pura (`cad/layers_rule.py`)**:
+  - `shape_multiplier(shape_format: Optional[str]) -> int`: mapeia `1x1` para 1, `4x1` para 2 e `6x1` para 3, com suporte a maiúsculas/minúsculas, espaços extras e variações do caractere unicode `×`. Retorna 1 para valores nulos, vazios ou não reconhecidos.
+  - Delimitação de escopo: a função é pura e desacoplada, pertencendo exclusivamente ao molde (sem interferência prematura em nesting ou impressão).
+- **Interface Visual (`ui/shape_editor_view.py`)**:
+  - Combobox `Formato:` (`ttk.Combobox`) com valores `["1x1", "4x1", "6x1"]` e tooltip explicativo, posicionado ao lado do botão de bloqueio de geometria.
+  - Label do fator multiplicador `lbl_format_factor` exibindo `× 1`, `× 2` ou `× 3`.
+  - `_update_lock_ui()`: alterna o combobox entre `disabled` (modo seguro) e `readonly` (modo liberado).
+  - `_on_shape_format_changed()`: dispara histórico de undo (`push_undo`), atualiza o fator, marca o molde como modificado e atualiza título e abas.
+  - `undo_or_revert()`: restaura o formato e o fator anterior no Ctrl+Z, removendo o `*` quando retornado ao estado salvo.
+  - `save_changes()` / `save_all_changes()`: persiste o formato no payload e limpa o indicador de modificado.
+- **Testes Automatizados**:
+  - `tests/test_shape_format_multiplier.py`: 13 testes unitários cobrindo a função pura, tolerâncias de string, migração e CRUD no SQLite, comportamento de trava de geometria, dirty indicator, desfazer e salvamento.
+- **Suíte de Testes**: **641 testes passando** (643 total, 2 skip, 100% de sucesso).
+
+---
+
 ## 9. Pendências e arquivos faltantes
 
 ### 9.1 Tarefas abertas
@@ -4068,6 +4120,7 @@ No fluxo de modelagem e encaixe de calçados, os operadores e preparadores de pr
 - [x] Multi-moldes com abas, sobreposição e rotação sincronizada no Shape Editor (v1.6.36) — Concluído (§8.54, `ui/shape_editor_view.py`, `tests/test_shape_editor_multishape.py`)
 - [x] Adição de moldes por seleção de pasta e importação de `.die` do disco no Layout Editor (v1.6.36) — Concluído (§8.54, `ui/add_shapes_dialog.py`, `ui/layout_editor_view.py`, `tests/test_layout_editor_add_shape.py`)
 - [x] Limpeza de opções de criação de pasta de produção no menu Ferramentas, remoção da caixa Xfer/Remoto e de idiomas não utilizados (v1.6.36) — Concluído (§8.54, `ui/main_window.py`, `ui/options_dialog.py`)
+- [x] Formato do Molde (1x1, 4x1, 6x1), fator multiplicador no Shape Editor e migração no banco de dados (v1.6.37) — Concluído (§8.55, `ui/shape_editor_view.py`, `cad/layers_rule.py`, `database.py`, `db/migrations/008_add_shape_format.sql`, `tests/test_shape_format_multiplier.py`)
 
 ### 9.2 Arquivos de amostra que faltam (por prioridade)
 
@@ -4195,6 +4248,7 @@ Local: `/home/dola/Documentos/clone do job/antigo/arquivos pos instalacao/Common
 <!-- AUTO:gitlog:start -->
 | Commit | Data | Autor | Mensagem |
 |---|---|---|---|
+| `a148721` | 2026-11-07 | Doletabgi | feat(release): multi-moldes, adicao de shapes externos e limpeza de menus (v1.6.36) |
 | `8e3bb5f` | 2026-11-06 | Doletabgi | feat(release): cadastro de usuario, reorganizacao da folha A4 e codigo de barras (v1.6.35) |
 | `d8156f8` | 2026-11-05 | Doletabgi | feat(release): impressao em massa e paginacao no print preview (v1.6.33) |
 | `631c8a6` | 2026-11-04 | Doletabgi | fix(build): clean_database com saida ASCII no Windows (v1.6.29) |
@@ -4209,7 +4263,6 @@ Local: `/home/dola/Documentos/clone do job/antigo/arquivos pos instalacao/Common
 | `504c073` | 2026-11-03 | Doletabgi | feat(print): folhas longas/curtas no cabecalho e sem Material Area (v1.6.21) |
 | `4b621ce` | 2026-11-03 | Doletabgi | feat(print): remove a linha Description das folhas impressas (v1.6.20) |
 | `5d85d8b` | 2026-11-03 | Doletabgi | fix(tip): clamp unico da ponta — linha azul nao vaza na miniatura nem no refile (v1.6.19) |
-| `6e610c1` | 2026-11-03 | Doletabgi | fix(save): refile do layout agora e persistido e nao e sobrescrito (v1.6.18) |
 <!-- AUTO:gitlog:end -->
 
 ---
@@ -4270,6 +4323,7 @@ Local: `/home/dola/Documentos/clone do job/antigo/arquivos pos instalacao/Common
 | Qui, 05/11/2026 | 14:15 | Antigravity | Código de barras padrão industrial Code 128 nas impressões A4, abertura automática via leitor USB e remoção de Material Area (v1.6.34): motor nativo em Python puro `cad/barcode.py` (Subset B, 107 padrões, checksum modulo 103); inclusão automática no canto superior direito do cabeçalho da folha A4 no `LayoutPrintDialog` (Canvas e exportação Pillow/PDF) com payload `CAC:SESS:<id>` (ou `CAC:SESS:<id>:LAY:<idx>`) e legenda textual humana; listener global de teclado na `MainWindow` (`_on_global_key_scanner`) capturando rajadas USB HID (< 120 ms) com `<Return>`, abrindo a sessão e placa instantaneamente sem cliques; comando de inserção manual e atalho `<F8>` no menu Arquivo; remoção definitiva da linha `Material Area:` de todas as folhas de impressão (Canvas e PDF/Pillow); 7 novos testes unitários (597 testes passando). | `cad/barcode.py`, `ui/layout_print_dialog.py`, `ui/layout_editor_view.py`, `ui/session_view.py`, `ui/main_window.py`, `tests/test_barcode_print.py`, `tests/test_print_metros.py`, `CorteAC.spec`, `build_linux.sh`, `build_exe_windows.bat`, `.github/workflows/release.yml`, `config.py`, `docs/PROJETO_ATOM_JOBMANAGER.md` |
 | Sex, 06/11/2026 | 12:45 | Antigravity | Cadastro de usuário/operador, exibição na folha de impressão e reorganização do layout A4 (v1.6.35): (1) Gestão centralizada de operadores no banco (`database.py`, `db/schema_mysql.sql`) com persistência em SQLite e MySQL (tabela `users`); (2) Diálogo visual `UserManagementDialog` (`ui/user_dialog.py`) com CRUD, ativação instantânea, escolha de prefixo (`Usuário:`, `Operador:` ou nenhum) e prévia ao vivo do cabeçalho; (3) Acesso integrado no menu Ferramentas, na barra de status da janela principal (`👤 <Operador>`), na janela de opções e no diálogo de impressão; (4) Exibição do nome do operador logo abaixo do título `layXXXX.lay (Placa X de Y)` na folha A4 (Canvas e Pillow/PDF); (5) Reorganização do layout de impressão: remoção de `Refile:` e `Material Area:`, deslocamento da tabela de moldes/pares para um card com cantos arredondados no espaço em branco à direita da placa e aproveitamento total da altura para a mesa de corte; (6) 10 novos testes unitários (608 testes passando com 100% de sucesso). | `database.py`, `db/schema_mysql.sql`, `ui/user_dialog.py`, `ui/layout_print_dialog.py`, `ui/main_window.py`, `ui/options_dialog.py`, `tests/test_user_management.py`, `tests/test_layout_print_user.py`, `build_linux.sh`, `build_exe_windows.bat`, `.github/workflows/release.yml`, `config.py`, `docs/PROJETO_ATOM_JOBMANAGER.md` |
 | Sáb, 07/11/2026 | 11:30 | Antigravity | Multi-moldes com rotação simultânea no Shape Editor, adição de moldes externos por pasta no Layout Editor e limpeza de menus (v1.6.36): (1) Multi-moldes no Shape Editor (`ui/shape_editor_view.py`): barra de abas (`tabs_bar`) com fechar aba, modo de sobreposição (`👁️ Sobrepor`) para comparação de graduações e ferramenta de rotação sincronizada (`🔄 Girar`) que rotaciona todos os moldes abertos/selecionados em torno do baricentro unificado; (2) Adição de moldes de fora do layout no Layout Editor (`ui/layout_editor_view.py`, `ui/add_shapes_dialog.py`): botão (+) configurado para abrir o diálogo `AddShapesDialog` com seleção de pasta do catálogo/banco (`faca`, `807266`, etc.), botão `📂 Do Disco (.die)...` para importar moldes diretamente do computador, menu de contexto com botão direito no (+) e colocação imediata das peças na mesa de corte com retenção de contorno, furos, costuras e recortes internos; (3) Limpeza de menus legados: remoção de `📁 Criar Subpasta de Produção...` de Ferramentas (`ui/main_window.py`) e remoção da caixa Xfer/Remoto e de 3 idiomas de `ui/options_dialog.py`; (4) 20 novos testes automatizados (628 testes passando, 630 no total com 100% de sucesso). | `ui/shape_editor_view.py`, `ui/layout_editor_view.py`, `ui/add_shapes_dialog.py`, `ui/main_window.py`, `ui/options_dialog.py`, `tests/test_shape_editor_multishape.py`, `tests/test_layout_editor_add_shape.py`, `config.py`, `.github/workflows/release.yml`, `docs/PROJETO_ATOM_JOBMANAGER.md` |
+| Sáb, 07/11/2026 | 17:15 | Antigravity | Formato do Molde (1x1, 4x1, 6x1) e fator multiplicador no Shape Editor com persistência e migração no banco (v1.6.37): (1) Banco de dados (`database.py`, `db/schema_mysql.sql`, migração `db/migrations/008_add_shape_format.sql`): coluna `shape_format VARCHAR(8) NOT NULL DEFAULT '1x1'` na tabela `shapes` com auto-migração idempotente em SQLite e MySQL, fallback transparente `'1x1'` para moldes legados e suporte em `create_shape`, `update_shape`, `get_shape`, `get_shapes_by_article`, `get_article_shape_catalog` e `MainWindow.on_shape_saved`; (2) Função pura `shape_multiplier` em `cad/layers_rule.py` mapeando `1x1 -> 1`, `4x1 -> 2`, `6x1 -> 3` com tolerância a espaços, maiúsculas e caracteres de multiplicação unicode (`×`); (3) Interface no Shape Editor (`ui/shape_editor_view.py`): Combobox `Formato:` e label `× N` na barra de ferramentas, controle de ativação respeitando `geometry_locked` (desabilitado em modo seguro, `readonly` quando liberado), histórico de desfazer (Ctrl+Z), indicador de modificado `*` no título da janela e nas abas; (4) 13 novos testes automatizados em `tests/test_shape_format_multiplier.py` (641 testes passando com 100% de sucesso). | `ui/shape_editor_view.py`, `ui/main_window.py`, `cad/layers_rule.py`, `database.py`, `db/schema_mysql.sql`, `db/migrations/008_add_shape_format.sql`, `tests/test_shape_format_multiplier.py`, `config.py`, `docs/PROJETO_ATOM_JOBMANAGER.md` |
 
 ## 11. Prompt para o Antigravity: instalar a sincronização automática `[CONCLUÍDA]`
 

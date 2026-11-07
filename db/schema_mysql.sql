@@ -71,6 +71,7 @@ CREATE TABLE IF NOT EXISTS shapes (
     stitching_json LONGTEXT NULL,
     folder VARCHAR(150) DEFAULT '',
     size VARCHAR(50) DEFAULT '41',
+    shape_format VARCHAR(8) NOT NULL DEFAULT '1x1',
     FOREIGN KEY (article_id) REFERENCES articles(id) ON DELETE SET NULL,
     INDEX idx_shapes_article (article_id),
     INDEX idx_shapes_name (name),

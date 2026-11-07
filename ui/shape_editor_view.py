@@ -15,6 +15,8 @@ from cad.geometry import (
     rotate_point, point_in_polygon
 )
 from cad.die_parser import parse_die_file, save_die_file
+from cad.layers_rule import shape_multiplier
+from ui.tooltip import ToolTip
 
 class ShapeEditorView(tk.Frame):
     def __init__(self, parent, shape_data=None, on_close=None, on_minimize=None, on_maximize=None, on_save=None, on_import_die=None, **kwargs):
@@ -76,6 +78,8 @@ class ShapeEditorView(tk.Frame):
         # Modo Seguro / Trava de Geometria (Padrão: Bloqueado)
         self.geometry_locked = tk.BooleanVar(value=True)
         self.btn_lock = None
+        self.cb_shape_format = None
+        self.lbl_format_factor = None
 
         self._initial_fit_needed = True
         self._last_canvas_w = 0
@@ -83,6 +87,8 @@ class ShapeEditorView(tk.Frame):
 
         self.setup_ui()
         self._update_lock_ui()
+        self._update_format_ui_from_shape()
+        self._update_title()
         self.reset_view()
 
     def _default_shape(self):
@@ -91,6 +97,7 @@ class ShapeEditorView(tk.Frame):
             "name": "Gaspea_Nova",
             "article_id": 1,
             "color": "#2563eb",
+            "shape_format": "1x1",
             "contour": [
                 {"x": 0, "y": 0},
                 {"x": 180, "y": 0},
@@ -108,9 +115,11 @@ class ShapeEditorView(tk.Frame):
         }
 
     def _make_shape_entry(self, shape_data):
+        s = copy.deepcopy(shape_data)
+        s["shape_format"] = str(s.get("shape_format") or "1x1")
         return {
-            "shape": copy.deepcopy(shape_data),
-            "original_shape": copy.deepcopy(shape_data),
+            "shape": s,
+            "original_shape": copy.deepcopy(s),
             "undo_stack": [],
             "redo_stack": [],
             "selected_vertex_idx": -1,
@@ -163,15 +172,12 @@ class ShapeEditorView(tk.Frame):
         self.selected_hole_idx = entry["selected_hole_idx"]
         self.geometry_locked.set(entry["geometry_locked"])
         self._update_lock_ui()
+        self._update_format_ui_from_shape()
+        self._update_title()
         self._pre_drag_state = None
         self._initial_fit_needed = True
 
         shp_name = self.shape.get("name", "Molde")
-        shp_size = self.shape.get("size", "")
-        disp_title = f"{shp_name} (Tam: {shp_size})" if shp_size else shp_name
-        total_open = len(self.open_shapes)
-        count_suffix = f" [{active_index+1} de {total_open}]" if total_open > 1 else ""
-        self.lbl_title.config(text=f"📐 Shape Editor - [{disp_title}.die]{count_suffix}")
 
         self.entry_name.delete(0, tk.END)
         self.entry_name.insert(0, shp_name)
@@ -225,6 +231,8 @@ class ShapeEditorView(tk.Frame):
 
         self.geometry_locked.set(entry.get("geometry_locked", True))
         self._update_lock_ui()
+        self._update_format_ui_from_shape()
+        self._update_title()
 
         self.zoom = entry.get("zoom", 1.8)
         self.pan_x = entry.get("pan_x", 220.0)
@@ -232,12 +240,6 @@ class ShapeEditorView(tk.Frame):
         self._initial_fit_needed = entry.get("_initial_fit_needed", True)
 
         shp_name = self.shape.get("name", "Molde")
-        shp_size = self.shape.get("size", "")
-        disp_title = f"{shp_name} (Tam: {shp_size})" if shp_size else shp_name
-        total_open = len(self.open_shapes)
-        count_suffix = f" [{index+1} de {total_open}]" if total_open > 1 else ""
-        self.lbl_title.config(text=f"📐 Shape Editor - [{disp_title}.die]{count_suffix}")
-
         self.entry_name.delete(0, tk.END)
         self.entry_name.insert(0, shp_name)
         self._update_tab_bar()
@@ -331,9 +333,9 @@ class ShapeEditorView(tk.Frame):
             entry = self.open_shapes[i]
             s = entry["shape"]
             is_active = (i == self.active_shape_index)
-            s_name = s.get("name", f"Molde_{i+1}")
-            s_size = s.get("size", "")
-            label_text = f"📐 {s_name}" + (f" [{s_size}]" if s_size else "")
+            is_dirty = entry.get("is_dirty", False)
+            dirty_str = " *" if is_dirty else ""
+            label_text = f"📐 {s_name}" + (f" [{s_size}]" if s_size else "") + dirty_str
 
             tab_bg = "#ffffff" if is_active else "#ece9d8"
             tab_fg = "#000080" if is_active else "#222222"
@@ -420,6 +422,32 @@ class ShapeEditorView(tk.Frame):
 
         self.btn_lock = tk.Button(toolbar, text="🔒 Editar Geometria", bg=THEME["bg_surface"], fg=THEME["text_main"], relief="raised", bd=2, font=("Segoe UI", 8, "bold"), command=self.toggle_geometry_lock)
         self.btn_lock.pack(side="left", padx=2)
+
+        # Formato do Molde (1x1, 4x1, 6x1) e Fator Multiplicador
+        self.lbl_format = tk.Label(toolbar, text="Formato:", bg=THEME["bg_surface"], fg=THEME["text_main"], font=("Segoe UI", 8, "bold"))
+        self.lbl_format.pack(side="left", padx=(4, 1))
+
+        self.cb_shape_format = ttk.Combobox(
+            toolbar,
+            values=["1x1", "4x1", "6x1"],
+            state="disabled",
+            width=4,
+            font=("Segoe UI", 8)
+        )
+        self.cb_shape_format.set(self.shape.get("shape_format", "1x1") or "1x1")
+        self.cb_shape_format.pack(side="left", padx=1)
+        self.cb_shape_format.bind("<<ComboboxSelected>>", self._on_shape_format_changed)
+        ToolTip(self.cb_shape_format, "Formato do Molde (1x1 = fator 1, 4x1 = fator 2, 6x1 = fator 3)")
+
+        init_fmt = self.shape.get("shape_format", "1x1") or "1x1"
+        self.lbl_format_factor = tk.Label(
+            toolbar,
+            text=f"× {shape_multiplier(init_fmt)}",
+            bg=THEME["bg_surface"],
+            fg="#1e40af",
+            font=("Segoe UI", 8, "bold")
+        )
+        self.lbl_format_factor.pack(side="left", padx=(1, 4))
 
         tk.Button(toolbar, text="🗑️ Excluir", bg=THEME["bg_surface"], fg=THEME["text_main"], relief="raised", bd=1, font=("Segoe UI", 8), command=self.delete_selected).pack(side="left", padx=1)
 
@@ -711,6 +739,11 @@ class ShapeEditorView(tk.Frame):
             else:
                 self.btn_lock.config(text="🔓 Geometria Liberada", relief="sunken", bg=THEME["bg_hover"])
                 self.lbl_sbar_status.config(text="Modo Edição: Geometria liberada para edição de vértices.")
+        if hasattr(self, "cb_shape_format") and self.cb_shape_format:
+            if is_locked:
+                self.cb_shape_format.config(state="disabled")
+            else:
+                self.cb_shape_format.config(state="readonly")
 
     def set_tool_mode(self, mode):
         self.tool_mode = mode
@@ -760,8 +793,64 @@ class ShapeEditorView(tk.Frame):
     def on_name_change(self):
         new_name = self.entry_name.get().strip()
         if new_name:
-            self.shape["name"] = new_name
-            self.lbl_title.config(text=f"📐 Shape Editor - [{new_name}.die]")
+            if new_name != self.shape.get("name"):
+                self.shape["name"] = new_name
+                if 0 <= self.active_shape_index < len(self.open_shapes):
+                    self.open_shapes[self.active_shape_index]["shape"]["name"] = new_name
+                self.set_modified(True)
+            else:
+                self.shape["name"] = new_name
+                self._update_title()
+
+    def _update_title(self):
+        """Atualiza a barra de título clássica com o nome do molde, tamanho e indicador de modificado (*)."""
+        if not hasattr(self, "lbl_title") or not self.lbl_title:
+            return
+        shp_name = self.shape.get("name", "Molde")
+        shp_size = self.shape.get("size", "")
+        disp_title = f"{shp_name} (Tam: {shp_size})" if shp_size else shp_name
+        total_open = len(self.open_shapes)
+        count_suffix = f" [{self.active_shape_index+1} de {total_open}]" if total_open > 1 else ""
+        is_dirty = False
+        if 0 <= self.active_shape_index < len(self.open_shapes):
+            is_dirty = self.open_shapes[self.active_shape_index].get("is_dirty", False)
+        dirty_marker = " *" if is_dirty else ""
+        self.lbl_title.config(text=f"📐 Shape Editor - [{disp_title}.die{dirty_marker}]{count_suffix}")
+
+    def set_modified(self, is_dirty=True):
+        """Marca o molde ativo como modificado e atualiza os indicadores visuais (*)."""
+        if 0 <= self.active_shape_index < len(self.open_shapes):
+            self.open_shapes[self.active_shape_index]["is_dirty"] = is_dirty
+        self._update_title()
+        self._update_tab_bar()
+
+    def _on_shape_format_changed(self, event=None):
+        """Callback acionado ao alterar o formato do molde no Combobox."""
+        if not hasattr(self, "cb_shape_format") or not self.cb_shape_format:
+            return
+        new_val = self.cb_shape_format.get().strip()
+        factor = shape_multiplier(new_val)
+        if hasattr(self, "lbl_format_factor") and self.lbl_format_factor:
+            self.lbl_format_factor.config(text=f"× {factor}")
+
+        curr_val = self.shape.get("shape_format", "1x1")
+        if new_val != curr_val:
+            self.push_undo()
+            self.shape["shape_format"] = new_val
+            if 0 <= self.active_shape_index < len(self.open_shapes):
+                self.open_shapes[self.active_shape_index]["shape"]["shape_format"] = new_val
+            self.set_modified(True)
+            self.lbl_sbar_status.config(text=f"Formato do molde alterado para {new_val} (fator × {factor}).")
+
+    def _update_format_ui_from_shape(self):
+        """Sincroniza o combobox e o rótulo de fator com o shape_format do molde ativo."""
+        if not hasattr(self, "cb_shape_format") or not self.cb_shape_format:
+            return
+        fmt = self.shape.get("shape_format", "1x1") or "1x1"
+        self.cb_shape_format.set(fmt)
+        factor = shape_multiplier(fmt)
+        if hasattr(self, "lbl_format_factor") and self.lbl_format_factor:
+            self.lbl_format_factor.config(text=f"× {factor}")
 
     def _on_title_press(self, event):
         self.lift()
@@ -838,6 +927,8 @@ class ShapeEditorView(tk.Frame):
         if 0 <= self.active_shape_index < len(self.open_shapes):
             self.open_shapes[self.active_shape_index]["original_shape"] = copy.deepcopy(self.shape)
             self.open_shapes[self.active_shape_index]["is_dirty"] = False
+        self._update_title()
+        self._update_tab_bar()
         shp_name = self.shape.get("name", "Molde")
         self.lbl_sbar_status.config(text=f"Molde '{shp_name}' salvo com sucesso!")
         messagebox.showinfo("Shape Editor", f"Molde '{shp_name}' salvo com sucesso!", parent=self)
@@ -855,6 +946,8 @@ class ShapeEditorView(tk.Frame):
             entry["is_dirty"] = False
             count += 1
         self.original_shape = copy.deepcopy(self.shape)
+        self._update_title()
+        self._update_tab_bar()
         self.lbl_sbar_status.config(text=f"Todos os {count} moldes foram salvos com sucesso!")
         messagebox.showinfo("Shape Editor", f"Todos os {count} moldes abertos foram salvos com sucesso!", parent=self)
 
@@ -914,11 +1007,15 @@ class ShapeEditorView(tk.Frame):
                 for idx, s_data in all_pre.items():
                     if 0 <= idx < len(self.open_shapes):
                         self.open_shapes[idx]["shape"] = copy.deepcopy(s_data)
+                        self.open_shapes[idx]["is_dirty"] = (self.open_shapes[idx]["shape"] != self.open_shapes[idx].get("original_shape"))
 
                 if 0 <= self.active_shape_index < len(self.open_shapes):
                     self.shape = self.open_shapes[self.active_shape_index]["shape"]
                 self.selected_vertex_idx = -1
                 self.selected_hole_idx = -1
+                self._update_format_ui_from_shape()
+                self._update_title()
+                self._update_tab_bar()
                 self.update_info_panel()
                 self.redraw()
                 self.lbl_sbar_status.config(text=f"Alteração desfeita em todos os {len(all_pre)} moldes (Ctrl+Z).")
@@ -928,8 +1025,12 @@ class ShapeEditorView(tk.Frame):
                 self.shape = prev_state
                 if 0 <= self.active_shape_index < len(self.open_shapes):
                     self.open_shapes[self.active_shape_index]["shape"] = prev_state
+                    self.open_shapes[self.active_shape_index]["is_dirty"] = (self.shape != self.original_shape)
                 self.selected_vertex_idx = -1
                 self.selected_hole_idx = -1
+                self._update_format_ui_from_shape()
+                self._update_title()
+                self._update_tab_bar()
                 self.update_info_panel()
                 self.redraw()
                 self.lbl_sbar_status.config(text="Alteração desfeita (Ctrl+Z).")
@@ -937,8 +1038,14 @@ class ShapeEditorView(tk.Frame):
         elif self.shape != self.original_shape:
             self.push_undo()
             self.shape = copy.deepcopy(self.original_shape)
+            if 0 <= self.active_shape_index < len(self.open_shapes):
+                self.open_shapes[self.active_shape_index]["shape"] = self.shape
+                self.open_shapes[self.active_shape_index]["is_dirty"] = False
             self.selected_vertex_idx = -1
             self.selected_hole_idx = -1
+            self._update_format_ui_from_shape()
+            self._update_title()
+            self._update_tab_bar()
             self.update_info_panel()
             self.redraw()
             self.lbl_sbar_status.config(text="Molde revertido ao original (Ctrl+Z).")
@@ -952,8 +1059,14 @@ class ShapeEditorView(tk.Frame):
             if self.shape != self.original_shape:
                 self.push_undo()
             self.shape = copy.deepcopy(self.original_shape)
+            if 0 <= self.active_shape_index < len(self.open_shapes):
+                self.open_shapes[self.active_shape_index]["shape"] = self.shape
+                self.open_shapes[self.active_shape_index]["is_dirty"] = False
             self.selected_vertex_idx = -1
             self.selected_hole_idx = -1
+            self._update_format_ui_from_shape()
+            self._update_title()
+            self._update_tab_bar()
             self.update_info_panel()
             self.redraw()
             self.lbl_sbar_status.config(text="Alterações descartadas. Molde original recarregado.")
@@ -1173,6 +1286,8 @@ class ShapeEditorView(tk.Frame):
                 entry["is_dirty"] = True
             if 0 <= self.active_shape_index < len(self.open_shapes):
                 self.shape = self.open_shapes[self.active_shape_index]["shape"]
+            self._update_title()
+            self._update_tab_bar()
             self.update_info_panel()
             self.redraw()
             self.lbl_sbar_status.config(text=f"Todos os {len(self.open_shapes)} moldes rotacionados em {angle_deg:.1f}°.")
@@ -1181,7 +1296,7 @@ class ShapeEditorView(tk.Frame):
             self._apply_rotation_to_shape_dict(self.shape, self.shape, cx, cy, cos_a, sin_a)
             if 0 <= self.active_shape_index < len(self.open_shapes):
                 self.open_shapes[self.active_shape_index]["shape"] = self.shape
-                self.open_shapes[self.active_shape_index]["is_dirty"] = True
+            self.set_modified(True)
             self.update_info_panel()
             self.redraw()
             self.lbl_sbar_status.config(text=f"Molde rotacionado em {angle_deg:.1f}°.")
@@ -1200,6 +1315,7 @@ class ShapeEditorView(tk.Frame):
             del contour[self.selected_vertex_idx]
             self.lbl_sbar_status.config(text=f"Vértice {self.selected_vertex_idx} excluído.")
             self.selected_vertex_idx = -1
+            self.set_modified(True)
             self.update_info_panel()
             self.redraw()
         elif self.selected_hole_idx >= 0 and self.selected_hole_idx < len(holes):
@@ -1207,6 +1323,7 @@ class ShapeEditorView(tk.Frame):
             del holes[self.selected_hole_idx]
             self.lbl_sbar_status.config(text=f"Furo {self.selected_hole_idx} excluído.")
             self.selected_hole_idx = -1
+            self.set_modified(True)
             self.update_info_panel()
             self.redraw()
         else:
@@ -1563,7 +1680,7 @@ class ShapeEditorView(tk.Frame):
                     self.undo_stack.pop(0)
                 self.redo_stack.clear()
                 if 0 <= self.active_shape_index < len(self.open_shapes):
-                    self.open_shapes[self.active_shape_index]["is_dirty"] = True
+                    self.set_modified(True)
             self._pre_drag_state = None
 
         self.drag_target = None

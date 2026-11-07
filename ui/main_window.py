@@ -1842,7 +1842,8 @@ class MainWindow(tk.Tk):
                 updated_shape.get("name"),
                 updated_shape.get("contour"),
                 updated_shape.get("holes"),
-                updated_shape.get("stitching")
+                updated_shape.get("stitching"),
+                shape_format=updated_shape.get("shape_format", "1x1")
             )
             for i, s in enumerate(self.current_shapes):
                 if s["id"] == shape_id:
