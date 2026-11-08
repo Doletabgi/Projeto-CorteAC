@@ -9,7 +9,7 @@ on:
       tag_name:
         description: 'Tag de versão SemVer (ex: v1.0.0)'
         required: false
-        default: 'v1.6.44'
+        default: 'v1.6.47'
 
 permissions:
   contents: write
@@ -197,22 +197,23 @@ jobs:
 
             ---
 
-            ### 🛠️ Recursos Incluídos Nesta Versão (v1.6.44):
-            - **Programação de Datas e Horas de Backup de Moldes (Agendamento Automático)**:
-              - Nova aba dedicada **`⏰ Programar Backup (Agendamento)`** na ferramenta de backup e novo atalho direto em **Ferramentas ➔ ⏰ Programar Backup de Moldes...**.
-              - **Quatro Modos de Programação**:
-                - *Diário (todos os dias)*: Execução recorrente em horários definidos pelo usuário (ex: `12:00, 18:00`).
-                - *Dias da Semana específicos*: Seleção detalhada por dias da semana (Seg, Ter, Qua, Qui, Sex, Sáb, Dom).
-                - *Intervalo em Horas*: Execução a cada N horas (ex: a cada 2h, 4h, 6h, 8h, 12h ou 24h).
-                - *Data e Hora específica*: Agendamento pontual em calendário/horário futuro (`DD/MM/AAAA HH:MM`).
-              - **Serviço de Monitoramento em Background**: Thread leve (`ShapeBackupScheduler`) executando silenciosamente em segundo plano enquanto o CorteAC estiver aberto, sem travar ou interromper o trabalho de corte do operador.
-              - **Política de Retenção Automática**: Preservação dos últimos N backups (ex: manter os 10 mais recentes) e limpeza automática de arquivos legados para poupar espaço em disco.
-              - **Histórico e Execução Imediata**: Botão *⚡ Executar Backup Agora*, tabela de histórico dos backups gerados com tamanho, data e botão de restauração direta.
-            - **Ferramenta de Backup e Restauração de Moldes Cadastrados (v1.6.43)**:
-              - Exportação atômica em `.zip` / `.csh` com especificações canônicas e arquivos `.die` padrão ATOM.
-              - Inspeção prévia com detecção de duplicados e estratégias configuráveis de conflito (*Sobrescrever*, *Pular*, *Renomear*).
+            ### 🛠️ Recursos Incluídos Nesta Versão (v1.6.47):
+            - **Backup e Restauração de Sessões de Corte e Layouts (v1.6.47)**:
+              - Extensão completa da ferramenta de backup para suportar sessões de corte (`sessions`) e todos os seus layouts (`layouts`: `lay0000`, `lay0001`, ...), além do catálogo de moldes.
+              - **Escopos de Backup Selecionáveis**: *Backup Completo* (Moldes + Sessões + Layouts + Materiais), *Apenas Moldes* ou *Apenas Sessões de Corte*.
+              - **Filtros Flexíveis**: Filtro opcional por pasta de moldes e/ou por pasta de produção (Job).
+              - **Inspeção Prévia Detalhada**: Abas dedicadas na tela de restauração para visualizar previamente todos os moldes e sessões contidos no pacote compactado.
+              - **Estratégias de Conflito para Sessões**:
+                - *Importar com Novo ID*: Gera novo identificador monotônico sequencial seguro sem colidir com sessões já existentes.
+                - *Atualizar Existente*: Sobrescreve a sessão e seus layouts caso o ID já exista.
+                - *Ignorar Existentes*: Preserva os dados locais intactos.
+              - **Direcionamento de Pasta de Produção**: Permite restaurar sessões mantendo o Job original ou direcionando para um Job customizado.
+              - **Programação Automática (Agendamento)**: Atualizada para suportar backup automático diário, semanal ou por intervalo de Moldes e Sessões.
+              - **100% de Retrocompatibilidade**: Suporta restauração de pacotes de versões anteriores e ZIPs legados de arquivos `.die`.
+            - **Visualização de Lays da Sessão em Cascata e Lado a Lado (v1.6.46)**:
+              - Organização em subjanelas MDI no Layout Editor via menu *Janela* (*Em cascata*, *Lado a lado horizontal*, *Lado a lado vertical* e *Maximizar*).
             - **Estabilidade e Testes**:
-              - Suíte expandida para **674 testes automatizados** passando com 100% de sucesso.
+              - Suíte de testes expandida para **692 testes automatizados** passando com 100% de sucesso.
           files: |
             dist-release/**/*.exe
             dist-release/**/*.zip

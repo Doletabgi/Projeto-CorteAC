@@ -36,8 +36,10 @@ def get_default_schedule_config() -> Dict[str, Any]:
         "interval_hours": 4,                 # Para mode == "interval"
         "specific_datetime": "",             # Para mode == "specific_datetime" ("AAAA-MM-DD HH:MM")
         "backup_dir": str(DEFAULT_BACKUPS_DIR),
+        "backup_type": "all",                # "all" (moldes + sessões), "shapes_only", "sessions_only"
         "include_dies": True,
         "folder_filter": None,               # None para todos os moldes, ou lista de nomes de pastas
+        "session_filter_job": None,          # None para todas as ordens de produção, ou nome do job
         "max_retained_backups": 10,          # Quantidade máxima de backups preservados (0 = ilimitado)
         "last_run_timestamp": "",            # Data/hora ISO da última execução bem-sucedida
         "last_run_status": "",               # "success" ou "error"
@@ -111,6 +113,20 @@ def normalize_schedule_config(cfg: Optional[Dict[str, Any]]) -> Dict[str, Any]:
     if not b_dir:
         b_dir = str(DEFAULT_BACKUPS_DIR)
     result["backup_dir"] = b_dir
+
+    # Normaliza backup_type
+    b_type = str(result.get("backup_type") or "all").strip().lower()
+    if b_type not in ("all", "shapes_only", "sessions_only"):
+        b_type = "all"
+    result["backup_type"] = b_type
+
+    # Normaliza session_filter_job
+    sf_job = result.get("session_filter_job")
+    if sf_job is not None:
+        sf_job_str = str(sf_job).strip()
+        result["session_filter_job"] = sf_job_str if sf_job_str else None
+    else:
+        result["session_filter_job"] = None
 
     return result
 
@@ -324,7 +340,7 @@ def is_backup_due(config: Dict[str, Any], now: Optional[datetime] = None) -> boo
 def apply_retention_policy(backup_dir: Union[str, Path], max_keep: int = 10) -> int:
     """
     Aplica a política de retenção no diretório de backups automáticos.
-    Mantém os `max_keep` arquivos mais recentes com prefixo 'backup_moldes_' e exclui os mais antigos.
+    Mantém os `max_keep` arquivos mais recentes com prefixo 'backup_' e exclui os mais antigos.
     Se max_keep <= 0, mantém todos. Retorna a contagem de arquivos excluídos.
     """
     if max_keep <= 0:
@@ -336,7 +352,7 @@ def apply_retention_policy(backup_dir: Union[str, Path], max_keep: int = 10) -> 
 
     backup_files = []
     for f in p_dir.iterdir():
-        if f.is_file() and f.name.startswith("backup_moldes_") and (f.suffix.lower() in (".zip", ".csh")):
+        if f.is_file() and f.name.startswith("backup_") and (f.suffix.lower() in (".zip", ".csh")):
             try:
                 backup_files.append((f.stat().st_mtime, f))
             except Exception:
@@ -413,11 +429,20 @@ def execute_scheduled_backup(
     backup_dir = Path(config.get("backup_dir") or DEFAULT_BACKUPS_DIR)
     backup_dir.mkdir(parents=True, exist_ok=True)
 
+    b_type = config.get("backup_type", "all")
+    if b_type == "shapes_only":
+        prefix = "backup_moldes_"
+    elif b_type == "sessions_only":
+        prefix = "backup_sessoes_"
+    else:
+        prefix = "backup_corteac_"
+
     timestamp_str = now.strftime("%Y-%m-%d_%H-%M-%S")
-    target_filename = f"backup_moldes_{timestamp_str}.zip"
+    target_filename = f"{prefix}{timestamp_str}.zip"
     target_file = backup_dir / target_filename
 
     folder_filter = config.get("folder_filter")
+    session_filter_job = config.get("session_filter_job")
     include_dies = bool(config.get("include_dies", True))
 
     try:
@@ -426,6 +451,8 @@ def execute_scheduled_backup(
             target_file=target_file,
             folder_filter=folder_filter,
             include_die_files=include_dies,
+            backup_scope=b_type,
+            session_filter_job=session_filter_job,
             on_progress=on_progress
         )
 
@@ -437,9 +464,15 @@ def execute_scheduled_backup(
         config["last_run_timestamp"] = now.isoformat()
         config["last_run_status"] = "success"
         config["last_run_file"] = str(target_file.resolve())
+        if summary.total_sessions > 0 and summary.total_shapes > 0:
+            det = f"{summary.total_shapes} moldes, {summary.total_sessions} sessões ({summary.total_layouts} layouts), {summary.total_folders} pastas"
+        elif summary.total_sessions > 0:
+            det = f"{summary.total_sessions} sessões ({summary.total_layouts} layouts)"
+        else:
+            det = f"{summary.total_shapes} moldes, {summary.total_folders} pastas"
+
         config["last_run_message"] = (
-            f"Backup gerado com sucesso: {summary.total_shapes} moldes, "
-            f"{summary.total_folders} pastas ({summary.file_size_bytes / 1024:.1f} KB)."
+            f"Backup gerado com sucesso: {det} ({summary.file_size_bytes / 1024:.1f} KB)."
         )
         config["last_checked_minute"] = now.strftime("%Y-%m-%d %H:%M")
 
@@ -451,6 +484,8 @@ def execute_scheduled_backup(
             "target_file": str(target_file.resolve()),
             "total_shapes": summary.total_shapes,
             "total_folders": summary.total_folders,
+            "total_sessions": summary.total_sessions,
+            "total_layouts": summary.total_layouts,
             "file_size_bytes": summary.file_size_bytes,
             "purged_old_files": purged,
             "message": config["last_run_message"]

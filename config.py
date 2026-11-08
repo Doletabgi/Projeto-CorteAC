@@ -36,9 +36,8 @@ BACKUPS_DIR.mkdir(parents=True, exist_ok=True)
 
 from cad.semver import SemVer
 
-# Application Metadata
 APP_NAME = "CorteAC"
-APP_VERSION = "1.6.46"
+APP_VERSION = "1.6.47"
 
 # UI Classic Windows XP Theme Palette (Amostrado exatamente dos prints do usuário)
 THEME = {

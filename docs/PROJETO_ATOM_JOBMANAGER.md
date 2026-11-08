@@ -6,7 +6,7 @@
 > **Regra de ouro:** o que está marcado `[CONFIRMADO]` veio do relatório, do código ou do usuário. O que está `[NÃO CONFIRMADO]` é suposição e não deve virar "fato" sem validação. O que está `[PREENCHER]` a IA deve completar lendo o código real.
 
 <!-- AUTO:header:start -->
-**Última sincronização com o código:** 2026-11-08 11:07 (HEAD ao gerar: `368e251`; 165 arquivos Python, ~80123 linhas)
+**Última sincronização com o código:** 2026-11-08 11:42 (HEAD ao gerar: `f6e3a63`; 166 arquivos Python, ~81220 linhas)
 <!-- AUTO:header:end -->
 **Versão deste documento:** 2
 
@@ -210,6 +210,7 @@ tests/test_shape_editor_multishape.py                # tests/test_shape_editor_m
 tests/test_shape_editor_security.py                  # tests/test_shape_editor_security.py
 tests/test_shape_editor_stitching.py
 tests/test_shape_format_multiplier.py                # tests/test_shape_format_multiplier.py
+tests/test_shape_session_backup.py                   # Testes automatizados para backup e restauração de sessões de corte e layouts
 tests/test_shape_sorting.py                          # Testes Unitários: Classificação e Ordenação de Moldes e Tamanhos (Maior para Menor / Menor para Maior)
 tests/test_shapes_resto.py                           # Testes unitários e de integração para a coluna 'Resto' na grade de Moldes da SessionView.
 tests/test_sidebar_counter.py                        # Testes unitários e de integração para o contador de peças da barra lateral,
@@ -379,12 +380,12 @@ ui/user_dialog.py                                    # JobManager 2000 (Python E
 
 ### `cad/shape_backup.py`
 - `class BackupSummary` (linha 23, 0 métodos)
-- `class BackupInspectionResult` (linha 34, 0 métodos)
-- `class RestoreResult` (linha 48, 0 métodos)
+- `class BackupInspectionResult` (linha 37, 0 métodos)
+- `class RestoreResult` (linha 56, 0 métodos)
 - funções: `create_shapes_backup`, `inspect_shapes_backup`, `restore_shapes_backup`
 
 ### `cad/shape_backup_scheduler.py`
-- `class ShapeBackupScheduler` (linha 475, 5 métodos): Serviço em segundo plano gerenciador do agendamento de backups.
+- `class ShapeBackupScheduler` (linha 510, 5 métodos): Serviço em segundo plano gerenciador do agendamento de backups.
 - funções: `get_default_schedule_config`, `normalize_schedule_config`, `get_schedule_config`, `save_schedule_config`, `get_next_scheduled_run`, `is_backup_due`, `apply_retention_policy`, `list_backup_history`, `execute_scheduled_backup`
 
 ### `cad/trim_engine.py`
@@ -651,6 +652,9 @@ ui/user_dialog.py                                    # JobManager 2000 (Python E
 - `class TestShapeFormatDatabase` (linha 65, 5 métodos)
 - `class TestShapeEditorViewFormatUI` (linha 160, 10 métodos)
 
+### `tests/test_shape_session_backup.py`
+- `class TestShapeSessionBackup` (linha 33, 12 métodos)
+
 ### `tests/test_shape_sorting.py`
 - `class TestShapeSorting` (linha 14, 6 métodos)
 - `class DummyKeyEvent` (linha 105, 1 métodos)
@@ -815,7 +819,7 @@ ui/user_dialog.py                                    # JobManager 2000 (Python E
 - `class MacroPanel` (linha 23, 12 métodos): Camada 3: Macro / Aprendizado.
 
 ### `ui/main_window.py`
-- `class MainWindow` (linha 68, 161 métodos)
+- `class MainWindow` (linha 68, 162 métodos)
 - funções: `get_assets_dir`
 
 ### `ui/material_codes_view.py`
@@ -838,7 +842,7 @@ ui/user_dialog.py                                    # JobManager 2000 (Python E
 - `class SessionView` (linha 250, 114 métodos)
 
 ### `ui/shape_backup_restore_dialog.py`
-- `class ShapeBackupRestoreDialog` (linha 54, 31 métodos): Diálogo modal completo para Backup, Restauração e Programação de Datas/Horas do Catálogo de Moldes.
+- `class ShapeBackupRestoreDialog` (linha 54, 35 métodos): Diálogo modal completo para Backup, Restauração e Programação de Datas/Horas do Catálogo de Moldes.
 - funções: `open_folder_in_file_manager`
 
 ### `ui/shape_catalog_view.py`
@@ -1838,10 +1842,10 @@ A ordem de corte do `.lay` para a mesa **não pode** ser aleatória:
 | Delete | `ui/layout_editor_view.py:1095` | `self.bind_all("<Delete>", lambda e: self.delete_selected())` |
 | Delete | `ui/main_window.py:307` | `edit_menu.add_command(label="Excluir", accelerator="Del", command=self.on_global` |
 | Delete | `ui/main_window.py:701` | `self.bind_all("<Delete>", self.on_global_delete_key, add="+")` |
-| Delete | `ui/main_window.py:3686` | `accelerator="Del",` |
-| Delete | `ui/main_window.py:3705` | `accelerator="Del",` |
-| Delete | `ui/main_window.py:3982` | `accelerator="Del",` |
-| Delete | `ui/main_window.py:4001` | `accelerator="Del",` |
+| Delete | `ui/main_window.py:3712` | `accelerator="Del",` |
+| Delete | `ui/main_window.py:3731` | `accelerator="Del",` |
+| Delete | `ui/main_window.py:4008` | `accelerator="Del",` |
+| Delete | `ui/main_window.py:4027` | `accelerator="Del",` |
 | Delete | `ui/session_view.py:881` | `self.tree_shapes.bind("<Delete>", lambda e: self._on_tree_shapes_delete())` |
 | Delete | `ui/session_view.py:1040` | `w.bind("<Delete>", self.remove_session_material)` |
 | Delete | `ui/session_view.py:1041` | `w.bind("<Key-Delete>", self.remove_session_material)` |
@@ -1862,13 +1866,13 @@ A ordem de corte do `.lay` para a mesa **não pode** ser aleatória:
 | Escape | `ui/layout_print_dialog.py:1194` | `self.bind("<Escape>", self.on_escape)` |
 | Escape | `ui/main_window.py:89` | `self.bind("<Escape>", self.exit_fullscreen)` |
 | Escape | `ui/main_window.py:700` | `self.bind_all("<Escape>", self.dismiss_popup_menus, add="+")` |
-| Escape | `ui/main_window.py:4309` | `dialog.bind("<Escape>", lambda e: dialog.destroy())` |
+| Escape | `ui/main_window.py:4335` | `dialog.bind("<Escape>", lambda e: dialog.destroy())` |
 | Escape | `ui/material_codes_view.py:510` | `dlg.bind("<Escape>", lambda e: dlg.destroy())` |
 | Escape | `ui/options_dialog.py:40` | `self.bind("<Escape>", lambda e: self.on_cancel())` |
 | Escape | `ui/session_view.py:3323` | `entry.bind("<Escape>", cancel)` |
 | Escape | `ui/session_view.py:3441` | `dialog.bind("<Escape>", lambda e: dialog.destroy())` |
 | Escape | `ui/session_view.py:3879` | `entry.bind("<Escape>", cancel_edit)` |
-| Escape | `ui/shape_backup_restore_dialog.py:126` | `self.bind("<Escape>", lambda e: self._on_close())` |
+| Escape | `ui/shape_backup_restore_dialog.py:143` | `self.bind("<Escape>", lambda e: self._on_close())` |
 | Escape | `ui/shape_catalog_view.py:268` | `self.bind("<Escape>", lambda e: self.on_close_click())` |
 | Escape | `ui/shape_editor_view.py:601` | `self.bind("<Escape>", self.on_escape_key)` |
 | Escape | `ui/shape_editor_view.py:602` | `self.canvas.bind("<Escape>", self.on_escape_key)` |
@@ -1913,7 +1917,7 @@ A ordem de corte do `.lay` para a mesa **não pode** ser aleatória:
 | Return | `ui/import_materials_dialog.py:84` | `self.ent_filepath.bind("<Return>", lambda e: self.load_file_from_path(self.ent_f` |
 | Return | `ui/main_window.py:570` | `self.tree_main.bind("<Return>", self.on_tree_key_return)` |
 | Return | `ui/main_window.py:617` | `self.grid_lower.bind("<Return>", self.on_grid_double_click)` |
-| Return | `ui/main_window.py:4308` | `dialog.bind("<Return>", lambda e: save())` |
+| Return | `ui/main_window.py:4334` | `dialog.bind("<Return>", lambda e: save())` |
 | Return | `ui/material_codes_view.py:212` | `self.tree.bind("<Return>", lambda e: self.open_edit_selected_dialog())` |
 | Return | `ui/material_codes_view.py:509` | `dlg.bind("<Return>", lambda e: save_action())` |
 | Return | `ui/session_view.py:599` | `self.entry_gap.bind("<Return>", self._on_gap_entry_change)` |
@@ -4338,6 +4342,37 @@ O operador solicitou: *"adicionar no bkp uma opcao de programar as datas e horas
 
 ---
 
+## 8.65. Backup, Restauração e Agendamento Estendidos para Sessões de Corte e Layouts (v1.6.47) `[CONFIRMADO]`
+
+- **Contexto**: A ferramenta de backup do CorteAC operava exclusivamente sobre o catálogo de moldes cadastrados (`shapes.json`, pastas e arquivos `.die`). O operador solicitou a inclusão das sessões de corte e seus respectivos layouts (`lay0000`, `lay0001`, ...) no sistema de backups, permitindo exportar e restaurar a produção completa ou de forma seletiva com total retrocompatibilidade.
+- **Implementação e Alterações**:
+  - **`cad/shape_backup.py`**:
+    - **Suporte a Escopos de Backup**: Introduzido parâmetro `backup_scope` com opções `"all"` (Moldes + Sessões + Layouts + Materiais), `"shapes_only"` e `"sessions_only"`, além de filtro opcional por pasta de produção `session_filter_job`.
+    - **Exportação Canônica de Sessões e Layouts**: Extração de dados da tabela `sessions` e de todos os layouts associados via `db.get_session_layouts(session_id)`. Serialização atômica em `sessions.json` e exportação preventiva de `materials.json` para garantir integridade referencial.
+    - **Formato Canônico v2.0**: Manifesto atualizado com `format_version: "2.0"` e metadados detalhados de sessões e layouts.
+    - **Inspeção Prévia Dupla**: `inspect_shapes_backup()` inspeciona e reporta individualmente a contagem e resumos de moldes e sessões contidos no pacote.
+    - **Restauração Seletiva e Resolução de Conflitos**:
+      - Suporte independente a `restore_shapes` e `restore_sessions`.
+      - Três estratégias de conflito para sessões: `"import_new_id"` (atribui novo ID monotônico sequencial seguro via `db.get_next_session_number()`), `"overwrite"` (atualiza dados da sessão e regrava layouts via `db.save_session_layouts()`) e `"skip"` (preserva sessão existente).
+      - Redirecionamento flexível de Job de destino (`target_job`).
+      - 100% retrocompatível com backups de moldes da v1.6.43 e ZIPs legados de arquivos `.die`.
+  - **`cad/shape_backup_scheduler.py`**:
+    - Suporte a `backup_type` (`"all"`, `"shapes_only"`, `"sessions_only"`) e `session_filter_job` nas configurações e rotinas de agendamento automático.
+    - Nomenclatura dinâmica de arquivos gerados: `backup_corteac_*.zip` (completo), `backup_moldes_*.zip` e `backup_sessoes_*.zip`.
+    - Aplicação unificada da política de retenção em disco cobrindo todos os prefixos de backup.
+  - **`ui/shape_backup_restore_dialog.py`**:
+    - **Aba Backup**: Seletores de conteúdo a incluir (Backup Completo, Apenas Moldes, Apenas Sessões), filtros por Pasta de Moldes e Pasta de Produção (Job), e sugestão dinâmica de nome de arquivo.
+    - **Aba Restauração**: Prévia dividida em abas (`Moldes` e `Sessões`), checkboxes independentes de inclusão, estratégia de conflito dedicada para sessões e opção de direcionar sessões para Job específico.
+    - **Aba Programação**: Seleção do conteúdo a ser agendado automaticamente (Moldes e Sessões, Apenas Moldes ou Apenas Sessões).
+  - **`ui/main_window.py`**:
+    - Menus atualizados para `📦 Backup e Restauração (Moldes e Sessões)...` e `⏰ Programar Backup Automático...`.
+    - Implementado callback `on_sessions_restored` sincronizando a árvore de produção, catálogo e grid inferior após a restauração.
+  - **Testes Automatizados**:
+    - Criado [`tests/test_shape_session_backup.py`](file:///home/dola/Documentos/clone%20do%20job/jobmanager-win10-python/tests/test_shape_session_backup.py) com 10 testes dedicados cobrindo backups de escopo completo, exclusivo de sessões e exclusivo de moldes, inspeção, estratégias `import_new_id`, `overwrite` e `skip`, direcionamento de Job, restauração em banco limpo e agendamento automático.
+    - Total de 30 testes passando nas 3 suítes de backup (`test_shape_session_backup.py`, `test_shape_backup_restore.py`, `test_shape_backup_scheduler.py`).
+
+---
+
 ## 9. Pendências e arquivos faltantes
 
 ### 9.1 Tarefas abertas
@@ -4396,6 +4431,7 @@ O operador solicitou: *"adicionar no bkp uma opcao de programar as datas e horas
 - [x] Programação de Datas e Horas de Backup de Moldes — Agendamento Automático (v1.6.44) — Concluído (§8.62, `cad/shape_backup_scheduler.py`, `ui/shape_backup_restore_dialog.py`, `ui/main_window.py`, `tests/test_shape_backup_scheduler.py`)
 - [x] Shape Editor em Branco ao Abrir por Menu ou Atalho (v1.6.45) — Concluído (§8.63, `ui/shape_editor_view.py`, `ui/main_window.py`, `tests/test_shape_editor_blank_on_open.py`)
 - [x] Visualização dos Lays da Sessão em Cascata e Lado a Lado no Layout Editor (v1.6.46) — Concluído (§8.64, `ui/layout_editor_view.py`, `ui/main_window.py`, `tests/test_layout_editor_multi_window.py`)
+- [x] Backup, Restauração e Agendamento Estendidos para Sessões de Corte e Layouts (v1.6.47) — Concluído (§8.65, `cad/shape_backup.py`, `cad/shape_backup_scheduler.py`, `ui/shape_backup_restore_dialog.py`, `ui/main_window.py`, `tests/test_shape_session_backup.py`)
 
 ### 9.2 Arquivos de amostra que faltam (por prioridade)
 
@@ -4523,6 +4559,7 @@ Local: `/home/dola/Documentos/clone do job/antigo/arquivos pos instalacao/Common
 <!-- AUTO:gitlog:start -->
 | Commit | Data | Autor | Mensagem |
 |---|---|---|---|
+| `f6e3a63` | 2026-11-08 | Doletabgi | feat(layout): visualização das placas da sessão em cascata e lado a lado (v1.6.46) |
 | `368e251` | 2026-11-08 | Doletabgi | feat(shape-editor): inicializacao em branco ao abrir por menu ou atalho (v1.6.45) |
 | `07ccbc2` | 2026-11-07 | Doletabgi | feat(shapes): programacao de datas e horas de backup automatico de moldes (v1.6.44) |
 | `097f102` | 2026-11-07 | Doletabgi | feat(shapes): ferramenta de backup e restauracao de moldes no menu ferramentas (v1.6.43) |
@@ -4537,7 +4574,6 @@ Local: `/home/dola/Documentos/clone do job/antigo/arquivos pos instalacao/Common
 | `8e3bb5f` | 2026-11-06 | Doletabgi | feat(release): cadastro de usuario, reorganizacao da folha A4 e codigo de barras (v1.6.35) |
 | `d8156f8` | 2026-11-05 | Doletabgi | feat(release): impressao em massa e paginacao no print preview (v1.6.33) |
 | `631c8a6` | 2026-11-04 | Doletabgi | fix(build): clean_database com saida ASCII no Windows (v1.6.29) |
-| `bc09044` | 2026-11-04 | Doletabgi | fix(build): versiona clean_database usado pelo CI (v1.6.29) |
 <!-- AUTO:gitlog:end -->
 
 ---
@@ -4607,6 +4643,8 @@ Local: `/home/dola/Documentos/clone do job/antigo/arquivos pos instalacao/Common
 | Sáb, 07/11/2026 | 21:30 | Antigravity | Ferramenta de Backup e Restauração de Moldes Cadastrados no Menu Ferramentas (v1.6.43): (1) Novo motor `cad/shape_backup.py` para geração atômica de pacotes de backup compactados (.zip/.csh) com `manifest.json`, `shapes.json` canônico completo, pastas, artigos e cópias individuais .die (padrão ATOM FlashCut); (2) Inspeção prévia de pacotes com suporte a ZIPs legados de arquivos .die; (3) Restauração com resolução inteligente de conflitos (substituir, ignorar ou criar cópias renomeadas) e direcionamento de pastas; (4) Diálogo visual `ShapeBackupRestoreDialog` em `ui/shape_backup_restore_dialog.py` acessível via `Ferramentas ➔ 📦 Backup e Restauração de Moldes...`; (5) Callback de atualização em tempo real do catálogo de moldes na tela principal; (6) 9 novos testes em `tests/test_shape_backup_restore.py`; 663 testes passando com 100% de sucesso. | `cad/shape_backup.py`, `ui/shape_backup_restore_dialog.py`, `ui/main_window.py`, `cad/die_parser.py`, `tests/test_shape_backup_restore.py`, `tests/test_tools_menu_items.py`, `CorteAC.spec`, `build_linux.sh`, `build_exe_windows.bat`, `config.py`, `.github/workflows/release.yml`, `docs/PROJETO_ATOM_JOBMANAGER.md` |
 | Sáb, 07/11/2026 | 21:55 | Antigravity | Programação de Datas e Horas de Backup de Moldes — Agendamento Automático (v1.6.44): (1) Novo motor `cad/shape_backup_scheduler.py` suportando 4 modos de programação: diário com múltiplos horários (ex: 12:00, 18:00), semanal por dias específicos (Seg a Dom), intervalo a cada N horas e data/hora pontual no calendário; (2) Serviço em segundo plano `ShapeBackupScheduler` com thread daemon leve e monitoramento silencioso integrado ao ciclo de vida da `MainWindow`; (3) Política de retenção automática de backups em disco com purga de arquivos excedentes; (4) Nova aba dedicada `⏰ Programar Backup (Agendamento)` em `ShapeBackupRestoreDialog` com status em tempo real, badges, presets rápidos, histórico e execução imediata; (5) Novo atalho `Ferramentas ➔ ⏰ Programar Backup de Moldes...`; (6) 11 novos testes automatizados em `tests/test_shape_backup_scheduler.py`; 674 testes passando com 100% de sucesso. | `cad/shape_backup_scheduler.py`, `ui/shape_backup_restore_dialog.py`, `ui/main_window.py`, `config.py`, `CorteAC.spec`, `build_linux.sh`, `build_exe_windows.bat`, `.github/workflows/release.yml`, `tests/test_shape_backup_scheduler.py`, `tests/test_shape_backup_restore.py`, `tests/test_tools_menu_items.py`, `docs/PROJETO_ATOM_JOBMANAGER.md` |
 | Dom, 08/11/2026 | 10:25 | Antigravity | Shape Editor em Branco ao Abrir por Menu ou Atalho (v1.6.45): (1) Eliminado o fallback compulsório que pré-carregava moldes existentes ou peças mock ao abrir o editor de moldes; (2) `show_shape_editor` sem argumentos agora abre 100% limpo com novo método `ShapeEditorView.load_empty_shape()` e título `[Novo Molde]`; (3) Adicionado botão '📄 Novo' na toolbar do Shape Editor e atalhos `Ctrl+N` / `Ctrl+Shift+N`; (4) Métricas e coordenadas zeradas no painel de info em estado vazio; (5) Suporte a salvar novos moldes desenhados do zero via `on_shape_saved` e `db.create_shape`; (6) 4 novos testes automatizados em `tests/test_shape_editor_blank_on_open.py`; 676 testes passando com 100% de sucesso. | `ui/shape_editor_view.py`, `ui/main_window.py`, `config.py`, `tests/test_shape_editor_blank_on_open.py`, `docs/PROJETO_ATOM_JOBMANAGER.md` |
+| Dom, 08/11/2026 | 11:15 | Antigravity | Visualização dos Lays da Sessão em Cascata e Lado a Lado no Layout Editor (v1.6.46): (1) Implementação do componente `LayoutSubWindow` no padrão clássico Windows XP MDI no `LayoutEditorView`; (2) Suporte a visualização simultânea de todas as placas da sessão ativa em cascata (`cascade_layouts`), lado a lado horizontal (`tile_layouts_horizontal`) e empilhado vertical (`tile_layouts_vertical`); (3) Maximização rápida em 1 clique ou duplo-clique no título/canvas; (4) Menu Janela com reconstrução dinâmica das placas e indicador de layout ativo; (5) Delegação transparente dos menus da `MainWindow` (`cascade_windows`, `tile_horizontal`, `tile_vertical`) para o Layout Editor; (6) 6 novos testes automatizados em `tests/test_layout_editor_multi_window.py`; 682 testes passando com 100% de sucesso. | `ui/layout_editor_view.py`, `ui/main_window.py`, `config.py`, `.github/workflows/release.yml`, `tests/test_layout_editor_multi_window.py`, `docs/PROJETO_ATOM_JOBMANAGER.md` |
+| Dom, 08/11/2026 | 11:45 | Antigravity | Backup, Restauração e Agendamento Estendidos para Sessões de Corte e Layouts (v1.6.47): (1) Extensão do motor `cad/shape_backup.py` para suportar escopos `all` (moldes + sessões + layouts + materiais), `shapes_only` e `sessions_only`, com filtro opcional por pasta de produção (Job); (2) Serialização de `sessions.json` e `materials.json` com manifesto canônico v2.0; (3) Restauração seletiva com 3 estratégias de conflito para sessões (`import_new_id`, `overwrite`, `skip`) e direcionamento de Job; (4) Extensão do motor de agendamento `cad/shape_backup_scheduler.py` com suporte aos 3 tipos de backup e política de retenção unificada para `backup_corteac_*`, `backup_moldes_*` e `backup_sessoes_*`; (5) Interface `ShapeBackupRestoreDialog` atualizada com prévia dual, filtros por pasta/job e controles independentes; (6) Menus e callbacks da `MainWindow` sincronizados; (7) 10 novos testes automatizados em `tests/test_shape_session_backup.py` e 30 testes no conjunto de backup (692 testes passando com 100% de sucesso). | `cad/shape_backup.py`, `cad/shape_backup_scheduler.py`, `ui/shape_backup_restore_dialog.py`, `ui/main_window.py`, `tests/test_shape_session_backup.py`, `tests/test_tools_menu_items.py`, `config.py`, `docs/PROJETO_ATOM_JOBMANAGER.md` |
 
 ## 11. Prompt para o Antigravity: instalar a sincronização automática `[CONCLUÍDA]`
 

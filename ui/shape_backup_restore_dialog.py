@@ -60,21 +60,29 @@ class ShapeBackupRestoreDialog(tk.Toplevel):
       3. Programar datas e horários automáticos de backup com retenção e monitoramento em segundo plano.
     """
 
-    def __init__(self, parent, db=None, on_shapes_changed: Optional[Callable[[], None]] = None, initial_tab: int = 0):
+    def __init__(
+        self,
+        parent,
+        db=None,
+        on_shapes_changed: Optional[Callable[[], None]] = None,
+        on_sessions_changed: Optional[Callable[[], None]] = None,
+        initial_tab: int = 0
+    ):
         super().__init__(parent)
         self.parent_window = parent
         self.db = db
         self.on_shapes_changed = on_shapes_changed
+        self.on_sessions_changed = on_sessions_changed
 
-        self.title("Backup, Restauração e Programação de Moldes Cadastrados")
+        self.title("Backup, Restauração e Programação (Moldes e Sessões)")
         self.transient(parent)
         self.grab_set()
         self.resizable(True, True)
         self.configure(bg=THEME["bg_surface"])
 
-        dlg_w, dlg_h = 820, 680
+        dlg_w, dlg_h = 860, 710
         self.geometry(f"{dlg_w}x{dlg_h}")
-        self.minsize(740, 560)
+        self.minsize(780, 580)
 
         # Centraliza sobre a janela pai
         self.update_idletasks()
@@ -83,17 +91,25 @@ class ShapeBackupRestoreDialog(tk.Toplevel):
         self.geometry(f"+{max(10, rx)}+{max(10, ry)}")
 
         # Estado interno - Backup Manual
-        self.var_backup_scope = tk.StringVar(value="all")  # "all" ou "folder"
+        self.var_backup_type = tk.StringVar(value="all")  # "all", "shapes_only", "sessions_only"
+        self.var_backup_scope = tk.StringVar(value="all")  # "all" ou "folder" (moldes)
         self.var_backup_folder = tk.StringVar(value="")
+        self.var_backup_job_scope = tk.StringVar(value="all")  # "all" ou "job" (sessões)
+        self.var_backup_job = tk.StringVar(value="")
         self.var_include_dies = tk.BooleanVar(value=True)
         self.var_backup_dest_path = tk.StringVar(value="")
         self.is_busy = False
 
         # Estado interno - Restauração
         self.var_restore_src_path = tk.StringVar(value="")
+        self.var_restore_shapes = tk.BooleanVar(value=True)
+        self.var_restore_sessions = tk.BooleanVar(value=True)
         self.var_conflict_strategy = tk.StringVar(value="overwrite")  # "overwrite", "skip", "rename"
+        self.var_session_conflict_strategy = tk.StringVar(value="import_new_id")  # "import_new_id", "overwrite", "skip"
         self.var_restore_folder_mode = tk.StringVar(value="original")  # "original" ou "custom"
         self.var_restore_custom_folder = tk.StringVar(value="")
+        self.var_restore_job_mode = tk.StringVar(value="original")  # "original" ou "custom"
+        self.var_restore_custom_job = tk.StringVar(value="")
         self.current_inspection: Optional[BackupInspectionResult] = None
 
         # Estado interno - Programação / Agendamento
@@ -111,6 +127,7 @@ class ShapeBackupRestoreDialog(tk.Toplevel):
         self.var_sched_specific_date = tk.StringVar(value="")
         self.var_sched_specific_time = tk.StringVar(value="18:00")
         self.var_sched_backup_dir = tk.StringVar(value=str(DEFAULT_BACKUPS_DIR))
+        self.var_sched_backup_type = tk.StringVar(value="all")  # "all", "shapes_only", "sessions_only"
         self.var_sched_max_retained = tk.StringVar(value="10")
         self.var_sched_include_dies = tk.BooleanVar(value=True)
         self.var_sched_scope = tk.StringVar(value="all")
@@ -139,7 +156,7 @@ class ShapeBackupRestoreDialog(tk.Toplevel):
 
         lbl_title = tk.Label(
             header_frame,
-            text="📦 Backup e Restauração de Moldes Cadastrados",
+            text="📦 Backup e Restauração de Moldes e Sessões de Corte",
             bg=THEME["title_bar_bg"],
             fg=THEME["title_bar_fg"],
             font=("Segoe UI", 11, "bold")
@@ -181,14 +198,14 @@ class ShapeBackupRestoreDialog(tk.Toplevel):
         # Card com estatísticas atuais do banco
         card_stats = tk.LabelFrame(
             self.tab_backup,
-            text="Status Atual do Catálogo no Sistema",
+            text="Status Atual do Sistema",
             bg=THEME["bg_surface"],
             fg=THEME["text_main"],
             font=("Segoe UI", 9, "bold"),
             padx=12,
             pady=8
         )
-        card_stats.pack(fill="x", pady=(0, 8))
+        card_stats.pack(fill="x", pady=(0, 6))
 
         self.lbl_stats_summary = tk.Label(
             card_stats,
@@ -201,15 +218,15 @@ class ShapeBackupRestoreDialog(tk.Toplevel):
         self.lbl_stats_summary.pack(fill="x")
 
         # Card informativo sobre o Agendamento Automático
-        self.card_sched_banner = tk.Frame(self.tab_backup, bg="#f0fdf4", bd=1, relief="solid", padx=10, pady=6)
-        self.card_sched_banner.pack(fill="x", pady=(0, 8))
+        self.card_sched_banner = tk.Frame(self.tab_backup, bg="#f0fdf4", bd=1, relief="solid", padx=10, pady=5)
+        self.card_sched_banner.pack(fill="x", pady=(0, 6))
 
         self.lbl_sched_banner_text = tk.Label(
             self.card_sched_banner,
             text="⏰ Agendamento Automático: Verificando...",
             bg="#f0fdf4",
             fg="#15803d",
-            font=("Segoe UI", 9)
+            font=("Segoe UI", 8)
         )
         self.lbl_sched_banner_text.pack(side="left")
 
@@ -225,80 +242,156 @@ class ShapeBackupRestoreDialog(tk.Toplevel):
         )
         btn_sched_goto.pack(side="right")
 
-        # Grupo: Escopo do Backup
-        grp_scope = tk.LabelFrame(
+        # Grupo 1: Conteúdo do Pacote (O que incluir)
+        grp_content = tk.LabelFrame(
             self.tab_backup,
-            text="Escopo do Backup",
+            text="Conteúdo a Incluir no Backup",
             bg=THEME["bg_surface"],
             fg=THEME["text_main"],
             font=("Segoe UI", 9, "bold"),
             padx=12,
-            pady=8
+            pady=6
         )
-        grp_scope.pack(fill="x", pady=(0, 8))
+        grp_content.pack(fill="x", pady=(0, 6))
 
-        rb_all = tk.Radiobutton(
-            grp_scope,
-            text="Exportar TODOS os moldes cadastrados no sistema (Recomendado)",
+        rb_btype_all = tk.Radiobutton(
+            grp_content,
+            text="Backup Completo: Moldes Cadastrados + Sessões de Corte (Recomendado)",
+            variable=self.var_backup_type,
+            value="all",
+            bg=THEME["bg_surface"],
+            font=("Segoe UI", 9, "bold"),
+            command=self._on_backup_type_change
+        )
+        rb_btype_all.pack(anchor="w", pady=1)
+
+        f_sub_types = tk.Frame(grp_content, bg=THEME["bg_surface"])
+        f_sub_types.pack(fill="x", pady=1)
+
+        rb_btype_shapes = tk.Radiobutton(
+            f_sub_types,
+            text="Apenas Moldes Cadastrados",
+            variable=self.var_backup_type,
+            value="shapes_only",
+            bg=THEME["bg_surface"],
+            font=("Segoe UI", 9),
+            command=self._on_backup_type_change
+        )
+        rb_btype_shapes.pack(side="left", padx=(0, 20))
+
+        rb_btype_sessions = tk.Radiobutton(
+            f_sub_types,
+            text="Apenas Sessões de Corte (com placas e layouts)",
+            variable=self.var_backup_type,
+            value="sessions_only",
+            bg=THEME["bg_surface"],
+            font=("Segoe UI", 9),
+            command=self._on_backup_type_change
+        )
+        rb_btype_sessions.pack(side="left")
+
+        # Grupo 2: Filtros de Exportação
+        self.grp_filters = tk.LabelFrame(
+            self.tab_backup,
+            text="Filtros de Exportação (Opcional)",
+            bg=THEME["bg_surface"],
+            fg=THEME["text_main"],
+            font=("Segoe UI", 9, "bold"),
+            padx=12,
+            pady=6
+        )
+        self.grp_filters.pack(fill="x", pady=(0, 6))
+
+        # Filtro de pasta de moldes
+        self.f_shapes_filter_line = tk.Frame(self.grp_filters, bg=THEME["bg_surface"])
+        self.f_shapes_filter_line.pack(fill="x", pady=2)
+
+        tk.Label(self.f_shapes_filter_line, text="Moldes:", bg=THEME["bg_surface"], font=("Segoe UI", 8, "bold"), width=10, anchor="w").pack(side="left")
+        rb_all_shapes = tk.Radiobutton(
+            self.f_shapes_filter_line,
+            text="Todas as pastas",
             variable=self.var_backup_scope,
             value="all",
             bg=THEME["bg_surface"],
-            font=("Segoe UI", 9),
+            font=("Segoe UI", 8),
             command=self._on_backup_scope_change
         )
-        rb_all.pack(anchor="w", pady=2)
+        rb_all_shapes.pack(side="left", padx=(0, 10))
 
-        f_folder_scope = tk.Frame(grp_scope, bg=THEME["bg_surface"])
-        f_folder_scope.pack(fill="x", pady=2)
-
-        rb_folder = tk.Radiobutton(
-            f_folder_scope,
-            text="Exportar apenas moldes da pasta:",
+        rb_fld_shapes = tk.Radiobutton(
+            self.f_shapes_filter_line,
+            text="Apenas da pasta:",
             variable=self.var_backup_scope,
             value="folder",
             bg=THEME["bg_surface"],
-            font=("Segoe UI", 9),
+            font=("Segoe UI", 8),
             command=self._on_backup_scope_change
         )
-        rb_folder.pack(side="left")
+        rb_fld_shapes.pack(side="left")
 
         self.cb_backup_folder = ttk.Combobox(
-            f_folder_scope,
+            self.f_shapes_filter_line,
             textvariable=self.var_backup_folder,
             state="disabled",
-            width=28
+            width=22
         )
-        self.cb_backup_folder.pack(side="left", padx=8)
+        self.cb_backup_folder.pack(side="left", padx=6)
+
+        # Filtro de sessões por pasta de produção (Job)
+        self.f_sessions_filter_line = tk.Frame(self.grp_filters, bg=THEME["bg_surface"])
+        self.f_sessions_filter_line.pack(fill="x", pady=2)
+
+        tk.Label(self.f_sessions_filter_line, text="Sessões:", bg=THEME["bg_surface"], font=("Segoe UI", 8, "bold"), width=10, anchor="w").pack(side="left")
+        rb_all_jobs = tk.Radiobutton(
+            self.f_sessions_filter_line,
+            text="Todas as ordens",
+            variable=self.var_backup_job_scope,
+            value="all",
+            bg=THEME["bg_surface"],
+            font=("Segoe UI", 8),
+            command=self._on_backup_job_scope_change
+        )
+        rb_all_jobs.pack(side="left", padx=(0, 10))
+
+        rb_fld_jobs = tk.Radiobutton(
+            self.f_sessions_filter_line,
+            text="Apenas da pasta (Job):",
+            variable=self.var_backup_job_scope,
+            value="job",
+            bg=THEME["bg_surface"],
+            font=("Segoe UI", 8),
+            command=self._on_backup_job_scope_change
+        )
+        rb_fld_jobs.pack(side="left")
+
+        self.cb_backup_job = ttk.Combobox(
+            self.f_sessions_filter_line,
+            textvariable=self.var_backup_job,
+            state="disabled",
+            width=22
+        )
+        self.cb_backup_job.pack(side="left", padx=6)
 
         # Grupo: Opções de Compatibilidade
         grp_opts = tk.LabelFrame(
             self.tab_backup,
-            text="Formato do Pacote",
+            text="Opções de Compatibilidade",
             bg=THEME["bg_surface"],
             fg=THEME["text_main"],
             font=("Segoe UI", 9, "bold"),
             padx=12,
-            pady=8
+            pady=6
         )
-        grp_opts.pack(fill="x", pady=(0, 8))
+        grp_opts.pack(fill="x", pady=(0, 6))
 
-        chk_dies = tk.Checkbutton(
+        self.chk_dies = tk.Checkbutton(
             grp_opts,
             text="Incluir arquivos individuais .die (ATOM FlashCut) no pacote ZIP para máxima compatibilidade",
             variable=self.var_include_dies,
             bg=THEME["bg_surface"],
-            font=("Segoe UI", 9)
-        )
-        chk_dies.pack(anchor="w")
-
-        lbl_dies_hint = tk.Label(
-            grp_opts,
-            text="Permite abrir os moldes exportados tanto no CorteAC quanto em máquinas ATOM antigas e outros softwares CAM.",
-            bg=THEME["bg_surface"],
-            fg="#64748b",
             font=("Segoe UI", 8)
         )
-        lbl_dies_hint.pack(anchor="w", padx=20)
+        self.chk_dies.pack(anchor="w")
 
         # Grupo: Arquivo de Destino
         grp_dest = tk.LabelFrame(
@@ -308,9 +401,9 @@ class ShapeBackupRestoreDialog(tk.Toplevel):
             fg=THEME["text_main"],
             font=("Segoe UI", 9, "bold"),
             padx=12,
-            pady=8
+            pady=6
         )
-        grp_dest.pack(fill="x", pady=(0, 8))
+        grp_dest.pack(fill="x", pady=(0, 6))
 
         f_dest_entry = tk.Frame(grp_dest, bg=THEME["bg_surface"])
         f_dest_entry.pack(fill="x", pady=2)
@@ -329,7 +422,7 @@ class ShapeBackupRestoreDialog(tk.Toplevel):
 
         # Barra inferior de ação e progresso
         f_bottom = tk.Frame(self.tab_backup, bg=THEME["bg_surface"])
-        f_bottom.pack(side="bottom", fill="x", pady=(6, 0))
+        f_bottom.pack(side="bottom", fill="x", pady=(4, 0))
 
         self.lbl_backup_status = tk.Label(
             f_bottom,
@@ -339,10 +432,10 @@ class ShapeBackupRestoreDialog(tk.Toplevel):
             font=("Segoe UI", 9),
             anchor="w"
         )
-        self.lbl_backup_status.pack(fill="x", pady=(0, 4))
+        self.lbl_backup_status.pack(fill="x", pady=(0, 2))
 
         self.prog_backup = ttk.Progressbar(f_bottom, orient="horizontal", mode="determinate")
-        self.prog_backup.pack(fill="x", pady=(0, 8))
+        self.prog_backup.pack(fill="x", pady=(0, 6))
 
         self.btn_run_backup = tk.Button(
             f_bottom,
@@ -371,9 +464,9 @@ class ShapeBackupRestoreDialog(tk.Toplevel):
             fg=THEME["text_main"],
             font=("Segoe UI", 9, "bold"),
             padx=12,
-            pady=8
+            pady=6
         )
-        grp_file.pack(fill="x", pady=(0, 8))
+        grp_file.pack(fill="x", pady=(0, 6))
 
         f_file_row = tk.Frame(grp_file, bg=THEME["bg_surface"])
         f_file_row.pack(fill="x")
@@ -391,12 +484,12 @@ class ShapeBackupRestoreDialog(tk.Toplevel):
         btn_browse_src.pack(side="right")
 
         # Painel de resumo da inspeção do arquivo selecionado
-        self.card_inspection = tk.Frame(self.tab_restore, bg="#f8fafc", bd=1, relief="solid", padx=10, pady=6)
-        self.card_inspection.pack(fill="x", pady=(0, 8))
+        self.card_inspection = tk.Frame(self.tab_restore, bg="#f8fafc", bd=1, relief="solid", padx=10, pady=5)
+        self.card_inspection.pack(fill="x", pady=(0, 6))
 
         self.lbl_inspect_summary = tk.Label(
             self.card_inspection,
-            text="Nenhum arquivo inspecionado no momento. Selecione um arquivo .zip acima.",
+            text="Nenhum arquivo inspecionado no momento. Selecione um arquivo .zip ou .csh acima.",
             bg="#f8fafc",
             fg="#475569",
             font=("Segoe UI", 9),
@@ -404,60 +497,98 @@ class ShapeBackupRestoreDialog(tk.Toplevel):
         )
         self.lbl_inspect_summary.pack(fill="x")
 
-        # Tabela de pré-visualização dos moldes no backup
-        grp_preview = tk.LabelFrame(
-            self.tab_restore,
-            text="Moldes Detectados no Pacote",
-            bg=THEME["bg_surface"],
-            fg=THEME["text_main"],
-            font=("Segoe UI", 9, "bold"),
-            padx=8,
-            pady=6
-        )
-        grp_preview.pack(fill="both", expand=True, pady=(0, 8))
+        # Container com Abas para Pré-visualização (Moldes e Sessões)
+        self.nb_inspect = ttk.Notebook(self.tab_restore)
+        self.nb_inspect.pack(fill="both", expand=True, pady=(0, 6))
 
-        cols = ("idx", "name", "folder", "article", "points", "status")
-        self.tree_inspect = ttk.Treeview(grp_preview, columns=cols, show="headings", height=6)
+        # Aba de Pré-visualização de Moldes
+        self.tab_insp_shapes = tk.Frame(self.nb_inspect, bg=THEME["bg_surface"], padx=4, pady=4)
+        self.nb_inspect.add(self.tab_insp_shapes, text="  Moldes Detectados (0)  ")
+
+        cols_s = ("idx", "name", "size", "folder", "article", "points", "status")
+        self.tree_inspect = ttk.Treeview(self.tab_insp_shapes, columns=cols_s, show="headings", height=5)
         self.tree_inspect.heading("idx", text="#")
         self.tree_inspect.heading("name", text="Nome do Molde")
+        self.tree_inspect.heading("size", text="Tam.")
         self.tree_inspect.heading("folder", text="Pasta")
         self.tree_inspect.heading("article", text="Artigo")
         self.tree_inspect.heading("points", text="Vértices")
         self.tree_inspect.heading("status", text="No Sistema Atual?")
 
-        self.tree_inspect.column("idx", width=40, anchor="center")
-        self.tree_inspect.column("name", width=180, anchor="w")
+        self.tree_inspect.column("idx", width=35, anchor="center")
+        self.tree_inspect.column("name", width=170, anchor="w")
+        self.tree_inspect.column("size", width=45, anchor="center")
         self.tree_inspect.column("folder", width=110, anchor="w")
-        self.tree_inspect.column("article", width=110, anchor="w")
-        self.tree_inspect.column("points", width=70, anchor="center")
-        self.tree_inspect.column("status", width=140, anchor="center")
+        self.tree_inspect.column("article", width=100, anchor="w")
+        self.tree_inspect.column("points", width=60, anchor="center")
+        self.tree_inspect.column("status", width=130, anchor="center")
 
-        sb_tree_y = ttk.Scrollbar(grp_preview, orient="vertical", command=self.tree_inspect.yview)
-        self.tree_inspect.configure(yscrollcommand=sb_tree_y.set)
-
+        sb_tree_s_y = ttk.Scrollbar(self.tab_insp_shapes, orient="vertical", command=self.tree_inspect.yview)
+        self.tree_inspect.configure(yscrollcommand=sb_tree_s_y.set)
         self.tree_inspect.pack(side="left", fill="both", expand=True)
-        sb_tree_y.pack(side="right", fill="y")
+        sb_tree_s_y.pack(side="right", fill="y")
+
+        # Aba de Pré-visualização de Sessões
+        self.tab_insp_sessions = tk.Frame(self.nb_inspect, bg=THEME["bg_surface"], padx=4, pady=4)
+        self.nb_inspect.add(self.tab_insp_sessions, text="  Sessões de Corte (0)  ")
+
+        cols_sess = ("idx", "code", "name", "job", "layouts", "pieces", "material", "status")
+        self.tree_inspect_sess = ttk.Treeview(self.tab_insp_sessions, columns=cols_sess, show="headings", height=5)
+        self.tree_inspect_sess.heading("idx", text="#")
+        self.tree_inspect_sess.heading("code", text="Código")
+        self.tree_inspect_sess.heading("name", text="Nome da Sessão")
+        self.tree_inspect_sess.heading("job", text="Pasta/Job")
+        self.tree_inspect_sess.heading("layouts", text="Placas/Layouts")
+        self.tree_inspect_sess.heading("pieces", text="Peças")
+        self.tree_inspect_sess.heading("material", text="Material")
+        self.tree_inspect_sess.heading("status", text="No Sistema?")
+
+        self.tree_inspect_sess.column("idx", width=35, anchor="center")
+        self.tree_inspect_sess.column("code", width=80, anchor="center")
+        self.tree_inspect_sess.column("name", width=150, anchor="w")
+        self.tree_inspect_sess.column("job", width=110, anchor="w")
+        self.tree_inspect_sess.column("layouts", width=95, anchor="center")
+        self.tree_inspect_sess.column("pieces", width=60, anchor="center")
+        self.tree_inspect_sess.column("material", width=110, anchor="w")
+        self.tree_inspect_sess.column("status", width=120, anchor="center")
+
+        sb_tree_sess_y = ttk.Scrollbar(self.tab_insp_sessions, orient="vertical", command=self.tree_inspect_sess.yview)
+        self.tree_inspect_sess.configure(yscrollcommand=sb_tree_sess_y.set)
+        self.tree_inspect_sess.pack(side="left", fill="both", expand=True)
+        sb_tree_sess_y.pack(side="right", fill="y")
 
         # Opções de importação e conflito
         grp_import_opts = tk.LabelFrame(
             self.tab_restore,
-            text="Opções de Restauração",
+            text="Opções de Restauração e Resolução de Conflitos",
             bg=THEME["bg_surface"],
             fg=THEME["text_main"],
             font=("Segoe UI", 9, "bold"),
             padx=10,
             pady=6
         )
-        grp_import_opts.pack(fill="x", pady=(0, 8))
+        grp_import_opts.pack(fill="x", pady=(0, 6))
 
+        # Coluna Esquerda: Opções de Moldes
         col_left = tk.Frame(grp_import_opts, bg=THEME["bg_surface"])
-        col_left.pack(side="left", fill="x", expand=True)
+        col_left.pack(side="left", fill="both", expand=True, padx=(0, 10))
 
-        tk.Label(col_left, text="Resolução de Nomes Duplicados:", bg=THEME["bg_surface"], font=("Segoe UI", 8, "bold")).pack(anchor="w")
+        self.chk_restore_shapes = tk.Checkbutton(
+            col_left,
+            text="Restaurar Moldes Cadastrados",
+            variable=self.var_restore_shapes,
+            bg=THEME["bg_surface"],
+            font=("Segoe UI", 8, "bold"),
+            command=self._on_restore_scope_toggle
+        )
+        self.chk_restore_shapes.pack(anchor="w", pady=(0, 2))
+
+        self.f_shapes_conflicts = tk.Frame(col_left, bg=THEME["bg_surface"], padx=14)
+        self.f_shapes_conflicts.pack(fill="x")
 
         tk.Radiobutton(
-            col_left,
-            text="Sobrescrever / Atualizar existente (Recomendado)",
+            self.f_shapes_conflicts,
+            text="Sobrescrever existente (Recomendado)",
             variable=self.var_conflict_strategy,
             value="overwrite",
             bg=THEME["bg_surface"],
@@ -465,8 +596,8 @@ class ShapeBackupRestoreDialog(tk.Toplevel):
         ).pack(anchor="w")
 
         tk.Radiobutton(
-            col_left,
-            text="Pular existentes (importar apenas novos)",
+            self.f_shapes_conflicts,
+            text="Pular existentes (apenas novos)",
             variable=self.var_conflict_strategy,
             value="skip",
             bg=THEME["bg_surface"],
@@ -474,52 +605,121 @@ class ShapeBackupRestoreDialog(tk.Toplevel):
         ).pack(anchor="w")
 
         tk.Radiobutton(
-            col_left,
-            text="Renomear cópia (ex: 'Molde (1)')",
+            self.f_shapes_conflicts,
+            text="Renomear cópia (ex: 'Molde_copia')",
             variable=self.var_conflict_strategy,
             value="rename",
             bg=THEME["bg_surface"],
             font=("Segoe UI", 8)
         ).pack(anchor="w")
 
-        col_right = tk.Frame(grp_import_opts, bg=THEME["bg_surface"])
-        col_right.pack(side="right", fill="x", expand=True)
-
-        tk.Label(col_right, text="Direcionamento de Pastas:", bg=THEME["bg_surface"], font=("Segoe UI", 8, "bold")).pack(anchor="w")
-
+        f_cust_row = tk.Frame(self.f_shapes_conflicts, bg=THEME["bg_surface"])
+        f_cust_row.pack(fill="x", pady=(2, 0))
         tk.Radiobutton(
-            col_right,
-            text="Restaurar nas pastas originais do backup",
+            f_cust_row,
+            text="Pastas originais",
             variable=self.var_restore_folder_mode,
             value="original",
             bg=THEME["bg_surface"],
             font=("Segoe UI", 8),
             command=self._on_restore_folder_mode_change
-        ).pack(anchor="w")
+        ).pack(side="left")
 
-        f_cust_row = tk.Frame(col_right, bg=THEME["bg_surface"])
-        f_cust_row.pack(fill="x")
         tk.Radiobutton(
             f_cust_row,
-            text="Forçar para pasta específica:",
+            text="Forçar pasta:",
             variable=self.var_restore_folder_mode,
             value="custom",
             bg=THEME["bg_surface"],
             font=("Segoe UI", 8),
             command=self._on_restore_folder_mode_change
-        ).pack(side="left")
+        ).pack(side="left", padx=(6, 2))
 
         self.cb_restore_custom_folder = ttk.Combobox(
             f_cust_row,
             textvariable=self.var_restore_custom_folder,
             state="disabled",
-            width=18
+            width=14
         )
-        self.cb_restore_custom_folder.pack(side="left", padx=4)
+        self.cb_restore_custom_folder.pack(side="left")
+
+        # Coluna Direita: Opções de Sessões de Corte
+        col_right = tk.Frame(grp_import_opts, bg=THEME["bg_surface"])
+        col_right.pack(side="right", fill="both", expand=True)
+
+        self.chk_restore_sessions = tk.Checkbutton(
+            col_right,
+            text="Restaurar Sessões de Corte",
+            variable=self.var_restore_sessions,
+            bg=THEME["bg_surface"],
+            font=("Segoe UI", 8, "bold"),
+            command=self._on_restore_scope_toggle
+        )
+        self.chk_restore_sessions.pack(anchor="w", pady=(0, 2))
+
+        self.f_sessions_conflicts = tk.Frame(col_right, bg=THEME["bg_surface"], padx=14)
+        self.f_sessions_conflicts.pack(fill="x")
+
+        tk.Radiobutton(
+            self.f_sessions_conflicts,
+            text="Importar com novo número sequencial (#189...) [Seguro]",
+            variable=self.var_session_conflict_strategy,
+            value="import_new_id",
+            bg=THEME["bg_surface"],
+            font=("Segoe UI", 8)
+        ).pack(anchor="w")
+
+        tk.Radiobutton(
+            self.f_sessions_conflicts,
+            text="Sobrescrever sessão existente com mesmo ID",
+            variable=self.var_session_conflict_strategy,
+            value="overwrite",
+            bg=THEME["bg_surface"],
+            font=("Segoe UI", 8)
+        ).pack(anchor="w")
+
+        tk.Radiobutton(
+            self.f_sessions_conflicts,
+            text="Pular existentes (ignorar se ID já existir)",
+            variable=self.var_session_conflict_strategy,
+            value="skip",
+            bg=THEME["bg_surface"],
+            font=("Segoe UI", 8)
+        ).pack(anchor="w")
+
+        f_cust_job_row = tk.Frame(self.f_sessions_conflicts, bg=THEME["bg_surface"])
+        f_cust_job_row.pack(fill="x", pady=(2, 0))
+        tk.Radiobutton(
+            f_cust_job_row,
+            text="Job original",
+            variable=self.var_restore_job_mode,
+            value="original",
+            bg=THEME["bg_surface"],
+            font=("Segoe UI", 8),
+            command=self._on_restore_job_mode_change
+        ).pack(side="left")
+
+        tk.Radiobutton(
+            f_cust_job_row,
+            text="Forçar Job:",
+            variable=self.var_restore_job_mode,
+            value="custom",
+            bg=THEME["bg_surface"],
+            font=("Segoe UI", 8),
+            command=self._on_restore_job_mode_change
+        ).pack(side="left", padx=(6, 2))
+
+        self.cb_restore_custom_job = ttk.Combobox(
+            f_cust_job_row,
+            textvariable=self.var_restore_custom_job,
+            state="disabled",
+            width=14
+        )
+        self.cb_restore_custom_job.pack(side="left")
 
         # Barra inferior de restauração
         f_bottom_res = tk.Frame(self.tab_restore, bg=THEME["bg_surface"])
-        f_bottom_res.pack(side="bottom", fill="x", pady=(4, 0))
+        f_bottom_res.pack(side="bottom", fill="x", pady=(2, 0))
 
         self.lbl_restore_status = tk.Label(
             f_bottom_res,
@@ -529,7 +729,7 @@ class ShapeBackupRestoreDialog(tk.Toplevel):
             font=("Segoe UI", 9),
             anchor="w"
         )
-        self.lbl_restore_status.pack(fill="x", pady=(0, 4))
+        self.lbl_restore_status.pack(fill="x", pady=(0, 2))
 
         self.prog_restore = ttk.Progressbar(f_bottom_res, orient="horizontal", mode="determinate")
         self.prog_restore.pack(fill="x", pady=(0, 6))
@@ -549,6 +749,53 @@ class ShapeBackupRestoreDialog(tk.Toplevel):
             command=self._on_start_restore
         )
         self.btn_run_restore.pack(side="right")
+
+    def _on_backup_type_change(self):
+        btype = self.var_backup_type.get()
+        timestamp_str = datetime.now().strftime("%Y%m%d_%H%M%S")
+        if btype == "shapes_only":
+            prefix = "backup_moldes_"
+            if hasattr(self, "chk_dies"):
+                self.chk_dies.config(state="normal")
+        elif btype == "sessions_only":
+            prefix = "backup_sessoes_"
+            if hasattr(self, "chk_dies"):
+                self.chk_dies.config(state="disabled")
+        else:
+            prefix = "backup_corteac_"
+            if hasattr(self, "chk_dies"):
+                self.chk_dies.config(state="normal")
+
+        sugg_name = f"{prefix}{timestamp_str}.zip"
+        sugg_path = Path(EXPORTS_DIR) / sugg_name
+        self.var_backup_dest_path.set(str(sugg_path))
+
+    def _on_backup_job_scope_change(self):
+        if self.var_backup_job_scope.get() == "job":
+            self.cb_backup_job.config(state="readonly")
+        else:
+            self.cb_backup_job.config(state="disabled")
+
+    def _on_restore_job_mode_change(self):
+        if self.var_restore_job_mode.get() == "custom":
+            self.cb_restore_custom_job.config(state="normal")
+        else:
+            self.cb_restore_custom_job.config(state="disabled")
+
+    def _on_restore_scope_toggle(self):
+        s_on = self.var_restore_shapes.get()
+        for child in self.f_shapes_conflicts.winfo_children():
+            try:
+                child.config(state="normal" if s_on else "disabled")
+            except Exception:
+                pass
+
+        sess_on = self.var_restore_sessions.get()
+        for child in self.f_sessions_conflicts.winfo_children():
+            try:
+                child.config(state="normal" if sess_on else "disabled")
+            except Exception:
+                pass
 
     # =========================================================================
     # ABA 3: PROGRAMAR BACKUP (AGENDAMENTO DE DATAS E HORAS)
@@ -739,6 +986,13 @@ class ShapeBackupRestoreDialog(tk.Toplevel):
         )
         grp_dest_ret.pack(fill="x", pady=(0, 8))
 
+        f_stype_line = tk.Frame(grp_dest_ret, bg=THEME["bg_surface"])
+        f_stype_line.pack(fill="x", pady=(0, 4))
+        tk.Label(f_stype_line, text="Conteúdo a Salvar:", bg=THEME["bg_surface"], font=("Segoe UI", 8, "bold")).pack(side="left", padx=(0, 6))
+        tk.Radiobutton(f_stype_line, text="Moldes + Sessões de Corte (Completo)", variable=self.var_sched_backup_type, value="all", bg=THEME["bg_surface"], font=("Segoe UI", 8)).pack(side="left", padx=(0, 8))
+        tk.Radiobutton(f_stype_line, text="Apenas Moldes", variable=self.var_sched_backup_type, value="shapes_only", bg=THEME["bg_surface"], font=("Segoe UI", 8)).pack(side="left", padx=(0, 8))
+        tk.Radiobutton(f_stype_line, text="Apenas Sessões", variable=self.var_sched_backup_type, value="sessions_only", bg=THEME["bg_surface"], font=("Segoe UI", 8)).pack(side="left")
+
         f_dest_line = tk.Frame(grp_dest_ret, bg=THEME["bg_surface"])
         f_dest_line.pack(fill="x", pady=(0, 4))
 
@@ -883,7 +1137,6 @@ class ShapeBackupRestoreDialog(tk.Toplevel):
         if spec_dt:
             parts = spec_dt.split(" ")
             if len(parts) >= 2:
-                # Se estiver YYYY-MM-DD converte para DD/MM/YYYY na UI
                 try:
                     d_parsed = datetime.strptime(parts[0], "%Y-%m-%d").strftime("%d/%m/%Y")
                     self.var_sched_specific_date.set(d_parsed)
@@ -893,12 +1146,12 @@ class ShapeBackupRestoreDialog(tk.Toplevel):
             else:
                 self.var_sched_specific_date.set(spec_dt)
         else:
-            # Sugere data de amanhã
             tomorrow = datetime.now() + timedelta(days=1)
             self.var_sched_specific_date.set(tomorrow.strftime("%d/%m/%Y"))
             self.var_sched_specific_time.set("18:00")
 
         self.var_sched_backup_dir.set(str(cfg.get("backup_dir") or DEFAULT_BACKUPS_DIR))
+        self.var_sched_backup_type.set(str(cfg.get("backup_type", "all")))
         self.var_sched_max_retained.set(str(cfg.get("max_retained_backups", 10)))
         self.var_sched_include_dies.set(bool(cfg.get("include_dies", True)))
 
@@ -1025,12 +1278,10 @@ class ShapeBackupRestoreDialog(tk.Toplevel):
         except Exception:
             interval_h = 4
 
-        # Monta data e hora específica
         spec_date = self.var_sched_specific_date.get().strip()
         spec_time = self.var_sched_specific_time.get().strip() or "18:00"
         normalized_spec = ""
         if spec_date:
-            # Tenta converter de DD/MM/AAAA para YYYY-MM-DD
             try:
                 d_obj = datetime.strptime(spec_date, "%d/%m/%Y")
                 normalized_spec = f"{d_obj.strftime('%Y-%m-%d')} {spec_time}"
@@ -1038,6 +1289,7 @@ class ShapeBackupRestoreDialog(tk.Toplevel):
                 normalized_spec = f"{spec_date} {spec_time}"
 
         bdir = self.var_sched_backup_dir.get().strip() or str(DEFAULT_BACKUPS_DIR)
+        btype = self.var_sched_backup_type.get().strip() or "all"
 
         try:
             max_ret = max(0, int(self.var_sched_max_retained.get()))
@@ -1046,7 +1298,6 @@ class ShapeBackupRestoreDialog(tk.Toplevel):
 
         inc_dies = self.var_sched_include_dies.get()
 
-        # Mantém histórico anterior
         current_cfg = get_schedule_config(self.db)
 
         return {
@@ -1057,8 +1308,10 @@ class ShapeBackupRestoreDialog(tk.Toplevel):
             "interval_hours": interval_h,
             "specific_datetime": normalized_spec,
             "backup_dir": bdir,
+            "backup_type": btype,
             "include_dies": inc_dies,
             "folder_filter": None,
+            "session_filter_job": None,
             "max_retained_backups": max_ret,
             "last_run_timestamp": current_cfg.get("last_run_timestamp", ""),
             "last_run_status": current_cfg.get("last_run_status", ""),
@@ -1070,7 +1323,6 @@ class ShapeBackupRestoreDialog(tk.Toplevel):
         """Salva a configuração do agendamento e atualiza os indicadores."""
         cfg = self._collect_schedule_config_from_ui()
 
-        # Validação de dias da semana se mode == weekly
         if cfg["mode"] == "weekly" and not cfg["days_of_week"]:
             messagebox.showwarning(
                 "Configuração Incompleta",
@@ -1082,7 +1334,6 @@ class ShapeBackupRestoreDialog(tk.Toplevel):
         saved = save_schedule_config(self.db, cfg)
         self._update_sched_status_display(saved)
 
-        # Cria a pasta caso ainda não exista
         try:
             Path(saved["backup_dir"]).mkdir(parents=True, exist_ok=True)
         except Exception:
@@ -1107,7 +1358,7 @@ class ShapeBackupRestoreDialog(tk.Toplevel):
         cfg = self._collect_schedule_config_from_ui()
 
         self.is_busy = True
-        self.lbl_sched_last_run.config(text="Executando backup de moldes agora...", fg="#0284c7")
+        self.lbl_sched_last_run.config(text="Executando backup programado agora...", fg="#0284c7")
 
         def _worker():
             try:
@@ -1127,14 +1378,15 @@ class ShapeBackupRestoreDialog(tk.Toplevel):
             messagebox.showerror("Erro no Backup", f"Falha ao executar backup imediato:\n\n{error_msg}", parent=self)
             return
 
-        # Sucesso
         self._update_sched_status_display()
         self._refresh_sched_history()
 
         msg = (
             f"🎉 Backup executado com sucesso!\n\n"
             f"• Arquivo: {res.get('target_file')}\n"
-            f"• Moldes exportados: {res.get('total_shapes')}\n"
+            f"• Moldes exportados: {res.get('total_shapes', 0)}\n"
+            f"• Sessões exportadas: {res.get('total_sessions', 0)}\n"
+            f"• Placas/Layouts: {res.get('total_layouts', 0)}\n"
             f"• Tamanho: {res.get('file_size_bytes', 0) / 1024:.1f} KB\n"
             f"• Backups antigos purgados pela retenção: {res.get('purged_old_files', 0)}"
         )
@@ -1178,28 +1430,46 @@ class ShapeBackupRestoreDialog(tk.Toplevel):
         try:
             shapes = self.db.get_all_shapes() if hasattr(self.db, "get_all_shapes") else []
             folders = self.db.get_shape_folders() if hasattr(self.db, "get_shape_folders") else []
+            sessions = self.db.get_sessions() if hasattr(self.db, "get_sessions") else []
 
             total_shapes = len(shapes)
             total_folders = len(folders)
+            total_sessions = len(sessions)
+            total_layouts = 0
+            jobs_set = set()
+            for s in sessions:
+                j = (s.get("job") or "").strip()
+                if j:
+                    jobs_set.add(j)
+                if hasattr(self.db, "get_session_layouts"):
+                    try:
+                        total_layouts += len(self.db.get_session_layouts(s.get("id")))
+                    except Exception:
+                        pass
+
+            jobs_list = sorted(list(jobs_set))
 
             self.lbl_stats_summary.config(
-                text=f"📊 Sistema possui {total_shapes} molde(s) cadastrado(s) distribuído(s) em {total_folders} pasta(s)."
+                text=f"📊 Moldes: {total_shapes} em {total_folders} pasta(s) | Sessões de Corte: {total_sessions} ({total_layouts} placas/layouts) em {len(jobs_list)} ordens/jobs."
             )
 
-            # Preenche comboboxes com as pastas existentes
             self.cb_backup_folder["values"] = folders
             if folders:
                 self.var_backup_folder.set(folders[0])
+
+            self.cb_backup_job["values"] = jobs_list
+            if jobs_list:
+                self.var_backup_job.set(jobs_list[0])
 
             self.cb_restore_custom_folder["values"] = folders
             if folders:
                 self.var_restore_custom_folder.set(folders[0])
 
-            # Sugere nome com timestamp para o backup manual
-            timestamp_str = datetime.now().strftime("%Y%m%d_%H%M%S")
-            sugg_name = f"backup_moldes_{timestamp_str}.zip"
-            sugg_path = Path(EXPORTS_DIR) / sugg_name
-            self.var_backup_dest_path.set(str(sugg_path))
+            self.cb_restore_custom_job["values"] = jobs_list
+            if jobs_list:
+                self.var_restore_custom_job.set(jobs_list[0])
+
+            self._on_backup_type_change()
 
         except Exception as e:
             self.lbl_stats_summary.config(text=f"Aviso ao carregar dados do catálogo: {str(e)}", fg="#b91c1c")
@@ -1213,11 +1483,11 @@ class ShapeBackupRestoreDialog(tk.Toplevel):
     def _on_browse_backup_dest(self):
         init_file = self.var_backup_dest_path.get()
         init_dir = str(Path(init_file).parent) if init_file else str(EXPORTS_DIR)
-        init_name = Path(init_file).name if init_file else "backup_moldes.zip"
+        init_name = Path(init_file).name if init_file else "backup_corteac.zip"
 
         chosen = filedialog.asksaveasfilename(
             parent=self,
-            title="Salvar Arquivo de Backup dos Moldes",
+            title="Salvar Arquivo de Backup do CorteAC",
             initialdir=init_dir,
             initialfile=init_name,
             filetypes=[("Pacote Compactado ZIP", "*.zip"), ("CorteAC Shape Archive", "*.csh"), ("Todos os Arquivos", "*.*")]
@@ -1236,13 +1506,23 @@ class ShapeBackupRestoreDialog(tk.Toplevel):
             messagebox.showwarning("Destino Inválido", "Por favor, defina o arquivo de destino para o backup.", parent=self)
             return
 
+        backup_type = self.var_backup_type.get()
+
         folder_filter = None
-        if self.var_backup_scope.get() == "folder":
+        if backup_type in ("all", "shapes_only") and self.var_backup_scope.get() == "folder":
             sel_f = self.var_backup_folder.get().strip()
             if not sel_f:
-                messagebox.showwarning("Pasta não Selecionada", "Selecione uma pasta para filtrar o backup.", parent=self)
+                messagebox.showwarning("Pasta não Selecionada", "Selecione uma pasta de moldes para filtrar o backup.", parent=self)
                 return
             folder_filter = [sel_f]
+
+        session_filter_job = None
+        if backup_type in ("all", "sessions_only") and self.var_backup_job_scope.get() == "job":
+            sel_j = self.var_backup_job.get().strip()
+            if not sel_j:
+                messagebox.showwarning("Job não Selecionado", "Selecione uma ordem/pasta (Job) para filtrar as sessões.", parent=self)
+                return
+            session_filter_job = sel_j
 
         include_dies = self.var_include_dies.get()
 
@@ -1262,6 +1542,8 @@ class ShapeBackupRestoreDialog(tk.Toplevel):
                     target_file=dest_file,
                     folder_filter=folder_filter,
                     include_die_files=include_dies,
+                    backup_scope=backup_type,
+                    session_filter_job=session_filter_job,
                     on_progress=_prog
                 )
                 self.after(0, lambda: self._on_backup_finished(summary, None))
@@ -1288,15 +1570,24 @@ class ShapeBackupRestoreDialog(tk.Toplevel):
         if summary:
             self.prog_backup["value"] = 100
             sz_kb = summary.file_size_bytes / 1024
+            items_str = []
+            if summary.total_shapes > 0:
+                items_str.append(f"{summary.total_shapes} molde(s) em {summary.total_folders} pasta(s)")
+            if summary.total_sessions > 0:
+                items_str.append(f"{summary.total_sessions} sessão(ões) com {summary.total_layouts} placa(s)/layout(s)")
+
+            sum_desc = " + ".join(items_str) if items_str else "Nenhum item"
             self.lbl_backup_status.config(
-                text=f"Concluído com sucesso! {summary.total_shapes} molde(s) salvo(s) em {sz_kb:.1f} KB.",
+                text=f"Concluído com sucesso! {sum_desc} salvos em {sz_kb:.1f} KB.",
                 fg="#15803d"
             )
             msg = (
                 f"🎉 Backup gerado com sucesso!\n\n"
                 f"• Arquivo: {summary.target_file}\n"
                 f"• Total de moldes exportados: {summary.total_shapes}\n"
-                f"• Pastas organizadas: {summary.total_folders}\n"
+                f"• Total de sessões de corte: {summary.total_sessions}\n"
+                f"• Total de placas/layouts: {summary.total_layouts}\n"
+                f"• Pastas de moldes organizadas: {summary.total_folders}\n"
                 f"• Tamanho do arquivo: {sz_kb:.1f} KB\n"
                 f"• Arquivos .die individuais: {'Sim' if summary.included_dies else 'Não'}"
             )
@@ -1323,9 +1614,11 @@ class ShapeBackupRestoreDialog(tk.Toplevel):
             self._inspect_file_and_populate(chosen)
 
     def _inspect_file_and_populate(self, fpath: str):
-        """Inspeciona o arquivo e preenche a tabela de pré-visualização."""
+        """Inspeciona o arquivo e preenche as tabelas de pré-visualização de moldes e sessões."""
         for item in self.tree_inspect.get_children():
             self.tree_inspect.delete(item)
+        for item in self.tree_inspect_sess.get_children():
+            self.tree_inspect_sess.delete(item)
 
         self.btn_run_restore.config(state="disabled")
         self.lbl_restore_status.config(text="Inspecionando integridade do arquivo...", fg="#0284c7")
@@ -1342,14 +1635,33 @@ class ShapeBackupRestoreDialog(tk.Toplevel):
             messagebox.showerror("Arquivo Inválido", f"O arquivo selecionado não é um backup válido:\n\n{inspection.error}", parent=self)
             return
 
-        # Preenche resumo
         badge_text = "Coleção legada de arquivos .die" if inspection.is_legacy_die_zip else f"Backup CorteAC ({inspection.app_version})"
+        det_parts = []
+        if inspection.has_shapes:
+            det_parts.append(f"{inspection.total_shapes} moldes em {inspection.total_folders} pasta(s)")
+        if inspection.has_sessions:
+            det_parts.append(f"{inspection.total_sessions} sessões ({inspection.total_layouts} placas/layouts)")
+        det_str = " + ".join(det_parts) or "Vazio"
+
+        created_text = f" | Criado em: {inspection.created_at}" if inspection.created_at else ""
         self.lbl_inspect_summary.config(
-            text=f"📦 {badge_text} | Total de moldes: {inspection.total_shapes} | Pastas: {inspection.total_folders} | Criado em: {inspection.created_at}",
+            text=f"📦 {badge_text} | Conteúdo: {det_str}{created_text}",
             fg="#15803d"
         )
 
-        # Checa duplicados com o banco atual para exibir na tabela
+        self.nb_inspect.tab(0, text=f"  Moldes Detectados ({inspection.total_shapes})  ")
+        self.nb_inspect.tab(1, text=f"  Sessões de Corte ({inspection.total_sessions})  ")
+
+        self.var_restore_shapes.set(inspection.has_shapes)
+        self.chk_restore_shapes.config(state="normal" if inspection.has_shapes else "disabled")
+        self.var_restore_sessions.set(inspection.has_sessions)
+        self.chk_restore_sessions.config(state="normal" if inspection.has_sessions else "disabled")
+
+        if inspection.has_sessions and not inspection.has_shapes:
+            self.nb_inspect.select(1)
+        else:
+            self.nb_inspect.select(0)
+
         existing_names = set()
         if self.db and hasattr(self.db, "get_all_shapes"):
             try:
@@ -1359,25 +1671,54 @@ class ShapeBackupRestoreDialog(tk.Toplevel):
 
         for idx, shp in enumerate(inspection.shapes, 1):
             nm = shp.get("name", "")
+            sz = str(shp.get("size", "41"))
             fld = shp.get("folder", "")
             art = shp.get("article_name", "") or "-"
-            pts = len(shp.get("points") or [])
+            pts = shp.get("points_count", 0)
             is_dup = nm in existing_names
             status_text = "⚠️ Já existe (duplicado)" if is_dup else "✨ Novo"
 
             item_id = self.tree_inspect.insert(
                 "",
                 "end",
-                values=(idx, nm, fld, art, pts, status_text)
+                values=(idx, nm, sz, fld, art, pts, status_text)
             )
             if is_dup:
                 self.tree_inspect.item(item_id, tags=("dup",))
 
         self.tree_inspect.tag_configure("dup", foreground="#b45309")
 
+        existing_sess_ids = set()
+        if self.db and hasattr(self.db, "get_sessions"):
+            try:
+                existing_sess_ids = {s.get("id") for s in self.db.get_sessions() if s.get("id") is not None}
+            except Exception:
+                existing_sess_ids = set()
+
+        for idx, sess in enumerate(inspection.sessions, 1):
+            s_id = sess.get("id")
+            s_code = sess.get("code") or f"SESS-{s_id}"
+            s_name = sess.get("name", "")
+            s_job = sess.get("job", "")
+            s_lys = sess.get("layouts_count", 0)
+            s_pcs = sess.get("pieces_count", 0)
+            s_mat = sess.get("material_id") or "-"
+            is_dup_s = s_id in existing_sess_ids
+            status_text = f"⚠️ ID #{s_id} já existe" if is_dup_s else f"✨ ID #{s_id} livre"
+
+            item_id = self.tree_inspect_sess.insert(
+                "",
+                "end",
+                values=(idx, s_code, s_name, s_job, s_lys, s_pcs, s_mat, status_text)
+            )
+            if is_dup_s:
+                self.tree_inspect_sess.item(item_id, tags=("dup",))
+
+        self.tree_inspect_sess.tag_configure("dup", foreground="#b45309")
+
         self.btn_run_restore.config(state="normal")
         self.lbl_restore_status.config(
-            text=f"Pronto para restaurar {inspection.total_shapes} molde(s). Escolha a estratégia de conflito e clique no botão abaixo.",
+            text=f"Pronto para restaurar. Selecione as opções desejadas e clique no botão abaixo.",
             fg="#15803d"
         )
 
@@ -1386,7 +1727,14 @@ class ShapeBackupRestoreDialog(tk.Toplevel):
             return
 
         fpath = self.var_restore_src_path.get().strip()
-        strategy = self.var_conflict_strategy.get()
+        do_shapes = self.var_restore_shapes.get() and self.current_inspection.has_shapes
+        do_sessions = self.var_restore_sessions.get() and self.current_inspection.has_sessions
+
+        if not do_shapes and not do_sessions:
+            messagebox.showwarning("Nenhum Item Selecionado", "Marque pelo menos uma opção para restauração: Moldes ou Sessões de Corte.", parent=self)
+            return
+
+        strategy_shapes = self.var_conflict_strategy.get()
         target_folder = None
         if self.var_restore_folder_mode.get() == "custom":
             target_folder = self.var_restore_custom_folder.get().strip()
@@ -1394,21 +1742,33 @@ class ShapeBackupRestoreDialog(tk.Toplevel):
                 messagebox.showwarning("Pasta não Selecionada", "Selecione uma pasta para forçar o destino dos moldes.", parent=self)
                 return
 
-        # Confirmação do operador
-        msg_confirm = (
-            f"Deseja iniciar a restauração de {self.current_inspection.total_shapes} molde(s)?\n\n"
-            f"• Estratégia de conflito: "
-            f"{'Substituir existentes' if strategy == 'overwrite' else ('Ignorar existentes' if strategy == 'skip' else 'Criar cópias renomeadas')}\n"
-            f"• Destino das pastas: "
-            f"{'Pastas originais do backup' if not target_folder else f'Forçar na pasta \"{target_folder}\"'}"
-        )
-        if not messagebox.askyesno("Confirmar Restauração", msg_confirm, parent=self):
+        strategy_sessions = self.var_session_conflict_strategy.get()
+        target_job = None
+        if self.var_restore_job_mode.get() == "custom":
+            target_job = self.var_restore_custom_job.get().strip()
+            if not target_job:
+                messagebox.showwarning("Job não Selecionado", "Selecione ou digite um Job para forçar a pasta das sessões.", parent=self)
+                return
+
+        lines = ["Deseja iniciar a restauração dos dados?"]
+        if do_shapes:
+            lines.append(f"\n• Moldes ({self.current_inspection.total_shapes}): "
+                         f"{'Substituir existentes' if strategy_shapes == 'overwrite' else ('Ignorar existentes' if strategy_shapes == 'skip' else 'Criar cópias renomeadas')}")
+            if target_folder:
+                lines.append(f"  Destino da pasta: Forçar na pasta \"{target_folder}\"")
+        if do_sessions:
+            lines.append(f"\n• Sessões ({self.current_inspection.total_sessions} com {self.current_inspection.total_layouts} placas): "
+                         f"{'Novos números sequenciais (#189...)' if strategy_sessions == 'import_new_id' else ('Substituir sessões com mesmo ID' if strategy_sessions == 'overwrite' else 'Ignorar sessões com mesmo ID')}")
+            if target_job:
+                lines.append(f"  Destino do Job: Forçar no Job \"{target_job}\"")
+
+        if not messagebox.askyesno("Confirmar Restauração", "\n".join(lines), parent=self):
             return
 
         self.is_busy = True
         self.btn_run_restore.config(state="disabled")
         self.prog_restore["value"] = 0
-        self.lbl_restore_status.config(text="Restaurando moldes no banco de dados...", fg="#16a34a")
+        self.lbl_restore_status.config(text="Restaurando dados no banco...", fg="#16a34a")
 
         def _worker():
             try:
@@ -1419,8 +1779,12 @@ class ShapeBackupRestoreDialog(tk.Toplevel):
                 res = restore_shapes_backup(
                     db=self.db,
                     backup_file=fpath,
-                    conflict_strategy=strategy,
+                    conflict_strategy=strategy_shapes,
                     target_folder=target_folder,
+                    restore_shapes=do_shapes,
+                    restore_sessions=do_sessions,
+                    session_conflict_strategy=strategy_sessions,
+                    target_job=target_job,
                     on_progress=_prog
                 )
                 self.after(0, lambda: self._on_restore_finished(res, None))
@@ -1441,34 +1805,50 @@ class ShapeBackupRestoreDialog(tk.Toplevel):
         if err:
             self.prog_restore["value"] = 0
             self.lbl_restore_status.config(text=f"Erro na restauração: {err}", fg="#b91c1c")
-            messagebox.showerror("Erro na Restauração", f"Falha ao restaurar moldes:\n\n{err}", parent=self)
+            messagebox.showerror("Erro na Restauração", f"Falha ao restaurar dados:\n\n{err}", parent=self)
             return
 
         if res:
             self.prog_restore["value"] = 100
-            msg = (
-                f"🎉 Restauração concluída com sucesso!\n\n"
-                f"• Total de moldes processados: {res.total_in_backup}\n"
-                f"• Novos moldes importados: {res.imported_new}\n"
-                f"• Moldes existentes atualizados: {res.updated_existing}\n"
-                f"• Moldes ignorados (conflitos): {res.skipped}\n"
-                f"• Pastas criadas/asseguradas: {res.folders_created}"
-            )
-            if res.errors:
-                msg += f"\n\n⚠️ Erros em {len(res.errors)} molde(s):\n" + "\n".join(res.errors[:5])
+            msg_parts = ["🎉 Restauração concluída com sucesso!\n"]
+            if res.total_in_backup > 0 or res.imported_new > 0 or res.updated_existing > 0:
+                msg_parts.append(
+                    f"Moldes:\n"
+                    f"• Novos moldes importados: {res.imported_new}\n"
+                    f"• Moldes atualizados: {res.updated_existing}\n"
+                    f"• Moldes ignorados: {res.skipped}\n"
+                    f"• Pastas criadas: {res.folders_created}\n"
+                )
+            if res.total_sessions_in_backup > 0 or res.sessions_imported > 0 or res.sessions_updated > 0:
+                msg_parts.append(
+                    f"Sessões de Corte:\n"
+                    f"• Novas sessões importadas: {res.sessions_imported}\n"
+                    f"• Sessões atualizadas: {res.sessions_updated}\n"
+                    f"• Sessões ignoradas: {res.sessions_skipped}\n"
+                )
 
+            if res.errors:
+                msg_parts.append(f"\n⚠️ Ocorreram avisos/erros em {len(res.errors)} item(ns):\n" + "\n".join(res.errors[:5]))
+
+            msg = "\n".join(msg_parts)
             self.lbl_restore_status.config(
-                text=f"Concluído: {res.imported_new} novos, {res.updated_existing} atualizados, {res.skipped} ignorados.",
+                text=f"Concluído! Moldes: +{res.imported_new} | Sessões: +{res.sessions_imported}.",
                 fg="#15803d"
             )
             messagebox.showinfo("Restauração Concluída", msg, parent=self)
 
-            # Notifica a janela principal para recarregar imediatamente a árvore e o grid
-            if callable(self.on_shapes_changed):
-                try:
-                    self.on_shapes_changed()
-                except Exception:
-                    pass
+            if res.imported_new > 0 or res.updated_existing > 0 or res.total_in_backup > 0:
+                if callable(self.on_shapes_changed):
+                    try:
+                        self.on_shapes_changed()
+                    except Exception:
+                        pass
 
-            # Atualiza também as estatísticas da Aba de Backup
+            if res.sessions_imported > 0 or res.sessions_updated > 0 or res.total_sessions_in_backup > 0:
+                if callable(self.on_sessions_changed):
+                    try:
+                        self.on_sessions_changed()
+                    except Exception:
+                        pass
+
             self.load_initial_stats()

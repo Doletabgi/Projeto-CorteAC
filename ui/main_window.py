@@ -339,8 +339,8 @@ class MainWindow(tk.Tk):
         tools_menu.add_command(label="💾 Exportar G-Code (ATOM)...", command=self.on_export_gcode)
         tools_menu.add_separator()
         tools_menu.add_command(label="🔄 Conversor de Arquivos (.lay ⇄ .onx)...", command=self.open_converter_dialog)
-        tools_menu.add_command(label="📦 Backup e Restauração de Moldes...", command=self.open_shape_backup_restore_dialog)
-        tools_menu.add_command(label="⏰ Programar Backup de Moldes...", command=lambda: self.open_shape_backup_restore_dialog(initial_tab=2))
+        tools_menu.add_command(label="📦 Backup e Restauração (Moldes e Sessões)...", command=self.open_shape_backup_restore_dialog)
+        tools_menu.add_command(label="⏰ Programar Backup Automático...", command=lambda: self.open_shape_backup_restore_dialog(initial_tab=2))
         tools_menu.add_command(label="🧹 Limpar Layouts de Teste...", command=self.on_clean_test_layouts)
         menubar.add_cascade(label="Ferramentas", menu=tools_menu)
 
@@ -1787,8 +1787,14 @@ class MainWindow(tk.Tk):
         LayoutConverterDialog(self, db=self.db, initial_files=initial_files)
 
     def open_shape_backup_restore_dialog(self, initial_tab=0):
-        """Abre a janela modal de Backup e Restauração de Moldes Cadastrados (Ferramentas -> Backup)."""
-        ShapeBackupRestoreDialog(self, db=self.db, on_shapes_changed=self.on_shapes_restored, initial_tab=initial_tab)
+        """Abre a janela modal de Backup e Restauração de Moldes e Sessões (Ferramentas -> Backup)."""
+        ShapeBackupRestoreDialog(
+            self,
+            db=self.db,
+            on_shapes_changed=self.on_shapes_restored,
+            on_sessions_changed=self.on_sessions_restored,
+            initial_tab=initial_tab
+        )
 
     def on_shapes_restored(self):
         """Callback acionado após a restauração de moldes: recarrega o catálogo e sincroniza as views."""
@@ -1799,15 +1805,35 @@ class MainWindow(tk.Tk):
         if hasattr(self, "lbl_status_msg") and self.lbl_status_msg:
             self.lbl_status_msg.config(text="Catálogo de moldes atualizado com sucesso a partir do backup.")
 
+    def on_sessions_restored(self):
+        """Callback acionado após restauração de sessões: recarrega sessões e sincroniza views."""
+        self.reload_shapes()
+        try:
+            self.sessions = self.db.get_sessions()
+        except Exception:
+            pass
+        self.refresh_tree()
+        self.populate_grid_lower()
+        if hasattr(self, "lbl_status_msg") and self.lbl_status_msg:
+            self.lbl_status_msg.config(text="Sessões de corte e moldes restaurados com sucesso a partir do backup.")
+
     def _on_scheduled_backup_completed(self, result: dict):
         """Callback acionado quando o agendador conclui um backup automático em background."""
         shapes_cnt = result.get("total_shapes", 0)
-        msg = f"📦 Backup automático de moldes concluído com sucesso ({shapes_cnt} moldes salvos)."
+        sessions_cnt = result.get("total_sessions", 0)
+        layouts_cnt = result.get("total_layouts", 0)
+        parts = []
+        if shapes_cnt > 0 or (shapes_cnt == 0 and sessions_cnt == 0):
+            parts.append(f"{shapes_cnt} moldes")
+        if sessions_cnt > 0:
+            parts.append(f"{sessions_cnt} sessões ({layouts_cnt} lays)")
+        details = ", ".join(parts)
+        msg = f"📦 Backup automático concluído com sucesso ({details} salvos)."
         self.after(0, lambda: self._update_status_msg_safe(msg))
 
     def _on_scheduled_backup_error(self, err_msg: str):
         """Callback acionado se o backup automático em background reportar falha."""
-        msg = f"⚠️ Falha no backup automático de moldes: {err_msg}"
+        msg = f"⚠️ Falha no backup automático: {err_msg}"
         self.after(0, lambda: self._update_status_msg_safe(msg))
 
     def _update_status_msg_safe(self, msg: str):
