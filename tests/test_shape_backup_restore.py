@@ -294,9 +294,10 @@ class TestShapeBackupRestore(unittest.TestCase):
         try:
             dlg = ShapeBackupRestoreDialog(root, db=self.db)
             self.assertIsNotNone(dlg.notebook)
-            self.assertEqual(len(dlg.notebook.tabs()), 2)
+            self.assertEqual(len(dlg.notebook.tabs()), 3)
             self.assertTrue(dlg.btn_run_backup.winfo_exists())
             self.assertTrue(dlg.btn_run_restore.winfo_exists())
+            self.assertTrue(dlg.tab_schedule.winfo_exists())
             dlg.destroy()
         finally:
             root.destroy()

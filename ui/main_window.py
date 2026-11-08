@@ -56,6 +56,7 @@ from ui.tooltip import ToolTip
 from ui.batch_nest_dialog import BatchAutoNestDialog, BatchProgressDialog
 from ui.layout_converter_dialog import LayoutConverterDialog
 from ui.shape_backup_restore_dialog import ShapeBackupRestoreDialog
+from cad.shape_backup_scheduler import ShapeBackupScheduler
 
 def get_assets_dir():
     if getattr(sys, 'frozen', False):
@@ -339,6 +340,7 @@ class MainWindow(tk.Tk):
         tools_menu.add_separator()
         tools_menu.add_command(label="🔄 Conversor de Arquivos (.lay ⇄ .onx)...", command=self.open_converter_dialog)
         tools_menu.add_command(label="📦 Backup e Restauração de Moldes...", command=self.open_shape_backup_restore_dialog)
+        tools_menu.add_command(label="⏰ Programar Backup de Moldes...", command=lambda: self.open_shape_backup_restore_dialog(initial_tab=2))
         tools_menu.add_command(label="🧹 Limpar Layouts de Teste...", command=self.on_clean_test_layouts)
         menubar.add_cascade(label="Ferramentas", menu=tools_menu)
 
@@ -1796,6 +1798,25 @@ class MainWindow(tk.Tk):
         if hasattr(self, "lbl_status_msg") and self.lbl_status_msg:
             self.lbl_status_msg.config(text="Catálogo de moldes atualizado com sucesso a partir do backup.")
 
+    def _on_scheduled_backup_completed(self, result: dict):
+        """Callback acionado quando o agendador conclui um backup automático em background."""
+        shapes_cnt = result.get("total_shapes", 0)
+        msg = f"📦 Backup automático de moldes concluído com sucesso ({shapes_cnt} moldes salvos)."
+        self.after(0, lambda: self._update_status_msg_safe(msg))
+
+    def _on_scheduled_backup_error(self, err_msg: str):
+        """Callback acionado se o backup automático em background reportar falha."""
+        msg = f"⚠️ Falha no backup automático de moldes: {err_msg}"
+        self.after(0, lambda: self._update_status_msg_safe(msg))
+
+    def _update_status_msg_safe(self, msg: str):
+        """Atualiza a mensagem na barra de status inferior de forma thread-safe."""
+        if hasattr(self, "lbl_status_msg") and self.lbl_status_msg:
+            try:
+                self.lbl_status_msg.config(text=msg)
+            except Exception:
+                pass
+
     def _on_user_updated(self):
         """Atualiza a indicação do usuário ativo na barra de status da janela principal."""
         active = self.db.get_active_user() if hasattr(self, "db") and self.db else ""
@@ -3127,6 +3148,11 @@ class MainWindow(tk.Tk):
         except Exception as exc:
             print(f"[AVISO] Falha ao salvar estado ao fechar aplicativo: {exc}")
         finally:
+            try:
+                if hasattr(self, "shape_backup_scheduler") and self.shape_backup_scheduler:
+                    self.shape_backup_scheduler.stop()
+            except Exception:
+                pass
             self.destroy()
 
     # =========================================================================
@@ -3270,6 +3296,17 @@ class MainWindow(tk.Tk):
 
         # Inicia no modo Produção (Print 1)
         self.switch_tree_mode("jobs")
+
+        # Inicializa o agendador de backup automático em segundo plano
+        try:
+            self.shape_backup_scheduler = ShapeBackupScheduler(
+                db=self.db,
+                on_backup_completed=self._on_scheduled_backup_completed,
+                on_backup_error=self._on_scheduled_backup_error
+            )
+            self.shape_backup_scheduler.start()
+        except Exception as sched_err:
+            print(f"[AVISO] Falha ao iniciar agendador de backup de moldes: {sched_err}")
 
     def switch_tree_mode(self, mode):
         self.current_mode = mode
