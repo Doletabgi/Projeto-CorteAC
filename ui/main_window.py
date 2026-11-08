@@ -1251,6 +1251,16 @@ class MainWindow(tk.Tk):
         """Organiza janelas abertas empilhadas horizontalmente."""
         if not self.open_windows:
             return
+        if (
+            hasattr(self, "layout_editor_view")
+            and self.layout_editor_view in self.open_windows
+            and self.layout_editor_view.winfo_ismapped()
+            and (getattr(self, "active_child", None) == self.layout_editor_view or len(self.open_windows) == 1)
+            and len(getattr(self.layout_editor_view, "layouts", [])) > 1
+        ):
+            self.layout_editor_view.tile_layouts_horizontal()
+            return
+
         self._window_layout_mode = "tile_h"
         N = len(self.open_windows)
         for i, w in enumerate(self.open_windows):
@@ -1267,6 +1277,16 @@ class MainWindow(tk.Tk):
         """Organiza janelas abertas lado a lado verticalmente."""
         if not self.open_windows:
             return
+        if (
+            hasattr(self, "layout_editor_view")
+            and self.layout_editor_view in self.open_windows
+            and self.layout_editor_view.winfo_ismapped()
+            and (getattr(self, "active_child", None) == self.layout_editor_view or len(self.open_windows) == 1)
+            and len(getattr(self.layout_editor_view, "layouts", [])) > 1
+        ):
+            self.layout_editor_view.tile_layouts_vertical()
+            return
+
         self._window_layout_mode = "tile_v"
         N = len(self.open_windows)
         for i, w in enumerate(self.open_windows):
@@ -1283,6 +1303,16 @@ class MainWindow(tk.Tk):
         """Organiza janelas abertas em cascata."""
         if not self.open_windows:
             return
+        if (
+            hasattr(self, "layout_editor_view")
+            and self.layout_editor_view in self.open_windows
+            and self.layout_editor_view.winfo_ismapped()
+            and (getattr(self, "active_child", None) == self.layout_editor_view or len(self.open_windows) == 1)
+            and len(getattr(self.layout_editor_view, "layouts", [])) > 1
+        ):
+            self.layout_editor_view.cascade_layouts()
+            return
+
         self._window_layout_mode = "cascade"
         ww = max(450, int(self.mdi_workspace.winfo_width() * 0.75))
         wh = max(350, int(self.mdi_workspace.winfo_height() * 0.75))

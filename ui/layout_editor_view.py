@@ -264,6 +264,285 @@ TARGET_SPECS = [
 ]
 
 
+class LayoutSubWindow(tk.Frame):
+    """
+    Subjanela MDI para visualização de uma placa (layout) individual da sessão
+    no modo multi-janela (Em Cascata / Lado a Lado).
+    Estilo clássico Windows XP com barra de título azul, botões de janela,
+    renderização proporcional de contornos e métricas resumidas.
+    """
+    def __init__(self, parent, editor, layout_index: int, layout_data: dict, on_select=None, on_maximize=None):
+        super().__init__(parent, relief="raised", bd=2, bg=THEME["bg_main"])
+        self.editor = editor
+        self.layout_index = layout_index
+        self.layout_data = layout_data
+        self.on_select = on_select
+        self.on_maximize = on_maximize
+        self.is_active = False
+
+        self._drag_data = {"x": 0, "y": 0}
+
+        self._setup_ui()
+
+    def _setup_ui(self):
+        # 1. Barra de Título Windows XP
+        self.title_bar = tk.Frame(self, bg=THEME["title_inactive_bg"], height=24)
+        self.title_bar.pack(side="top", fill="x")
+        self.title_bar.pack_propagate(False)
+
+        name = self.layout_data.get("name") or f"lay{self.layout_index:04d}"
+        tot = len(self.editor.layouts) if getattr(self.editor, "layouts", None) else 1
+        layers = self.layout_data.get("layers", 2)
+        w_mm = float(self.layout_data.get("width_mm") or getattr(self.editor, "sheet_width", 1380.0))
+        h_mm = float(self.layout_data.get("height_mm") or getattr(self.editor, "sheet_height", 1080.0))
+        title_text = f"🧩 {name} (Placa {self.layout_index + 1} de {tot}) - [{layers}c, {w_mm:.0f}x{h_mm:.0f} mm]"
+
+        self.lbl_title = tk.Label(
+            self.title_bar,
+            text=title_text,
+            bg=THEME["title_inactive_bg"],
+            fg=THEME["title_bar_fg"],
+            font=("Segoe UI", 8, "bold"),
+            anchor="w",
+            cursor="hand2"
+        )
+        self.lbl_title.pack(side="left", fill="x", expand=True, padx=4)
+
+        # Botão Maximizar (□)
+        self.btn_max = tk.Button(
+            self.title_bar,
+            text="□",
+            relief="raised",
+            bd=1,
+            bg=THEME["bg_surface"],
+            fg=THEME["text_main"],
+            font=("Segoe UI", 8, "bold"),
+            width=2,
+            height=1,
+            padx=0,
+            pady=0,
+            cursor="hand2",
+            command=self._do_maximize
+        )
+        self.btn_max.pack(side="right", padx=2, pady=1)
+
+        # 2. Rodapé com Métricas
+        pieces = self.layout_data.get("pieces") or self.layout_data.get("placed_pieces") or []
+        yield_pct = float(self.layout_data.get("yield_percent", 0.0))
+        if yield_pct <= 0.0 and pieces:
+            tot_a = 0.0
+            for p in pieces:
+                cntr = p.get("contour") or (p.get("shape", {}).get("contour") if isinstance(p.get("shape"), dict) else None)
+                if cntr:
+                    tot_a += _contour_area_mm2(cntr)
+            sheet_a = max(1.0, w_mm * h_mm)
+            yield_pct = round((tot_a / sheet_a) * 100.0, 1)
+
+        self.footer_bar = tk.Frame(self, bg=THEME["bg_main"], height=20)
+        self.footer_bar.pack(side="bottom", fill="x")
+        self.footer_bar.pack_propagate(False)
+
+        footer_text = f"Peças: {len(pieces)} | Aproveitamento: {yield_pct:.1f}% | Duplo-clique para editar"
+        self.lbl_footer = tk.Label(
+            self.footer_bar,
+            text=footer_text,
+            bg=THEME["bg_main"],
+            fg=THEME["text_muted"],
+            font=("Segoe UI", 8),
+            anchor="w"
+        )
+        self.lbl_footer.pack(side="left", padx=4)
+
+        # 3. Canvas da Placa
+        self.canvas = tk.Canvas(self, bg="#808080", highlightthickness=0, cursor="arrow")
+        self.canvas.pack(fill="both", expand=True)
+
+        # Bindings
+        self.canvas.bind("<Configure>", lambda e: self.redraw())
+        self.canvas.bind("<ButtonPress-1>", self._on_click)
+        self.canvas.bind("<Double-Button-1>", lambda e: self._do_maximize())
+
+        self.title_bar.bind("<ButtonPress-1>", self._on_title_press)
+        self.title_bar.bind("<B1-Motion>", self._on_title_drag)
+        self.title_bar.bind("<Double-Button-1>", lambda e: self._do_maximize())
+        self.lbl_title.bind("<ButtonPress-1>", self._on_title_press)
+        self.lbl_title.bind("<B1-Motion>", self._on_title_drag)
+        self.lbl_title.bind("<Double-Button-1>", lambda e: self._do_maximize())
+
+    def _on_title_press(self, event):
+        self._on_click(event)
+        self._drag_data["x"] = event.x_root
+        self._drag_data["y"] = event.y_root
+
+    def _on_title_drag(self, event):
+        dx = event.x_root - self._drag_data["x"]
+        dy = event.y_root - self._drag_data["y"]
+        self._drag_data["x"] = event.x_root
+        self._drag_data["y"] = event.y_root
+        cur_x = self.winfo_x()
+        cur_y = self.winfo_y()
+        self.place(x=max(0, cur_x + dx), y=max(0, cur_y + dy))
+
+    def _on_click(self, event=None):
+        if callable(self.on_select):
+            self.on_select(self.layout_index)
+        self.lift()
+
+    def _do_maximize(self):
+        if callable(self.on_maximize):
+            self.on_maximize(self.layout_index)
+
+    def set_active(self, active: bool):
+        self.is_active = active
+        bg = THEME["title_bar_bg"] if active else THEME["title_inactive_bg"]
+        self.title_bar.config(bg=bg)
+        self.lbl_title.config(bg=bg)
+        if active:
+            self.lift()
+
+    def redraw(self):
+        cw = self.canvas.winfo_width()
+        ch = self.canvas.winfo_height()
+        if cw <= 10 or ch <= 10:
+            try:
+                cw = int(self.canvas.cget("width"))
+                ch = int(self.canvas.cget("height"))
+            except Exception:
+                cw, ch = 300, 200
+            if cw <= 10 or ch <= 10:
+                cw, ch = 300, 200
+
+        self.canvas.delete("all")
+
+        w_mm = float(self.layout_data.get("width_mm") or getattr(self.editor, "sheet_width", 1380.0))
+        h_mm = float(self.layout_data.get("height_mm") or getattr(self.editor, "sheet_height", 1080.0))
+        if w_mm <= 0 or h_mm <= 0:
+            return
+
+        pad = 16.0
+        avail_w = max(20.0, cw - pad * 2)
+        avail_h = max(20.0, ch - pad * 2)
+
+        scale = min(avail_w / w_mm, avail_h / h_mm)
+        plate_w = w_mm * scale
+        plate_h = h_mm * scale
+
+        # Centralizar na subjanela
+        cx = cw / 2.0
+        cy = ch / 2.0
+        x1 = cx - plate_w / 2.0
+        y2 = cy + plate_h / 2.0
+        x2 = x1 + plate_w
+        y1 = y2 - plate_h
+
+        # 1. Chapa de corte cinza (#9b9b9b) com borda preta
+        self.canvas.create_rectangle(
+            x1, y1, x2, y2,
+            fill="#9b9b9b",
+            outline="#000000",
+            width=1.5
+        )
+
+        # 2. Margens de segurança tracejadas
+        m_left = float(self.layout_data.get("margin_left", getattr(self.editor, "margin_left", 10.0)))
+        m_right = float(self.layout_data.get("margin_right", getattr(self.editor, "margin_right", 10.0)))
+        m_top = float(self.layout_data.get("margin_top", getattr(self.editor, "margin_top", 10.0)))
+        m_bottom = float(self.layout_data.get("margin_bottom", getattr(self.editor, "margin_bottom", 10.0)))
+        mx1 = x1 + m_left * scale
+        mx2 = x2 - m_right * scale
+        my1 = y1 + m_top * scale
+        my2 = y2 - m_bottom * scale
+        if mx2 > mx1 and my2 > my1:
+            self.canvas.create_rectangle(
+                mx1, my1, mx2, my2,
+                fill="", outline="#475569", dash=(3, 3), width=1.0
+            )
+
+        # Rótulo de dimensões
+        name = self.layout_data.get("name") or f"lay{self.layout_index:04d}"
+        self.canvas.create_text(
+            cx,
+            max(8.0, y1 - 8.0),
+            text=f"{name} ({w_mm:.0f} x {h_mm:.0f} mm)",
+            fill="#ffffff",
+            font=("Segoe UI", 7, "bold")
+        )
+
+        # 3. Linha de refile (trim cut line) se presente
+        trim_line = self.layout_data.get("trim_cut_line")
+        if trim_line and trim_line.get("enabled", True):
+            tx_mm = float(trim_line.get("x", 0.0))
+            if 0 < tx_mm < w_mm:
+                screen_tx = x1 + tx_mm * scale
+                self.canvas.create_line(screen_tx, y1, screen_tx, y2, fill="#dc2626", width=2.0, dash=(6, 3))
+                self.canvas.create_text(screen_tx, y1 + 10, text="✂", fill="#dc2626", font=("Segoe UI", 9, "bold"))
+
+        # 4. Zona de ponta (tip zone) se presente
+        tip_zone = self.layout_data.get("tip_zone")
+        if tip_zone:
+            tw = float(tip_zone.get("width_mm", 0.0))
+            th = float(tip_zone.get("height_mm", 0.0))
+            if tw > 0 and th > 0:
+                t_mode = self.layout_data.get("tip_mode", "canto")
+                if t_mode == "faixa_topo":
+                    t_x1, t_y1 = x1, y1
+                    t_x2, t_y2 = x2, y1 + th * scale
+                else:
+                    t_x1, t_y1 = x2 - tw * scale, y1
+                    t_x2, t_y2 = x2, y1 + th * scale
+                self.canvas.create_rectangle(
+                    t_x1, t_y1, t_x2, t_y2,
+                    fill="#bfdbfe", stipple="gray25", outline="#2563eb", width=1.5, dash=(4, 2)
+                )
+
+        # 5. Peças colocadas
+        pieces = self.layout_data.get("pieces") or self.layout_data.get("placed_pieces") or []
+        for p_idx, p in enumerate(pieces):
+            poly, bbox = ([], None)
+            if hasattr(self.editor, "_get_piece_geom"):
+                try:
+                    poly, bbox = self.editor._get_piece_geom(p)
+                except Exception:
+                    poly = []
+            if not poly:
+                cntr = p.get("contour")
+                if not cntr and isinstance(p.get("shape"), dict):
+                    cntr = p["shape"].get("contour")
+                if not cntr and hasattr(self.editor, "_resolve_piece_contour"):
+                    cntr = self.editor._resolve_piece_contour(p)
+                if not cntr:
+                    continue
+                px = float(p.get("x", 0.0))
+                py = float(p.get("y", 0.0))
+                rot = float(p.get("rotation", p.get("rot", 0.0)))
+                poly = transform_contour(cntr, px, py, rot)
+
+            if not poly or len(poly) < 3:
+                continue
+
+            screen_pts = []
+            for pt in poly:
+                wx = float(pt["x"]) if isinstance(pt, dict) else float(pt[0])
+                wy = float(pt["y"]) if isinstance(pt, dict) else float(pt[1])
+                sx = x1 + wx * scale
+                sy = y2 - wy * scale
+                screen_pts.extend((sx, sy))
+
+            base_col = p.get("color")
+            if not base_col:
+                s_size = str(p.get("size") or (p.get("shape", {}).get("size") if isinstance(p.get("shape"), dict) else "") or "")
+                if not s_size:
+                    s_size = str(p.get("name") or "")
+                base_col = get_color_for_size(s_size, p_idx)
+
+            self.canvas.create_polygon(
+                screen_pts,
+                fill=base_col,
+                outline="#1e293b",
+                width=1.0
+            )
+
+
 class LayoutEditorView(tk.Frame):
     def __init__(self, parent, on_close=None, on_minimize=None, on_maximize=None, layout_name="[I0000]", on_save=None, db=None, load_sample=False, **kwargs):
         frame_kwargs = {k: v for k, v in kwargs.items() if k not in {
@@ -433,6 +712,12 @@ class LayoutEditorView(tk.Frame):
         self.custom_divider_ratio = None
         self.is_dragging_divider = False
         self.update_sidebar_targets()
+
+        # Modos de visualização MDI para múltiplos layouts (single, cascade, tile_h, tile_v)
+        self.layout_view_mode = "single"
+        self.sub_windows = []
+        self.mdi_container = None
+        self.window_menu = None
 
         # Constrói UI completa
         self.setup_ui()
@@ -668,11 +953,14 @@ class LayoutEditorView(tk.Frame):
         # -------------------------------------------------------------
         # 4. Área de Trabalho Principal (Canvas ocupa todo o espaço, sem sidebar)
         # -------------------------------------------------------------
-        work_area = tk.Frame(self, bg="#ffffff")
-        work_area.pack(fill="both", expand=True)
+        self.work_area = tk.Frame(self, bg=THEME["bg_workspace"])
+        self.work_area.pack(fill="both", expand=True)
 
-        self.canvas = tk.Canvas(work_area, bg="#ffffff", highlightthickness=0, cursor="arrow")
+        self.canvas = tk.Canvas(self.work_area, bg="#ffffff", highlightthickness=0, cursor="arrow")
         self.canvas.pack(fill="both", expand=True)
+
+        self.mdi_container = tk.Frame(self.work_area, bg=THEME["bg_workspace"])
+        self.mdi_container.bind("<Configure>", self._on_mdi_container_resize)
 
         # Bindings do Canvas:
         self.canvas.bind("<Configure>", lambda e: self.redraw())
@@ -1013,10 +1301,260 @@ class LayoutEditorView(tk.Frame):
             menu_obj.add_command(label="Verificar Sobreposição\tCtrl+E", command=self.check_overlay)
             menu_obj.add_command(label="Preferências...", command=lambda: None)
         elif menu_name in ("Janela", "Window"):
-            menu_obj.add_command(label="Em cascata")
-            menu_obj.add_command(label="Lado a lado horizontal")
+            self.window_menu = menu_obj
+            menu_obj.config(postcommand=lambda: self._refresh_window_menu(menu_obj))
+            self._refresh_window_menu(menu_obj)
         elif menu_name in ("Ajuda", "Help"):
             menu_obj.add_command(label="Sobre o Layout Editor...", command=self.about_layout)
+
+    def _refresh_window_menu(self, menu_obj):
+        """Popula dinamicamente o menu 'Janela' com comandos MDI e lista de placas da sessão."""
+        try:
+            menu_obj.delete(0, "end")
+        except Exception:
+            return
+
+        menu_obj.add_command(label="Em cascata", command=self.cascade_layouts)
+        menu_obj.add_command(label="Lado a lado horizontal", command=self.tile_layouts_horizontal)
+        menu_obj.add_command(label="Lado a lado vertical", command=self.tile_layouts_vertical)
+        menu_obj.add_command(label="Maximizar (Layout Único)", command=lambda: self.maximize_current_layout())
+        menu_obj.add_separator()
+
+        layouts = getattr(self, "layouts", []) or []
+        tot = len(layouts)
+        cur_idx = getattr(self, "current_layout_index", 0)
+
+        if not layouts:
+            menu_obj.add_command(label="1 (Placa única ativa)", state="disabled")
+            return
+
+        for idx, ly in enumerate(layouts):
+            name = ly.get("name") or f"lay{idx:04d}"
+            layers = ly.get("layers", 2)
+            prefix = "✓ " if idx == cur_idx else "    "
+            label = f"{prefix}{idx + 1}  {name} (Placa {idx + 1} de {tot} - {layers}c)"
+            menu_obj.add_command(
+                label=label,
+                command=lambda i=idx: self.maximize_current_layout(i)
+            )
+
+    def cascade_layouts(self):
+        """Organiza e exibe todos os layouts/placas da sessão em cascata."""
+        self._sync_current_layout_pieces()
+        self.layout_view_mode = "cascade"
+        if hasattr(self, "canvas") and self.canvas:
+            self.canvas.pack_forget()
+        if hasattr(self, "mdi_container") and self.mdi_container:
+            self.mdi_container.pack(fill="both", expand=True)
+            self.mdi_container.update_idletasks()
+        self._render_subwindows()
+        self._layout_cascade()
+        self.update_title_and_status()
+
+    def tile_layouts_horizontal(self):
+        """Organiza e exibe todos os layouts/placas da sessão lado a lado horizontalmente (colunas)."""
+        self._sync_current_layout_pieces()
+        self.layout_view_mode = "tile_h"
+        if hasattr(self, "canvas") and self.canvas:
+            self.canvas.pack_forget()
+        if hasattr(self, "mdi_container") and self.mdi_container:
+            self.mdi_container.pack(fill="both", expand=True)
+            self.mdi_container.update_idletasks()
+        self._render_subwindows()
+        self._layout_tile_horizontal()
+        self.update_title_and_status()
+
+    def tile_layouts_vertical(self):
+        """Organiza e exibe todos os layouts/placas da sessão empilhados verticalmente (linhas)."""
+        self._sync_current_layout_pieces()
+        self.layout_view_mode = "tile_v"
+        if hasattr(self, "canvas") and self.canvas:
+            self.canvas.pack_forget()
+        if hasattr(self, "mdi_container") and self.mdi_container:
+            self.mdi_container.pack(fill="both", expand=True)
+            self.mdi_container.update_idletasks()
+        self._render_subwindows()
+        self._layout_tile_vertical()
+        self.update_title_and_status()
+
+    def maximize_current_layout(self, target_index: int = None):
+        """Restaura o modo de visualização única (tela cheia) para a placa especificada ou ativa."""
+        if target_index is not None and 0 <= target_index < len(getattr(self, "layouts", [])):
+            self.switch_to_layout(target_index, save_current=True)
+        else:
+            self._sync_current_layout_pieces()
+
+        self.layout_view_mode = "single"
+        if hasattr(self, "mdi_container") and self.mdi_container:
+            self.mdi_container.pack_forget()
+        if hasattr(self, "canvas") and self.canvas:
+            self.canvas.pack(fill="both", expand=True)
+
+        self.update_title_and_status()
+        self.update_sidebar_targets()
+        self.redraw()
+
+    def _render_subwindows(self):
+        """Cria e renderiza as subjanelas MDI para cada layout da sessão."""
+        for sw in self.sub_windows:
+            try:
+                sw.destroy()
+            except Exception:
+                pass
+        self.sub_windows.clear()
+
+        if not getattr(self, "layouts", None):
+            self.layouts = [{
+                "name": getattr(self, "layout_name", "lay0000"),
+                "pieces": copy.deepcopy(self.placed_pieces),
+                "width_mm": self.sheet_width,
+                "height_mm": self.sheet_height,
+                "layers": getattr(self, "material_layers", 2),
+                "margin_left": self.margin_left,
+                "margin_right": self.margin_right,
+                "margin_top": self.margin_top,
+                "margin_bottom": self.margin_bottom,
+                "trim_cut_line": copy.deepcopy(getattr(self, "trim_cut_line", None)),
+                "tip_zone": copy.deepcopy(getattr(self, "tip_zone", None)),
+                "layers_tip": getattr(self, "layers_tip", None),
+                "tip_mode": getattr(self, "tip_mode", "canto"),
+            }]
+        else:
+            self._sync_current_layout_pieces()
+
+        for idx, ly in enumerate(self.layouts):
+            sw = LayoutSubWindow(
+                parent=self.mdi_container,
+                editor=self,
+                layout_index=idx,
+                layout_data=ly,
+                on_select=self._on_subwindow_selected,
+                on_maximize=self.maximize_current_layout
+            )
+            sw.set_active(idx == self.current_layout_index)
+            self.sub_windows.append(sw)
+
+    def _layout_cascade(self):
+        """Disposiciona as subjanelas MDI em cascata com deslocamento diagonal."""
+        if not self.sub_windows:
+            return
+        cw = self.mdi_container.winfo_width()
+        ch = self.mdi_container.winfo_height()
+        if cw <= 50 or ch <= 50:
+            try:
+                cw = self.work_area.winfo_width()
+                ch = self.work_area.winfo_height()
+            except Exception:
+                cw, ch = 900, 600
+            if cw <= 50 or ch <= 50:
+                cw, ch = 900, 600
+
+        sw_w = max(320, int(cw * 0.72))
+        sw_h = max(240, int(ch * 0.72))
+        step = 28
+
+        for i, sw in enumerate(self.sub_windows):
+            x = 15 + i * step
+            y = 15 + i * step
+            if x + sw_w > cw:
+                x = 15 + (i % 5) * step
+            if y + sw_h > ch:
+                y = 15 + (i % 5) * step
+            sw.place(x=x, y=y, width=sw_w, height=sw_h)
+            sw.redraw()
+
+        if 0 <= self.current_layout_index < len(self.sub_windows):
+            self.sub_windows[self.current_layout_index].lift()
+
+    def _layout_tile_horizontal(self):
+        """Organiza as subjanelas MDI lado a lado horizontalmente (dividindo em colunas)."""
+        if not self.sub_windows:
+            return
+        N = len(self.sub_windows)
+        cw = self.mdi_container.winfo_width()
+        ch = self.mdi_container.winfo_height()
+        if cw <= 50 or ch <= 50:
+            try:
+                cw = self.work_area.winfo_width()
+                ch = self.work_area.winfo_height()
+            except Exception:
+                cw, ch = 900, 600
+            if cw <= 50 or ch <= 50:
+                cw, ch = 900, 600
+
+        col_w = max(100, int(cw / N))
+        for i, sw in enumerate(self.sub_windows):
+            x = i * col_w
+            w = col_w if i < N - 1 else (cw - x)
+            sw.place(x=x, y=0, width=w, height=ch)
+            sw.redraw()
+
+        if 0 <= self.current_layout_index < len(self.sub_windows):
+            self.sub_windows[self.current_layout_index].lift()
+
+    def _layout_tile_vertical(self):
+        """Organiza as subjanelas MDI empilhadas verticalmente (dividindo em linhas)."""
+        if not self.sub_windows:
+            return
+        N = len(self.sub_windows)
+        cw = self.mdi_container.winfo_width()
+        ch = self.mdi_container.winfo_height()
+        if cw <= 50 or ch <= 50:
+            try:
+                cw = self.work_area.winfo_width()
+                ch = self.work_area.winfo_height()
+            except Exception:
+                cw, ch = 900, 600
+            if cw <= 50 or ch <= 50:
+                cw, ch = 900, 600
+
+        row_h = max(80, int(ch / N))
+        for i, sw in enumerate(self.sub_windows):
+            y = i * row_h
+            h = row_h if i < N - 1 else (ch - y)
+            sw.place(x=0, y=y, width=cw, height=h)
+            sw.redraw()
+
+        if 0 <= self.current_layout_index < len(self.sub_windows):
+            self.sub_windows[self.current_layout_index].lift()
+
+    def _on_subwindow_selected(self, index: int):
+        """Chamado quando uma subjanela é clicada ou selecionada."""
+        if index < 0 or index >= len(getattr(self, "layouts", [])):
+            return
+        if self.current_layout_index != index:
+            self._sync_current_layout_pieces()
+            self.current_layout_index = index
+            ly = self.layouts[index]
+            self.placed_pieces = copy.deepcopy(ly.get("pieces") or ly.get("placed_pieces") or [])
+            for p in self.placed_pieces:
+                if not p.get("contour"):
+                    p["contour"] = self._resolve_piece_contour(p)
+            self.sheet_width = float(ly.get("width_mm", self.sheet_width))
+            self.sheet_height = float(ly.get("height_mm", self.sheet_height))
+            self.trim_cut_line = copy.deepcopy(ly.get("trim_cut_line", None))
+            self.tip_zone = copy.deepcopy(ly.get("tip_zone", None))
+            self.layers_tip = ly.get("layers_tip", None)
+            self.tip_mode = ly.get("tip_mode", "canto")
+            self.layout_name = ly.get("name") or f"lay{index:04d}"
+            self.update_title_and_status()
+            self.update_sidebar_targets()
+
+        for sw in self.sub_windows:
+            sw.set_active(sw.layout_index == index)
+
+        if getattr(self, "window_menu", None):
+            self._refresh_window_menu(self.window_menu)
+
+    def _on_mdi_container_resize(self, event=None):
+        """Recalcula o posicionamento das subjanelas quando o container é redimensionado."""
+        mode = getattr(self, "layout_view_mode", "single")
+        if mode == "cascade":
+            self._layout_cascade()
+        elif mode == "tile_h":
+            self._layout_tile_horizontal()
+        elif mode == "tile_v":
+            self._layout_tile_vertical()
 
     # -------------------------------------------------------------
     # Barra Lateral de Moldes (Miniatura, Nome e Numeração/Contagem)
@@ -1881,6 +2419,19 @@ class LayoutEditorView(tk.Frame):
 
     def set_session_layouts(self, layouts: list, initial_index: int = 0):
         """Define a lista de múltiplos layouts da sessão e carrega a placa inicial."""
+        if getattr(self, "layout_view_mode", "single") != "single":
+            if hasattr(self, "mdi_container") and self.mdi_container:
+                self.mdi_container.pack_forget()
+            if hasattr(self, "canvas") and self.canvas:
+                self.canvas.pack(fill="both", expand=True)
+            self.layout_view_mode = "single"
+            for sw in getattr(self, "sub_windows", []):
+                try:
+                    sw.destroy()
+                except Exception:
+                    pass
+            self.sub_windows = []
+
         if not layouts:
             self.layouts = []
             self.layout_undo_stacks = {}
@@ -1981,7 +2532,13 @@ class LayoutEditorView(tk.Frame):
 
         self.update_title_and_status()
         self.update_sidebar_targets()
-        self.redraw()
+        if getattr(self, "layout_view_mode", "single") == "single":
+            self.redraw()
+        else:
+            for sw in getattr(self, "sub_windows", []):
+                sw.set_active(sw.layout_index == index)
+        if getattr(self, "window_menu", None):
+            self._refresh_window_menu(self.window_menu)
         return True
 
     def _on_ctrl_l(self, event=None):
