@@ -1505,47 +1505,16 @@ class MainWindow(tk.Tk):
             if s:
                 target_shapes = [s]
         elif shape_id_or_data is None:
-            # 1. Se estiver no modo 'shapes', verifica seleção múltipla na grade inferior (grid_lower)
-            if getattr(self, "current_mode", "") == "shapes" and hasattr(self, "grid_lower"):
-                grid_sel = self.grid_lower.selection()
-                if grid_sel:
-                    for g_item in grid_sel:
-                        vals = self.grid_lower.item(g_item, "values")
-                        if vals and len(vals) >= 1:
-                            try:
-                                s_id = int(vals[0])
-                                s = self.db.get_shape(s_id)
-                                if s:
-                                    target_shapes.append(s)
-                            except (ValueError, TypeError):
-                                pass
-
-            # 2. Se não encontrou na grade, verifica tree_main
-            if not target_shapes:
-                sel = self.tree_main.selection()
-                if sel:
-                    for t_item in sel:
-                        val = self.tree_main.item(t_item, "values")
-                        if val and len(val) >= 2 and val[0] == "shape":
-                            try:
-                                s = self.db.get_shape(int(val[1]))
-                                if s:
-                                    target_shapes.append(s)
-                            except (ValueError, TypeError):
-                                pass
-
-            # 3. Fallback para moldes atuais se nada estiver selecionado
-            if not target_shapes and self.current_shapes:
-                target_shapes = [self.current_shapes[0]]
-
-        if not target_shapes and self.current_shapes:
-            target_shapes = [self.current_shapes[0]]
+            # Ao abrir diretamente pelo menu Ferramentas, Janela ou atalho da barra de ferramentas, abre sempre em branco
+            target_shapes = []
 
         if target_shapes:
             if len(target_shapes) > 1:
                 self.shape_editor_view.load_shapes(target_shapes)
             else:
                 self.shape_editor_view.load_shape(target_shapes[0])
+        else:
+            self.shape_editor_view.load_empty_shape()
 
         if self.shape_editor_view in self.minimized_windows:
             self.restore_window(self.shape_editor_view)
@@ -1558,6 +1527,8 @@ class MainWindow(tk.Tk):
             else:
                 shp_name = target_shapes[0].get("name", "Molde")
                 self.lbl_status_msg.config(text=f"Shape Editor: [{shp_name}] aberto em tela cheia.")
+        else:
+            self.lbl_status_msg.config(text="Shape Editor: Novo molde em branco aberto em tela cheia.")
 
     def show_shape_catalog(self, article_id=None):
         target_article_id = 1
@@ -1884,6 +1855,21 @@ class MainWindow(tk.Tk):
                 if s["id"] == shape_id:
                     self.current_shapes[i] = copy.deepcopy(updated_shape)
                     break
+        else:
+            contour = updated_shape.get("contour", [])
+            if contour:
+                name = updated_shape.get("name", "").strip() or "Novo_Molde"
+                new_id = self.db.create_shape(
+                    name=name,
+                    contour=contour,
+                    holes=updated_shape.get("holes", []),
+                    stitching=updated_shape.get("stitching", []),
+                    shape_format=updated_shape.get("shape_format", "1x1"),
+                    folder=updated_shape.get("folder", "")
+                )
+                updated_shape["id"] = new_id
+                shape_id = new_id
+                self.current_shapes.append(copy.deepcopy(updated_shape))
 
         for sv in self.open_sessions.values():
             sv.all_shapes_catalog = self.current_shapes

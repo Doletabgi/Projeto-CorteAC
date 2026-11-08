@@ -41,7 +41,7 @@ class ShapeEditorView(tk.Frame):
             self.original_shape = self.open_shapes[0]["original_shape"]
             self.shape = self.open_shapes[0]["shape"]
         else:
-            base_s = shape_data or self._default_shape()
+            base_s = shape_data or self._empty_shape()
             self.original_shape = copy.deepcopy(base_s)
             self.shape = copy.deepcopy(base_s)
             self.open_shapes.append(self._make_shape_entry(self.shape))
@@ -91,6 +91,21 @@ class ShapeEditorView(tk.Frame):
         self._update_title()
         self.reset_view()
 
+    def _empty_shape(self):
+        """Retorna uma estrutura de molde em branco pronta para edição."""
+        return {
+            "id": None,
+            "name": "",
+            "size": "",
+            "article_id": None,
+            "folder": "",
+            "color": "#000080",
+            "shape_format": "1x1",
+            "contour": [],
+            "holes": [],
+            "stitching": []
+        }
+
     def _default_shape(self):
         return {
             "id": 1,
@@ -117,6 +132,7 @@ class ShapeEditorView(tk.Frame):
     def _make_shape_entry(self, shape_data):
         s = copy.deepcopy(shape_data)
         s["shape_format"] = str(s.get("shape_format") or "1x1")
+        is_empty = not s.get("contour") and s.get("id") is None
         return {
             "shape": s,
             "original_shape": copy.deepcopy(s),
@@ -124,11 +140,11 @@ class ShapeEditorView(tk.Frame):
             "redo_stack": [],
             "selected_vertex_idx": -1,
             "selected_hole_idx": -1,
-            "geometry_locked": True,
-            "zoom": 1.8,
+            "geometry_locked": False if is_empty else True,
+            "zoom": 1.0 if is_empty else 1.8,
             "pan_x": 220.0,
             "pan_y": 180.0,
-            "_initial_fit_needed": True,
+            "_initial_fit_needed": not is_empty,
             "is_dirty": False
         }
 
@@ -158,7 +174,7 @@ class ShapeEditorView(tk.Frame):
                 self.open_shapes.append(self._make_shape_entry(s))
 
         if not self.open_shapes:
-            self.open_shapes.append(self._make_shape_entry(self._default_shape()))
+            self.open_shapes.append(self._make_shape_entry(self._empty_shape()))
 
         active_index = max(0, min(active_index, len(self.open_shapes) - 1))
         self.active_shape_index = active_index
@@ -177,14 +193,23 @@ class ShapeEditorView(tk.Frame):
         self._pre_drag_state = None
         self._initial_fit_needed = True
 
-        shp_name = self.shape.get("name", "Molde")
+        shp_name = self.shape.get("name", "")
 
         self.entry_name.delete(0, tk.END)
-        self.entry_name.insert(0, shp_name)
+        if shp_name:
+            self.entry_name.insert(0, shp_name)
         self._update_tab_bar()
         self.reset_view()
         self.update_info_panel()
         self.redraw()
+
+    def load_empty_shape(self):
+        """Carrega uma prancheta em branco no editor de moldes."""
+        self.load_shapes([self._empty_shape()])
+        self.geometry_locked.set(False)
+        self._update_lock_ui()
+        if hasattr(self, "lbl_sbar_status") and self.lbl_sbar_status:
+            self.lbl_sbar_status.config(text="Novo molde em branco. Clique em '➕ Ponto' para desenhar ou '📂 Importar .die'.")
 
     def load_shape(self, shape_data, replace=True):
         """Carrega um molde (ou lista de moldes) no editor."""
@@ -304,8 +329,8 @@ class ShapeEditorView(tk.Frame):
 
         for idx, entry in enumerate(self.open_shapes):
             s = entry["shape"]
-            s_name = s.get("name", f"Molde_{idx+1}")
-            s_size = s.get("size", "")
+            s_name = s.get("name", "").strip() or ("Novo Molde" if not s.get("contour") else f"Molde_{idx+1}")
+            s_size = s.get("size", "").strip()
             disp = f"[{idx+1}] {s_name}" + (f" ({s_size})" if s_size else "")
             names.append(disp)
 
@@ -335,7 +360,9 @@ class ShapeEditorView(tk.Frame):
             is_active = (i == self.active_shape_index)
             is_dirty = entry.get("is_dirty", False)
             dirty_str = " *" if is_dirty else ""
-            label_text = f"📐 {s_name}" + (f" [{s_size}]" if s_size else "") + dirty_str
+            tab_name = s.get("name", "").strip() or ("Novo Molde" if not s.get("contour") else f"Molde_{i+1}")
+            tab_size = s.get("size", "").strip()
+            label_text = f"📐 {tab_name}" + (f" [{tab_size}]" if tab_size else "") + dirty_str
 
             tab_bg = "#ffffff" if is_active else "#ece9d8"
             tab_fg = "#000080" if is_active else "#222222"
@@ -397,6 +424,7 @@ class ShapeEditorView(tk.Frame):
         toolbar.pack(fill="x")
 
         # Ações de Arquivo
+        tk.Button(toolbar, text="📄 Novo", bg=THEME["bg_surface"], fg=THEME["text_main"], relief="raised", bd=1, font=("Segoe UI", 8), command=self.load_empty_shape).pack(side="left", padx=1)
         tk.Button(toolbar, text="💾 Salvar", bg=THEME["bg_surface"], fg=THEME["text_main"], relief="raised", bd=2, font=("Segoe UI", 8, "bold"), command=self.save_changes).pack(side="left", padx=1)
         self.btn_save_all = tk.Button(toolbar, text="💾 Salvar Todos", bg=THEME["bg_surface"], fg=THEME["text_main"], relief="raised", bd=1, font=("Segoe UI", 8), command=self.save_all_changes)
         self.btn_save_all.pack(side="left", padx=1)
@@ -546,6 +574,16 @@ class ShapeEditorView(tk.Frame):
         self.canvas.bind("<MouseWheel>", self.on_zoom_wheel)
         self.canvas.bind("<Button-4>", lambda e: self.zoom_step(1.15, e.x, e.y))
         self.canvas.bind("<Button-5>", lambda e: self.zoom_step(0.85, e.x, e.y))
+
+        # Atalho para Novo Molde em Branco (Ctrl+N)
+        self.bind("<Control-n>", lambda e: self.load_empty_shape())
+        self.bind("<Control-N>", lambda e: self.load_empty_shape())
+        self.bind("<Control-Key-n>", lambda e: self.load_empty_shape())
+        self.bind("<Control-Key-N>", lambda e: self.load_empty_shape())
+        self.canvas.bind("<Control-n>", lambda e: self.load_empty_shape())
+        self.canvas.bind("<Control-N>", lambda e: self.load_empty_shape())
+        self.canvas.bind("<Control-Key-n>", lambda e: self.load_empty_shape())
+        self.canvas.bind("<Control-Key-N>", lambda e: self.load_empty_shape())
 
         # Atalhos de Teclado para Voltar / Reverter (Ctrl+Z)
         self.bind("<Control-z>", self.undo_or_revert)
@@ -806,16 +844,22 @@ class ShapeEditorView(tk.Frame):
         """Atualiza a barra de título clássica com o nome do molde, tamanho e indicador de modificado (*)."""
         if not hasattr(self, "lbl_title") or not self.lbl_title:
             return
-        shp_name = self.shape.get("name", "Molde")
-        shp_size = self.shape.get("size", "")
-        disp_title = f"{shp_name} (Tam: {shp_size})" if shp_size else shp_name
+        shp_name = self.shape.get("name", "").strip()
+        shp_size = self.shape.get("size", "").strip()
         total_open = len(self.open_shapes)
         count_suffix = f" [{self.active_shape_index+1} de {total_open}]" if total_open > 1 else ""
         is_dirty = False
         if 0 <= self.active_shape_index < len(self.open_shapes):
             is_dirty = self.open_shapes[self.active_shape_index].get("is_dirty", False)
         dirty_marker = " *" if is_dirty else ""
-        self.lbl_title.config(text=f"📐 Shape Editor - [{disp_title}.die{dirty_marker}]{count_suffix}")
+
+        if not shp_name and not self.shape.get("contour"):
+            disp_title = "Novo Molde"
+            self.lbl_title.config(text=f"📐 Shape Editor - [{disp_title}{dirty_marker}]{count_suffix}")
+        else:
+            name_display = shp_name or "Molde"
+            disp_title = f"{name_display} (Tam: {shp_size})" if shp_size else name_display
+            self.lbl_title.config(text=f"📐 Shape Editor - [{disp_title}.die{dirty_marker}]{count_suffix}")
 
     def set_modified(self, is_dirty=True):
         """Marca o molde ativo como modificado e atualiza os indicadores visuais (*)."""
@@ -1394,13 +1438,6 @@ class ShapeEditorView(tk.Frame):
 
     def reset_view(self):
         """Ajusta o zoom e pan para enquadrar perfeitamente o molde no centro exato da tela."""
-        contour = self.shape.get("contour", [])
-        if not contour:
-            return
-        min_x, min_y, max_x, max_y = polygon_bbox(contour)
-        w = max(10, max_x - min_x)
-        h = max(10, max_y - min_y)
-
         c_w = self.canvas.winfo_width()
         c_h = self.canvas.winfo_height()
 
@@ -1410,6 +1447,22 @@ class ShapeEditorView(tk.Frame):
                 c_h = max(300, self.winfo_height() - 60)
             except Exception:
                 c_w, c_h = 1000, 700
+
+        contour = self.shape.get("contour", [])
+        if not contour:
+            self.zoom = 1.0
+            self.pan_x = c_w / 2.0
+            self.pan_y = c_h / 2.0
+            self._last_canvas_w = c_w
+            self._last_canvas_h = c_h
+            if hasattr(self, "lbl_sbar_zoom") and self.lbl_sbar_zoom:
+                self.lbl_sbar_zoom.config(text="Zoom: 100%")
+            self.redraw()
+            return
+
+        min_x, min_y, max_x, max_y = polygon_bbox(contour)
+        w = max(10, max_x - min_x)
+        h = max(10, max_y - min_y)
 
         scale_x = (c_w - 140) / w
         scale_y = (c_h - 140) / h
@@ -1426,7 +1479,8 @@ class ShapeEditorView(tk.Frame):
         self._last_canvas_h = c_h
 
         pct = int(self.zoom * 100)
-        self.lbl_sbar_zoom.config(text=f"Zoom: {pct}%")
+        if hasattr(self, "lbl_sbar_zoom") and self.lbl_sbar_zoom:
+            self.lbl_sbar_zoom.config(text=f"Zoom: {pct}%")
         self.redraw()
 
     def zoom_step(self, factor, center_sx=None, center_sy=None):
@@ -1784,6 +1838,11 @@ class ShapeEditorView(tk.Frame):
             self.lbl_area_net.config(text=f"Área Líquida: {area_net_dm2:.2f} dm²")
             self.lbl_counts.config(text=f"Vértices: {len(contour)} | Furos: {len(holes)} | Costuras: {n_stitching}")
         else:
+            self.lbl_dim_w.config(text="Largura (X): 0.0 mm")
+            self.lbl_dim_h.config(text="Altura (Y): 0.0 mm")
+            self.lbl_perim.config(text="Perímetro: 0.0 mm")
+            self.lbl_area_gross.config(text="Área Bruta: 0.00 dm²")
+            self.lbl_area_net.config(text="Área Líquida: 0.00 dm²")
             self.lbl_counts.config(text=f"Vértices: {len(contour)} | Furos: {len(holes)} | Costuras: {n_stitching}")
 
         if hasattr(self, "lbl_stitching"):
