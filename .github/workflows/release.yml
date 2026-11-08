@@ -9,7 +9,7 @@ on:
       tag_name:
         description: 'Tag de versão SemVer (ex: v1.0.0)'
         required: false
-        default: 'v1.6.42'
+        default: 'v1.6.43'
 
 permissions:
   contents: write
@@ -47,7 +47,7 @@ jobs:
 
       - name: Compilar Executável Standalone com PyInstaller
         run: |
-          pyinstaller --clean --onefile --noconsole --icon "assets/app_icon.ico" --add-data "assets;assets" --add-data "samples;samples" --add-data "jobmanager.db;." --add-data "db.example.ini;." --hidden-import pymysql --hidden-import cryptography --hidden-import cad.project_packager --hidden-import cad.barcode --hidden-import cad.layout_converter --hidden-import cad.czlib --hidden-import cad.onx_exporter --hidden-import cad.dual_exporter --hidden-import ui.user_dialog --hidden-import ui.layout_converter_dialog --name "CorteAC" main.py
+          pyinstaller --clean --onefile --noconsole --icon "assets/app_icon.ico" --add-data "assets;assets" --add-data "samples;samples" --add-data "jobmanager.db;." --add-data "db.example.ini;." --hidden-import pymysql --hidden-import cryptography --hidden-import cad.project_packager --hidden-import cad.barcode --hidden-import cad.layout_converter --hidden-import cad.czlib --hidden-import cad.onx_exporter --hidden-import cad.dual_exporter --hidden-import cad.shape_backup --hidden-import ui.user_dialog --hidden-import ui.layout_converter_dialog --hidden-import ui.shape_backup_restore_dialog --name "CorteAC" main.py
 
       - name: Empacotar Pacote Portátil ZIP
         shell: pwsh
@@ -98,7 +98,7 @@ jobs:
 
       - name: Compilar Executável Standalone Linux com PyInstaller
         run: |
-          pyinstaller --clean --onefile --add-data "assets:assets" --add-data "samples:samples" --add-data "jobmanager.db:." --add-data "db.example.ini:." --hidden-import pymysql --hidden-import cryptography --hidden-import cad.project_packager --hidden-import cad.barcode --hidden-import cad.layout_converter --hidden-import cad.czlib --hidden-import cad.onx_exporter --hidden-import cad.dual_exporter --hidden-import ui.user_dialog --hidden-import ui.layout_converter_dialog --name "corteac_linux" main.py
+          pyinstaller --clean --onefile --add-data "assets:assets" --add-data "samples:samples" --add-data "jobmanager.db:." --add-data "db.example.ini:." --hidden-import pymysql --hidden-import cryptography --hidden-import cad.project_packager --hidden-import cad.barcode --hidden-import cad.layout_converter --hidden-import cad.czlib --hidden-import cad.onx_exporter --hidden-import cad.dual_exporter --hidden-import cad.shape_backup --hidden-import ui.user_dialog --hidden-import ui.layout_converter_dialog --hidden-import ui.shape_backup_restore_dialog --name "corteac_linux" main.py
 
       - name: Empacotar Pacote Portátil TAR.GZ
         run: |
@@ -197,24 +197,22 @@ jobs:
 
             ---
 
-            ### 🛠️ Recursos Incluídos Nesta Versão (v1.6.42):
+            ### 🛠️ Recursos Incluídos Nesta Versão (v1.6.43):
+            - **Ferramenta de Backup e Restauração de Moldes Cadastrados no Menu Ferramentas**:
+              - Nova ferramenta completa acessível diretamente em **Ferramentas ➔ 📦 Backup e Restauração de Moldes...**.
+              - **Exportação Atômica**: Gera pacotes compactados padronizados (`.zip` / `.csh`) contendo `manifest.json`, `shapes.json` canônico (geometrias poligonais $X, Y$, furos, costuras, tamanhos e formato de molde `1x1`, `4x1`, `6x1`), catálogo de pastas (`folders.json`) e artigos (`articles.json`).
+              - **Interoperabilidade ATOM FlashCut**: Opção para incluir cópias individuais em formato `.die` dentro do pacote ZIP, permitindo abrir os moldes exportados tanto no CorteAC quanto em máquinas industriais antigas e softwares CAM externos.
+              - **Inspeção Prévia e Pré-visualização**: Validação de integridade do arquivo antes de restaurar, com exibição de versão de origem, data do backup, total de moldes, artigos e tabela detalhada de peças. Suporte a ZIPs legados de arquivos `.die`.
+              - **Resolução Inteligente de Conflitos**: Estratégias configuráveis pelo operador ao restaurar moldes já existentes: *Substituir existentes* (atualiza contornos mantendo histórico), *Ignorar existentes* (preserva base atual intacta) ou *Criar cópias renomeadas* (`molde_copia`).
+              - **Sincronização em Tempo Real**: Recarregamento automático instantâneo da árvore de navegação e grade inferior da tela principal ao término da restauração, sem necessidade de reiniciar a aplicação.
             - **Identificação da(s) Placa(s) dos Moldes/Números na Barra Lateral do Layout Editor**:
-              - Abaixo do mostrador de contagem (`{n}/{m}`), adicionada linha informativa exibindo diretamente em qual placa cada número ou molde está alocado na sessão (`Placa 1`, `Placa 2`, `Placa 1, 2` ou `Sem placa`).
-              - Destaque cromático dinâmico: azul escuro em negrito (`#000080`) quando o número está presente na placa aberta atualmente, azul celeste (`#0284c7`) quando alocado em outras placas da sessão, e cinza discreto (`#64748b`) quando não possui peças alocadas.
-              - Mensagem contextual detalhada na barra de status inferior ao clicar no molde: quando o número selecionado está alocado em outra placa (exibindo `0/101` na placa atual), o sistema avisa imediatamente: `Molde {nome}: nenhuma peça nesta placa (presente na Placa X)`.
-              - Facilidade imediata para o operador de corte identificar onde está cada numeração em encaixes distribuídos em múltiplas placas.
+              - Abaixo do mostrador de contagem (`{n}/{m}`), linha informativa exibindo diretamente em qual placa cada número ou molde está alocado na sessão (`Placa 1`, `Placa 2`, `Placa 1, 2` ou `Sem placa`) com código de cores e mensagem orientativa ao clicar.
             - **Deslocamento de Exportar G-Code da Toolbar para o Menu Ferramentas**:
-              - Remoção do botão `💾 Exportar G-Code` da barra de ferramentas superior da tela principal, deixando a barra mais limpa e organizada.
-              - Inclusão da opção `💾 Exportar G-Code (ATOM)...` no menu suspenso **Ferramentas**, mantendo acesso rápido e centralizado junto às ferramentas de corte e nesting.
-            - **Limpeza e Otimização do Menu Ferramentas**:
-              - Remoção das opções redundantes "Criar Produção...", "Criar Pasta de Moldes..." e "Criar Subpasta de Moldes..." do menu suspenso Ferramentas, tornando o menu mais ágil e intuitivo.
-            - **Ajuste no Título da Folha de Impressão (Remoção da extensão `.lay`)**:
-              - O título principal do cabeçalho da folha de impressão agora exibe `layXXXX (Placa X de Y)` em vez de `layXXXX.lay (Placa X de Y)`.
+              - Botão `💾 Exportar G-Code` movido para a aba Ferramentas, mantendo a barra de ferramentas superior compacta e organizada.
             - **Conversor de Arquivos de Corte (.lay ⇄ .onx) no Menu Ferramentas**:
-              - Conversão bidirecional entre os padrões industriais **ATOM FlashCut (`.lay`)** e **Comelz CNC (`.onx`)**.
-              - Suporte a seleção múltipla de arquivos e pastas completas para processamento em lote com interface modal dedicada.
+              - Conversão bidirecional entre os padrões industriais **ATOM FlashCut (`.lay`)** e **Comelz CNC (`.onx`)** com processamento em lote.
             - **Estabilidade e Testes**:
-              - Suíte de testes automatizados com cobertura completa para identificação de placas e regressão visual.
+              - Suíte expandida para **663 testes automatizados** passando com 100% de sucesso.
           files: |
             dist-release/**/*.exe
             dist-release/**/*.zip

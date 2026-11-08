@@ -486,13 +486,24 @@ def generate_die_content(shape_data: dict) -> str:
 
     # Furos e Punções
     if holes:
-        out.append(f"num_of_holes={len(holes)}")
-        out.append(f"num_of_hpoints={len(holes)}")
-        for h_pt in holes:
-            out.append(f"hpoint={h_pt['x']:.2f} {h_pt['y']:.2f} 0.000000")
+        flat_holes = []
+        for h_item in holes:
+            if isinstance(h_item, list):
+                for sub_pt in h_item:
+                    if isinstance(sub_pt, dict):
+                        flat_holes.append(sub_pt)
+            elif isinstance(h_item, dict):
+                flat_holes.append(h_item)
+
+        out.append(f"num_of_holes={len(flat_holes)}")
+        out.append(f"num_of_hpoints={len(flat_holes)}")
+        for h_pt in flat_holes:
+            x_val = h_pt.get("x", 0.0)
+            y_val = h_pt.get("y", 0.0)
+            out.append(f"hpoint={x_val:.2f} {y_val:.2f} 0.000000")
             r = h_pt.get("r", 2.5)
-            out.append(f"drill={h_pt['x']:.2f} {h_pt['y']:.2f} {r:.2f} 1 DRILL")
-        out.append(f"num_of_drills={len(holes)}")
+            out.append(f"drill={x_val:.2f} {y_val:.2f} {r:.2f} 1 DRILL")
+        out.append(f"num_of_drills={len(flat_holes)}")
     else:
         out.append("num_of_holes=0")
         out.append("num_of_drills=0")

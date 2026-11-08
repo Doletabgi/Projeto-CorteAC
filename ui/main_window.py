@@ -55,6 +55,7 @@ from ui.sort_utils import natural_sort_key, size_sort_key, clean_session_display
 from ui.tooltip import ToolTip
 from ui.batch_nest_dialog import BatchAutoNestDialog, BatchProgressDialog
 from ui.layout_converter_dialog import LayoutConverterDialog
+from ui.shape_backup_restore_dialog import ShapeBackupRestoreDialog
 
 def get_assets_dir():
     if getattr(sys, 'frozen', False):
@@ -337,6 +338,7 @@ class MainWindow(tk.Tk):
         tools_menu.add_command(label="💾 Exportar G-Code (ATOM)...", command=self.on_export_gcode)
         tools_menu.add_separator()
         tools_menu.add_command(label="🔄 Conversor de Arquivos (.lay ⇄ .onx)...", command=self.open_converter_dialog)
+        tools_menu.add_command(label="📦 Backup e Restauração de Moldes...", command=self.open_shape_backup_restore_dialog)
         tools_menu.add_command(label="🧹 Limpar Layouts de Teste...", command=self.on_clean_test_layouts)
         menubar.add_cascade(label="Ferramentas", menu=tools_menu)
 
@@ -1780,6 +1782,19 @@ class MainWindow(tk.Tk):
     def open_converter_dialog(self, initial_files=None):
         """Abre a janela modal do Conversor de Arquivos (.lay ⇄ .onx) (Ferramentas -> Conversor)."""
         LayoutConverterDialog(self, db=self.db, initial_files=initial_files)
+
+    def open_shape_backup_restore_dialog(self, initial_tab=0):
+        """Abre a janela modal de Backup e Restauração de Moldes Cadastrados (Ferramentas -> Backup)."""
+        ShapeBackupRestoreDialog(self, db=self.db, on_shapes_changed=self.on_shapes_restored, initial_tab=initial_tab)
+
+    def on_shapes_restored(self):
+        """Callback acionado após a restauração de moldes: recarrega o catálogo e sincroniza as views."""
+        self.reload_shapes()
+        if getattr(self, "current_mode", None) == "shapes":
+            self.refresh_tree()
+            self.populate_grid_lower()
+        if hasattr(self, "lbl_status_msg") and self.lbl_status_msg:
+            self.lbl_status_msg.config(text="Catálogo de moldes atualizado com sucesso a partir do backup.")
 
     def _on_user_updated(self):
         """Atualiza a indicação do usuário ativo na barra de status da janela principal."""
