@@ -1239,7 +1239,7 @@ class LayoutEditorView(tk.Frame):
             is_active = (i == self.active_target_index)
             if is_active:
                 self.canvas.create_rectangle(
-                    col_cx - 36, item_y + 1, col_cx + 36, item_y + 64,
+                    col_cx - 36, item_y + 1, col_cx + 36, item_y + 68,
                     outline="#3b82f6",
                     dash=(2, 2),
                     width=1.5,
@@ -1248,7 +1248,7 @@ class LayoutEditorView(tk.Frame):
 
             # Miniatura do contorno do molde (Thumbnail)
             thumb_cx = col_cx
-            thumb_cy = item_y + 18
+            thumb_cy = item_y + 16
 
             contour = target.get("contour") or CONTOUR_CON
             fill_col = get_color_for_size(target.get("size") or target.get("name"))
@@ -1260,7 +1260,7 @@ class LayoutEditorView(tk.Frame):
                 bw = max(0.1, max_x - min_x)
                 bh = max(0.1, max_y - min_y)
 
-                scale_thumb = min(18.0 / bw, 28.0 / bh)
+                scale_thumb = min(18.0 / bw, 24.0 / bh)
                 mid_x = (min_x + max_x) / 2.0
                 mid_y = (min_y + max_y) / 2.0
 
@@ -1278,26 +1278,54 @@ class LayoutEditorView(tk.Frame):
                     tags=("sidebar_element", f"sidebar_target_{i}", "sidebar_ui")
                 )
 
-            # Linha: Nome do Molde (ex: 323_PalAcb_36a)
+            # Linha 1: Nome do Molde (ex: 323_PalAcb_36a)
             name_raw = target.get("name", "Molde")
             name_disp = name_raw[:14] + ".." if len(name_raw) > 16 else name_raw
             self.canvas.create_text(
-                col_cx, item_y + 38,
+                col_cx, item_y + 35,
                 text=name_disp,
                 fill="#000000",
                 font=("Segoe UI", 7),
                 tags=("sidebar_element", f"sidebar_target_{i}", "sidebar_ui")
             )
 
-            # Mostrador simplificado: texto único {n}/{m}
+            # Linha 2: Mostrador simplificado: texto único {n}/{m}
             # n = quantidade de PEÇAS DESENHADAS do molde na PLACA ATUAL (layout aberto)
             # m = PARES PEDIDOS do molde
             stat_disp = f"{placed_cnt}/{req_cnt}"
             self.canvas.create_text(
-                col_cx, item_y + 52,
+                col_cx, item_y + 47,
                 text=stat_disp,
                 fill=stat_color,
                 font=("Segoe UI", 7),
+                tags=("sidebar_element", f"sidebar_target_{i}", "sidebar_ui")
+            )
+
+            # Linha 3: Identificação de em qual(is) placa(s) este número/molde está presente
+            plates = self.get_plates_for_target(target)
+            if plates:
+                if len(plates) == 1:
+                    plate_disp = f"Placa {plates[0]}"
+                elif len(plates) <= 3:
+                    plate_disp = f"Placa {', '.join(str(p) for p in plates)}"
+                else:
+                    plate_disp = f"Pl. {plates[0]}..{plates[-1]}"
+            else:
+                plate_disp = "Sem placa"
+
+            cur_plate_num = getattr(self, "current_layout_index", 0) + 1
+            if cur_plate_num in plates:
+                plate_color = "#000080"
+            elif plates:
+                plate_color = "#0284c7"
+            else:
+                plate_color = "#64748b"
+
+            self.canvas.create_text(
+                col_cx, item_y + 59,
+                text=plate_disp,
+                fill=plate_color,
+                font=("Segoe UI", 6, "bold"),
                 tags=("sidebar_element", f"sidebar_target_{i}", "sidebar_ui")
             )
 
@@ -1322,6 +1350,35 @@ class LayoutEditorView(tk.Frame):
             tag_name = f"sidebar_target_{i}"
             self.canvas.tag_bind(tag_name, "<Enter>", lambda e, t=tip_text: self._on_sidebar_target_enter(t))
             self.canvas.tag_bind(tag_name, "<Leave>", lambda e: self._on_sidebar_target_leave())
+
+    def get_plates_for_target(self, target) -> list:
+        """
+        Retorna a lista ordenada de números das placas (1-indexed) que contêm peças do molde/tamanho especificado.
+        Examina a placa atualmente em edição (placed_pieces) e as demais placas de layouts da sessão.
+        """
+        if not target:
+            return []
+        plates = []
+        layouts = getattr(self, "layouts", None)
+        cur_idx = getattr(self, "current_layout_index", 0)
+
+        if not layouts:
+            if self.count_pieces_for_target(self.placed_pieces, target) > 0:
+                plates.append(1)
+            return plates
+
+        for l_idx, ly in enumerate(layouts):
+            plate_num = l_idx + 1
+            if l_idx == cur_idx:
+                cnt = self.count_pieces_for_target(self.placed_pieces, target)
+            else:
+                ly_pieces = ly.get("pieces") or ly.get("placed_pieces") or []
+                cnt = self.count_pieces_for_target(ly_pieces, target)
+
+            if cnt > 0:
+                plates.append(plate_num)
+
+        return plates
 
     def count_pieces_for_target(self, pieces, target) -> int:
         """
@@ -1424,7 +1481,12 @@ class LayoutEditorView(tk.Frame):
                 texto = (f"{qtd} peça{'s' if qtd > 1 else ''} do molde {nome} "
                          f"selecionada{'s' if qtd > 1 else ''} nesta placa")
             else:
-                texto = f"Molde {nome}: nenhuma peça nesta placa"
+                plates = self.get_plates_for_target(target)
+                if plates:
+                    pl_str = ", ".join(f"Placa {p}" for p in plates)
+                    texto = f"Molde {nome}: nenhuma peça nesta placa (presente na {pl_str})"
+                else:
+                    texto = f"Molde {nome}: nenhuma peça alocada na sessão"
             if hasattr(self, "lbl_stat_pos") and self.lbl_stat_pos.winfo_exists():
                 self.lbl_stat_pos.config(text=texto, fg="#1e40af")
 

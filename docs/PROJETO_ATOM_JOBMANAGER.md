@@ -6,7 +6,7 @@
 > **Regra de ouro:** o que está marcado `[CONFIRMADO]` veio do relatório, do código ou do usuário. O que está `[NÃO CONFIRMADO]` é suposição e não deve virar "fato" sem validação. O que está `[PREENCHER]` a IA deve completar lendo o código real.
 
 <!-- AUTO:header:start -->
-**Última sincronização com o código:** 2026-11-07 20:52 (HEAD ao gerar: `79deff7`; 157 arquivos Python, ~75779 linhas)
+**Última sincronização com o código:** 2026-11-07 21:10 (HEAD ao gerar: `5193122`; 158 arquivos Python, ~75976 linhas)
 <!-- AUTO:header:end -->
 **Versão deste documento:** 2
 
@@ -207,6 +207,7 @@ tests/test_shape_format_multiplier.py                # tests/test_shape_format_m
 tests/test_shape_sorting.py                          # Testes Unitários: Classificação e Ordenação de Moldes e Tamanhos (Maior para Menor / Menor para Maior)
 tests/test_shapes_resto.py                           # Testes unitários e de integração para a coluna 'Resto' na grade de Moldes da SessionView.
 tests/test_sidebar_counter.py                        # Testes unitários e de integração para o contador de peças da barra lateral,
+tests/test_sidebar_plates_identification.py          # Testes automatizados para a identificação da(s) placa(s) em que cada molde/número está alocado
 tests/test_sobras_dobra.py                           # tests/test_sobras_dobra.py
 tests/test_strategy_removal.py                       # Testes automatizados para validação da remoção da estratégia flashnestroll (bobinas contínuas):
 tests/test_tools_menu_items.py                       # Testes Automatizados para validação dos itens do menu Ferramentas na MainWindow.
@@ -632,6 +633,9 @@ ui/user_dialog.py                                    # JobManager 2000 (Python E
 ### `tests/test_sidebar_counter.py`
 - `class TestSidebarCounterAndLayers` (linha 12, 20 métodos)
 
+### `tests/test_sidebar_plates_identification.py`
+- `class TestSidebarPlatesIdentification` (linha 12, 5 métodos)
+
 ### `tests/test_sobras_dobra.py`
 - `class TestSobrasDobra` (linha 53, 7 métodos)
 - `class TestRecompactacaoBase` (linha 131, 5 métodos): A retirada da peça ímpar não pode deixar buraco na placa de 4 camadas.
@@ -769,7 +773,7 @@ ui/user_dialog.py                                    # JobManager 2000 (Python E
 - `class LayoutConverterDialog` (linha 25, 18 métodos): Janela modal para conversão bidirecional de layouts (.lay <-> .onx).
 
 ### `ui/layout_editor_view.py`
-- `class LayoutEditorView` (linha 267, 162 métodos)
+- `class LayoutEditorView` (linha 267, 163 métodos)
 - funções: `_contour_area_mm2`, `_shade_color`, `_contour_key`, `rotate_piece_in_place`
 
 ### `ui/layout_print_dialog.py`
@@ -4159,6 +4163,34 @@ O usuário solicitou via print da interface (`media_1794095266829.png`): "retira
   - Atualizado [`tests/test_create_session_left_click.py`](file:///home/dola/Documentos/clone%20do%20job/jobmanager-win10-python/tests/test_create_session_left_click.py) ajustando a lista de botões da barra de ferramentas.
   - Atualizado [`tests/test_tools_menu_items.py`](file:///home/dola/Documentos/clone%20do%20job/jobmanager-win10-python/tests/test_tools_menu_items.py) com novos testes validando que `self.root.btn_tb_export_gcode` não está na toolbar e que `Exportar G-Code` está presente no menu Ferramentas.
 
+## 8.60. Identificação das Placas dos Moldes na Barra Lateral do Layout Editor (v1.6.42) `[CONFIRMADO]`
+
+### 1. Contexto e solicitação do usuário
+O operador de corte solicitou via print da interface (`media_1794095714124.png`): "nos shapes da placa da para identificar abaixo qual placa estao os numeros.". Em sessões com múltiplas chapas (ex: 2 placas geradas pelo nesting), determinados moldes ou tamanhos são alocados integralmente na Placa 1 (exibindo `51/101`), enquanto outros são colocados na Placa 2 ou divididos entre ambas. Quando o operador visualizava a Placa 1, os moldes alocados na Placa 2 exibiam `0/101`, gerando a necessidade de alternar constantemente de placa para descobrir onde cada numeração foi posicionada.
+
+### 2. Implementação técnica
+- **Motor de Detecção de Placas por Molde (`ui/layout_editor_view.py:get_plates_for_target`)**:
+  - Implementado o método `get_plates_for_target(self, target) -> list` que examina em tempo real a placa atualmente em edição (`placed_pieces`) e todas as demais placas da sessão (`self.layouts`), retornando a lista 1-indexada ordenada das placas que contêm peças daquele molde (ex: `[1]`, `[2]`, `[1, 2]`).
+- **Renderização na Grade da Barra Lateral (`ui/layout_editor_view.py:draw_sidebar`)**:
+  - Ajustadas as cotas verticais para manter o limite estrito de `item_h = 70`:
+    - Miniatura de contorno centralizada em `item_y + 16`.
+    - Linha 1 (Nome do molde, ex: `323_PalAcb_36a`): `item_y + 35`, fonte Segoe UI 7pt.
+    - Linha 2 (Contador de peças desenhadas na placa vs pares pedidos, ex: `51/101` ou `0/101`): `item_y + 47`, fonte Segoe UI 7pt.
+    - Linha 3 (Identificação de placas): `item_y + 59`, fonte Segoe UI 6pt Bold.
+  - Formatação inteligente:
+    - Molde presente em 1 placa: `Placa 1` ou `Placa 2`.
+    - Molde presente em 2 ou 3 placas: `Placa 1, 2`.
+    - Molde em mais de 3 placas: `Pl. 1..N`.
+    - Sem peças alocadas na sessão: `Sem placa`.
+  - Esquema de cores:
+    - Azul marinho (`#000080`): molde presente na placa aberta no momento.
+    - Azul celeste (`#0284c7`): molde presente em outra(s) placa(s) da sessão.
+    - Cinza suave (`#64748b`): molde sem peças alocadas.
+- **Feedback Interativo ao Clicar na Grade (`ui/layout_editor_view.py:on_sidebar_click`)**:
+  - Quando o operador clica em um molde que não possui peças na placa atual, a barra de status inferior informa com precisão: `Molde {nome}: nenhuma peça nesta placa (presente na Placa 2)`.
+- **Testes Automatizados**:
+  - Criado [`tests/test_sidebar_plates_identification.py`](file:///home/dola/Documentos/clone%20do%20job/jobmanager-win10-python/tests/test_sidebar_plates_identification.py) simulando o cenário exato do print com 2 placas, 5 tamanhos (`36a`, `32a`, `31a`, `30a`, `29a`), validação das strings renderizadas em cada troca de placa e validação da mensagem de clique na barra de status.
+
 ---
 
 ## 9. Pendências e arquivos faltantes
@@ -4214,6 +4246,7 @@ O usuário solicitou via print da interface (`media_1794095266829.png`): "retira
 - [x] Ajuste no Título da Folha de Impressão — Remoção da extensão .lay (v1.6.39) — Concluído (§8.57, `ui/layout_print_dialog.py`, `ui/user_dialog.py`, `tests/test_layout_print_user.py`)
 - [x] Limpeza do Menu Ferramentas — Remoção de Criação de Produção e Pastas de Moldes (v1.6.40) — Concluído (§8.58, `ui/main_window.py`, `tests/test_tools_menu_items.py`)
 - [x] Deslocamento de Exportar G-Code da Toolbar para o Menu Ferramentas (v1.6.41) — Concluído (§8.59, `ui/main_window.py`, `tests/test_tools_menu_items.py`, `tests/test_create_session_left_click.py`)
+- [x] Identificação das placas de cada molde/tamanho na barra lateral do Layout Editor (v1.6.42) — Concluído (§8.60, `ui/layout_editor_view.py`, `tests/test_sidebar_plates_identification.py`)
 
 ### 9.2 Arquivos de amostra que faltam (por prioridade)
 
@@ -4341,6 +4374,7 @@ Local: `/home/dola/Documentos/clone do job/antigo/arquivos pos instalacao/Common
 <!-- AUTO:gitlog:start -->
 | Commit | Data | Autor | Mensagem |
 |---|---|---|---|
+| `5193122` | 2026-11-07 | Doletabgi | feat(toolbar): retirar botao exportar g-code da toolbar e adicionar no menu ferramentas (v1.6.41) |
 | `79deff7` | 2026-11-07 | Doletabgi | feat(menu): remover opcoes de criar producao e pastas de moldes do menu ferramentas (v1.6.40) |
 | `b4d724d` | 2026-11-07 | Doletabgi | fix(print): remover extensao .lay do titulo principal na folha de impressao (v1.6.39) |
 | `f73e52f` | 2026-11-07 | Doletabgi | chore(release): limpeza das notas de release removendo recursos anteriores |
@@ -4355,7 +4389,6 @@ Local: `/home/dola/Documentos/clone do job/antigo/arquivos pos instalacao/Common
 | `b31f744` | 2026-11-03 | Doletabgi | fix(nesting): fecha buraco da placa 0 pos-separacao de sobras (v1.6.26) |
 | `a0797e9` | 2026-11-03 | Doletabgi | docs: atualiza o PROJETO_ATOM_JOBMANAGER para o estado da v1.6.25 |
 | `2d5cfe7` | 2026-11-03 | Doletabgi | fix(nesting): preenchimento de vaos mede a area real das pecas (v1.6.25) |
-| `b92200c` | 2026-11-03 | Doletabgi | fix(nesting): peca nunca e deitada — apenas 0/180 graus (v1.6.24) |
 <!-- AUTO:gitlog:end -->
 
 ---
@@ -4421,6 +4454,7 @@ Local: `/home/dola/Documentos/clone do job/antigo/arquivos pos instalacao/Common
 | Sáb, 07/11/2026 | 20:35 | Antigravity | Ajuste no Título da Folha de Impressão — Remoção da extensão .lay (v1.6.39): (1) Remoção da extensão `.lay` no título principal da folha de impressão através do novo helper `LayoutPrintDialog.get_display_layout_name()`, formatando como `lay0000 (Placa 1 de 2)`; (2) Sincronização idêntica tanto na pré-visualização em tela (Canvas Tkinter) quanto na impressão física e exportação para PDF/PNG (Pillow); (3) Atualização do card de pré-visualização em `ui/user_dialog.py`; (4) Preservação intacta de caminhos de rede e identificadores de arquivo originais; (5) Atualização dos testes unitários em `tests/test_layout_print_user.py` com 649 testes passando. | `ui/layout_print_dialog.py`, `ui/user_dialog.py`, `tests/test_layout_print_user.py`, `config.py`, `.github/workflows/release.yml`, `docs/PROJETO_ATOM_JOBMANAGER.md` |
 | Sáb, 07/11/2026 | 20:45 | Antigravity | Limpeza do Menu Ferramentas — Remoção de Criação de Produção e Pastas de Moldes (v1.6.40): (1) Removidos os comandos 'Criar Produção...', 'Criar Pasta de Moldes...' e 'Criar Subpasta de Moldes...' do menu suspenso Ferramentas (`ui/main_window.py`) atendendo à solicitação do usuário para despoluir e simplificar a interface; (2) Mantidas as opções no menu Arquivo e no menu de contexto de clique direito da árvore de produção (`tree_menu`); (3) Novo teste automatizado `tests/test_tools_menu_items.py` cobrindo a integridade dos itens do menu Ferramentas; 650 testes passando com 100% de sucesso. | `ui/main_window.py`, `tests/test_tools_menu_items.py`, `config.py`, `.github/workflows/release.yml`, `docs/PROJETO_ATOM_JOBMANAGER.md` |
 | Sáb, 07/11/2026 | 20:50 | Antigravity | Deslocamento de Exportar G-Code da Toolbar para o Menu Ferramentas (v1.6.41): (1) Removido o botão '💾 Exportar G-Code' da barra de ferramentas superior da MainWindow (`ui/main_window.py`), despoluindo a toolbar; (2) Adicionado o comando '💾 Exportar G-Code (ATOM)...' no menu suspenso Ferramentas junto às ferramentas de corte e nesting; (3) Atualizados os testes automatizados em `tests/test_create_session_left_click.py` e `tests/test_tools_menu_items.py`; 651 testes passando com 100% de sucesso. | `ui/main_window.py`, `tests/test_tools_menu_items.py`, `tests/test_create_session_left_click.py`, `config.py`, `.github/workflows/release.yml`, `docs/PROJETO_ATOM_JOBMANAGER.md` |
+| Sáb, 07/11/2026 | 21:05 | Antigravity | Identificação da(s) Placa(s) dos Moldes/Números na Barra Lateral do Layout Editor (v1.6.42): (1) Adicionado o método `get_plates_for_target` em `LayoutEditorView` para varredura multi-placa em tempo real (`placed_pieces` e `layouts`); (2) Renderização de linha 3 abaixo do contador de cada molde com texto indicativo da placa (`Placa 1`, `Placa 2`, `Placa 1, 2` ou `Sem placa`) em Segoe UI 6pt Bold e coloração dinâmica (#000080 na placa ativa, #0284c7 em outras placas, #64748b sem alocação); (3) Mensagem descritiva no status bar ao clicar em molde sem peças na placa atual informando em qual placa ele se encontra; (4) Novo teste automatizado em `tests/test_sidebar_plates_identification.py`; 652 testes passando com 100% de sucesso. | `ui/layout_editor_view.py`, `tests/test_sidebar_plates_identification.py`, `config.py`, `.github/workflows/release.yml`, `docs/PROJETO_ATOM_JOBMANAGER.md` |
 
 ## 11. Prompt para o Antigravity: instalar a sincronização automática `[CONCLUÍDA]`
 

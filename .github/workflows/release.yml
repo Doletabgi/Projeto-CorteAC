@@ -9,7 +9,7 @@ on:
       tag_name:
         description: 'Tag de versão SemVer (ex: v1.0.0)'
         required: false
-        default: 'v1.6.41'
+        default: 'v1.6.42'
 
 permissions:
   contents: write
@@ -197,34 +197,24 @@ jobs:
 
             ---
 
-            ### 🛠️ Recursos Incluídos Nesta Versão (v1.6.41):
+            ### 🛠️ Recursos Incluídos Nesta Versão (v1.6.42):
+            - **Identificação da(s) Placa(s) dos Moldes/Números na Barra Lateral do Layout Editor**:
+              - Abaixo do mostrador de contagem (`{n}/{m}`), adicionada linha informativa exibindo diretamente em qual placa cada número ou molde está alocado na sessão (`Placa 1`, `Placa 2`, `Placa 1, 2` ou `Sem placa`).
+              - Destaque cromático dinâmico: azul escuro em negrito (`#000080`) quando o número está presente na placa aberta atualmente, azul celeste (`#0284c7`) quando alocado em outras placas da sessão, e cinza discreto (`#64748b`) quando não possui peças alocadas.
+              - Mensagem contextual detalhada na barra de status inferior ao clicar no molde: quando o número selecionado está alocado em outra placa (exibindo `0/101` na placa atual), o sistema avisa imediatamente: `Molde {nome}: nenhuma peça nesta placa (presente na Placa X)`.
+              - Facilidade imediata para o operador de corte identificar onde está cada numeração em encaixes distribuídos em múltiplas placas.
             - **Deslocamento de Exportar G-Code da Toolbar para o Menu Ferramentas**:
-              - Remoção do botão `💾 Exportar G-Code` da barra de ferramentas superior da tela principal, deixando a barra mais organizada e compacta.
+              - Remoção do botão `💾 Exportar G-Code` da barra de ferramentas superior da tela principal, deixando a barra mais limpa e organizada.
               - Inclusão da opção `💾 Exportar G-Code (ATOM)...` no menu suspenso **Ferramentas**, mantendo acesso rápido e centralizado junto às ferramentas de corte e nesting.
             - **Limpeza e Otimização do Menu Ferramentas**:
               - Remoção das opções redundantes "Criar Produção...", "Criar Pasta de Moldes..." e "Criar Subpasta de Moldes..." do menu suspenso Ferramentas, tornando o menu mais ágil e intuitivo.
-              - As operações de criação e gestão de pastas continuam plenamente disponíveis no menu Arquivo e com botão direito diretamente na árvore de produção.
             - **Ajuste no Título da Folha de Impressão (Remoção da extensão `.lay`)**:
               - O título principal do cabeçalho da folha de impressão agora exibe `layXXXX (Placa X de Y)` em vez de `layXXXX.lay (Placa X de Y)`.
-              - A extensão `.lay` é limpa de forma consistente tanto no preview em tela (Canvas Tkinter) quanto na renderização de alta definição para impressão física e exportação em PDF/PNG (Pillow).
-              - Preservação intacta do caminho completo do layout na linha de metadados (`Layout: \\...\lay0000.lay`).
             - **Conversor de Arquivos de Corte (.lay ⇄ .onx) no Menu Ferramentas**:
               - Conversão bidirecional entre os padrões industriais **ATOM FlashCut (`.lay`)** e **Comelz CNC (`.onx`)**.
-              - Detecção automática de formato baseada na extensão e na assinatura binária (`CZLIB\x02` e `$$LAYOUT.v3$$`).
-              - Suporte a seleção múltipla de arquivos e pastas completas para processamento em lote.
-              - Interface gráfica modal dedicada acessível diretamente em **Ferramentas ➔ 🔄 Conversor de Arquivos (.lay ⇄ .onx)...**.
-              - Tabela com status em tempo real, escolha de pasta de destino, barra de progresso suave e relatório detalhado de execução.
-              - Preservação integral de peças, contornos, furos, coordenadas $(X, Y)$, rotações angulares, dimensões e gaps.
-              - Suporte a execução via linha de comando (CLI): `python -m cad.layout_converter <arquivo>`.
-            - **Formato do Molde (1x1, 4x1, 6x1) e Multiplicador no Shape Editor**:
-              - Configuração do formato do molde com cálculo automático do fator multiplicador (`× 1`, `× 2`, `× 3`).
-              - Persistência e auto-migração nos bancos de dados SQLite e MySQL 8.0.
-            - **Suporte a Múltiplos Moldes e Rotação Sincronizada no Shape Editor**:
-              - Abertura simultânea de moldes em abas, sobreposição e rotação sincronizada em torno do baricentro unificado.
-            - **Adição de Moldes de Pastas Externas no Layout Editor**:
-              - Botão (+) para adicionar moldes de qualquer pasta do catálogo ou direto do disco (`.die`).
+              - Suporte a seleção múltipla de arquivos e pastas completas para processamento em lote com interface modal dedicada.
             - **Estabilidade e Testes**:
-              - Suíte completa com **649 testes automatizados** passando com 100% de sucesso.
+              - Suíte de testes automatizados com cobertura completa para identificação de placas e regressão visual.
           files: |
             dist-release/**/*.exe
             dist-release/**/*.zip
