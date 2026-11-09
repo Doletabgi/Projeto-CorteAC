@@ -24,6 +24,7 @@ docs/*
 !docs/img/
 !docs/img/*
 tools/*
+!tools/comparar_nesting.py
 !tools/scrub_all_sessions_shapes.py
 !tools/export_session.py
 !tools/clean_database.py

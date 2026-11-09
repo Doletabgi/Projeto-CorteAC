@@ -66,6 +66,10 @@ def get_assets_dir():
     return base / "assets"
 
 class MainWindow(tk.Tk):
+    def open_production_dashboard(self):
+        from ui.production_dashboard import ProductionDashboard
+        ProductionDashboard(self, self.db)
+
     def __init__(self):
         super().__init__()
 
@@ -321,6 +325,7 @@ class MainWindow(tk.Tk):
 
         self.tools_menu = tk.Menu(menubar, tearoff=0, bg=THEME["bg_surface"], fg=THEME["text_main"], activebackground=THEME["select_bg"], activeforeground=THEME["select_fg"])
         tools_menu = self.tools_menu
+        tools_menu.add_command(label="📊 Painel de Produção...", command=self.open_production_dashboard)
         tools_menu.add_command(label="Atualizar", accelerator="F5", command=self.on_refresh_f5)
         tools_menu.add_command(label="Opções", command=self.show_options_dialog)
         tools_menu.add_command(label="👤 Cadastrar Usuário...", command=self.show_user_dialog)
