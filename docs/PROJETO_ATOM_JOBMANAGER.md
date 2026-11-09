@@ -6,7 +6,7 @@
 > **Regra de ouro:** o que está marcado `[CONFIRMADO]` veio do relatório, do código ou do usuário. O que está `[NÃO CONFIRMADO]` é suposição e não deve virar "fato" sem validação. O que está `[PREENCHER]` a IA deve completar lendo o código real.
 
 <!-- AUTO:header:start -->
-**Última sincronização com o código:** 2026-11-08 21:10 (HEAD ao gerar: `849ce20`; 169 arquivos Python, ~82663 linhas)
+**Última sincronização com o código:** 2026-11-08 22:06 (HEAD ao gerar: `c3c5e13`; 170 arquivos Python, ~82748 linhas)
 <!-- AUTO:header:end -->
 **Versão deste documento:** 2
 
@@ -188,6 +188,7 @@ tests/test_nesting_backend.py                        # tests/test_nesting_backen
 tests/test_nesting_compactness.py                    # tests/test_nesting_compactness.py
 tests/test_nesting_contour_gap.py
 tests/test_nesting_mode_architecture.py              # JobManager 2000 (Python Edition)
+tests/test_network_paths.py                          # Testes unitários para carregamento e persistência de caminhos de rede
 tests/test_nfp.py                                    # tests/test_nfp.py
 tests/test_preencher_buracos.py                      # tests/test_preencher_buracos.py
 tests/test_print_layout_abre.py                      # tests/test_print_layout_abre.py
@@ -290,7 +291,7 @@ ui/user_dialog.py                                    # JobManager 2000 (Python E
 
 <!-- AUTO:symbols:start -->
 ### `database.py`
-- `class DatabaseManager` (linha 44, 69 métodos)
+- `class DatabaseManager` (linha 46, 69 métodos)
 - funções: `get_current_operator`
 
 ### `main.py`
@@ -571,6 +572,9 @@ ui/user_dialog.py                                    # JobManager 2000 (Python E
 
 ### `tests/test_nesting_mode_architecture.py`
 - `class TestNestingModeArchitecture` (linha 31, 12 métodos)
+
+### `tests/test_network_paths.py`
+- `class TestNetworkPaths` (linha 15, 4 métodos)
 
 ### `tests/test_nfp.py`
 - `class TestNFP` (linha 38, 7 métodos)
@@ -1859,10 +1863,10 @@ A ordem de corte do `.lay` para a mesa **não pode** ser aleatória:
 | Delete | `ui/layout_editor_view.py:1110` | `self.bind_all("<Delete>", lambda e: self.delete_selected())` |
 | Delete | `ui/main_window.py:307` | `edit_menu.add_command(label="Excluir", accelerator="Del", command=self.on_global` |
 | Delete | `ui/main_window.py:701` | `self.bind_all("<Delete>", self.on_global_delete_key, add="+")` |
-| Delete | `ui/main_window.py:3712` | `accelerator="Del",` |
-| Delete | `ui/main_window.py:3731` | `accelerator="Del",` |
-| Delete | `ui/main_window.py:4008` | `accelerator="Del",` |
-| Delete | `ui/main_window.py:4027` | `accelerator="Del",` |
+| Delete | `ui/main_window.py:3714` | `accelerator="Del",` |
+| Delete | `ui/main_window.py:3733` | `accelerator="Del",` |
+| Delete | `ui/main_window.py:4010` | `accelerator="Del",` |
+| Delete | `ui/main_window.py:4029` | `accelerator="Del",` |
 | Delete | `ui/session_view.py:881` | `self.tree_shapes.bind("<Delete>", lambda e: self._on_tree_shapes_delete())` |
 | Delete | `ui/session_view.py:1040` | `w.bind("<Delete>", self.remove_session_material)` |
 | Delete | `ui/session_view.py:1041` | `w.bind("<Key-Delete>", self.remove_session_material)` |
@@ -1884,7 +1888,7 @@ A ordem de corte do `.lay` para a mesa **não pode** ser aleatória:
 | Escape | `ui/layout_print_dialog.py:1194` | `self.bind("<Escape>", self.on_escape)` |
 | Escape | `ui/main_window.py:89` | `self.bind("<Escape>", self.exit_fullscreen)` |
 | Escape | `ui/main_window.py:700` | `self.bind_all("<Escape>", self.dismiss_popup_menus, add="+")` |
-| Escape | `ui/main_window.py:4335` | `dialog.bind("<Escape>", lambda e: dialog.destroy())` |
+| Escape | `ui/main_window.py:4337` | `dialog.bind("<Escape>", lambda e: dialog.destroy())` |
 | Escape | `ui/material_codes_view.py:510` | `dlg.bind("<Escape>", lambda e: dlg.destroy())` |
 | Escape | `ui/options_dialog.py:40` | `self.bind("<Escape>", lambda e: self.on_cancel())` |
 | Escape | `ui/session_view.py:3323` | `entry.bind("<Escape>", cancel)` |
@@ -1936,7 +1940,7 @@ A ordem de corte do `.lay` para a mesa **não pode** ser aleatória:
 | Return | `ui/import_materials_dialog.py:84` | `self.ent_filepath.bind("<Return>", lambda e: self.load_file_from_path(self.ent_f` |
 | Return | `ui/main_window.py:570` | `self.tree_main.bind("<Return>", self.on_tree_key_return)` |
 | Return | `ui/main_window.py:617` | `self.grid_lower.bind("<Return>", self.on_grid_double_click)` |
-| Return | `ui/main_window.py:4334` | `dialog.bind("<Return>", lambda e: save())` |
+| Return | `ui/main_window.py:4336` | `dialog.bind("<Return>", lambda e: save())` |
 | Return | `ui/material_codes_view.py:212` | `self.tree.bind("<Return>", lambda e: self.open_edit_selected_dialog())` |
 | Return | `ui/material_codes_view.py:509` | `dlg.bind("<Return>", lambda e: save_action())` |
 | Return | `ui/session_view.py:599` | `self.entry_gap.bind("<Return>", self._on_gap_entry_change)` |
@@ -4576,6 +4580,8 @@ Local: `/home/dola/Documentos/clone do job/antigo/arquivos pos instalacao/Common
 | Seg, 02/11/2026 | 15:40 | Antigravity | Contadores de Peças Dinâmicos e Reativos na Barra Lateral do Layout Editor e Reset de Coordenadas de Status (v1.6.3): eliminação do comportamento estático dos contadores `{n}/{m}` da barra lateral, desacoplando `draw_sidebar` de `bg_changed` no `redraw()`; limpeza atômica de `sidebar_element` ao atualizar miniaturas e números; reset automático das coordenadas residuais na barra de status (`Id: - | X: - | Y: - | Rot: -`) quando a chapa é esvaziada; sincronização atômica de `self.layouts[cur_idx]["pieces"]` em todas as mutações (`delete_selected`, `clear_all_pieces`, `add_piece_for_target`, `duplicate_selected`, `undo_action`, `fill_*`); resolução de `target_id` ao importar `.lay`; 3 novos testes unitários adicionados em `tests/test_sidebar_counter.py` (16/16 passando) e 123 testes da suíte de layouts 100% aprovados; atualização do release workflow e recompilação dos executáveis standalone Linux. | `config.py`, `ui/layout_editor_view.py`, `tests/test_sidebar_counter.py`, `.github/workflows/release.yml`, `docs/PROJETO_ATOM_JOBMANAGER.md` |
 | Dom, 08/11/2026 | 18:50 | Antigravity | Implementação da funcionalidade "Alterar chapa" no Layout Editor após o encaixe (v1.6.48): (1) Novo diálogo `AlterSheetDialog` (`ui/alter_sheet_dialog.py`) baseado na engenharia reversa do Diálogo 154 ("Create a Sheet") do Layout.exe, simplificado com foco operacional estrito em Largura e Altura em metros (aceitando vírgula ou ponto, ex: "1,38", "2,99"), suporte a Enter/Esc e cálculo em tempo real do envelope mínimo seguro `Mínimo possível: L × A m (peças + margem de segurança)` usando contorno real rotacionado; (2) Invariância geométrica absoluta: as peças posicionadas NUNCA são movidas, rotacionadas ou reninhadas; origem (0,0) fixa no canto inferior esquerdo (X max e Y max alterados); peças nunca são deletadas mesmo se chapa for reduzida abaixo do mínimo (aviso com contagem e destaque em vermelho #dc2626 com espessura 3.0 no canvas); (3) Sem disparo automático de sobras, pontas ou refile; refile existente (`trim_cut_line`) recalculado se couber ou invalidado (`None`); ponta de 2 camadas (`tip_zone`) preservada na ampliação com alerta na redução; (4) Snapshot único no Undo (Ctrl+Z restaura medidas, refile e ponta); atalho Ctrl+M e menus `Arquivo -> Alterar chapa...` e `Encaixe -> Alterar chapa...`; (5) Persistência multi-chapa no SQLite e MySQL preservando dimensões individuais por chapa; exportação `.lay` e `.onx` e impressão A4 sincronizadas; eliminação da descrição estática `2553.38 X 1350.00` em favor da real `Sheet (comprimento X largura)`; (6) 11 testes automatizados em `tests/test_alter_sheet.py` e 703 testes aprovados na suíte completa (100% sucesso); recompilação standalone Linux (`corteac_linux`). | `ui/alter_sheet_dialog.py`, `ui/layout_editor_view.py`, `ui/main_window.py`, `ui/session_view.py`, `ui/units.py`, `cad/geometry.py`, `cad/trim_engine.py`, `cad/lay_parser.py`, `cad/onx_exporter.py`, `tests/test_alter_sheet.py`, `build_linux.sh`, `.github/workflows/release.yml`, `docs/PROJETO_ATOM_JOBMANAGER.md` |
 | Dom, 08/11/2026 | 21:00 | Antigravity | Correção de colisão falsa e traçado de margem sobre peças em chapas refiladas (Sessão 188): (1) Detecção de bordas refiladas em `LayoutEditorView.redraw()` via `trim_cut_line` (`has_cut_x`, `has_cut_y`), definindo o limite de corte como a borda útil sem subtrair 10 mm de margem sobre cortes já efetuados por guilhotina; (2) Eliminação de 21 falsos alertas de colisão e contornos vermelhos no `lay0000` e 13 no `lay0001` da Sessão 188; (3) Correção do retângulo tracejado `sheet_margins` para traçar linhas apenas nas bordas de fábrica (não cortadas por refile), impedindo que a margem tracejada corte ao meio as peças do topo e da lateral direita; (4) Atualização de `calc_pieces_minimum` e `count_pieces_outside` em `AlterSheetDialog` para suportar `has_cut_x` e `has_cut_y`, eliminando falsos alertas na confirmação do diálogo; (5) Novo teste automatizado dedicado `test_12_refile_layout_no_false_edge_collisions_session_188` em `tests/test_alter_sheet.py` (704/706 testes passando na suíte geral, 100% de sucesso); (6) Recompilação completa dos executáveis standalone Linux (`./corteac_linux`, `./teste_dola_linux`, `dist/CorteAC`, `dist/CorteAC-Linux-x64.tar.gz`). | `ui/layout_editor_view.py`, `ui/alter_sheet_dialog.py`, `tests/test_alter_sheet.py`, `build_linux.sh`, `docs/PROJETO_ATOM_JOBMANAGER.md`, `corteac_linux`, `teste_dola_linux` |
+| Dom, 08/11/2026 | 22:05 | Antigravity | Instalador oficial Windows via Inno Setup e suporte a pastas centralizadas na rede para Moldes e Sessões (v1.6.49): (1) Novo script Inno Setup `packaging/corteac_setup.iss` gerando instalador Windows com assistente interativo para configurar pastas de rede e IP do MySQL central, atalhos na Área de Trabalho e Menu Iniciar, e desinstalador registrado no Windows; (2) Leitura de caminhos de rede no `db.ini` e variáveis de ambiente em `db/config.py` e `config.py` (`shapes_dir` e `sessions_dir`); (3) Diálogos de importação de moldes (`MainWindow`, `ShapeCatalogView`, `LayoutEditorView`) e salvamento de sessões para máquina (`database.py:get_setting`) utilizam automaticamente as pastas centrais de rede da fábrica; (4) Integração completa no GitHub Actions (`.github/workflows/release.yml`) para compilar o Inno Setup no runner Windows e anexar `CorteAC-Setup.exe` diretamente na aba Releases; (5) Testes automatizados em `tests/test_network_paths.py` (706 testes aprovados, 100% sucesso). | `packaging/corteac_setup.iss`, `.github/workflows/release.yml`, `db/config.py`, `config.py`, `database.py`, `db.example.ini`, `ui/main_window.py`, `ui/shape_catalog_view.py`, `ui/layout_editor_view.py`, `tests/test_network_paths.py`, `docs/PROJETO_ATOM_JOBMANAGER.md` |
+
 
 
 **Commits recentes (automático):**
@@ -4583,6 +4589,7 @@ Local: `/home/dola/Documentos/clone do job/antigo/arquivos pos instalacao/Common
 <!-- AUTO:gitlog:start -->
 | Commit | Data | Autor | Mensagem |
 |---|---|---|---|
+| `c3c5e13` | 2026-11-08 | Doletabgi | feat(layout): alterar medidas da chapa apos encaixe e correcao de limites em refile (v1.6.48) |
 | `849ce20` | 2026-11-08 | Doletabgi | feat(backup): suporte a backup, restauracao e agendamento de sessoes de corte e layouts (v1.6.47) |
 | `f6e3a63` | 2026-11-08 | Doletabgi | feat(layout): visualização das placas da sessão em cascata e lado a lado (v1.6.46) |
 | `368e251` | 2026-11-08 | Doletabgi | feat(shape-editor): inicializacao em branco ao abrir por menu ou atalho (v1.6.45) |
@@ -4597,7 +4604,6 @@ Local: `/home/dola/Documentos/clone do job/antigo/arquivos pos instalacao/Common
 | `f5de209` | 2026-11-07 | Doletabgi | feat(release): formato do molde (1x1, 4x1, 6x1) e multiplicador no Shape Editor (v1.6.37) |
 | `a148721` | 2026-11-07 | Doletabgi | feat(release): multi-moldes, adicao de shapes externos e limpeza de menus (v1.6.36) |
 | `8e3bb5f` | 2026-11-06 | Doletabgi | feat(release): cadastro de usuario, reorganizacao da folha A4 e codigo de barras (v1.6.35) |
-| `d8156f8` | 2026-11-05 | Doletabgi | feat(release): impressao em massa e paginacao no print preview (v1.6.33) |
 <!-- AUTO:gitlog:end -->
 
 ---

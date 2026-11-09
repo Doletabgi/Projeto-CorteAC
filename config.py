@@ -34,10 +34,12 @@ EXPORTS_DIR.mkdir(exist_ok=True)
 BACKUPS_DIR = BASE_DIR / "backups" / "shapes"
 BACKUPS_DIR.mkdir(parents=True, exist_ok=True)
 
+from db.config import SHAPES_NETWORK_DIR, SESSIONS_NETWORK_DIR
+
 from cad.semver import SemVer
 
 APP_NAME = "CorteAC"
-APP_VERSION = "1.6.48"
+APP_VERSION = "1.6.49"
 
 # UI Classic Windows XP Theme Palette (Amostrado exatamente dos prints do usuário)
 THEME = {

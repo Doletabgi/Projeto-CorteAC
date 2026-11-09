@@ -52,3 +52,8 @@ MYSQL_CONNECT_TIMEOUT = _get_int("database", "connect_timeout", "MYSQL_CONNECT_T
 
 # Parâmetros SQLite Reserva
 SQLITE_PATH = _get_val("sqlite", "path", "SQLITE_PATH", str(APP_DIR / "jobmanager.db"))
+
+# Parâmetros de Pastas de Rede (Moldes e Sessões da Fábrica)
+SHAPES_NETWORK_DIR = _get_val("paths", "shapes_dir", "CORTEAC_SHAPES_DIR", "").strip()
+SESSIONS_NETWORK_DIR = _get_val("paths", "sessions_dir", "CORTEAC_SESSIONS_DIR", "").strip()
+

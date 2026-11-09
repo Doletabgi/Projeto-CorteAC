@@ -2141,9 +2141,13 @@ class LayoutEditorView(tk.Frame):
 
     def open_add_shape_file_dialog(self):
         """Abre seletor de arquivos do sistema operacional para escolher arquivos de moldes (.die / .d)."""
-        initial_dir = os.path.expanduser("~")
-        if os.path.exists("/home/dola/Documentos/clone do job"):
+        shapes_cfg = str(self.db.get_setting("shapes_dir", "") or "").strip() if getattr(self, "db", None) else ""
+        if shapes_cfg and os.path.exists(shapes_cfg):
+            initial_dir = shapes_cfg
+        elif os.path.exists("/home/dola/Documentos/clone do job"):
             initial_dir = "/home/dola/Documentos/clone do job"
+        else:
+            initial_dir = os.path.expanduser("~")
 
         files = filedialog.askopenfilenames(
             title="Escolher Shape(s) fora do Layout (.die / .d)",

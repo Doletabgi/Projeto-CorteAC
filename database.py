@@ -12,6 +12,8 @@ import socket
 from pathlib import Path
 from typing import Optional, List, Dict, Any
 from config import DATABASE_PATH, DEFAULT_MATERIALS
+import db.config as db_config
+from db.config import SHAPES_NETWORK_DIR, SESSIONS_NETWORK_DIR
 from cad.colors import get_color_for_size
 from db import (
     get_connection as db_get_connection,
@@ -1762,6 +1764,12 @@ class DatabaseManager:
             cursor = conn.cursor()
             cursor.execute("SELECT `value` FROM settings WHERE `key` = ?", (key,))
             row = cursor.fetchone()
+            if row and row["value"] is not None and str(row["value"]).strip() != "":
+                return row["value"]
+            if key == "machine_export_dir" and getattr(db_config, "SESSIONS_NETWORK_DIR", ""):
+                return db_config.SESSIONS_NETWORK_DIR
+            if key == "shapes_dir" and getattr(db_config, "SHAPES_NETWORK_DIR", ""):
+                return db_config.SHAPES_NETWORK_DIR
             return row["value"] if row else default
 
     def set_setting(self, key, value):

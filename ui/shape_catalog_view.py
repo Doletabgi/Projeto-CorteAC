@@ -897,8 +897,10 @@ class ShapeCatalogView(tk.Frame):
 
     def action_merge_file(self):
         """2. Mesclar arquivo: importa um arquivo .die ou .cmz e adiciona ao artigo."""
+        init_dir = str(self.db.get_setting("shapes_dir", "") or "").strip() or None if hasattr(self, "db") and self.db else None
         file_paths = filedialog.askopenfilenames(
             title="Mesclar Arquivo Shape (.die / .cmz)",
+            initialdir=init_dir,
             filetypes=[("Arquivos Shape ATOM (*.die, *.d)", ("*.die", "*.d")), ("Todos os Arquivos (*.*)", "*.*")],
             parent=self,
         )

@@ -2355,8 +2355,10 @@ class MainWindow(tk.Tk):
                     target_folder = chosen
 
         title_txt = f"Importar Shape(s) ATOM (.die) para pasta '{target_folder}'" if target_folder else "Importar Shape(s) ATOM (.die)"
+        shapes_init_dir = str(self.db.get_setting("shapes_dir", "") or "").strip() or None
         file_paths = filedialog.askopenfilenames(
             title=title_txt,
+            initialdir=shapes_init_dir,
             filetypes=[
                 ("Arquivos Shape ATOM (*.die, *.d)", ("*.die", "*.Die", "*.DIE", "*.d", "*.D")),
                 ("Moldes ATOM (.die)", ("*.die", "*.Die", "*.DIE")),

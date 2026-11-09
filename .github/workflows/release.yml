@@ -9,7 +9,7 @@ on:
       tag_name:
         description: 'Tag de versão SemVer (ex: v1.0.0)'
         required: false
-        default: 'v1.6.48'
+        default: 'v1.6.49'
 
 permissions:
   contents: write
@@ -61,6 +61,24 @@ jobs:
           python -c "import config; open('versao.txt','w').write(config.APP_VERSION)"
           Compress-Archive -Path "dist_package\CorteAC\*" -DestinationPath "dist\CorteAC-Windows-x64.zip"
 
+      - name: Instalar Inno Setup
+        run: |
+          choco install innosetup -y
+
+      - name: Compilar Instalador Oficial com Inno Setup
+        shell: pwsh
+        run: |
+          $appVersion = (Get-Content versao.txt).Trim()
+          Write-Host "Compilando CorteAC-Setup para a versao $appVersion..." -ForegroundColor Cyan
+          & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" "/DMyAppVersion=$appVersion" packaging\corteac_setup.iss
+          if (Test-Path "dist\CorteAC-Setup-$appVersion.exe") {
+            Copy-Item "dist\CorteAC-Setup-$appVersion.exe" "dist\CorteAC-Setup.exe" -Force
+            Write-Host "Instalador Inno Setup gerado com sucesso!" -ForegroundColor Green
+          } else {
+            Write-Error "Falha ao gerar o instalador Inno Setup"
+            exit 1
+          }
+
       - name: Upload Artefatos Windows
         uses: actions/upload-artifact@v4
         with:
@@ -68,7 +86,9 @@ jobs:
           path: |
             dist/CorteAC.exe
             dist/CorteAC-Windows-x64.zip
+            dist/CorteAC-Setup*.exe
           retention-days: 7
+
 
   build-linux:
     name: Compilar Binário Linux (Standalone)
@@ -177,12 +197,17 @@ jobs:
             ---
 
             ### 🪟 Para Usuários Windows (Windows 10 e Windows 11):
-            1. Baixe o pacote **`CorteAC-Windows-x64.zip`** (ou diretamente o **`CorteAC.exe`**) abaixo na seção **Assets**.
-            2. Extraia o `.zip` em qualquer pasta (ex: Área de Trabalho ou `C:\CorteAC`).
-            3. Dê dois cliques no **`CorteAC.exe`**.
-            4. O banco SQLite local (`jobmanager.db`) é inicializado automaticamente na pasta ao iniciar.
+            1. **Instalador Oficial com Suporte a Rede (Recomendado)**:
+               - Baixe o instalador **`CorteAC-Setup.exe`** (ou `CorteAC-Setup-v*.exe`) abaixo na seção **Assets**.
+               - Dê dois cliques e siga o assistente (permite configurar as pastas de Moldes e Sessões na rede da fábrica).
+               - O instalador cria atalhos na Área de Trabalho e registra no Adicionar/Remover Programas.
+            2. **Versão Portátil (.zip ou .exe direto)**:
+               - Baixe o pacote **`CorteAC-Windows-x64.zip`** (ou diretamente o **`CorteAC.exe`**).
+               - Extraia e dê dois cliques no **`CorteAC.exe`**.
+               - O banco SQLite local (`jobmanager.db`) é inicializado automaticamente na pasta ao iniciar.
 
             *Nota SmartScreen: Se o Windows exibir a tela de proteção, clique em "Mais informações" e depois em "Executar assim mesmo".*
+
 
             ---
 
@@ -197,7 +222,17 @@ jobs:
 
             ---
 
-            ### 🛠️ Recursos Incluídos Nesta Versão (v1.6.48):
+            ### 🛠️ Recursos Incluídos Nesta Versão (v1.6.49):
+            - **Instalador Oficial Windows Inno Setup (`CorteAC-Setup.exe`)**:
+              - Assistente interativo clássico com suporte à instalação limpa em `C:\CorteAC` (sem problemas de permissão UAC).
+              - Tela de configuração de rede integrada: permite definir pastas de Moldes na rede, pasta de Sessões na rede e IP do servidor MySQL central.
+              - Gera e atualiza automaticamente o arquivo `db.ini` na instalação.
+              - Criação de atalhos na Área de Trabalho e Menu Iniciar, com desinstalador oficial no Painel de Controle do Windows.
+            - **Suporte a Pastas Compartilhadas de Rede para Moldes e Sessões**:
+              - Suporte nativo a caminhos UNC (`\\servidor\compartilhamento`) e unidades de rede mapeadas (`Z:\...`).
+              - Diálogos de importação de moldes (`.die`, `.sho`, `.cmz`) abrem automaticamente na pasta de rede configurada.
+              - Exportação de sessões para máquina (`Salvar Sessão para Máquina...`) utiliza a pasta de sessões na rede como destino padrão.
+              - Fallback transparente caso não haja rede configurada (usa pastas locais padrão sem erros).
             - **Alterar Medidas da Chapa no Layout Editor após o Encaixe (v1.6.48)**:
               - Novo diálogo **Alterar chapa** (atalho `Ctrl+M` e menus *Arquivo -> Alterar chapa...* e *Encaixe -> Alterar chapa...*).
               - Edição direta de **Largura** e **Altura** em metros (aceitando vírgula ou ponto, ex.: "1,38", "2,82").
