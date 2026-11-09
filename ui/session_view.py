@@ -5,6 +5,7 @@ Telas frmSessionGeneral, frmSessionShapes, frmSessionMats, frmSessionLays, frmSe
 """
 
 import math
+import copy
 import json
 from typing import Dict, Any, Optional, List
 import tkinter as tk
@@ -103,21 +104,22 @@ class SobrasConfigDialog(tk.Toplevel):
     Diálogo para configuração do modo de Ponta de 2 Camadas (Enfesto em Degrau)
     e folga extra da ponta.
     """
-    def __init__(self, parent, current_tip_mode="canto", current_folga=15.0, on_save_cb=None):
+    def __init__(self, parent, current_tip_mode="canto", current_folga=15.0, on_save_cb=None, current_destino="ponta"):
         super().__init__(parent)
-        self.title("Configurar Ponta de 2 Camadas (Sobras)")
+        self.title("Configurar Sobras de 2 Camadas")
         self.configure(bg=THEME["bg_card"])
         self.resizable(False, False)
         self.transient(parent)
         self.grab_set()
 
         self.on_save_cb = on_save_cb
+        self.destino_var = tk.StringVar(value=current_destino if current_destino in ("ponta", "placa") else "ponta")
         self.tip_mode_var = tk.StringVar(value=current_tip_mode if current_tip_mode in ("canto", "faixa") else "canto")
-        val_folga = float(current_folga) if current_folga not in (None, 0.0, "0", "0.0") else 15.0
+        val_folga = float(current_folga) if current_folga is not None else 15.0
         self.folga_var = tk.DoubleVar(value=val_folga)
 
         self._build_ui()
-        self.geometry("520x360")
+        self.geometry("600x470")
         self.center_window()
 
     def center_window(self):
@@ -139,7 +141,7 @@ class SobrasConfigDialog(tk.Toplevel):
 
         tk.Label(
             pad,
-            text="Configuração de Enfesto em Degrau (Ponta de 2 Camadas)",
+            text="Destino das sobras de 2 camadas",
             font=("Segoe UI", 11, "bold"),
             bg=THEME["bg_card"],
             fg=THEME["text_main"],
@@ -148,15 +150,20 @@ class SobrasConfigDialog(tk.Toplevel):
 
         tk.Label(
             pad,
-            text="Quando ativo em sessões de 4 camadas, as sobras dos moldes ímpares\n"
-                 "são agrupadas no topo (maior Y / final do enfesto) da última chapa com 2 camadas.\n"
-                 "O operador estende 2 folhas longas na base e 2 curtas no topo (enfesto em degrau).",
+            text="Escolha como organizar as sobras de uma sessão com 4 camadas.",
             font=("Segoe UI", 9),
             bg=THEME["bg_card"],
             fg=THEME["text_muted"],
             justify="left",
             anchor="w"
         ).pack(fill="x", pady=(0, 12))
+
+        for label, value in (("Ponta na última placa (enfesto em degrau)", "ponta"),
+                             ("Nova placa separada com 2 camadas", "placa")):
+            tk.Radiobutton(pad, text=label, variable=self.destino_var, value=value,
+                           command=self._update_destino_controls, bg=THEME["bg_card"],
+                           fg=THEME["text_main"], selectcolor=THEME["bg_card"],
+                           font=("Segoe UI", 9)).pack(anchor="w")
 
         lbl_mode = tk.Label(
             pad,
@@ -196,6 +203,7 @@ class SobrasConfigDialog(tk.Toplevel):
             font=("Segoe UI", 9)
         )
         rb_faixa.pack(anchor="w", pady=2)
+        self._tip_buttons = (rb_canto, rb_faixa)
 
         frame_folga = tk.Frame(pad, bg=THEME["bg_card"])
         frame_folga.pack(fill="x", pady=(4, 16))
@@ -233,6 +241,14 @@ class SobrasConfigDialog(tk.Toplevel):
             font=("Segoe UI", 9, "bold")
         )
         btn_save.pack(side="right")
+        self._update_destino_controls()
+
+    def _update_destino_controls(self):
+        state = "normal" if self.destino_var.get() == "ponta" else "disabled"
+        for button in getattr(self, "_tip_buttons", ()):
+            button.configure(state=state)
+        if hasattr(self, "entry_folga"):
+            self.entry_folga.configure(state=state)
 
     def _on_save(self):
         try:
@@ -243,7 +259,11 @@ class SobrasConfigDialog(tk.Toplevel):
             folga = 0.0
         mode = self.tip_mode_var.get()
         if self.on_save_cb:
-            self.on_save_cb(mode, folga)
+            try:
+                self.on_save_cb(mode, folga, self.destino_var.get())
+            except Exception as exc:
+                messagebox.showerror("Configurar sobras", f"Não foi possível salvar a configuração: {exc}", parent=self)
+                return
         self.destroy()
 
 
@@ -2035,26 +2055,37 @@ class SessionView(tk.Frame):
         cur_preset, opts = parse_session_params(self.session_data.get("params"))
         cur_mode = opts.get("tip_mode", "canto")
         try:
-            cur_folga = float(opts.get("folga_ponta", 0.0))
+            cur_folga = float(opts.get("folga_ponta", 15.0))
         except (ValueError, TypeError):
-            cur_folga = 0.0
+            cur_folga = 15.0
 
-        def _on_saved(new_mode, new_folga):
+        def _on_saved(new_mode, new_folga, new_destino):
             cur_p, cur_opts = parse_session_params(self.session_data.get("params"))
             cur_opts["tip_mode"] = new_mode
             cur_opts["folga_ponta"] = str(new_folga)
+            cur_opts["destino_sobras"] = new_destino
             encoded = encode_session_params(cur_p, cur_opts)
-            self.session_data["params"] = encoded
             if self.db and self.session_data.get("id"):
-                try:
-                    self.db.update_session(self.session_data["id"], params=encoded)
-                except Exception:
-                    pass
+                self.db.update_session(self.session_data["id"], params=encoded)
+            self.session_data["params"] = encoded
             self._on_decision_changed("Configurar Ponta")
             if self.var_separar_sobras.get():
-                self.reapply_sobras_separation(True)
+                current_session = self.session_data
+                if hasattr(self, "_show_toast"):
+                    self._show_toast("Configuração salva. Atualizando placas...")
+                def apply_saved_config():
+                    if self.session_data is not current_session:
+                        return
+                    try:
+                        applied = self.reapply_sobras_separation(True)
+                        if applied and hasattr(self, "_show_toast"):
+                            self._show_toast("Configuração de sobras aplicada.")
+                    except Exception as exc:
+                        messagebox.showerror("Separação de sobras", f"A configuração foi salva, mas não foi possível atualizar as placas: {exc}", parent=self)
+                self.after(50, apply_saved_config)
 
-        SobrasConfigDialog(self, current_tip_mode=cur_mode, current_folga=cur_folga, on_save_cb=_on_saved)
+        SobrasConfigDialog(self, current_tip_mode=cur_mode, current_folga=cur_folga,
+                           on_save_cb=_on_saved, current_destino=opts.get("destino_sobras", "ponta"))
 
     def reapply_sobras_separation(self, separate: bool):
         """Reaplica ou desfaz a separação de sobras dinamicamente nos layouts existentes."""
@@ -2076,7 +2107,8 @@ class SessionView(tk.Frame):
 
         if separate:
             new_lays, msg = separar_sobras_em_ponta(
-                layouts=layouts,
+                layouts=copy.deepcopy(layouts),
+                session=self.session_data,
                 shapes=shapes,
                 sheet_w=sheet_w,
                 sheet_h=sheet_h,
@@ -2085,23 +2117,25 @@ class SessionView(tk.Frame):
                 tip_mode=tip_mode,
                 opts=opts
             )
-            self.session_data["layouts"] = new_lays
             log_sobras(f"Reaplicado separar_sobras_em_ponta na SessionView: {msg}")
+            if msg and "Não foi possível converter" in msg:
+                messagebox.showwarning("Separação de sobras", msg, parent=self)
+                return
         else:
-            new_lays, msg = desfazer_separacao_sobras(layouts)
-            self.session_data["layouts"] = new_lays
+            new_lays, msg = desfazer_separacao_sobras(copy.deepcopy(layouts))
             log_sobras(f"Reaplicado desfazer_separacao_sobras na SessionView: {msg}")
 
         # Salva no banco de dados se session_id estiver disponível
         sess_id = self.session_data.get("id")
-        if self.db and sess_id:
-            try:
-                self.db.save_session_layouts(sess_id, new_lays)
-            except Exception as e:
-                print(f"Erro ao salvar layouts da sessão após recalcular sobras: {e}")
+        if self.db and sess_id and new_lays != layouts:
+            if not self.db.save_session_layouts(sess_id, new_lays):
+                raise RuntimeError("O banco não confirmou o salvamento dos layouts.")
+
+        self.session_data["layouts"] = new_lays
 
         # Atualiza a tabela de layouts
-        self.set_session_data(self.session_data)
+        self.refresh_layout_tab(self.session_data)
+        self.refresh_shapes_resto_column()
 
         # Atualiza o LayoutEditorView e MainWindow se estiverem abertos/embutidos
         top = self.winfo_toplevel()
@@ -2135,6 +2169,7 @@ class SessionView(tk.Frame):
 
         if hasattr(self, "draw_mini_layout_preview"):
             self.draw_mini_layout_preview()
+        return True
 
     def on_separar_sobras_toggled(self):
         val = self.var_separar_sobras.get()
@@ -2671,7 +2706,7 @@ class SessionView(tk.Frame):
 
     def get_params(self):
         preset = self.cb_params.get() if hasattr(self, "cb_params") else "stdNOTFill"
-        opts = {}
+        _, opts = parse_session_params(self.session_data.get("params"))
         if hasattr(self, "var_separar_sobras"):
             opts["separar_sobras"] = "1" if self.var_separar_sobras.get() else "0"
         if hasattr(self, "var_refile_auto"):

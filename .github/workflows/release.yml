@@ -9,7 +9,7 @@ on:
       tag_name:
         description: 'Tag de versão SemVer (ex: v1.0.0)'
         required: false
-        default: 'v1.7.0'
+        default: 'v1.8.0'
 
 permissions:
   contents: write
@@ -222,11 +222,12 @@ jobs:
 
             ---
 
-            ### 🛠️ Recursos Incluídos Nesta Versão (v1.7.0):
-            - **Painel de Produção** no menu Ferramentas: indicadores de planejamento com filtros por data de criação da sessão e material, comparação por material e evolução por dia.
-            - Aproveitamento ponderado pela área dos layouts persistidos; área não ocupada apresentada como estimativa por camada. Produção efetiva, tempo real e filtro por operador dependem de registros de rastreabilidade.
-            - Ferramenta de diagnóstico de nesting no código-fonte: compara estratégias, demanda e geometria, identifica delegações ao motor clássico e simula refile e preenchimento. Não aplica resultados automaticamente.
-            - Testes executados em cópia isolada; integração com MySQL real e validação operacional de fábrica permanecem pendentes.
+            ### 🛠️ Recursos Incluídos Nesta Versão (v1.8.0):
+            - **Destino das sobras de 2 camadas:** escolha entre ponta na última placa (enfesto em degrau) e uma ou mais placas separadas de 2 camadas.
+            - A escolha é salva na sessão e considerada no recálculo, no processamento em lote e antes da exportação.
+            - Corrigido o fechamento da janela após salvar e a atualização visual dos layouts; falhas de gravação são informadas ao operador.
+            - Os cálculos de quantidade e as verificações de integridade física existentes são preservados. Recomenda-se validar o fluxo com dados reais antes do corte.
+            - A suíte local foi executada em cópia isolada; as compilações Windows e Linux são geradas pelo GitHub Actions.
           files: |
             dist-release/**/*.exe
             dist-release/**/*.zip

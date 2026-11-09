@@ -772,6 +772,42 @@ def separar_sobras_em_ponta(
         logger.info("[SOBRAS] Nenhum layout na sessão para separar sobras.")
         return layouts, "[SOBRAS] Nenhum layout na sessão para separar sobras."
 
+    # A opção da sessão também vale na geração em lote e na pré-exportação.
+    # O parâmetro explícito pode conter só o preset do lote; preserve as demais
+    # opções da sessão e permita que opções explícitas tenham precedência.
+    _, chosen_opts = parse_session_params(session.get("params") if isinstance(session, dict) else None)
+    _, supplied_opts = parse_session_params(params)
+    chosen_opts.update(supplied_opts)
+    if opts:
+        chosen_opts.update(opts)
+    if _k is None and chosen_opts.get("destino_sobras") == "placa":
+        if not is_separar_sobras_enabled(
+            encode_session_params("", chosen_opts),
+            default_camadas=resolve_session_layers(session, material=material, default=4),
+        ):
+            return layouts, "[SOBRAS] Separação desativada ou sessão diferente de 4 camadas."
+        sess = dict(session or {})
+        if material is not None:
+            sess["material"] = material
+        if sheet_w is not None or sheet_h is not None:
+            mat = dict(sess.get("material") or {})
+            if sheet_w is not None:
+                mat["width_mm"] = sheet_w
+            if sheet_h is not None:
+                mat["height_mm"] = sheet_h
+            sess["material"] = mat
+        preset, _ = parse_session_params(params if params is not None else sess.get("params"))
+        combined = encode_session_params(preset, chosen_opts)
+        sess["params"] = combined
+        original = copy.deepcopy(layouts)
+        base = layouts
+        if any(ly.get("tip_zone") or ly.get("layers_tip") for ly in layouts):
+            base, _ = desfazer_separacao_sobras(layouts, session=sess, shapes=shapes)
+        result, message = separar_sobras_camadas(base, session=sess, shapes=shapes, params=combined)
+        if base is not layouts and not message:
+            return original, "[SOBRAS] Não foi possível converter a ponta em placa separada; layout original preservado."
+        return result, message
+
     # Sem `_k` explícito: escolhe automaticamente a divisão que fecha a placa melhor
     if _k is None:
         return _escolher_divisao_otima(

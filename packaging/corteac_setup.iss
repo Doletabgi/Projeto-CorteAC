@@ -5,7 +5,7 @@
 
 #define MyAppName "CorteAC"
 #ifndef MyAppVersion
-  #define MyAppVersion "1.7.0"
+  #define MyAppVersion "1.8.0"
 #endif
 #define MyAppPublisher "ATOM / CorteAC Industrial"
 #define MyAppURL "https://github.com/Doletabgi/Projeto-CorteAC"
