@@ -72,7 +72,6 @@ jobs:
           Write-Host "Compilando CorteAC-Setup para a versao $appVersion..." -ForegroundColor Cyan
           & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" "/DMyAppVersion=$appVersion" packaging\corteac_setup.iss
           if (Test-Path "dist\CorteAC-Setup-$appVersion.exe") {
-            Copy-Item "dist\CorteAC-Setup-$appVersion.exe" "dist\CorteAC-Setup.exe" -Force
             Write-Host "Instalador Inno Setup gerado com sucesso!" -ForegroundColor Green
           } else {
             Write-Error "Falha ao gerar o instalador Inno Setup"
@@ -86,7 +85,7 @@ jobs:
           path: |
             dist/CorteAC.exe
             dist/CorteAC-Windows-x64.zip
-            dist/CorteAC-Setup*.exe
+            dist/CorteAC-Setup-*.exe
           retention-days: 7
 
 
@@ -180,6 +179,30 @@ jobs:
             echo "tag=v${VERSION}" >> $GITHUB_OUTPUT
           fi
 
+      - name: Remover cópia antiga do instalador sem versão
+        uses: actions/github-script@v7
+        env:
+          RELEASE_TAG: ${{ steps.release_tag.outputs.tag }}
+        with:
+          script: |
+            const { owner, repo } = context.repo;
+            let release;
+            try {
+              ({ data: release } = await github.rest.repos.getReleaseByTag({
+                owner, repo, tag: process.env.RELEASE_TAG
+              }));
+            } catch (error) {
+              if (error.status === 404) return;
+              throw error;
+            }
+            const assets = await github.paginate(github.rest.repos.listReleaseAssets, {
+              owner, repo, release_id: release.id
+            });
+            for (const asset of assets.filter(a => a.name === 'CorteAC-Setup.exe')) {
+              await github.rest.repos.deleteReleaseAsset({ owner, repo, asset_id: asset.id });
+              core.info(`Removido instalador sem versão: ${asset.name}`);
+            }
+
       - name: Publicar ou Atualizar Release no GitHub
         uses: softprops/action-gh-release@v2
         with:
@@ -198,7 +221,7 @@ jobs:
 
             ### 🪟 Para Usuários Windows (Windows 10 e Windows 11):
             1. **Instalador Oficial com Suporte a Rede (Recomendado)**:
-               - Baixe o instalador **`CorteAC-Setup.exe`** (ou `CorteAC-Setup-v*.exe`) abaixo na seção **Assets**.
+               - Baixe o instalador **`CorteAC-Setup-<versão>.exe`** (ex.: `CorteAC-Setup-1.8.4.exe`) abaixo na seção **Assets**.
                - Dê dois cliques e siga o assistente (permite configurar as pastas de Moldes e Sessões na rede da fábrica).
                - O instalador cria atalhos na Área de Trabalho e registra no Adicionar/Remover Programas.
             2. **Versão Portátil (.zip ou .exe direto)**:
@@ -230,7 +253,8 @@ jobs:
             - Atualizações locais preservam sessões e layouts; a limpeza fica disponível por ação manual.
             - Testes incluem conservação física, colisões, economia, rollback, refile, gravação/recarga e regressão na ordem da geração.
           files: |
-            dist-release/**/*.exe
+            dist-release/**/CorteAC.exe
+            dist-release/**/CorteAC-Setup-*.exe
             dist-release/**/*.zip
             dist-release/**/*.tar.gz
             dist-release/**/corteac_linux

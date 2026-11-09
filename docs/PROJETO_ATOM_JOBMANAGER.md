@@ -6,7 +6,7 @@
 > **Regra de ouro:** o que está marcado `[CONFIRMADO]` veio do relatório, do código ou do usuário. O que está `[NÃO CONFIRMADO]` é suposição e não deve virar "fato" sem validação. O que está `[PREENCHER]` a IA deve completar lendo o código real.
 
 <!-- AUTO:header:start -->
-**Última sincronização com o código:** 2026-11-09 13:50 (HEAD ao gerar: `6168ca7`; 177 arquivos Python, ~84217 linhas)
+**Última sincronização com o código:** 2026-11-09 13:58 (HEAD ao gerar: `e1ae4bc`; 177 arquivos Python, ~84217 linhas)
 <!-- AUTO:header:end -->
 **Versão deste documento:** 2
 
@@ -25,6 +25,10 @@
 
 ---
 
+
+### Publicação do instalador — somente nome com versão (09/11/2026)
+
+Por solicitação do operador, o instalador Windows é publicado somente como `CorteAC-Setup-<versão>.exe`. O arquivo `CorteAC-Setup.exe` era uma cópia idêntica criada pelo workflow e foi removido do processo de geração e dos padrões de upload. Ao atualizar uma release existente, o workflow remove apenas o asset legado com esse nome exato e preserva o instalador versionado e os demais pacotes. As instruções de download foram corrigidas. A alteração é de empacotamento e mantém a versão 1.8.4 do aplicativo.
 
 ### Versão 1.8.4 — economia também na placa separada (09/11/2026)
 
@@ -4686,6 +4690,7 @@ Local: `/home/dola/Documentos/clone do job/antigo/arquivos pos instalacao/Common
 <!-- AUTO:gitlog:start -->
 | Commit | Data | Autor | Mensagem |
 |---|---|---|---|
+| `e1ae4bc` | 2026-11-09 | Doletabgi | feat: otimiza sobras em ponta e placa separada v1.8.4 |
 | `6168ca7` | 2026-11-09 | Doletabgi | feat: destino das sobras e correção do salvamento v1.8.0 |
 | `980d73c` | 2026-11-09 | Doletabgi | feat: painel de produção e diagnóstico de nesting v1.7.0 |
 | `368490c` | 2026-11-08 | Doletabgi | feat(packaging): instalador inno setup com suporte a pastas na rede e release automatica (v1.6.49) |
@@ -4700,7 +4705,6 @@ Local: `/home/dola/Documentos/clone do job/antigo/arquivos pos instalacao/Common
 | `79deff7` | 2026-11-07 | Doletabgi | feat(menu): remover opcoes de criar producao e pastas de moldes do menu ferramentas (v1.6.40) |
 | `b4d724d` | 2026-11-07 | Doletabgi | fix(print): remover extensao .lay do titulo principal na folha de impressao (v1.6.39) |
 | `f73e52f` | 2026-11-07 | Doletabgi | chore(release): limpeza das notas de release removendo recursos anteriores |
-| `7f5f845` | 2026-11-07 | Doletabgi | feat(release): conversor de arquivos de corte lay para onx e onx para lay no menu ferramentas (v1.6.38) |
 <!-- AUTO:gitlog:end -->
 
 ---
