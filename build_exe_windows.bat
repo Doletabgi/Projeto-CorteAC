@@ -13,8 +13,7 @@ if errorlevel 1 (
 )
 
 echo.
-echo Higienizando banco de dados para distribuicao limpa (sem layouts de teste)...
-python tools\clean_database.py
+echo Preservando banco de dados e layouts existentes durante a compilacao.
 
 echo.
 echo Gerando executavel standalone (CorteAC.exe)...

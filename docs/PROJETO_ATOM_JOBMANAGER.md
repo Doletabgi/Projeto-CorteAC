@@ -6,7 +6,7 @@
 > **Regra de ouro:** o que está marcado `[CONFIRMADO]` veio do relatório, do código ou do usuário. O que está `[NÃO CONFIRMADO]` é suposição e não deve virar "fato" sem validação. O que está `[PREENCHER]` a IA deve completar lendo o código real.
 
 <!-- AUTO:header:start -->
-**Última sincronização com o código:** 2026-11-09 12:03 (HEAD ao gerar: `980d73c`; 177 arquivos Python, ~83655 linhas)
+**Última sincronização com o código:** 2026-11-09 13:50 (HEAD ao gerar: `6168ca7`; 177 arquivos Python, ~84217 linhas)
 <!-- AUTO:header:end -->
 **Versão deste documento:** 2
 
@@ -25,6 +25,42 @@
 
 ---
 
+
+### Versão 1.8.4 — economia também na placa separada (09/11/2026)
+
+A lógica confirmada de transferência 4 → 2 camadas agora vale tanto para ponta quanto para placas separadas. A finalização compartilhada `otimizar_sobras_existentes` verifica as opções da sessão e conserva a produção física por molde. No modo placa separada, testa até oito fileiras finais da base; cada posição retirada acrescenta dois desenhos à demanda das placas de 2 camadas. O motor reencaixa esse conjunto respeitando contornos, folga e margens. Só aceita o candidato se reduzir o comprimento total após refile, não aumentar o consumo estimado pela largura do material e não criar mais placas de sobras. Falha ou posicionamento parcial mantém o layout recebido.
+
+O segundo preenchimento passa por `preencher_buracos_apos_separacao`: quando há placas separadas no fim, procura vãos entre as bases de 4 camadas e mantém as placas de 2 intactas. A validação desse passe considera a demanda física do subconjunto de bases, e a finalização posterior verifica a conservação global por molde. Isso evita o retorno vazio por encontrar uma placa de 2 camadas como última placa da sessão.
+
+A reaplicação da separação reconhece divisões já duplicadas pela produção física, preservando-as. A normalização dos desenhos ao alternar de placa separada para ponta limita a demanda de 2 camadas à divisão candidata; testes cobrem a troca nos dois sentidos, conservação física, colisão, economia, rollback e gravação/recarga. A geração individual e em lote executa a finalização antes do refile e da persistência.
+
+**Reprodução completa da sessão 188 em memória, sem gravação no banco do operador:** após separar, duas bases com 220 e 130 desenhos e uma placa de 2 camadas com 7. O segundo preenchimento leva seis desenhos à primeira base: 226 e 124, mais 7. A nova finalização retira duas posições da última base e acrescenta quatro desenhos na placa separada: bases com 226 e 122; sobras com 11 desenhos. A última base reduz de 1487,38 mm para 1282,07 mm; a placa de sobras permanece com 254,98 mm de altura. Mesmas três placas, produção por molde exata, sem colisões na placa de sobras. A aplicação no layout de produção ocorre ao gerar novamente.
+
+**Validação:** suíte completa em cópia isolada do projeto, com 738 testes aprovados, 2 ignorados por dependências de referência ausentes e 16 subtestes aprovados. Gravação e recarga da sessão real em cópia isolada do banco confirmaram 226/122/11 desenhos em placas de 4/4/2 camadas. Binários e chamadas das novas etapas conferidos no pacote compilado.
+
+**Entrega:** código, documentação e scripts preparados para 1.8.4; compilação local Linux e atualização do atalho, com banco e binário anterior em backup. A publicação no GitHub usa o workflow de release para gerar os pacotes Windows/Linux e a tag da versão. O script de sincronização do documento passa a ser versionado. Backups locais e o banco de produção não fazem parte do commit.
+
+### Correção local 1.8.3 — ordem completa da geração da sessão 188 (09/11/2026)
+
+O teste do operador após a versão 1.8.2 continuou mostrando duas peças isoladas. A investigação confirmou que o executável aberto era o correto. A reprodução completa com os parâmetros salvos identificou a causa: o segundo preenchimento de buracos movia seis peças da última placa para a primeira **depois** da tentativa inicial de otimizar a ponta. Essa transferência deixava duas peças na fileira alta, que não eram avaliadas novamente. As verificações anteriores sobre um layout pronto não cobriam essa ordem de execução.
+
+A função `otimizar_ponta_existente` é chamada após o segundo preenchimento e antes do refile e da gravação, tanto no comando individual como no processamento em lote. Trabalha em cópia e preserva a produção física por molde. A mesma função é reutilizada na reaplicação sobre ponta existente. Quando não há economia ou a separação está desativada/usa placa separada, mantém o resultado recebido.
+
+Reprodução completa em memória, lendo SQLite em modo somente leitura, com os moldes, material e parâmetros da sessão 188: geração inicial 224 + 133 desenhos; separação 220 + 137, sendo 7 na ponta; segundo preenchimento 226 + 131, ainda 7 na ponta e altura 1746,36 mm (reproduz exatamente a falha). A nova etapa final deixa a primeira placa com 226 desenhos e a última com 133, sendo 122 na base e 11 na ponta, altura após refile 1541,05 mm. Duas posições de 4 camadas passam a quatro posições de 2 camadas. Produção exata por molde e nenhuma colisão de contorno na última placa.
+
+Regressão acrescentada ao comando real `MainWindow.on_auto_nest`, simulando a transferência de seis peças pelo segundo preenchimento; o resultado já refilado deve conter 11 desenhos na ponta. A gravação e recarga em cópia isolada do banco real também foram verificadas; foi corrigido o fallback de `item_index`/`instance_id` quando uma cópia chega com `id=None`, que antes provocava violação NOT NULL ao persistir. O teste de regressão cobre essa gravação/recarga. Suíte direcionada de sobras, geração, refile, lote, limpeza, atalhos e persistência: 100 aprovados. Executável Linux e atalho atualizados para 1.8.3. Nenhum layout do operador foi substituído pela simulação; é necessário reabrir a nova versão para gerar o resultado na sessão.
+
+### Correção local 1.8.2 — ponta existente e validação da sessão 188 (09/11/2026)
+
+Após o operador refazer o encaixe e ainda observar duas peças isoladas, foi identificado um caminho de retorno antecipado para ponta existente e fisicamente consistente que não tentava a compactação. A escolha automática agora testa a transferência também nesse caminho, trabalhando em cópia e verificando novamente a produção por molde. Fileiras são agrupadas por sobreposição vertical, permitindo que peças de alturas diferentes sejam transferidas juntas. Se não houver economia, preserva o layout existente.
+
+Validação em memória dos layouts reais salvos da sessão 188, lidos com SQLite em modo somente leitura: última placa passou de 124 desenhos na base e 7 na ponta para 122 na base e 11 na ponta; altura geométrica de refile passou de 1746,36 mm para 1541,05 mm. Produção física por molde exata, nenhuma colisão de contorno na última placa, resultado mantido após preenchimento de buracos e refile. Nenhum layout foi gravado no banco pela validação. Suíte direcionada: 46 testes aprovados. A conferência visual no aplicativo pelo operador continua necessária.
+
+### Atualização local 1.8.1 — fileira final na ponta (09/11/2026)
+
+Na escolha automática da divisão em ponta, o motor tenta retirar a fileira mais alta da base de 4 camadas e colocar duas cópias de cada peça na ponta de 2 camadas. A tentativa usa os contornos, margens e folga existentes e só é aceita se reduzir a altura em pelo menos 0,5 mm e não aumentar a estimativa de consumo por largura completa. São avaliadas até oito fileiras; a verificação final por molde mantém a quantidade física. Exemplo confirmado pelo operador na sessão 188: duas peças na base devem virar quatro na ponta. O resultado com os moldes reais será validado pelo operador ao refazer o layout; layouts já salvos não são recalculados automaticamente.
+
+Os scripts locais de compilação Linux/Windows e a abertura após atualização deixam de limpar automaticamente o banco. A limpeza manual permanece disponível com confirmação. O executável Linux e os atalhos locais são recompilados/sincronizados para 1.8.1; a geração do executável Windows depende da compilação Windows.
 
 ### Diagnóstico em desenvolvimento: comparação de nesting (09/11/2026)
 
@@ -383,7 +419,7 @@ ui/user_dialog.py                                    # JobManager 2000 (Python E
 - funções: `shape_multiplier`, `resolve_layout_layers`, `layers_for_piece`, `format_dimensions_folhas`, `clamp_tip_zone`, `format_enfesto_operator_text`, `resolve_session_layers`, `is_layers_defined`, `pecas_na_mesa`, `calc_resto`, `calc_resto_efetivo`, `parse_session_params`, `encode_session_params`, `is_separar_sobras_enabled`, `is_refile_auto_enabled`
 
 ### `cad/layers_split.py`
-- funções: `log_sobras`, `_recompact_plate`, `separar_sobras_camadas`, `_cluster_pieces_by_y`, `_place_sobra_piece`, `_nest_sobras_on_last_sheet`, `_escolher_divisao_otima`, `separar_sobras_em_ponta`, `desfazer_separacao_sobras`
+- funções: `log_sobras`, `_recompact_plate`, `separar_sobras_camadas`, `_cluster_pieces_by_y`, `_place_sobra_piece`, `_nest_sobras_on_last_sheet`, `_compactar_topo_na_ponta`, `preencher_buracos_apos_separacao`, `otimizar_sobras_existentes`, `_otimizar_placas_separadas`, `otimizar_ponta_existente`, `_escolher_divisao_otima`, `separar_sobras_em_ponta`, `desfazer_separacao_sobras`
 
 ### `cad/layout_converter.py`
 - `class ConversionResult` (linha 21, 0 métodos): Resultado estruturado de uma operação de conversão de layout.
@@ -731,11 +767,12 @@ ui/user_dialog.py                                    # JobManager 2000 (Python E
 - `class TestSidebarPlatesIdentification` (linha 12, 5 métodos)
 
 ### `tests/test_sobras_destino.py`
-- funções: `scenario`, `physical`, `test_placa_separada_conserva_pares_e_eh_idempotente`, `test_modo_ponta_continua_padrao_e_sobras_desativadas`, `test_converte_ponta_existente_para_placa_separada`, `test_dialogo_oferece_duas_opcoes_e_preserva_escolha`, `test_destino_salvo_sobrevive_a_preset_do_lote`, `test_conversao_mal_sucedida_preserva_original`, `test_salvar_destino_preserva_opcoes_da_sessao`, `test_get_params_conserva_destino_e_configuracao_de_ponta`, `test_reaplicar_atualiza_tabela_e_preserva_layout_se_banco_falhar`, `test_dialogo_nao_fecha_se_persistencia_falha`, `test_reaplicar_layout_ja_separado_nao_regrava_o_banco`
+- funções: `scenario`, `physical`, `test_placa_separada_conserva_pares_e_eh_idempotente`, `test_modo_ponta_continua_padrao_e_sobras_desativadas`, `test_converte_ponta_existente_para_placa_separada`, `test_dialogo_oferece_duas_opcoes_e_preserva_escolha`, `test_destino_salvo_sobrevive_a_preset_do_lote`, `test_conversao_mal_sucedida_preserva_original`, `test_salvar_destino_preserva_opcoes_da_sessao`, `test_get_params_conserva_destino_e_configuracao_de_ponta`, `test_reaplicar_atualiza_tabela_e_preserva_layout_se_banco_falhar`, `test_dialogo_nao_fecha_se_persistencia_falha`, `test_reaplicar_layout_ja_separado_nao_regrava_o_banco`, `separated_last_row`, `test_duas_pecas_viram_quatro_na_placa_separada_sem_colisao_e_sem_placa_extra` (+4)
 
 ### `tests/test_sobras_dobra.py`
-- `class TestSobrasDobra` (linha 53, 7 métodos)
-- `class TestRecompactacaoBase` (linha 131, 5 métodos): A retirada da peça ímpar não pode deixar buraco na placa de 4 camadas.
+- `class TestSobrasDobra` (linha 53, 10 métodos)
+- `class TestRecompactacaoBase` (linha 208, 5 métodos): A retirada da peça ímpar não pode deixar buraco na placa de 4 camadas.
+- `class TestPontaDepoisDoPreenchimento` (linha 265, 1 métodos)
 - funções: `_shape`, `_layout`
 
 ### `tests/test_strategy_removal.py`
@@ -1923,10 +1960,10 @@ A ordem de corte do `.lay` para a mesa **não pode** ser aleatória:
 | Delete | `ui/layout_editor_view.py:1110` | `self.bind_all("<Delete>", lambda e: self.delete_selected())` |
 | Delete | `ui/main_window.py:311` | `edit_menu.add_command(label="Excluir", accelerator="Del", command=self.on_global` |
 | Delete | `ui/main_window.py:706` | `self.bind_all("<Delete>", self.on_global_delete_key, add="+")` |
-| Delete | `ui/main_window.py:3719` | `accelerator="Del",` |
-| Delete | `ui/main_window.py:3738` | `accelerator="Del",` |
-| Delete | `ui/main_window.py:4015` | `accelerator="Del",` |
-| Delete | `ui/main_window.py:4034` | `accelerator="Del",` |
+| Delete | `ui/main_window.py:3713` | `accelerator="Del",` |
+| Delete | `ui/main_window.py:3732` | `accelerator="Del",` |
+| Delete | `ui/main_window.py:4009` | `accelerator="Del",` |
+| Delete | `ui/main_window.py:4028` | `accelerator="Del",` |
 | Delete | `ui/session_view.py:901` | `self.tree_shapes.bind("<Delete>", lambda e: self._on_tree_shapes_delete())` |
 | Delete | `ui/session_view.py:1060` | `w.bind("<Delete>", self.remove_session_material)` |
 | Delete | `ui/session_view.py:1061` | `w.bind("<Key-Delete>", self.remove_session_material)` |
@@ -1948,7 +1985,7 @@ A ordem de corte do `.lay` para a mesa **não pode** ser aleatória:
 | Escape | `ui/layout_print_dialog.py:1194` | `self.bind("<Escape>", self.on_escape)` |
 | Escape | `ui/main_window.py:93` | `self.bind("<Escape>", self.exit_fullscreen)` |
 | Escape | `ui/main_window.py:705` | `self.bind_all("<Escape>", self.dismiss_popup_menus, add="+")` |
-| Escape | `ui/main_window.py:4342` | `dialog.bind("<Escape>", lambda e: dialog.destroy())` |
+| Escape | `ui/main_window.py:4336` | `dialog.bind("<Escape>", lambda e: dialog.destroy())` |
 | Escape | `ui/material_codes_view.py:510` | `dlg.bind("<Escape>", lambda e: dlg.destroy())` |
 | Escape | `ui/options_dialog.py:40` | `self.bind("<Escape>", lambda e: self.on_cancel())` |
 | Escape | `ui/session_view.py:3358` | `entry.bind("<Escape>", cancel)` |
@@ -2000,7 +2037,7 @@ A ordem de corte do `.lay` para a mesa **não pode** ser aleatória:
 | Return | `ui/import_materials_dialog.py:84` | `self.ent_filepath.bind("<Return>", lambda e: self.load_file_from_path(self.ent_f` |
 | Return | `ui/main_window.py:575` | `self.tree_main.bind("<Return>", self.on_tree_key_return)` |
 | Return | `ui/main_window.py:622` | `self.grid_lower.bind("<Return>", self.on_grid_double_click)` |
-| Return | `ui/main_window.py:4341` | `dialog.bind("<Return>", lambda e: save())` |
+| Return | `ui/main_window.py:4335` | `dialog.bind("<Return>", lambda e: save())` |
 | Return | `ui/material_codes_view.py:212` | `self.tree.bind("<Return>", lambda e: self.open_edit_selected_dialog())` |
 | Return | `ui/material_codes_view.py:509` | `dlg.bind("<Return>", lambda e: save_action())` |
 | Return | `ui/session_view.py:619` | `self.entry_gap.bind("<Return>", self._on_gap_entry_change)` |
@@ -4649,6 +4686,7 @@ Local: `/home/dola/Documentos/clone do job/antigo/arquivos pos instalacao/Common
 <!-- AUTO:gitlog:start -->
 | Commit | Data | Autor | Mensagem |
 |---|---|---|---|
+| `6168ca7` | 2026-11-09 | Doletabgi | feat: destino das sobras e correção do salvamento v1.8.0 |
 | `980d73c` | 2026-11-09 | Doletabgi | feat: painel de produção e diagnóstico de nesting v1.7.0 |
 | `368490c` | 2026-11-08 | Doletabgi | feat(packaging): instalador inno setup com suporte a pastas na rede e release automatica (v1.6.49) |
 | `c3c5e13` | 2026-11-08 | Doletabgi | feat(layout): alterar medidas da chapa apos encaixe e correcao de limites em refile (v1.6.48) |
@@ -4663,7 +4701,6 @@ Local: `/home/dola/Documentos/clone do job/antigo/arquivos pos instalacao/Common
 | `b4d724d` | 2026-11-07 | Doletabgi | fix(print): remover extensao .lay do titulo principal na folha de impressao (v1.6.39) |
 | `f73e52f` | 2026-11-07 | Doletabgi | chore(release): limpeza das notas de release removendo recursos anteriores |
 | `7f5f845` | 2026-11-07 | Doletabgi | feat(release): conversor de arquivos de corte lay para onx e onx para lay no menu ferramentas (v1.6.38) |
-| `f5de209` | 2026-11-07 | Doletabgi | feat(release): formato do molde (1x1, 4x1, 6x1) e multiplicador no Shape Editor (v1.6.37) |
 <!-- AUTO:gitlog:end -->
 
 ---

@@ -86,8 +86,8 @@ class TestDatabaseCleanup(unittest.TestCase):
         last_sid = self.db.get_setting("last_active_session_id")
         self.assertEqual(str(last_sid), str(sess_real_id))
 
-    def test_post_update_cleanup_triggers_on_version_mismatch(self):
-        """Valida que a atualização de versão dispara a limpeza e grava a nova versão."""
+    def test_post_update_preserves_layout_on_version_mismatch(self):
+        """Valida que a atualização preserva o layout e grava a nova versão."""
         # Configura versão instalada como anterior
         self.db.set_setting("installed_version", "1.6.26")
 
@@ -101,11 +101,11 @@ class TestDatabaseCleanup(unittest.TestCase):
         from ui.main_window import MainWindow
         MainWindow.check_post_update_cleanup(mock_win)
 
-        # Verifica que o layout foi purgado
+        # Verifica que o layout foi preservado
         with self.db.get_connection() as conn:
             cur = conn.cursor()
             cur.execute("SELECT count(*) FROM layouts")
-            self.assertEqual(cur.fetchone()[0], 0)
+            self.assertEqual(cur.fetchone()[0], 1)
 
         # Verifica que installed_version foi atualizado para APP_VERSION atual
         self.assertEqual(self.db.get_setting("installed_version"), APP_VERSION)

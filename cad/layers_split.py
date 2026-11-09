@@ -9,7 +9,8 @@ Regra de negócio confirmada pelo operador:
   é retirada da placa de 4 camadas e colocada em layout(s) extra(s) de 2 CAMADAS (layers = 2).
 - Exemplo: 125 pares -> placa de 4 camadas com 62 peças (248 físicas) + layout de 2 camadas
   com 1 peça (2 físicas) = 250 físicas exatas = 125 pares exatos. Resto efetivo = 0.
-- Conservação de peças: o sistema apenas MOVE peças entre layouts; nunca cria nem apaga peças.
+- Conservação física: a quantidade cortada por molde é preservada; uma posição de 4
+  camadas pode virar duas posições de 2 camadas para reduzir a sobra.
 - Idempotência: se o estado desejado já existir, não altera nada e preserva ajustes manuais.
 - Integridade física estrita: sum(peças * layers) = 2P por molde. Se divergir, rollback atômico.
 """
@@ -259,12 +260,12 @@ def separar_sobras_camadas(
                     break
 
     # 6. Verificação de IDEMPOTÊNCIA:
-    # Se já existem placas de 2 camadas E as contagens em 4 e 2 batem perfeitamente com o estado desejado,
-    # não fazemos nada (preserva ajustes finos manuais do operador na placa de sobras).
+    # Uma peça da base pode já ter virado duas na placa separada. Reconhece
+    # qualquer divisão com produção física exata, preservando os ajustes manuais.
     is_already_separated = (
         bool(layouts_2) and
-        all(curr_counts_4[k] == desired[k]["target_4"] for k in desired) and
-        all(curr_counts_2[k] == desired[k]["target_2"] for k in desired)
+        all(4 * curr_counts_4[k] + 2 * curr_counts_2[k] == 2 * desired[k]["pairs"]
+            for k in desired)
     )
     if is_already_separated:
         return layouts, None
@@ -686,6 +687,248 @@ def _nest_sobras_on_last_sheet(
     return placed_sobras, tip_zone
 
 
+def _compactar_topo_na_ponta(dest, placed, zone, bed_w, bed_h, gap, margins,
+                            tip_mode, folga):
+    """Troca fileiras finais de 4 camadas por cópias em 2, se economizar material."""
+    base = dest["pieces"]
+
+    def score(pieces, tip):
+        height = calculate_layout_trim_bounds(pieces + tip, gap_mm=gap)[1]
+        base_height = max((p["bbox"][3] for p in pieces), default=0.0)
+        return height, height + base_height
+
+    for _ in range(8):
+        if len(base) < 2:
+            break
+        row = _cluster_pieces_by_y(base)[-1]
+        # Retira a fileira inteira: deixar uma peça alta impediria reduzir a base.
+        row_ids = {id(p) for p in row}
+        remaining = [p for p in base if id(p) not in row_ids]
+        if not remaining:
+            break
+        items = [{"piece": p} for p in placed]
+        for p in row:
+            for _copy in range(2):
+                duplicate = copy.deepcopy(p)
+                duplicate.update(id=None, is_duplicate=True, is_tip=True, layers=2)
+                items.append({"piece": duplicate})
+        trial = _nest_sobras_on_last_sheet(
+            {"pieces": remaining}, items, bed_w, bed_h, gap, margins,
+            tip_mode=tip_mode, folga_ponta=folga,
+        )
+        if not trial:
+            break
+        candidate, candidate_zone = trial
+        old_height, old_cost = score(base, placed)
+        new_height, new_cost = score(remaining, candidate)
+        if new_height >= old_height - 0.5 or new_cost > old_cost + 0.01:
+            break
+        base, placed, zone = remaining, candidate, candidate_zone
+    dest["pieces"] = base
+    return placed, zone
+
+
+def preencher_buracos_apos_separacao(layouts, **kwargs):
+    """Preenche as bases de 4 camadas mesmo com placas de sobras no final."""
+    from cad.nesting_engine import preencher_buracos_em_placas
+    session = kwargs.get("session")
+    bases = [ly for ly in layouts if resolve_layout_layers(ly, session=session, default=4) == 4]
+    extras = [ly for ly in layouts if resolve_layout_layers(ly, session=session, default=4) == 2]
+    if (not extras or len(bases) + len(extras) != len(layouts)
+            or any(ly.get("tip_zone") for ly in layouts)):
+        return preencher_buracos_em_placas(layouts, **kwargs)
+    # A validação deste passe cobre só as bases; a produção das placas de
+    # 2 camadas continua intacta, fora do subconjunto passado ao preenchimento.
+    shapes = kwargs.get("shapes") or (session or {}).get("shapes") or []
+    base_shapes = [dict(shape, pairs=2 * sum(
+        piece_matches_shape(p, shape) for ly in bases for p in ly.get("pieces", [])
+    )) for shape in shapes]
+    base_kwargs = dict(kwargs, shapes=base_shapes,
+                       session=dict(session or {}, shapes=base_shapes))
+    bases, info = preencher_buracos_em_placas(bases, **base_kwargs)
+    combined = bases + extras
+    for idx, ly in enumerate(combined):
+        ly.update(layout_index=idx, name=f"lay{idx:04d}", code=f"lay{idx:04d}")
+    return combined, info
+
+
+def otimizar_sobras_existentes(layouts, session=None, shapes=None, params=None):
+    """Finaliza a economia após o preenchimento, para ponta ou placas separadas."""
+    if not layouts or not shapes:
+        return layouts, None
+    _, options = parse_session_params((session or {}).get("params"))
+    _, supplied = parse_session_params(params)
+    options.update(supplied)
+    if not is_separar_sobras_enabled(
+        encode_session_params("", options),
+        default_camadas=resolve_session_layers(session, default=4),
+    ):
+        return layouts, None
+    if any(ly.get("tip_zone") for ly in layouts):
+        return otimizar_ponta_existente(layouts, session=session, shapes=shapes, params=params)
+    return _otimizar_placas_separadas(layouts, session=session, shapes=shapes, params=params)
+
+
+def _otimizar_placas_separadas(layouts, session=None, shapes=None, params=None):
+    """Dobra fileiras finais na placa de sobras se reduzir comprimento e consumo."""
+    if not any(resolve_layout_layers(ly, session=session, default=4) == 2 for ly in layouts):
+        return layouts, None
+    if any(resolve_layout_layers(ly, session=session, default=4) not in (2, 4) for ly in layouts):
+        return layouts, None
+    current = copy.deepcopy(layouts)
+    material = (session or {}).get("material") or {}
+    gap = float((session or {}).get("gap_mm", 1.0))
+    margins = {side: float((session or {}).get("margin_" + side, 10.0))
+               for side in ("left", "right", "top", "bottom")}
+    preset, _ = parse_session_params(params or (session or {}).get("params"))
+    strategy = (session or {}).get("strategy") or "flashnestsheet"
+
+    def physical(plates, shape):
+        return sum(layers_for_piece(ly, p) for ly in plates for p in ly.get("pieces", [])
+                   if piece_matches_shape(p, shape))
+
+    expected = [physical(layouts, shape) for shape in shapes]
+    moved = 0
+    for _ in range(8):
+        bases = [ly for ly in current if resolve_layout_layers(ly, session=session, default=4) == 4]
+        extras = [ly for ly in current if resolve_layout_layers(ly, session=session, default=4) == 2]
+        if not bases or not extras:
+            break
+        source = bases[-1]
+        rows = _cluster_pieces_by_y(source.get("pieces") or [])
+        if not rows:
+            break
+        row = rows[-1]
+        row_ids = {id(p) for p in row}
+        remaining = [p for p in source["pieces"] if id(p) not in row_ids]
+        pool = [p for ly in extras for p in ly.get("pieces", [])] + row + row
+        # A demanda explícita corresponde aos desenhos necessários em 2 camadas.
+        demand = []
+        matched = 0
+        for shape in shapes:
+            count = sum(piece_matches_shape(p, shape) for p in pool)
+            matched += count
+            if count:
+                demand.append(dict(shape, pairs=count, target_pieces=count, layers=2))
+        if matched != len(pool):
+            break
+        width = float(material.get("width_mm") or extras[0].get("sheet_width_mm")
+                      or extras[0].get("width_mm") or 1350.0)
+        height = float(material.get("height_mm") or extras[0].get("sheet_height_mm")
+                       or extras[0].get("height_mm") or 2553.38)
+        result = nest_multi_sheet(
+            available_shapes=demand, bed_width_mm=width, bed_height_mm=height,
+            strategy=strategy, params=preset, gap_mm=gap, margins=margins,
+            layers=2, max_sheets=len(extras),
+        )
+        new_extras = result.get("layouts") or []
+        if not new_extras or len(new_extras) > len(extras):
+            break
+        for ly in new_extras:
+            ly.update(layers=2, is_sobras=True, sheet_width_mm=width, sheet_height_mm=height)
+            for p in ly.get("pieces", []):
+                p.update(layers=2, is_tip=False)
+        new_source = dict(source, pieces=remaining)
+        candidate = bases[:-1] + ([new_source] if remaining else []) + new_extras
+        if any(physical(candidate, shape) != count for shape, count in zip(shapes, expected)):
+            break
+
+        def score(plates):
+            lengths = [(calculate_layout_trim_bounds(ly.get("pieces") or [], gap_mm=gap)[1],
+                        resolve_layout_layers(ly, session=session, default=4)) for ly in plates]
+            return sum(h for h, _ in lengths), sum(h * layers * width for h, layers in lengths)
+
+        old_length, old_consumption = score(current)
+        new_length, new_consumption = score(candidate)
+        if new_length >= old_length - 0.5 or new_consumption > old_consumption + 0.01:
+            break
+        moved += len(row)
+        current = candidate
+    if not moved:
+        return layouts, None
+    for idx, ly in enumerate(current):
+        ly.update(layout_index=idx, name=f"lay{idx:04d}", code=f"lay{idx:04d}")
+        pieces = ly.get("pieces") or []
+        ly["num_items"] = len(pieces)
+        if "placed_pieces" in ly:
+            ly["placed_pieces"] = pieces
+        area = float(ly.get("width_mm") or width) * float(ly.get("height_mm") or height) / 1e6
+        pct, used = calculate_yield(pieces, max(1e-4, area))
+        ly.update(yield_percent=pct, yield_pct=pct, used_area_m2=used)
+        ly["cutting_time_sec"], _ = calculate_atom_cutting_time(pieces)
+    message = (f"[SOBRAS] {moved} peça(s) de 4 camadas transferida(s) como {2 * moved} "
+               "desenhos nas placas separadas de 2 camadas.")
+    logger.info(message)
+    return current, message
+
+
+def otimizar_ponta_existente(
+    layouts, session=None, shapes=None, params=None,
+    sheet_w=None, sheet_h=None, tip_mode=None, opts=None,
+):
+    """Finaliza a ponta após mover peças entre placas, preservando a produção.
+
+    O preenchimento de buracos pode esvaziar a última fileira da base depois da
+    separação inicial. Por isso esta etapa deve preceder o refile e a gravação.
+    Sem melhoria, retorna os layouts recebidos sem alterar ajustes do operador.
+    """
+    if not layouts or not shapes or not layouts[-1].get("tip_zone"):
+        return layouts, None
+    _, options = parse_session_params((session or {}).get("params"))
+    _, supplied = parse_session_params(params)
+    options.update(supplied)
+    options.update(opts or {})
+    if options.get("destino_sobras") == "placa" or not is_separar_sobras_enabled(
+        encode_session_params("", options),
+        default_camadas=resolve_session_layers(session, default=4),
+    ):
+        return layouts, None
+
+    candidate = copy.deepcopy(layouts[-1])
+    tip = [p for p in candidate["pieces"] if layers_for_piece(candidate, p) == 2]
+    candidate["pieces"] = [p for p in candidate["pieces"] if layers_for_piece(candidate, p) == 4]
+    if not tip or not candidate["pieces"]:
+        return layouts, None
+    margins = {side: float(candidate.get("margin_" + side, 10.0))
+               for side in ("left", "right", "top", "bottom")}
+    width = float(sheet_w or candidate.get("width_mm") or 1380.0)
+    height = float(sheet_h or candidate.get("height_mm") or 2990.0)
+    gap = float((session or {}).get("gap_mm", 1.0))
+    _cluster_pieces_by_y(candidate["pieces"])
+    original_count = len(candidate["pieces"])
+    new_tip, zone = _compactar_topo_na_ponta(
+        candidate, tip, candidate["tip_zone"], width, height, gap, margins,
+        str(tip_mode or options.get("tip_mode", "canto")),
+        float(options.get("folga_ponta", 15.0)),
+    )
+    if len(candidate["pieces"]) == original_count:
+        return layouts, None
+    candidate["pieces"] += new_tip
+    candidate["tip_zone"] = zone
+    for p in candidate["pieces"]:
+        p["layers"] = layers_for_piece(candidate, p)
+        p["is_tip"] = p["layers"] == 2
+
+    def physical(plate, shape):
+        return sum(layers_for_piece(plate, p) for p in plate["pieces"]
+                   if piece_matches_shape(p, shape))
+
+    if any(physical(candidate, shape) != physical(layouts[-1], shape) for shape in shapes):
+        logger.error("[SOBRAS] Compactação final divergiu na produção; layout preservado.")
+        return layouts, None
+    candidate["num_items"] = len(candidate["pieces"])
+    if "placed_pieces" in candidate:
+        candidate["placed_pieces"] = candidate["pieces"]
+    pct, used = calculate_yield(candidate["pieces"], width * height / 1e6)
+    candidate.update(yield_percent=pct, yield_pct=pct, used_area_m2=used)
+    candidate["cutting_time_sec"], _ = calculate_atom_cutting_time(candidate["pieces"])
+    moved = original_count - (len(candidate["pieces"]) - len(new_tip))
+    message = (f"[SOBRAS] {moved} peça(s) da base transferida(s) como {2 * moved} "
+               "desenhos na ponta de 2 camadas.")
+    logger.info(message)
+    return layouts[:-1] + [candidate], message
+
+
 def _escolher_divisao_otima(
     layouts, session=None, shapes=None, params=None,
     sheet_w=None, sheet_h=None, material=None, refile=None, tip_mode=None, opts=None,
@@ -709,7 +952,8 @@ def _escolher_divisao_otima(
             res = separar_sobras_em_ponta(
                 layouts, session=session, shapes=shapes, params=params,
                 sheet_w=sheet_w, sheet_h=sheet_h, material=material,
-                refile=refile, tip_mode=tip_mode, opts=opts, _k=k,
+                refile=refile, tip_mode=tip_mode,
+                opts={**(opts or {}), "compactar_topo_ponta": True}, _k=k,
             )
         except Exception as exc:  # noqa: BLE001
             logger.warning("[SOBRAS] Divisão com k=%d falhou: %s", k, exc)
@@ -806,7 +1050,10 @@ def separar_sobras_em_ponta(
         result, message = separar_sobras_camadas(base, session=sess, shapes=shapes, params=combined)
         if base is not layouts and not message:
             return original, "[SOBRAS] Não foi possível converter a ponta em placa separada; layout original preservado."
-        return result, message
+        result, optimization = otimizar_sobras_existentes(
+            result, session=sess, shapes=shapes, params=combined,
+        )
+        return result, optimization or message
 
     # Sem `_k` explícito: escolhe automaticamente a divisão que fecha a placa melhor
     if _k is None:
@@ -883,6 +1130,13 @@ def separar_sobras_em_ponta(
                 counts_match = False
                 break
         if counts_match:
+            if opts and opts.get("compactar_topo_ponta") is True:
+                optimized, message = otimizar_ponta_existente(
+                    layouts, session=session, shapes=shapes, params=params,
+                    sheet_w=sheet_w, sheet_h=sheet_h, tip_mode=tip_mode, opts=opts,
+                )
+                if message:
+                    return optimized, message
             logger.info("[SOBRAS] Ponta de 2 camadas já aplicada e consistente. Layout preservado.")
             return layouts, "[SOBRAS] Ponta de 2 camadas já aplicada e consistente."
 
@@ -959,6 +1213,10 @@ def separar_sobras_em_ponta(
     for k, info in desired.items():
         alvo = int(info["target_2"])
         atuais = por_molde.get(k, [])
+        if len(atuais) > alvo:
+            surplus = {id(item) for item in atuais[alvo:]}
+            sobras_to_place = [item for item in sobras_to_place if id(item) not in surplus]
+            atuais = atuais[:alvo]
         faltam = alvo - len(atuais)
         if faltam <= 0 or not atuais:
             continue
@@ -1028,6 +1286,11 @@ def separar_sobras_em_ponta(
         return separar_sobras_camadas(original_layouts, session, shapes, params)
 
     placed_sobras, tip_zone = nest_res
+    if effective_opts.get("compactar_topo_ponta") is True:
+        placed_sobras, tip_zone = _compactar_topo_na_ponta(
+            dest_layout, placed_sobras, tip_zone, bed_w, bed_h, gap, margins,
+            effective_tip_mode, folga_ponta,
+        )
 
     # 10. Regra de Decisão Econômica (consumo de chapa / folha)
     is_refile = refile if refile is not None else (

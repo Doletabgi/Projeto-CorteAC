@@ -186,3 +186,118 @@ def test_reaplicar_layout_ja_separado_nao_regrava_o_banco():
                             refresh_shapes_resto_column=lambda: None, winfo_toplevel=lambda: None, master=None)
     assert SessionView.reapply_sobras_separation(dummy, True) is True
     assert writes == []
+
+
+def separated_last_row(extra_count=7):
+    """Duas peças isoladas na última fileira de 4 camadas, sobras em outra placa."""
+    contour = [{'x': 0, 'y': 0}, {'x': 90, 'y': 0},
+               {'x': 90, 'y': 200}, {'x': 0, 'y': 200}]
+    shape = {'id': 1, 'name': 'Molde_final', 'size': '41', 'sequence': 1,
+             'pairs': 28 + extra_count, 'contour': contour}
+    def piece(i, x, y, layers):
+        return {'id': i, 'name': shape['name'], 'size': shape['size'],
+                'shape': shape, 'contour': contour, 'x': x, 'y': y,
+                'rotation': 0, 'layers': layers}
+    base = [piece(i + 1, 10 + 91 * i, 10, 4) for i in range(12)]
+    base += [piece(13 + i, 10 + 91 * i, 211, 4) for i in range(2)]
+    extra = [piece(100 + i, 10 + 91 * i, 10, 2) for i in range(extra_count)]
+    layouts = [{'layout_index': 0, 'layers': 4, 'pieces': base, 'width_mm': 1200, 'height_mm': 2400},
+               {'layout_index': 1, 'layers': 2, 'pieces': extra, 'width_mm': 1200,
+                'height_mm': 2400, 'sheet_width_mm': 1200, 'sheet_height_mm': 2400}]
+    session = {'layers': 4, 'gap_mm': 1, 'strategy': 'flashnestsheet',
+               'params': 'FastNest;separar_sobras=1;refile_auto=1;destino_sobras=placa',
+               'material': {'width_mm': 1200, 'height_mm': 2400}}
+    return shape, session, layouts
+
+
+def test_duas_pecas_viram_quatro_na_placa_separada_sem_colisao_e_sem_placa_extra():
+    from cad.layers_split import otimizar_sobras_existentes
+    from cad.trim_engine import calculate_layout_trim_bounds, trim_layout_dict
+    from cad.geometry import transform_contour, polygon_bbox, polygons_collide
+    shape, session, layouts = separated_last_row()
+    original = copy.deepcopy(layouts)
+    new, msg = otimizar_sobras_existentes(layouts, session=session, shapes=[shape])
+    assert msg and len(new) == 2
+    assert [len(ly['pieces']) for ly in new] == [12, 11]
+    assert physical(new, shape) == physical(layouts, shape) == 70
+    assert layouts == original
+    before = sum(calculate_layout_trim_bounds(ly['pieces'])[1] for ly in layouts)
+    after = sum(calculate_layout_trim_bounds(ly['pieces'])[1] for ly in new)
+    assert after < before - 190
+    for ly in new:
+        trim_layout_dict(ly, gap_mm=1)
+        polys = [transform_contour(p['contour'], p['x'], p['y'], p.get('rotation', 0)) for p in ly['pieces']]
+        boxes = [polygon_bbox(q) for q in polys]
+        for i, poly in enumerate(polys):
+            for j in range(i + 1, len(polys)):
+                assert not polygons_collide(poly, polys[j], gap=1, bbox_a=boxes[i], bbox_b=boxes[j])
+    repeated, _ = separar_sobras_em_ponta(new, session=session, shapes=[shape])
+    assert repeated == new
+
+
+def test_placa_separada_preserva_layout_quando_nao_ha_economia_ou_encaixe_falha():
+    from cad.layers_split import otimizar_sobras_existentes
+    shape, session, layouts = separated_last_row(extra_count=12)
+    original = copy.deepcopy(layouts)
+    new, msg = otimizar_sobras_existentes(layouts, session=session, shapes=[shape])
+    assert new == original and not msg
+    shape, session, layouts = separated_last_row()
+    original = copy.deepcopy(layouts)
+    with patch('cad.layers_split.nest_multi_sheet', return_value={'layouts': [dict(layouts[-1], pieces=[])]}):
+        new, msg = otimizar_sobras_existentes(layouts, session=session, shapes=[shape])
+    assert new == original and not msg
+    session['params'] = session['params'].replace('separar_sobras=1', 'separar_sobras=0')
+    with patch('cad.layers_split.nest_multi_sheet') as nesting:
+        new, msg = otimizar_sobras_existentes(layouts, session=session, shapes=[shape])
+        assert new == original and not msg and not nesting.called
+
+
+def test_alternar_placa_otimizada_e_ponta_preserva_producao():
+    from cad.layers_split import otimizar_sobras_existentes
+    shape, session, layouts = separated_last_row()
+    optimized, _ = otimizar_sobras_existentes(layouts, session=session, shapes=[shape])
+    tip_session = dict(session, params=session['params'].replace('destino_sobras=placa', 'destino_sobras=ponta'))
+    tip, _ = separar_sobras_em_ponta(optimized, session=tip_session, shapes=[shape], refile=False)
+    assert any(ly.get('tip_zone') for ly in tip)
+    assert physical(tip, shape) == 70
+    separated, _ = separar_sobras_em_ponta(tip, session=session, shapes=[shape])
+    assert not any(ly.get('tip_zone') for ly in separated)
+    assert physical(separated, shape) == 70
+
+
+def test_gravacao_e_recarga_da_placa_otimizada(tmp_path):
+    from cad.layers_split import otimizar_sobras_existentes
+    from database import DatabaseManager
+    shape, session, layouts = separated_last_row()
+    new, _ = separar_sobras_em_ponta(layouts, session=session, shapes=[shape])
+    assert [len(ly['pieces']) for ly in new] == [12, 11]
+    db = DatabaseManager(str(tmp_path / 'sobras.db'), backend='sqlite')
+    sid = db.create_session(name='Placa de sobras otimizada')
+    assert db.save_session_layouts(sid, new)
+    loaded = db.get_session_layouts(sid)
+    assert [len(ly['pieces']) for ly in loaded] == [12, 11]
+    assert physical(loaded, shape) == 70
+
+
+def test_segundo_preenchimento_usa_ultima_base_antes_da_placa_de_sobras():
+    from cad.layers_split import preencher_buracos_apos_separacao, otimizar_sobras_existentes
+    shape, session, layouts = separated_last_row()
+    base = layouts[0]
+    # Reconstitui a fileira antes de seis peças preencherem vãos da primeira base.
+    six = [dict(base['pieces'][12], id=200 + i, x=10 + 91 * (i + 2)) for i in range(6)]
+    base['pieces'].extend(six)
+    first = dict(base, pieces=[])
+    original_extra = copy.deepcopy(layouts[-1])
+    def fill(plates, **kwargs):
+        assert len(plates) == 2 and all(ly['layers'] == 4 for ly in plates)
+        assert kwargs['shapes'][0]['pairs'] == 2 * sum(len(ly['pieces']) for ly in plates)
+        plates[0]['pieces'] = plates[1]['pieces'][-6:]
+        del plates[1]['pieces'][-6:]
+        return plates, {'movidas': 6, 'placas_removidas': 0}
+    with patch('cad.nesting_engine.preencher_buracos_em_placas', side_effect=fill):
+        filled, info = preencher_buracos_apos_separacao([first] + layouts, session=session, shapes=[shape])
+    assert info['movidas'] == 6
+    assert filled[-1]['pieces'] == original_extra['pieces']
+    optimized, _ = otimizar_sobras_existentes(filled, session=session, shapes=[shape])
+    assert [len(ly['pieces']) for ly in optimized] == [6, 12, 11]
+    assert physical(optimized, shape) == physical(filled, shape)

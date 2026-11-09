@@ -28,5 +28,9 @@ tools/*
 !tools/scrub_all_sessions_shapes.py
 !tools/export_session.py
 !tools/clean_database.py
+!tools/sync_project_doc.py
 scratch/
 .githooks/
+
+# Backups locais de produção e executáveis anteriores
+backups/

@@ -9,7 +9,7 @@ on:
       tag_name:
         description: 'Tag de versão SemVer (ex: v1.0.0)'
         required: false
-        default: 'v1.8.0'
+        default: 'v1.8.4'
 
 permissions:
   contents: write
@@ -222,12 +222,13 @@ jobs:
 
             ---
 
-            ### 🛠️ Recursos Incluídos Nesta Versão (v1.8.0):
-            - **Destino das sobras de 2 camadas:** escolha entre ponta na última placa (enfesto em degrau) e uma ou mais placas separadas de 2 camadas.
-            - A escolha é salva na sessão e considerada no recálculo, no processamento em lote e antes da exportação.
-            - Corrigido o fechamento da janela após salvar e a atualização visual dos layouts; falhas de gravação são informadas ao operador.
-            - Os cálculos de quantidade e as verificações de integridade física existentes são preservados. Recomenda-se validar o fluxo com dados reais antes do corte.
-            - A suíte local foi executada em cópia isolada; as compilações Windows e Linux são geradas pelo GitHub Actions.
+            ### 🛠️ Recursos Incluídos Nesta Versão (v1.8.4):
+            - A última fileira pouco ocupada da base de 4 camadas pode ser transferida para a ponta ou para a placa separada de 2 camadas: cada posição vira duas, mantendo a produção por molde.
+            - A transferência só é aceita quando reduz o comprimento total sem aumentar o consumo estimado de material nem a quantidade de placas de sobras.
+            - O segundo preenchimento de buracos considera as bases de 4 camadas mesmo quando há placas de 2 camadas no final da sessão; a otimização final ocorre antes do refile e da gravação, na geração individual e em lote.
+            - Corrigidos o salvamento das cópias sem identificador e a reaplicação da separação após a duplicação. Alternar entre ponta e placa separada preserva a produção.
+            - Atualizações locais preservam sessões e layouts; a limpeza fica disponível por ação manual.
+            - Testes incluem conservação física, colisões, economia, rollback, refile, gravação/recarga e regressão na ordem da geração.
           files: |
             dist-release/**/*.exe
             dist-release/**/*.zip

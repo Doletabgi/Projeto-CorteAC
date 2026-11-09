@@ -40,7 +40,7 @@ from cad.layers_rule import (
     layers_for_piece,
 )
 
-from cad.layers_split import separar_sobras_camadas, separar_sobras_em_ponta, desfazer_separacao_sobras
+from cad.layers_split import separar_sobras_camadas, separar_sobras_em_ponta, desfazer_separacao_sobras, otimizar_sobras_existentes, preencher_buracos_apos_separacao
 from ui.cad_canvas import CADCanvas
 from ui.order_view import OrderView
 from ui.session_view import SessionView
@@ -3262,20 +3262,14 @@ class MainWindow(tk.Tk):
             sv.all_shapes_catalog = self.current_shapes
 
     def check_post_update_cleanup(self):
-        """Regra de higienização pós-atualização:
-        Quando a versão do CorteAC é atualizada, limpa automaticamente todos os layouts de teste
-        e reseta as sessões para retornar sempre vazio e limpo na primeira abertura pós-atualização.
-        Em reinicializações normais da mesma versão, preserva integralmente as sessões e layouts."""
+        """Registra a atualização preservando sessões e layouts do operador.
+
+        A limpeza continua disponível na ação manual com confirmação.
+        """
         if not self.db:
             return
         installed_ver = self.db.get_setting("installed_version")
         if installed_ver != APP_VERSION:
-            try:
-                stats = self.db.clean_test_layouts()
-                if any(stats.values()):
-                    print(f"[CorteAC] Atualização para v{APP_VERSION} detectada. Banco higienizado: {stats}")
-            except Exception as exc:
-                print(f"[AVISO] Falha ao higienizar banco pós-atualização: {exc}")
             self.db.set_setting("installed_version", APP_VERSION)
 
     def on_clean_test_layouts(self):
@@ -6267,7 +6261,7 @@ class MainWindow(tk.Tk):
 
                             try:
                                 from cad.nesting_engine import preencher_buracos_em_placas
-                                layouts, _info2 = preencher_buracos_em_placas(
+                                layouts, _info2 = preencher_buracos_apos_separacao(
                                     layouts,
                                     gap_mm=float(sess_obj.get("gap_mm", 1.0) or 1.0) if sess_obj else 1.0,
                                     cell_mm=20.0,
@@ -6278,6 +6272,13 @@ class MainWindow(tk.Tk):
                                 )
                             except Exception as exc:  # noqa: BLE001
                                 print(f"[AVISO] Falha no 2º passe de buracos no lote #{sid}: {exc}")
+
+                            layouts, final_sobras_msg = otimizar_sobras_existentes(
+                                layouts, session=sess_obj, shapes=sorted_shapes,
+                                params=config.get("params", ""),
+                            )
+                            if final_sobras_msg:
+                                split_summary = final_sobras_msg
 
                         # Refile automático se habilitado
                         auto_trimmed = False
@@ -6717,7 +6718,7 @@ class MainWindow(tk.Tk):
                     _on_progress("Fechando vãos pós-separação...")
                     try:
                         from cad.nesting_engine import preencher_buracos_em_placas
-                        layouts, _info_lacunas2 = preencher_buracos_em_placas(
+                        layouts, _info_lacunas2 = preencher_buracos_apos_separacao(
                             layouts,
                             gap_mm=float(self.current_session.get("gap_mm", 1.0) or 1.0) if self.current_session else 1.0,
                             cell_mm=20.0,
@@ -6730,6 +6731,15 @@ class MainWindow(tk.Tk):
                             print(f"[BURACOS-2] {_info_lacunas2['movidas']} peça(s) realocadas para vãos pós-separação")
                     except Exception as exc:  # noqa: BLE001
                         print(f"[AVISO] Falha no 2º passe de preencher buracos: {exc}")
+
+                    # O preenchimento pode deixar uma fileira esparsa na base.
+                    # Finaliza as sobras depois desse passe e antes de refilar/salvar.
+                    layouts, final_sobras_msg = otimizar_sobras_existentes(
+                        layouts, session=self.current_session,
+                        shapes=sorted_sess_shapes, params=params,
+                    )
+                    if final_sobras_msg:
+                        result["split_summary"] = final_sobras_msg
 
                     # 4. Refile automático dos layouts gerados se a opção estiver habilitada
                     _on_progress("Refilando layout...")

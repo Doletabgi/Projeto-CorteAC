@@ -5,8 +5,7 @@ echo "  Compilando CorteAC para Linux (Standalone)"
 echo "========================================================"
 cd "$(dirname "$0")"
 
-echo "Higienizando banco de dados para distribuição limpa (sem layouts de teste)..."
-python3 tools/clean_database.py
+echo "Preservando banco de dados e layouts existentes durante a compilação."
 
 pyinstaller --clean --onefile --add-data "assets:assets" --add-data "samples:samples" --add-data "jobmanager.db:." --add-data "db.example.ini:." --hidden-import pymysql --hidden-import cryptography --hidden-import cad.project_packager --hidden-import cad.barcode --hidden-import cad.layout_converter --hidden-import cad.czlib --hidden-import cad.onx_exporter --hidden-import cad.dual_exporter --hidden-import cad.shape_backup --hidden-import cad.shape_backup_scheduler --hidden-import ui.user_dialog --hidden-import ui.layout_converter_dialog --hidden-import ui.production_dashboard --hidden-import analytics.production_dashboard --hidden-import ui.shape_backup_restore_dialog --hidden-import ui.alter_sheet_dialog --name "CorteAC" main.py
 

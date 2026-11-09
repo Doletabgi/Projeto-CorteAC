@@ -2501,13 +2501,18 @@ class DatabaseManager:
                     s_nm = str(it.get("name", "")).lower()
                     shp_id = shape_lookup.get(s_nm) or it.get("target_id")
                     rot_deg = float(it.get("rotation", 0.0))
+                    # Cópias criadas na conversão 4 -> 2 camadas têm id=None.
+                    # dict.get com default não cobre um valor explicitamente nulo.
+                    instance_id = it.get("id")
+                    if instance_id is None:
+                        instance_id = p_idx + 1
                     pieces_data.append((
                         layout_id,
                         shp_id,
                         shp_id,
-                        it.get("id", p_idx + 1),
+                        instance_id,
                         it.get("target_id", 1),
-                        it.get("id", p_idx + 1),
+                        instance_id,
                         it.get("name", "Molde"),
                         str(it.get("size", "")),
                         float(it.get("x", 0.0)),
