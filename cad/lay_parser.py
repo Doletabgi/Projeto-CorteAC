@@ -112,8 +112,8 @@ class LayoutData:
     gap: float = 1.0
     cod_r: str = ""
     hide_path: str = ""
-    ris_w: float = 1350.0
-    ris_l: float = 2553.38
+    ris_w: float = 1380.0
+    ris_l: float = 2990.0
     y_max: float = 0.0
     y_last: float = 0.0
     area: float = 0.0
@@ -604,8 +604,8 @@ def export_layout_from_pieces(
         tip_zone = material.get("tip_zone")
     if layers_tip is None and isinstance(material, dict):
         layers_tip = material.get("layers_tip")
-    ris_w = float(material.get("width_mm", 1350.0))
-    ris_l = float(material.get("height_mm", 2553.38))
+    ris_w = float(material.get("width_mm", 1380.0))
+    ris_l = float(material.get("height_mm", 2990.0))
     gap = float(material.get("gap_mm", 1.0))
     mat_code = str(material.get("id") or material.get("name") or "884412")
     if material.get("name") and material.get("name") not in mat_code:

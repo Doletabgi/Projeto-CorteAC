@@ -25,6 +25,7 @@ from cad.colors import get_color_for_size, get_contrast_text_color
 from cad.die_parser import parse_die_file
 from ui.layout_print_dialog import LayoutPrintDialog
 from ui.add_shapes_dialog import AddShapesDialog
+from ui.alter_sheet_dialog import AlterSheetDialog
 
 
 def _contour_area_mm2(cntr) -> float:
@@ -1051,6 +1052,20 @@ class LayoutEditorView(tk.Frame):
             w.bind("<Control-Key-t>", _on_ctrl_t)
             w.bind("<Control-Key-T>", _on_ctrl_t)
 
+        # Alterar medidas da chapa pós-encaixe (Ctrl+M)
+        def _on_ctrl_m(e=None):
+            w = self.focus_get()
+            if w and isinstance(w, (tk.Entry, ttk.Entry, tk.Text)):
+                return None
+            self.alter_sheet()
+            return "break"
+
+        for w in (self, self.canvas):
+            w.bind("<Control-m>", _on_ctrl_m)
+            w.bind("<Control-M>", _on_ctrl_m)
+            w.bind("<Control-Key-m>", _on_ctrl_m)
+            w.bind("<Control-Key-M>", _on_ctrl_m)
+
         # Navegação entre placas: Open Next (Ctrl+L) e Open Previous (Ctrl+Shift+L)
         for w in (self, self.canvas):
             w.bind("<Control-l>", self._on_ctrl_l)
@@ -1124,7 +1139,7 @@ class LayoutEditorView(tk.Frame):
         # Painel 8: Placa (255.34 X 135.00 cm)
         self.sheet_panel = tk.Frame(self.status_bar, relief="sunken", bd=1, bg=THEME["bg_surface"])
         self.sheet_panel.pack(side="right", padx=2, pady=1)
-        self.lbl_stat_sheet = tk.Label(self.sheet_panel, text="Placa (255.34 X 135.00 cm)", bg=THEME["bg_surface"], fg=THEME["text_main"], font=("Segoe UI", 8), padx=4)
+        self.lbl_stat_sheet = tk.Label(self.sheet_panel, text=f"Placa {format_dim_mm(self.sheet_width, self.sheet_height)}", bg=THEME["bg_surface"], fg=THEME["text_main"], font=("Segoe UI", 8), padx=4)
         self.lbl_stat_sheet.pack(side="left")
 
         # Painel 7: Rendimento (83.02%)
@@ -1251,6 +1266,7 @@ class LayoutEditorView(tk.Frame):
             menu_obj.add_command(label="Exportar Comelz (.onx)...", command=lambda: self.export_layout_dialog(target_format="onx"))
             menu_obj.add_command(label="⚡ Dupla Saída (.lay + .onx)...", command=lambda: self.export_layout_dialog(target_format="dual"))
             menu_obj.add_separator()
+            menu_obj.add_command(label="Alterar chapa...\tCtrl+M", command=self.alter_sheet)
             menu_obj.add_command(label="Carregar Material...", command=lambda: None)
             menu_obj.add_command(label="Imprimir...\tCtrl+P", command=self.print_layout)
             menu_obj.add_separator()
@@ -1288,6 +1304,7 @@ class LayoutEditorView(tk.Frame):
             menu_obj.add_command(label="Parâmetros SoleNest...", command=lambda: None)
             menu_obj.add_command(label="Camadas de Corte (Layers)...", command=self.edit_material_layers_dialog)
             menu_obj.add_separator()
+            menu_obj.add_command(label="Alterar chapa...\tCtrl+M", command=self.alter_sheet)
             menu_obj.add_command(label="Refilar Chapa no Final das Peças (Gap 1mm)\tCtrl+T", command=self.trim_layout_dialog)
             menu_obj.add_separator()
             menu_obj.add_command(label="▶ Simular Corte CAM (Esc para parar)", command=self.toggle_simulation)
@@ -2827,6 +2844,11 @@ class LayoutEditorView(tk.Frame):
             "size": len(getattr(self, "_piece_geom_cache", {})),
         }
 
+    @property
+    def colliding_indices(self) -> set:
+        """Índices de peças em colisão entre si ou com as margens da chapa."""
+        return getattr(self, "_cached_colliding_indices", set())
+
     # -------------------------------------------------------------
     # Renderização da Mesa CAD Estática e Coordenadas
     # -------------------------------------------------------------
@@ -2914,7 +2936,8 @@ class LayoutEditorView(tk.Frame):
             round(scale, 4), bool(self.show_grid),
             round(self.sheet_width, 1), round(self.sheet_height, 1),
             cw, ch, div_x, getattr(self, "current_layout_index", 0),
-            str(getattr(self, "tip_zone", None))
+            str(getattr(self, "tip_zone", None)),
+            str(getattr(self, "trim_cut_line", None))
         )
         bg_changed = (getattr(self, "_last_bg_sig", None) != bg_sig)
         if not bg_changed and not self.canvas.find_withtag("sheet_bed"):
@@ -2935,24 +2958,65 @@ class LayoutEditorView(tk.Frame):
                 tags=("sheet_bed", "bg_element")
             )
 
-            # 2.1 Margem de Segurança da Placa (Retângulo tracejado sutil delimitando a área útil de corte)
+            # 2.1 Margem de Segurança da Placa (Linhas tracejadas sutis delimitando a área útil de corte)
+            trim_cut_bg = getattr(self, "trim_cut_line", None)
+            trim_enabled_bg = bool(trim_cut_bg and trim_cut_bg.get("enabled", True))
+            has_cut_x_bg = bool(trim_enabled_bg and trim_cut_bg.get("has_cut_x", False))
+            has_cut_y_bg = bool(trim_enabled_bg and trim_cut_bg.get("has_cut_y", False))
+
             m_left = getattr(self, "margin_left", 10.0)
             m_right = getattr(self, "margin_right", 10.0)
             m_top = getattr(self, "margin_top", 10.0)
             m_bottom = getattr(self, "margin_bottom", 10.0)
             mx1 = x1 + m_left * scale
-            mx2 = x2 - m_right * scale
-            my1 = y1 + m_top * scale
+            mx2 = x2 if has_cut_x_bg else (x2 - m_right * scale)
+            my1 = y1 if has_cut_y_bg else (y1 + m_top * scale)
             my2 = y2 - m_bottom * scale
             if mx2 > mx1 and my2 > my1:
-                self.canvas.create_rectangle(
-                    mx1, my1, mx2, my2,
-                    fill="",
-                    outline="#475569",
-                    dash=(4, 3),
-                    width=1.0,
-                    tags=("sheet_margins", "bg_element")
-                )
+                if has_cut_x_bg or has_cut_y_bg:
+                    # Em bordas refiladas por guilhotina, a linha de refile é a borda da chapa útil
+                    # Traça as margens de segurança tracejadas apenas nas bordas de fábrica (não refiladas)
+                    # Borda esquerda
+                    self.canvas.create_line(
+                        mx1, my2, mx1, my1,
+                        fill="#475569",
+                        dash=(4, 3),
+                        width=1.0,
+                        tags=("sheet_margins", "bg_element")
+                    )
+                    # Borda inferior
+                    self.canvas.create_line(
+                        mx1, my2, mx2, my2,
+                        fill="#475569",
+                        dash=(4, 3),
+                        width=1.0,
+                        tags=("sheet_margins", "bg_element")
+                    )
+                    if not has_cut_x_bg:
+                        self.canvas.create_line(
+                            mx2, my2, mx2, my1,
+                            fill="#475569",
+                            dash=(4, 3),
+                            width=1.0,
+                            tags=("sheet_margins", "bg_element")
+                        )
+                    if not has_cut_y_bg:
+                        self.canvas.create_line(
+                            mx1, my1, mx2, my1,
+                            fill="#475569",
+                            dash=(4, 3),
+                            width=1.0,
+                            tags=("sheet_margins", "bg_element")
+                        )
+                else:
+                    self.canvas.create_rectangle(
+                        mx1, my1, mx2, my2,
+                        fill="",
+                        outline="#475569",
+                        dash=(4, 3),
+                        width=1.0,
+                        tags=("sheet_margins", "bg_element")
+                    )
 
             # Rótulo com dimensões no topo da chapa em metros (ex: Placa 1,38 x 2,99 m)
             cx = (x1 + x2) / 2.0
@@ -3080,7 +3144,22 @@ class LayoutEditorView(tk.Frame):
             piece_meta.append((cid, px, py, rot, cntr, mirr))
             cached_geoms.append(get_geom(p, _cid=cid, _px=px, _py=py, _rot=rot, _mirr=mirr))
 
-        piece_geom_sig = tuple((m[0], m[1], m[2], m[3]) for m in piece_meta)
+        trim_cut = getattr(self, "trim_cut_line", None)
+        trim_enabled = bool(trim_cut and trim_cut.get("enabled", True))
+        has_cut_x = bool(trim_enabled and trim_cut.get("has_cut_x", False))
+        has_cut_y = bool(trim_enabled and trim_cut.get("has_cut_y", False))
+
+        piece_geom_sig = (
+            round(self.sheet_width, 1),
+            round(self.sheet_height, 1),
+            float(getattr(self, "margin_left", 10.0)),
+            float(getattr(self, "margin_right", 10.0)),
+            float(getattr(self, "margin_top", 10.0)),
+            float(getattr(self, "margin_bottom", 10.0)),
+            has_cut_x,
+            has_cut_y,
+            tuple((m[0], m[1], m[2], m[3]) for m in piece_meta)
+        )
 
         if getattr(self, "_last_collision_sig", None) == piece_geom_sig:
             colliding_indices = getattr(self, "_cached_colliding_indices", set())
@@ -3142,6 +3221,28 @@ class LayoutEditorView(tk.Frame):
                         if polygons_collide(poly_i, poly_j, gap=0.0, bbox_a=bbox_i, bbox_b=bbox_j):
                             colliding_indices.add(i)
                             colliding_indices.add(j)
+
+            # Peças que ultrapassam as bordas da chapa ou a margem de segurança ficam destacadas em vermelho
+            m_l = float(getattr(self, "margin_left", 10.0))
+            m_r = float(getattr(self, "margin_right", 10.0))
+            m_t = float(getattr(self, "margin_top", 10.0))
+            m_b = float(getattr(self, "margin_bottom", 10.0))
+
+            limit_right = self.sheet_width if has_cut_x else (self.sheet_width - m_r)
+            limit_top = self.sheet_height if has_cut_y else (self.sheet_height - m_t)
+            limit_left = m_l
+            limit_bottom = m_b
+
+            for i in range(num_pieces):
+                poly_i, bbox_i = cached_geoms[i]
+                if not poly_i:
+                    continue
+                if (bbox_i[2] > limit_right + 0.01 or
+                    bbox_i[3] > limit_top + 0.01 or
+                    bbox_i[0] < limit_left - 0.01 or
+                    bbox_i[1] < limit_bottom - 0.01):
+                    colliding_indices.add(i)
+
             self._cached_colliding_indices = colliding_indices
             # Explica ao operador o vermelho no desenho (colisão real, não enfeite)
             if len(colliding_indices) != getattr(self, "_reported_collisions", None):
@@ -4971,6 +5072,8 @@ class LayoutEditorView(tk.Frame):
             "sheet_width": self.sheet_width,
             "sheet_height": self.sheet_height,
             "trim_cut_line": copy.deepcopy(getattr(self, "trim_cut_line", None)),
+            "tip_zone": copy.deepcopy(getattr(self, "tip_zone", None)),
+            "layers_tip": getattr(self, "layers_tip", None),
             "original_sheet_width": getattr(self, "original_sheet_width", None),
             "original_sheet_height": getattr(self, "original_sheet_height", None)
         }
@@ -4988,7 +5091,10 @@ class LayoutEditorView(tk.Frame):
                     self.sheet_width = prev_state["sheet_width"]
                 if "sheet_height" in prev_state:
                     self.sheet_height = prev_state["sheet_height"]
+                self._custom_sheet_size = (self.sheet_width, self.sheet_height)
                 self.trim_cut_line = copy.deepcopy(prev_state.get("trim_cut_line", None))
+                self.tip_zone = copy.deepcopy(prev_state.get("tip_zone", None))
+                self.layers_tip = prev_state.get("layers_tip", None)
                 self.original_sheet_width = prev_state.get("original_sheet_width", None)
                 self.original_sheet_height = prev_state.get("original_sheet_height", None)
             elif isinstance(prev_state, list):
@@ -4997,6 +5103,7 @@ class LayoutEditorView(tk.Frame):
             if self.selected_index is not None and self.selected_index >= len(self.placed_pieces):
                 self.selected_index = len(self.placed_pieces) - 1
             self._sync_current_layout_pieces()
+            self._last_bg_sig = None
             self.is_modified = (len(self.undo_stack) != getattr(self, "_saved_undo_index", -1))
             self._update_window_title()
             self.update_sheet_status()
@@ -6417,6 +6524,120 @@ class LayoutEditorView(tk.Frame):
 
         if hasattr(self, "lbl_stat_pos"):
             self.lbl_stat_pos.config(text=msg, fg="#0f766e")
+
+    def get_sheet_description(self) -> str:
+        """Retorna a descrição autêntica da chapa gerada das dimensões reais: 'Sheet (comprimento X largura)'."""
+        return f"Sheet ({self.sheet_height:.2f} X {self.sheet_width:.2f})"
+
+    def alter_sheet(self, new_w_mm=None, new_h_mm=None):
+        """
+        Altera as medidas da chapa (Largura e Altura em metros) DEPOIS do encaixe.
+        As peças já posicionadas NUNCA são movidas nem reencaixadas: só a chapa muda.
+        Origem (0,0) fixa no canto inferior esquerdo (aumentar/diminuir mexe só em X max e Y max).
+        Nenhum gatilho automático (separação de sobras, ponta, refile) dispara por causa da edição.
+        1 snapshot no undo (Ctrl+Z restaura dimensões, trim_cut_line e tip_zone).
+        """
+        if new_w_mm is None or new_h_mm is None:
+            dlg = AlterSheetDialog(
+                parent=self,
+                current_sheet_w_mm=self.sheet_width,
+                current_sheet_h_mm=self.sheet_height,
+                placed_pieces=self.placed_pieces,
+                margin_left=getattr(self, "margin_left", 10.0),
+                margin_right=getattr(self, "margin_right", 10.0),
+                margin_top=getattr(self, "margin_top", 10.0),
+                margin_bottom=getattr(self, "margin_bottom", 10.0),
+                tip_zone=getattr(self, "tip_zone", None),
+                trim_cut_line=getattr(self, "trim_cut_line", None),
+                on_apply=lambda w, h: self.alter_sheet(new_w_mm=w, new_h_mm=h),
+            )
+            return dlg
+
+        target_w_mm = float(new_w_mm)
+        target_h_mm = float(new_h_mm)
+
+        # 1. Salva 1 snapshot leve no undo (Ctrl+Z)
+        self.push_undo()
+
+        # 2. Atualiza as dimensões da chapa
+        self.sheet_width = target_w_mm
+        self.sheet_height = target_h_mm
+        self._custom_sheet_size = (target_w_mm, target_h_mm)
+
+        # 3. Refile (trim_cut_line) coerente:
+        # Se havia refile aplicado:
+        if getattr(self, "trim_cut_line", None) and self.trim_cut_line.get("enabled", True):
+            cut_x = float(self.trim_cut_line.get("x", self.sheet_width))
+            cut_y = float(self.trim_cut_line.get("y", self.sheet_height))
+            if cut_x <= target_w_mm + 0.5 and cut_y <= target_h_mm + 0.5:
+                has_cut_x = (target_w_mm - cut_x > 0.5)
+                has_cut_y = (target_h_mm - cut_y > 0.5)
+                if has_cut_x or has_cut_y:
+                    self.trim_cut_line["orig_w"] = target_w_mm
+                    self.trim_cut_line["orig_h"] = target_h_mm
+                    self.trim_cut_line["has_cut_x"] = has_cut_x
+                    self.trim_cut_line["has_cut_y"] = has_cut_y
+                    self.original_sheet_width = target_w_mm
+                    self.original_sheet_height = target_h_mm
+                else:
+                    self.trim_cut_line = None
+                    self.original_sheet_width = target_w_mm
+                    self.original_sheet_height = target_h_mm
+            else:
+                self.trim_cut_line = None
+                self.original_sheet_width = target_w_mm
+                self.original_sheet_height = target_h_mm
+        else:
+            self.original_sheet_width = target_w_mm
+            self.original_sheet_height = target_h_mm
+
+        # 4. Ponta de 2 camadas: ao aumentar, não se move; ao diminuir, mantém
+        # (nenhum reposicionamento automático).
+
+        # 5. Sincroniza self.layouts[cur_idx] se existir
+        if getattr(self, "layouts", None) and 0 <= getattr(self, "current_layout_index", 0) < len(self.layouts):
+            cur_idx = self.current_layout_index
+            self.layouts[cur_idx]["width_mm"] = self.sheet_width
+            self.layouts[cur_idx]["height_mm"] = self.sheet_height
+            self.layouts[cur_idx]["ris_w"] = self.sheet_width
+            self.layouts[cur_idx]["ris_l"] = self.sheet_height
+            self.layouts[cur_idx]["area_mm2"] = round(self.sheet_width * self.sheet_height, 2)
+            self.layouts[cur_idx]["trim_cut_line"] = copy.deepcopy(getattr(self, "trim_cut_line", None))
+            self.layouts[cur_idx]["tip_zone"] = copy.deepcopy(getattr(self, "tip_zone", None))
+            self.layouts[cur_idx]["original_sheet_width"] = self.original_sheet_width
+            self.layouts[cur_idx]["original_sheet_height"] = self.original_sheet_height
+
+        # 6. Atualizações de interface
+        self._last_bg_sig = None
+        self.set_modified(True)
+        self.update_sheet_status()
+        self.update_title_and_status()
+        self.update_sidebar_targets()
+        self.redraw()
+        self.update_status()
+
+        # Feedback na barra de status
+        from ui.alter_sheet_dialog import count_pieces_outside
+        _, _, affected = count_pieces_outside(
+            self.placed_pieces,
+            self.sheet_width,
+            self.sheet_height,
+            margin_left=getattr(self, "margin_left", 10.0),
+            margin_right=getattr(self, "margin_right", 10.0),
+            margin_bottom=getattr(self, "margin_bottom", 10.0),
+            margin_top=getattr(self, "margin_top", 10.0),
+        )
+        if affected and hasattr(self, "lbl_stat_pos"):
+            self.lbl_stat_pos.config(
+                text=f"Aviso: {len(affected)} peça(s) fora da chapa ou margem de segurança (em vermelho).",
+                fg="#dc2626"
+            )
+        elif hasattr(self, "lbl_stat_pos"):
+            self.lbl_stat_pos.config(
+                text=f"Chapa alterada para {format_dim_mm(self.sheet_width, self.sheet_height)}.",
+                fg="#0f766e"
+            )
+        return True
 
     # -------------------------------------------------------------
     # Simulação de Corte CAM do Layout na Mesa

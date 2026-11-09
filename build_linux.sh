@@ -8,7 +8,7 @@ cd "$(dirname "$0")"
 echo "Higienizando banco de dados para distribuição limpa (sem layouts de teste)..."
 python3 tools/clean_database.py
 
-pyinstaller --clean --onefile --add-data "assets:assets" --add-data "samples:samples" --add-data "jobmanager.db:." --add-data "db.example.ini:." --hidden-import pymysql --hidden-import cryptography --hidden-import cad.project_packager --hidden-import cad.barcode --hidden-import cad.layout_converter --hidden-import cad.czlib --hidden-import cad.onx_exporter --hidden-import cad.dual_exporter --hidden-import cad.shape_backup --hidden-import cad.shape_backup_scheduler --hidden-import ui.user_dialog --hidden-import ui.layout_converter_dialog --hidden-import ui.shape_backup_restore_dialog --name "CorteAC" main.py
+pyinstaller --clean --onefile --add-data "assets:assets" --add-data "samples:samples" --add-data "jobmanager.db:." --add-data "db.example.ini:." --hidden-import pymysql --hidden-import cryptography --hidden-import cad.project_packager --hidden-import cad.barcode --hidden-import cad.layout_converter --hidden-import cad.czlib --hidden-import cad.onx_exporter --hidden-import cad.dual_exporter --hidden-import cad.shape_backup --hidden-import cad.shape_backup_scheduler --hidden-import ui.user_dialog --hidden-import ui.layout_converter_dialog --hidden-import ui.shape_backup_restore_dialog --hidden-import ui.alter_sheet_dialog --name "CorteAC" main.py
 
 echo "Atualizando binários executáveis centralizados..."
 cp -f dist/CorteAC corteac_linux

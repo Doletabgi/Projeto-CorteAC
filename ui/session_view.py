@@ -1809,8 +1809,8 @@ class SessionView(tk.Frame):
                 target_layout = sess_layouts[0]
                 selected_idx = 0
 
-        sheet_w = 1350.0
-        sheet_h = 2553.38
+        sheet_w = 1380.0
+        sheet_h = 2990.0
         if target_layout:
             sheet_w = float(target_layout.get("width_mm") or target_layout.get("ris_w") or sheet_w)
             sheet_h = float(target_layout.get("height_mm") or target_layout.get("ris_l") or sheet_h)
@@ -1819,8 +1819,8 @@ class SessionView(tk.Frame):
         else:
             mat = self.session_data.get("material") if isinstance(self.session_data, dict) else None
             if mat:
-                sheet_w = float(mat.get("width_mm", 1350.0))
-                sheet_h = float(mat.get("height_mm", 2553.38))
+                sheet_w = float(mat.get("width_mm", 1380.0))
+                sheet_h = float(mat.get("height_mm", 2990.0))
             if isinstance(self.session_data, dict):
                 if "sheet_width" in self.session_data:
                     sheet_w = float(self.session_data["sheet_width"])

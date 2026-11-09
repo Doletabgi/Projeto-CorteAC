@@ -1075,7 +1075,7 @@ class MainWindow(tk.Tk):
             return "break"
         return None
 
-    def on_layout_editor_save(self, placed_pieces, sheet_w=1350.0, sheet_h=2553.38, layout_name="[I0000]"):
+    def on_layout_editor_save(self, placed_pieces, sheet_w=1380.0, sheet_h=2990.0, layout_name="[I0000]"):
         """Salva as peças posicionadas no layout de volta para a sessão ativa e banco de dados SQLite."""
         active_sess = self.current_session
         if not active_sess and getattr(self, "sessions", None):

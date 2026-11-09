@@ -76,8 +76,8 @@ def trim_layout_dict(
     if not pieces:
         return layout_dict
 
-    curr_w = float(layout_dict.get("width_mm") or layout_dict.get("ris_w") or original_w or 1350.0)
-    curr_h = float(layout_dict.get("height_mm") or layout_dict.get("ris_l") or original_h or 2553.38)
+    curr_w = float(layout_dict.get("width_mm") or layout_dict.get("ris_w") or original_w or 1380.0)
+    curr_h = float(layout_dict.get("height_mm") or layout_dict.get("ris_l") or original_h or 2990.0)
     orig_w = float(original_w or layout_dict.get("original_sheet_width") or curr_w)
     orig_h = float(original_h or layout_dict.get("original_sheet_height") or curr_h)
 

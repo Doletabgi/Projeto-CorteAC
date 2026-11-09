@@ -47,8 +47,8 @@ def parse_m(texto: str) -> float:
     if not limpo:
         raise ValueError("medida vazia")
     valor = float(limpo)
-    if valor < 0:
-        raise ValueError("medida negativa")
+    if valor <= 0:
+        raise ValueError("medida deve ser maior que zero")
     return valor
 
 

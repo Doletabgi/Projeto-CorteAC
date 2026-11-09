@@ -60,24 +60,38 @@ def _get_contour_hash(contour) -> int:
                 a0 = contour[0]
                 am = contour[n // 2]
                 az = contour[-1]
+                a0x = a0[0] if isinstance(a0, (tuple, list)) else a0["x"]
+                a0y = a0[1] if isinstance(a0, (tuple, list)) else a0["y"]
+                amx = am[0] if isinstance(am, (tuple, list)) else am["x"]
+                amy = am[1] if isinstance(am, (tuple, list)) else am["y"]
+                azx = az[0] if isinstance(az, (tuple, list)) else az["x"]
+                azy = az[1] if isinstance(az, (tuple, list)) else az["y"]
                 if (
-                    round(amostra[0], 4) == round(a0["x"], 4)
-                    and round(amostra[1], 4) == round(a0["y"], 4)
-                    and round(amostra[2], 4) == round(am["x"], 4)
-                    and round(amostra[3], 4) == round(am["y"], 4)
-                    and round(amostra[4], 4) == round(az["x"], 4)
-                    and round(amostra[5], 4) == round(az["y"], 4)
+                    round(amostra[0], 4) == round(a0x, 4)
+                    and round(amostra[1], 4) == round(a0y, 4)
+                    and round(amostra[2], 4) == round(amx, 4)
+                    and round(amostra[3], 4) == round(amy, 4)
+                    and round(amostra[4], 4) == round(azx, 4)
+                    and round(amostra[5], 4) == round(azy, 4)
                 ):
                     return h_cached
             except (KeyError, IndexError, TypeError):
                 pass
-    h = hash(tuple((int(p["x"] * 1000), int(p["y"] * 1000)) for p in contour))
+    h = hash(tuple((int((p[0] if isinstance(p, (tuple, list)) else p["x"]) * 1000),
+                    int((p[1] if isinstance(p, (tuple, list)) else p["y"]) * 1000))
+                   for p in contour))
     if len(_CONTOUR_HASH_CACHE) >= 2000:
         _CONTOUR_HASH_CACHE.clear()
     try:
-        amostra = (contour[0]["x"], contour[0]["y"],
-                   contour[n // 2]["x"], contour[n // 2]["y"],
-                   contour[-1]["x"], contour[-1]["y"])
+        a0 = contour[0]
+        am = contour[n // 2]
+        az = contour[-1]
+        amostra = (a0[0] if isinstance(a0, (tuple, list)) else a0["x"],
+                   a0[1] if isinstance(a0, (tuple, list)) else a0["y"],
+                   am[0] if isinstance(am, (tuple, list)) else am["x"],
+                   am[1] if isinstance(am, (tuple, list)) else am["y"],
+                   az[0] if isinstance(az, (tuple, list)) else az["x"],
+                   az[1] if isinstance(az, (tuple, list)) else az["y"])
     except (KeyError, IndexError, TypeError):
         amostra = None
     _CONTOUR_HASH_CACHE[cid] = (h, n, amostra) if amostra is not None else (h, n, None)
@@ -111,8 +125,8 @@ def transform_contour(contour, offset_x, offset_y, angle_deg):
         sin_a = math.sin(rad)
         base_rotated = []
         for pt in contour:
-            px = pt["x"]
-            py = pt["y"]
+            px = pt[0] if isinstance(pt, (tuple, list)) else pt["x"]
+            py = pt[1] if isinstance(pt, (tuple, list)) else pt["y"]
             base_rotated.append({
                 "x": px * cos_a - py * sin_a,
                 "y": px * sin_a + py * cos_a,
@@ -142,8 +156,14 @@ def polygon_area(poly):
     area = 0.0
     for i in range(n):
         j = (i + 1) % n
-        area += poly[i]["x"] * poly[j]["y"]
-        area -= poly[j]["x"] * poly[i]["y"]
+        p_i = poly[i]
+        p_j = poly[j]
+        xi = p_i[0] if isinstance(p_i, (tuple, list)) else p_i["x"]
+        yi = p_i[1] if isinstance(p_i, (tuple, list)) else p_i["y"]
+        xj = p_j[0] if isinstance(p_j, (tuple, list)) else p_j["x"]
+        yj = p_j[1] if isinstance(p_j, (tuple, list)) else p_j["y"]
+        area += xi * yj
+        area -= xj * yi
     return abs(area) / 2.0
 
 def polygon_perimeter(poly):
@@ -154,15 +174,21 @@ def polygon_perimeter(poly):
     perim = 0.0
     for i in range(n):
         j = (i + 1) % n
-        dx = poly[j]["x"] - poly[i]["x"]
-        dy = poly[j]["y"] - poly[i]["y"]
+        p_i = poly[i]
+        p_j = poly[j]
+        xi = p_i[0] if isinstance(p_i, (tuple, list)) else p_i["x"]
+        yi = p_i[1] if isinstance(p_i, (tuple, list)) else p_i["y"]
+        xj = p_j[0] if isinstance(p_j, (tuple, list)) else p_j["x"]
+        yj = p_j[1] if isinstance(p_j, (tuple, list)) else p_j["y"]
+        dx = xj - xi
+        dy = yj - yi
         perim += math.hypot(dx, dy)
     return perim
 
 def polygon_bbox(poly):
     """Retorna (min_x, min_y, max_x, max_y) do polígono."""
-    xs = [pt["x"] for pt in poly]
-    ys = [pt["y"] for pt in poly]
+    xs = [(pt[0] if isinstance(pt, (tuple, list)) else pt["x"]) for pt in poly]
+    ys = [(pt[1] if isinstance(pt, (tuple, list)) else pt["y"]) for pt in poly]
     return min(xs), min(ys), max(xs), max(ys)
 
 def bbox_overlap(bbox_a, bbox_b, gap=0.0):

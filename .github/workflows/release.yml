@@ -9,7 +9,7 @@ on:
       tag_name:
         description: 'Tag de versão SemVer (ex: v1.0.0)'
         required: false
-        default: 'v1.6.47'
+        default: 'v1.6.48'
 
 permissions:
   contents: write
@@ -47,7 +47,7 @@ jobs:
 
       - name: Compilar Executável Standalone com PyInstaller
         run: |
-          pyinstaller --clean --onefile --noconsole --icon "assets/app_icon.ico" --add-data "assets;assets" --add-data "samples;samples" --add-data "jobmanager.db;." --add-data "db.example.ini;." --hidden-import pymysql --hidden-import cryptography --hidden-import cad.project_packager --hidden-import cad.barcode --hidden-import cad.layout_converter --hidden-import cad.czlib --hidden-import cad.onx_exporter --hidden-import cad.dual_exporter --hidden-import cad.shape_backup --hidden-import cad.shape_backup_scheduler --hidden-import ui.user_dialog --hidden-import ui.layout_converter_dialog --hidden-import ui.shape_backup_restore_dialog --name "CorteAC" main.py
+          pyinstaller --clean --onefile --noconsole --icon "assets/app_icon.ico" --add-data "assets;assets" --add-data "samples;samples" --add-data "jobmanager.db;." --add-data "db.example.ini;." --hidden-import pymysql --hidden-import cryptography --hidden-import cad.project_packager --hidden-import cad.barcode --hidden-import cad.layout_converter --hidden-import cad.czlib --hidden-import cad.onx_exporter --hidden-import cad.dual_exporter --hidden-import cad.shape_backup --hidden-import cad.shape_backup_scheduler --hidden-import ui.user_dialog --hidden-import ui.layout_converter_dialog --hidden-import ui.shape_backup_restore_dialog --hidden-import ui.alter_sheet_dialog --name "CorteAC" main.py
 
       - name: Empacotar Pacote Portátil ZIP
         shell: pwsh
@@ -98,7 +98,7 @@ jobs:
 
       - name: Compilar Executável Standalone Linux com PyInstaller
         run: |
-          pyinstaller --clean --onefile --add-data "assets:assets" --add-data "samples:samples" --add-data "jobmanager.db:." --add-data "db.example.ini:." --hidden-import pymysql --hidden-import cryptography --hidden-import cad.project_packager --hidden-import cad.barcode --hidden-import cad.layout_converter --hidden-import cad.czlib --hidden-import cad.onx_exporter --hidden-import cad.dual_exporter --hidden-import cad.shape_backup --hidden-import cad.shape_backup_scheduler --hidden-import ui.user_dialog --hidden-import ui.layout_converter_dialog --hidden-import ui.shape_backup_restore_dialog --name "corteac_linux" main.py
+          pyinstaller --clean --onefile --add-data "assets:assets" --add-data "samples:samples" --add-data "jobmanager.db:." --add-data "db.example.ini:." --hidden-import pymysql --hidden-import cryptography --hidden-import cad.project_packager --hidden-import cad.barcode --hidden-import cad.layout_converter --hidden-import cad.czlib --hidden-import cad.onx_exporter --hidden-import cad.dual_exporter --hidden-import cad.shape_backup --hidden-import cad.shape_backup_scheduler --hidden-import ui.user_dialog --hidden-import ui.layout_converter_dialog --hidden-import ui.shape_backup_restore_dialog --hidden-import ui.alter_sheet_dialog --name "corteac_linux" main.py
 
       - name: Empacotar Pacote Portátil TAR.GZ
         run: |
@@ -197,23 +197,22 @@ jobs:
 
             ---
 
-            ### 🛠️ Recursos Incluídos Nesta Versão (v1.6.47):
-            - **Backup e Restauração de Sessões de Corte e Layouts (v1.6.47)**:
-              - Extensão completa da ferramenta de backup para suportar sessões de corte (`sessions`) e todos os seus layouts (`layouts`: `lay0000`, `lay0001`, ...), além do catálogo de moldes.
-              - **Escopos de Backup Selecionáveis**: *Backup Completo* (Moldes + Sessões + Layouts + Materiais), *Apenas Moldes* ou *Apenas Sessões de Corte*.
-              - **Filtros Flexíveis**: Filtro opcional por pasta de moldes e/ou por pasta de produção (Job).
-              - **Inspeção Prévia Detalhada**: Abas dedicadas na tela de restauração para visualizar previamente todos os moldes e sessões contidos no pacote compactado.
-              - **Estratégias de Conflito para Sessões**:
-                - *Importar com Novo ID*: Gera novo identificador monotônico sequencial seguro sem colidir com sessões já existentes.
-                - *Atualizar Existente*: Sobrescreve a sessão e seus layouts caso o ID já exista.
-                - *Ignorar Existentes*: Preserva os dados locais intactos.
-              - **Direcionamento de Pasta de Produção**: Permite restaurar sessões mantendo o Job original ou direcionando para um Job customizado.
-              - **Programação Automática (Agendamento)**: Atualizada para suportar backup automático diário, semanal ou por intervalo de Moldes e Sessões.
-              - **100% de Retrocompatibilidade**: Suporta restauração de pacotes de versões anteriores e ZIPs legados de arquivos `.die`.
-            - **Visualização de Lays da Sessão em Cascata e Lado a Lado (v1.6.46)**:
-              - Organização em subjanelas MDI no Layout Editor via menu *Janela* (*Em cascata*, *Lado a lado horizontal*, *Lado a lado vertical* e *Maximizar*).
+            ### 🛠️ Recursos Incluídos Nesta Versão (v1.6.48):
+            - **Alterar Medidas da Chapa no Layout Editor após o Encaixe (v1.6.48)**:
+              - Novo diálogo **Alterar chapa** (atalho `Ctrl+M` e menus *Arquivo -> Alterar chapa...* e *Encaixe -> Alterar chapa...*).
+              - Edição direta de **Largura** e **Altura** em metros (aceitando vírgula ou ponto, ex.: "1,38", "2,82").
+              - **Invariância geométrica absoluta**: as peças já encaixadas NUNCA são movidas, rotacionadas ou reencaixadas.
+              - Origem fixa no canto inferior esquerdo (0,0); redimensionamento altera unicamente as bordas direita e superior.
+              - Envelope mínimo seguro exibido em tempo real (`Mínimo possível: L × A m`).
+              - Peças fora da chapa reduzida destacadas em vermelho (`#dc2626`) com aviso ao operador sem deletar nada.
+              - Suporte completo a desfazer (`Ctrl+Z` restaura medidas, refile e ponta em snapshot único).
+              - Sincronização multi-chapa no SQLite/MySQL, exportação `.lay` e `.onx`, e folha de impressão A4.
+            - **Correção de Colisão e Margem em Chapas Refiladas (Sessão 188)**:
+              - Validação de limites sensível a refile (guilhotina CAM): bordas já cortadas usam o limite da chapa útil sem subtrair 10 mm de margem de fábrica.
+              - Eliminação de falsos alertas de colisão e contornos vermelhos nas peças das pontas em layouts com refile ativo.
+              - Linhas tracejadas de margem de segurança (`sheet_margins`) traçadas exclusivamente nas bordas brutas de fábrica, sem cortar peças nas bordas já refiladas.
             - **Estabilidade e Testes**:
-              - Suíte de testes expandida para **692 testes automatizados** passando com 100% de sucesso.
+              - Suíte de testes expandida para **704 testes automatizados** passando com 100% de sucesso.
           files: |
             dist-release/**/*.exe
             dist-release/**/*.zip

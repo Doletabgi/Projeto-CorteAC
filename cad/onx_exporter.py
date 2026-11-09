@@ -49,8 +49,8 @@ def build_onx_xml(
     else:
         m_top = m_left = m_bottom = m_right = 15.0
 
-    width = float(material.get("width_mm", 1350.0))
-    height = float(material.get("height_mm", 2553.38))
+    width = float(material.get("width_mm", 1380.0))
+    height = float(material.get("height_mm", 2990.0))
     thickness = float(material.get("thickness_mm", 1.0))
     gap = float(material.get("gap_mm", 1.0))
     layers = int(material.get("layers", 1))
@@ -303,14 +303,14 @@ def parse_onx(source: Any, db=None) -> Any:
     if mat_el is None:
         mat_el = root.find("{http://www.comelz.com/onx}material")
 
-    w = 1350.0
-    h = 2553.38
+    w = 1380.0
+    h = 2990.0
     gap = 1.0
     mat_code = "884412"
     if mat_el is not None:
         try:
-            w = float(mat_el.attrib.get("width", 1350.0))
-            h = float(mat_el.attrib.get("height", 2553.38))
+            w = float(mat_el.attrib.get("width", 1380.0))
+            h = float(mat_el.attrib.get("height", 2990.0))
         except ValueError:
             pass
         mat_code = mat_el.attrib.get("id", "884412")
