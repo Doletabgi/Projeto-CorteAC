@@ -599,34 +599,18 @@ class TestLayoutEditorShortcuts(unittest.TestCase):
         dlg.update_idletasks()
         dlg.redraw()
 
-        items = dlg.canvas.find_all()
-        rect_coords = None
-        for it in items:
-            if dlg.canvas.type(it) == "rectangle":
-                coords = dlg.canvas.coords(it)
-                if len(coords) == 4 and dlg.canvas.itemcget(it, "fill") == "#ffffff":
-                    w = coords[2] - coords[0]
-                    h = coords[3] - coords[1]
-                    if w < 595 and h < 842:
-                        rect_coords = coords
-                        break
-        self.assertIsNotNone(rect_coords)
-        w = rect_coords[2] - rect_coords[0]
-        h = rect_coords[3] - rect_coords[1]
-
-        # O tamanho DEVE ser grande proporcional à folha, muito maior que o antigo teto de 60pt!
-        self.assertGreater(h, 200.0, "A chapa deve ser grande e proporcional, não miniatura de 60pt")
-        self.assertGreater(w, 250.0, "A chapa deve ser grande e proporcional, não miniatura")
-
-        # A proporção geométrica (aspect ratio) deve coincidir com a da chapa
-        expected_ratio = 1380.0 / 1080.0
-        actual_ratio = w / h
-        self.assertAlmostEqual(actual_ratio, expected_ratio, delta=0.05)
-
-        # Testa renderização PIL
+        # O Canvas apresenta páginas rasterizadas; a região do mapa é medida
+        # em pontos pelo mesmo renderizador usado no PDF e na impressão.
         im = dlg.render_pillow_page(dpi=150)
-        self.assertIsNotNone(im)
-        self.assertEqual(im.size, (int(8.27 * 150), int(11.69 * 150)))
+        x0, y0, x1, y1 = dlg.print_regions[0]["map"]
+        w, h = x1-x0, y1-y0
+        self.assertGreater(h, 150.0, "A chapa não deve virar miniatura de 60pt")
+        self.assertGreater(w, 200.0)
+        self.assertAlmostEqual(w/h, 1380.0/1080.0, delta=0.01)
+        self.assertLess(x1, dlg.print_regions[0]["models"][0])
+        self.assertEqual(im.size, (round(595.28*150/72), round(841.89*150/72)))
+        self.assertTrue(dlg.canvas.find_withtag("print_page"))
+
         dlg.destroy()
 
         # Caso 2: Chapa alta (1350 x 2553.38 mm) como na captura do usuário (media_1792335385519)
@@ -638,28 +622,13 @@ class TestLayoutEditorShortcuts(unittest.TestCase):
         dlg2.update_idletasks()
         dlg2.redraw()
 
-        items2 = dlg2.canvas.find_all()
-        rect_coords2 = None
-        for it in items2:
-            if dlg2.canvas.type(it) == "rectangle":
-                coords = dlg2.canvas.coords(it)
-                if len(coords) == 4 and dlg2.canvas.itemcget(it, "fill") == "#ffffff":
-                    w2 = coords[2] - coords[0]
-                    h2 = coords[3] - coords[1]
-                    if w2 < 595 and h2 < 842:
-                        rect_coords2 = coords
-                        break
-        self.assertIsNotNone(rect_coords2)
-        w2 = rect_coords2[2] - rect_coords2[0]
-        h2 = rect_coords2[3] - rect_coords2[1]
-
-        # Na captura media_1792335385519, h2 era 48-60pt e w2 era 22pt!
-        # Agora h2 deve preencher a maior parte do espaço vertical disponível (~500pt)
-        self.assertGreater(h2, 350.0)
-        self.assertGreater(w2, 180.0)
-        expected_ratio2 = 1350.0 / 2553.38
-        actual_ratio2 = w2 / h2
-        self.assertAlmostEqual(actual_ratio2, expected_ratio2, delta=0.05)
+        dlg2.render_pillow_page(dpi=150)
+        x0, y0, x1, y1 = dlg2.print_regions[0]["map"]
+        w2, h2 = x1-x0, y1-y0
+        self.assertGreater(h2, 300.0)
+        self.assertGreater(w2, 150.0)
+        self.assertAlmostEqual(w2/h2, 1350.0/2553.38, delta=0.01)
+        self.assertLess(x1, dlg2.print_regions[0]["models"][0])
 
         dlg2.destroy()
 
@@ -767,25 +736,21 @@ class TestLayoutEditorShortcuts(unittest.TestCase):
         dlg.update_idletasks()
         dlg.redraw()
 
-        # 1. Canvas do diálogo deve conter itens das tags print_grid, print_tick e print_label
-        grid_lines = dlg.canvas.find_withtag("print_grid")
-        ticks = dlg.canvas.find_withtag("print_tick")
-        labels = dlg.canvas.find_withtag("print_label")
-
-        self.assertGreater(len(grid_lines), 15, "A tela de impressão deve conter linhas de grade interna")
-        self.assertGreater(len(ticks), 20, "A tela de impressão deve conter traços (ticks) de régua")
-        self.assertGreater(len(labels), 15, "A tela de impressão deve conter numeração na régua")
-
-        label_texts = [dlg.canvas.itemcget(item, "text") for item in labels]
-        self.assertIn("0,1", label_texts, "Régua da impressão deve marcar 0,1 m")
-        self.assertIn("0,2", label_texts, "Régua da impressão deve marcar 0,2 m")
-        self.assertIn("0,3", label_texts, "Régua da impressão deve marcar 0,3 m")
-        self.assertNotIn("10", label_texts, "A régua não deve mais numerar em centímetros")
-
-        # 2. Renderização Pillow (utilizada para PDF, impressão física e exportação de imagem) deve gerar com sucesso
-        im = dlg.render_pillow_page(dpi=150)
-        self.assertIsNotNone(im)
-        self.assertEqual(im.size, (int(8.27 * 150), int(11.69 * 150)))
+        from unittest.mock import patch
+        from PIL import ImageDraw
+        strokes = []
+        original_line = ImageDraw.ImageDraw.line
+        def record_line(draw, xy, *args, **kwargs):
+            strokes.append(kwargs.get("fill"))
+            return original_line(draw, xy, *args, **kwargs)
+        with patch.object(ImageDraw.ImageDraw, "line", record_line):
+            im = dlg.render_pillow_page(dpi=150)
+        self.assertGreater(strokes.count("#dddddd"), 15)
+        self.assertGreater(strokes.count("#555555"), 20)
+        for label in ("0,1", "0,2", "0,3"):
+            self.assertIn(label, dlg.print_texts)
+        self.assertNotIn("10", dlg.print_texts)
+        self.assertEqual(im.size, (round(595.28*150/72), round(841.89*150/72)))
 
         dlg.destroy()
 

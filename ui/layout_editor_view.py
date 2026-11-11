@@ -21,6 +21,7 @@ from config import THEME, EXPORTS_DIR
 from ui.units import format_m, format_dim_mm, format_dim_m
 from ui.tooltip import ToolTip
 from cad.geometry import transform_contour, point_in_polygon, rotate_point, polygon_bbox, polygons_collide, polygon_area, SpatialGrid, bbox_overlap
+from cad.sidebar_rules import count_pieces_for_target, get_plates_for_target, piece_matches_target
 from cad.colors import get_color_for_size, get_contrast_text_color
 from cad.die_parser import parse_die_file
 from ui.layout_print_dialog import LayoutPrintDialog
@@ -1907,88 +1908,21 @@ class LayoutEditorView(tk.Frame):
             self.canvas.tag_bind(tag_name, "<Leave>", lambda e: self._on_sidebar_target_leave())
 
     def get_plates_for_target(self, target) -> list:
-        """
-        Retorna a lista ordenada de números das placas (1-indexed) que contêm peças do molde/tamanho especificado.
-        Examina a placa atualmente em edição (placed_pieces) e as demais placas de layouts da sessão.
-        """
-        if not target:
-            return []
-        plates = []
-        layouts = getattr(self, "layouts", None)
-        cur_idx = getattr(self, "current_layout_index", 0)
-
-        if not layouts:
-            if self.count_pieces_for_target(self.placed_pieces, target) > 0:
-                plates.append(1)
-            return plates
-
-        for l_idx, ly in enumerate(layouts):
-            plate_num = l_idx + 1
-            if l_idx == cur_idx:
-                cnt = self.count_pieces_for_target(self.placed_pieces, target)
-            else:
-                ly_pieces = ly.get("pieces") or ly.get("placed_pieces") or []
-                cnt = self.count_pieces_for_target(ly_pieces, target)
-
-            if cnt > 0:
-                plates.append(plate_num)
-
-        return plates
+        """Placas do molde, incluindo as alterações ainda não salvas."""
+        return get_plates_for_target(
+            getattr(self, "layouts", None),
+            getattr(self, "current_layout_index", 0),
+            self.placed_pieces,
+            target,
+        )
 
     def count_pieces_for_target(self, pieces, target) -> int:
-        """
-        Conta quantas peças da coleção correspondem ao molde target especificado.
-        Utiliza _piece_matches_target como regra canônica.
-        """
-        if not pieces or not target:
-            return 0
-        return sum(1 for p in pieces if self._piece_matches_target(p, target))
+        """Conta peças usando a mesma regra da seleção pela barra lateral."""
+        return count_pieces_for_target(pieces, target)
 
     def _piece_matches_target(self, piece, target) -> bool:
-        """
-        Regra única de correspondência peça <-> molde da barra lateral.
-
-        Usada tanto pelos CONTADORES quanto pela SELEÇÃO por clique na miniatura,
-        para que o número exibido e as peças selecionadas nunca divirjam.
-        """
-        if not piece or not target:
-            return False
-
-        t_id = str(target.get("id") or "").strip()
-        t_sz = str(target.get("size") or "").strip()
-        t_nm = str(target.get("name") or "").strip()
-
-        shp = piece.get("shape") if isinstance(piece.get("shape"), dict) else {}
-        p_tid = str(piece.get("target_id") or piece.get("shape_id") or shp.get("id") or "").strip()
-        p_sz = str(piece.get("size") or shp.get("size") or "").strip()
-        p_nm = str(piece.get("name") or shp.get("name") or "").strip()
-
-        # Rejeição imediata se tamanhos divergirem
-        if p_sz and t_sz and p_sz != t_sz:
-            return False
-
-        # Correspondência por ID do molde
-        if p_tid and t_id and p_tid == t_id:
-            return True
-
-        # Se ambos possuem ID explícito diferente, não correspondem
-        if p_tid and t_id and p_tid != t_id:
-            return False
-
-        # Correspondência por nome idêntico ou prefixo (ex.: sufixos de tamanho ou truncamento)
-        if p_nm and t_nm:
-            if p_nm == t_nm:
-                return True
-            p_clean = p_nm.rstrip(".").lower()
-            t_clean = t_nm.rstrip(".").lower()
-            if p_clean == t_clean or p_clean.startswith(t_clean) or t_clean.startswith(p_clean):
-                return True
-
-        # Correspondência por tamanho idêntico
-        if p_sz and t_sz and p_sz == t_sz and (not p_nm or not t_nm or p_nm == t_nm):
-            return True
-
-        return False
+        """Mantém a API do editor; a regra canônica reside em cad.sidebar_rules."""
+        return piece_matches_target(piece, target)
 
     def _on_sidebar_target_enter(self, tip_text: str):
         if hasattr(self, "lbl_stat_pos") and self.lbl_stat_pos.winfo_exists():
@@ -7197,7 +7131,7 @@ class LayoutEditorView(tk.Frame):
         mat_desc = None
         mat_layers = None
         if mat and isinstance(mat, dict):
-            mat_code = mat.get("code") or mat.get("id") or getattr(self, "material_id", "853412")
+            mat_code = mat.get("code") or mat.get("id") or getattr(self, "material_id", None)
             mat_desc = mat.get("name") or mat.get("description") or mat.get("desc") or getattr(self, "material_name", "")
             mat_layers = mat.get("layers", getattr(self, "material_layers", 2))
         elif getattr(self, "material_cod_r", None):
@@ -7205,8 +7139,8 @@ class LayoutEditorView(tk.Frame):
             mat_desc = getattr(self, "material_name", None)
             mat_layers = getattr(self, "material_layers", None)
         else:
-            mat_code = getattr(self, "material_id", "853412")
-            mat_desc = getattr(self, "material_name", "SINT-LOGAM-PRETO")
+            mat_code = getattr(self, "material_id", None)
+            mat_desc = getattr(self, "material_name", None)
             mat_layers = getattr(self, "material_layers", 2)
 
         if hasattr(self, "_sync_current_layout_pieces"):
@@ -7224,6 +7158,7 @@ class LayoutEditorView(tk.Frame):
         )
 
         layout_data = {
+            "session": getattr(self, "session", None),
             "layout_name": getattr(self, "layout_name", "10001.lay"),
             "sheet_w_mm": self.sheet_width,
             "sheet_h_mm": self.sheet_height,

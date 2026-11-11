@@ -2846,6 +2846,8 @@ class MainWindow(tk.Tk):
 
             ly_copy["pieces"] = pcs
             ly_copy["placed_pieces"] = pcs
+            ly_copy["session"] = sess_obj
+            ly_copy["order_id"] = sess_obj.get("order_id")
             ly_copy["session_id"] = sid
             ly_copy["session_name"] = sess_name
             ly_copy["session_title"] = sess_title

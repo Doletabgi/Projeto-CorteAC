@@ -1,14 +1,20 @@
 import unittest
 import math
 import tkinter as tk
+from pathlib import Path
+from cad.die_parser import parse_die_file
 from database import DatabaseManager
 from cad.nesting_engine import auto_nest_pieces
 from cad.geometry import transform_contour, polygon_bbox, polygons_collide, point_segment_distance_sq
 
 class TestNestingContourGap(unittest.TestCase):
     def setUp(self):
-        self.db = DatabaseManager()
-        self.shapes = self.db.get_shapes()
+        # Catálogo explícito: o teste não depende de dados do operador nem da
+        # ordem de execução das outras suítes que cadastram/excluem moldes.
+        self.db = DatabaseManager(":memory:", backend="sqlite")
+        self.addCleanup(self.db.get_connection().raw.close)
+        shape = parse_die_file(str(Path(__file__).resolve().parents[1] / "samples" / "Gaspea_Derby_41.die"))
+        self.shapes = [{**shape, "id": 1, "pairs": 60, "layers": 2}]
         self.bed_width = 1350.0
         self.bed_height = 2553.38
 

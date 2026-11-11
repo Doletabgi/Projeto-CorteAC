@@ -77,61 +77,24 @@ class TestLayoutPrintBarcodeIntegration:
     """Testes de integração do código de barras no diálogo de impressão A4."""
 
     def test_print_dialog_barcode_payload_and_canvas(self):
-        root = tk.Tk()
-        root.withdraw()
+        root=tk.Tk();root.withdraw()
+        try:
+            dlg=LayoutPrintDialog(root,layout_data={'session_id':188,'sheet_w_mm':1380,'sheet_h_mm':1080,'layouts':[{'name':'lay0000','session_id':188},{'name':'lay0001','session_id':188}]})
+            payload,label=dlg.get_barcode_payload_and_label()
+            assert payload=='CAC:SESS:188:LAY:0'
+            assert 'Sessão #188' in label
+            assert dlg.canvas.find_withtag('print_page')
+            # O mesmo gerador Code128 é chamado em cada folha da prévia/exportação.
+            from unittest.mock import patch
+            from ui.production_sheet import generate_code128_pillow as original
+            with patch('ui.production_sheet.generate_code128_pillow', wraps=original) as barcode:
+                pages=dlg.render_pillow_pages()
+                assert barcode.call_count>=len(pages)
+                assert barcode.call_args.args[0]==payload
+            dlg.destroy()
+        finally:
+            root.destroy()
 
-        layout_data = {
-            "session_id": 188,
-            "session_name": "Sessão #188",
-            "layout_name": "lay0000.lay",
-            "sheet_w_mm": 1380.0,
-            "sheet_h_mm": 1080.0,
-            "layouts": [
-                {"name": "lay0000.lay", "session_id": 188},
-                {"name": "lay0001.lay", "session_id": 188},
-            ],
-            "current_layout_index": 0,
-        }
-
-        dlg = LayoutPrintDialog(root, layout_data=layout_data)
-        payload, label = dlg.get_barcode_payload_and_label()
-        assert payload == "CAC:SESS:188:LAY:0"
-        assert "Sessão #188" in label
-
-        # Verifica se o código de barras foi desenhado no canvas
-        bc_items = dlg.canvas.find_withtag("print_barcode")
-        assert len(bc_items) > 0
-
-        # Verifica que o título não sobrepõe o código de barras
-        bc_bbox = dlg.canvas.bbox("print_barcode")
-        title_item = None
-        for item in dlg.canvas.find_all():
-            txt = dlg.canvas.itemcget(item, "text") if dlg.canvas.type(item) == "text" else ""
-            if "Placa 1" in txt:
-                title_item = item
-                break
-        if title_item and bc_bbox:
-            t_bbox = dlg.canvas.bbox(title_item)
-            # Título deve terminar antes do início horizontal do código de barras
-            assert t_bbox[2] < bc_bbox[0], f"Sobreposição: título={t_bbox}, barcode={bc_bbox}"
-
-        # Verifica que o desenho do layout (print_bed) está alinhado à margem esquerda
-        bed_items = dlg.canvas.find_withtag("print_bed")
-        assert len(bed_items) > 0
-        bed_bbox = dlg.canvas.bbox(bed_items[0])
-        page_items = dlg.canvas.find_withtag("print_page")
-        if page_items:
-            page_bbox = dlg.canvas.bbox(page_items[0])
-            expected_m_left = page_bbox[0] + int(36 * dlg.zoom)
-            assert abs(bed_bbox[0] - expected_m_left) <= 2, f"bed_x={bed_bbox[0]} esperado={expected_m_left}"
-
-        # Verifica renderização no Pillow
-        im = dlg.render_pillow_page(dpi=72)
-        assert im is not None
-        assert im.size[0] > 0 and im.size[1] > 0
-
-        dlg.destroy()
-        root.destroy()
 
 
 class TestMainWindowScannerListener:

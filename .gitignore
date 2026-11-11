@@ -34,3 +34,12 @@ scratch/
 
 # Backups locais de produção e executáveis anteriores
 backups/
+
+# Artefatos locais de validação (podem conter dados de produção)
+output/
+!tools/semver.py
+!tools/check_release_cadence.py
+!tools/bench_nest.py
+!tools/capture_layout_screenshots.py
+!tests/fixtures/ia_teste_baseline.json
+!tools/bench_tsp.py

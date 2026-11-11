@@ -1,7 +1,6 @@
 """
 JobManager 2000 (Python Edition)
-Visualizador e Emissor de Relatório de Impressão do Layout (.lay)
-Reprodução idêntica ao modelo original ATOM FlashCut (media_1792071945871.jpg)
+Visualizador e emissor da ficha de produção A4 do layout (.lay).
 """
 
 import sys
@@ -11,21 +10,16 @@ import math
 import re
 from datetime import datetime
 from pathlib import Path
-from typing import Tuple, Optional, List, Dict
+from typing import Tuple
 import tkinter as tk
 from tkinter import ttk, messagebox, filedialog
-import tkinter.font as tkfont
-from PIL import Image, ImageDraw, ImageFont
+from PIL import Image
 
 from config import THEME
 from ui.units import format_m, format_dim_mm
 from cad.colors import get_color_for_size
 from cad.layers_rule import (
-    calc_resto,
-    calc_resto_efetivo,
     resolve_layout_layers,
-    is_separar_sobras_enabled,
-    format_enfesto_operator_text,
 )
 from cad.geometry import polygon_area, transform_contour
 
@@ -310,7 +304,7 @@ def _desenhar_retangulo_tracejado(draw, box, cor="#2563eb", largura=2, traco=6, 
 class LayoutPrintDialog(tk.Toplevel):
     """
     Janela modal de Visualização de Impressão (Print Preview) do Layout Editor.
-    Exibe a folha A4 com cabeçalho oficial ATOM, metadados completos e o gráfico do encaixe.
+    Exibe a ficha A4 com identificação, preparação, produção e mapa de corte.
     """
     def __init__(self, parent, layout_data=None, **kwargs):
         super().__init__(parent, bg=THEME["bg_surface"], **kwargs)
@@ -339,7 +333,7 @@ class LayoutPrintDialog(tk.Toplevel):
 
         self.unc_prefix = self.layout_data.get("unc_prefix", r"\\Lab-inf\NSDATAv1")
         self.description = self.layout_data.get("description", "fn98 - v1.2.36 - 12.09.2012")
-        self.date_str = self.layout_data.get("date_str") or datetime.now().strftime("%A, %d %B %Y")
+        self.date_str = self.layout_data.get("date_str") or datetime.now().strftime("%d/%m/%Y %H:%M")
         self.gap_str = self.layout_data.get("gap_str", "1.00 mm")
 
         # Metadados de sessão e moldes para legenda
@@ -445,7 +439,7 @@ class LayoutPrintDialog(tk.Toplevel):
             elif c_str:
                 base_mat = c_str
             else:
-                base_mat = "853412 - SINT-LOGAM-PRETO"
+                base_mat = "Material não informado"
 
             if "layer(s)" in base_mat.lower():
                 if mat_layers is not None:
@@ -460,7 +454,7 @@ class LayoutPrintDialog(tk.Toplevel):
             else:
                 self.material_name = raw_mat_name
         else:
-            self.material_name = "132011 - VELCRO 4'' ARGOLA - PRETO ( 4 layer(s) )"
+            self.material_name = "Material não informado"
 
     def load_layout_index(self, index: int, initial: bool = False) -> bool:
         """
@@ -478,13 +472,21 @@ class LayoutPrintDialog(tk.Toplevel):
         cur_shapes = self.current_layout.get("session_shapes") or self.current_layout.get("shapes")
         if cur_shapes:
             self.session_shapes = cur_shapes
-        elif self.layout_data.get("session_shapes"):
-            self.session_shapes = self.layout_data.get("session_shapes")
+        elif self.current_layout.get("session_id") and self.current_layout.get("session_id") != self.layout_data.get("session_id"):
+            self.session_shapes = []
+        else:
+            self.session_shapes = self.layout_data.get("session_shapes") or []
 
         if any(k in self.current_layout for k in ("material", "material_code", "material_name", "material_desc")):
             self._setup_material_metadata(source=self.current_layout)
         else:
             self._setup_material_metadata(source=self.layout_data)
+
+        gap = self.current_layout.get("gap_mm")
+        if gap is not None:
+            self.gap_str = f"{float(gap):.2f} mm".replace(".", ",")
+        else:
+            self.gap_str = self.layout_data.get("gap_str", "não informado")
 
         # 1. Nome do layout e título da janela
         raw_name = self.current_layout.get("name") or self.current_layout.get("layout_name") or self.current_layout.get("code")
@@ -518,20 +520,16 @@ class LayoutPrintDialog(tk.Toplevel):
             self.sheet_w_mm = float(sheet_w)
         elif "sheet_w_mm" in self.layout_data:
             self.sheet_w_mm = float(self.layout_data["sheet_w_mm"])
-        elif index == 0 and not self.layout_data.get("placed_pieces"):
-            self.sheet_w_mm = 1500.0
         else:
-            self.sheet_w_mm = 1380.0
+            self.sheet_w_mm = 0.0
 
         sheet_h = self.current_layout.get("height_mm") or self.current_layout.get("sheet_h_mm")
         if sheet_h is not None:
             self.sheet_h_mm = float(sheet_h)
         elif "sheet_h_mm" in self.layout_data:
             self.sheet_h_mm = float(self.layout_data["sheet_h_mm"])
-        elif index == 0 and not self.layout_data.get("placed_pieces"):
-            self.sheet_h_mm = 90.0
         else:
-            self.sheet_h_mm = 1080.0
+            self.sheet_h_mm = 0.0
 
         # 3. Peças colocadas
         pcs = self.current_layout.get("pieces") if self.current_layout.get("pieces") is not None else self.current_layout.get("placed_pieces")
@@ -544,29 +542,20 @@ class LayoutPrintDialog(tk.Toplevel):
         else:
             self.placed_pieces = []
 
-        if not self.placed_pieces and index == 0 and "sheet_w_mm" not in self.layout_data and (not self.layouts or len(self.layouts) <= 1):
-            self.dimensions_str = "1,50 x 2,98 m"
-            self.mat_area_str = "0.13 sq.M."
-            self.used_area_str = "0.11 sq.M."
-            self.yield_pct = 83.02
-            self.shapes_count = 15
-            self.instances_count = 40
-            self.init_sample_pieces()
-        else:
-            for p in self.placed_pieces:
-                if not isinstance(p, dict):
-                    continue
-                if not p.get("contour"):
-                    shp = p.get("shape") if isinstance(p.get("shape"), dict) else None
-                    if shp and shp.get("contour"):
-                        p["contour"] = shp.get("contour")
-                    elif self.session_shapes:
-                        sid = p.get("shape_id") or p.get("target_id") or p.get("name")
-                        for s in self.session_shapes:
-                            if isinstance(s, dict) and (s.get("id") == sid or s.get("name") == sid or s.get("shape_id") == sid):
-                                if s.get("contour"):
-                                    p["contour"] = s.get("contour")
-                                    break
+        for p in self.placed_pieces:
+            if not isinstance(p, dict):
+                continue
+            if not p.get("contour"):
+                shp = p.get("shape") if isinstance(p.get("shape"), dict) else None
+                if shp and shp.get("contour"):
+                    p["contour"] = shp.get("contour")
+                elif self.session_shapes:
+                    sid = p.get("shape_id") or p.get("target_id") or p.get("name")
+                    for s in self.session_shapes:
+                        if isinstance(s, dict) and (s.get("id") == sid or s.get("name") == sid or s.get("shape_id") == sid):
+                            if s.get("contour"):
+                                p["contour"] = s.get("contour")
+                                break
 
         # 4. Camadas / Enfesto
         mat_obj = self.current_layout.get("material") or self.layout_data.get("material")
@@ -615,7 +604,7 @@ class LayoutPrintDialog(tk.Toplevel):
         self.refile_display_str = ("Refilado (" + ", ".join(refile_parts) + ")") if refile_parts else "Sem refile"
 
         # 7. Dimensões e Linhas de Dimensão
-        self.dimensions_str = format_dim_mm(self.sheet_w_mm, self.sheet_h_mm)
+        self.dimensions_str = format_dim_mm(self.sheet_w_mm, self.sheet_h_mm) if self.sheet_w_mm > 0 and self.sheet_h_mm > 0 else "não informadas"
         if self.tip_zone:
             from cad.layers_rule import format_dimensions_folhas
             self.dimensions_lines = format_dimensions_folhas(
@@ -856,212 +845,19 @@ class LayoutPrintDialog(tk.Toplevel):
                 pass
         self.redraw()
 
-    def init_sample_pieces(self):
-        """Gera a disposição autêntica das 40 peças mostrada no print do usuário."""
-        self.placed_pieces = []
-        cols = 20
-        rows = 2
-        pw = 71.0
-        ph = 40.0
-        margin_x = 12.0
-        margin_y = 4.0
-        spacing_x = (self.sheet_w_mm - margin_x * 2 - cols * pw) / max(1, cols - 1)
-        spacing_y = (self.sheet_h_mm - margin_y * 2 - rows * ph) / max(1, rows - 1)
-
-        # Contorno retangular com cantos chanfrados (tira/velcro)
-        contour = [
-            {"x": -pw/2 + 4, "y": -ph/2},
-            {"x": pw/2 - 4, "y": -ph/2},
-            {"x": pw/2, "y": -ph/2 + 4},
-            {"x": pw/2, "y": ph/2 - 4},
-            {"x": pw/2 - 4, "y": ph/2},
-            {"x": -pw/2 + 4, "y": ph/2},
-            {"x": -pw/2, "y": ph/2 - 4},
-            {"x": -pw/2, "y": -ph/2 + 4},
-        ]
-
-        for col in range(cols):
-            for row in range(rows):
-                cx = margin_x + col * (pw + spacing_x) + pw / 2
-                cy = margin_y + row * (ph + spacing_y) + ph / 2
-                # As 2 peças da primeira coluna são laranjas (#f97316), as demais 38 são verdes (#22c55e)
-                color = "#f97316" if col == 0 else "#22c55e"
-                self.placed_pieces.append({
-                    "contour": contour,
-                    "x": cx,
-                    "y": cy,
-                    "color": color,
-                    "rotation": 0.0,
-                    "name": "Velcro",
-                    "size": "36"
-                })
-
     def build_legend_data(self):
-        """
-        Constrói a lista estruturada da legenda por molde:
-        [
-            {
-                "molde_name": str,
-                "shape_id": int/str or None,
-                "sizes": [
-                    {"size": str, "n": int, "m": int, "is_error": bool},
-                    ...
-                ]
-            }, ...
-        ]
-        """
-        cur_layout = getattr(self, "current_layout", None)
-        if cur_layout and isinstance(cur_layout, dict) and cur_layout.get("legend_data"):
-            return cur_layout.get("legend_data")
-        if self.layout_data.get("legend_data") and (not self.layouts or len(self.layouts) <= 1):
-            return self.layout_data.get("legend_data")
-
-        session_shapes = self.session_shapes or []
-        placed_pieces = self.placed_pieces or []
-        layouts = self.layouts or []
-        layers = max(1, getattr(self, "material_layers", 2) or 2)
-        is_multi_plate = (len(layouts) > 1)
-
-        # 1. Mapeamento de demanda da sessão e ShapeId a partir de session_shapes
-        session_m = {}         # (molde_name, fmt_size) -> int
-        molde_shape_ids = {}   # molde_name -> shape_id
-        moldes_order = []      # [molde_name, ...]
-        sizes_by_molde = {}    # molde_name -> set(fmt_size)
-
-        for shp in session_shapes:
-            if not isinstance(shp, dict):
-                continue
-            s_name = shp.get("name") or "Molde"
-            s_size_raw = shp.get("size") or ""
-            m_name = extract_molde_base_name(s_name, s_size_raw)
-            fmt_sz = format_size(s_size_raw)
-            s_id = shp.get("shape_id") if shp.get("shape_id") is not None else shp.get("id")
-            m_pairs = int(shp.get("pairs") or shp.get("required_qty", 0) or shp.get("required", 0) or 0)
-
-            if m_name not in moldes_order:
-                moldes_order.append(m_name)
-            if m_name not in molde_shape_ids and s_id is not None and str(s_id).strip():
-                molde_shape_ids[m_name] = str(s_id).strip()
-            if m_name not in sizes_by_molde:
-                sizes_by_molde[m_name] = set()
-            if fmt_sz:
-                sizes_by_molde[m_name].add(fmt_sz)
-                session_m[(m_name, fmt_sz)] = m_pairs
-
-        # 2. Contagem de peças/pares na placa atual (placed_pieces)
-        placed_counts = {}   # (molde_name, fmt_size) -> piece count
-        explicit_pairs = {}  # (molde_name, fmt_size) -> explicit pair count if provided
-
-        for p in placed_pieces:
-            if not isinstance(p, dict):
-                continue
-            p_name = p.get("name") or p.get("shape_name") or (p.get("shape", {}).get("name") if isinstance(p.get("shape"), dict) else "") or "Molde"
-            p_size_raw = p.get("size") or (p.get("shape", {}).get("size") if isinstance(p.get("shape"), dict) else "")
-            m_name = extract_molde_base_name(p_name, p_size_raw)
-            fmt_sz = format_size(p_size_raw)
-            if not fmt_sz and "size" in p:
-                fmt_sz = format_size(p["size"])
-            if not fmt_sz:
-                fmt_sz = "41"
-
-            if m_name not in moldes_order:
-                moldes_order.append(m_name)
-            if m_name not in sizes_by_molde:
-                sizes_by_molde[m_name] = set()
-            sizes_by_molde[m_name].add(fmt_sz)
-
-            p_sid = p.get("shape_id") or p.get("target_id") or (p.get("shape", {}).get("id") if isinstance(p.get("shape"), dict) else None)
-            if m_name not in molde_shape_ids and p_sid is not None and str(p_sid).strip():
-                molde_shape_ids[m_name] = str(p_sid).strip()
-
-            k = (m_name, fmt_sz)
-            if "pairs" in p and p["pairs"] is not None:
-                explicit_pairs[k] = explicit_pairs.get(k, 0) + int(p["pairs"])
-            else:
-                placed_counts[k] = placed_counts.get(k, 0) + 1
-
-        # 3. Em multi-placa, calcula somatório total entre placas se session_m não estiver presente
-        multi_plate_totals = {}
-        if is_multi_plate and not session_m:
-            for ly in layouts:
-                ly_pcs = ly.get("pieces") or ly.get("placed_pieces") or []
-                for p in ly_pcs:
-                    if not isinstance(p, dict):
-                        continue
-                    p_name = p.get("name") or p.get("shape_name") or (p.get("shape", {}).get("name") if isinstance(p.get("shape"), dict) else "") or "Molde"
-                    p_size_raw = p.get("size") or (p.get("shape", {}).get("size") if isinstance(p.get("shape"), dict) else "")
-                    m_name = extract_molde_base_name(p_name, p_size_raw)
-                    fmt_sz = format_size(p_size_raw) or "41"
-                    k = (m_name, fmt_sz)
-                    if "pairs" in p and p["pairs"] is not None:
-                        multi_plate_totals[k] = multi_plate_totals.get(k, 0) + int(p["pairs"])
-                    else:
-                        multi_plate_totals[k] = multi_plate_totals.get(k, 0) + 1
-
-            for k in list(multi_plate_totals.keys()):
-                if k not in explicit_pairs:
-                    multi_plate_totals[k] = (multi_plate_totals[k] * layers) // 2
-
-        # 4. Monta lista consolidada de moldes e tamanhos
-        legend_result = []
-
-        def _size_key(sz_str):
-            m = re.search(r"(\d+(?:\.\d+)?)", str(sz_str))
-            return float(m.group(1)) if m else 0.0
-
-        for m_name in moldes_order:
-            all_szs = sorted(list(sizes_by_molde.get(m_name, [])), key=_size_key)
-            size_list = []
-
-            for sz in all_szs:
-                k = (m_name, sz)
-                if k in explicit_pairs:
-                    n = explicit_pairs[k]
-                elif k in placed_counts:
-                    n = (placed_counts[k] * layers) // 2
-                else:
-                    n = 0
-
-                if k in session_m:
-                    m = session_m[k]
-                elif is_multi_plate and k in multi_plate_totals:
-                    m = multi_plate_totals[k]
-                elif session_m:
-                    m = 0
-                else:
-                    m = n
-
-                # Não lista tamanhos com 0 peças na placa atual se não foram solicitados
-                if n == 0 and (k not in session_m or session_m[k] == 0):
-                    continue
-
-                # Se n == 0 nesta placa em multi-placa e há outras peças deste molde aqui:
-                if n == 0 and is_multi_plate:
-                    has_other_placed = any(placed_counts.get((m_name, other_sz), 0) > 0 or explicit_pairs.get((m_name, other_sz), 0) > 0 for other_sz in all_szs)
-                    if has_other_placed:
-                        continue
-
-                # A sobra legítima NÃO é erro: destacar em vermelho SOMENTE se n exceder m + sobra legítima
-                is_sep = is_separar_sobras_enabled(getattr(self, "session", None))
-                sess_layouts = getattr(self, "layouts", None)
-                resto = calc_resto_efetivo(m, layers, separar=is_sep, layouts_atuais=sess_layouts)
-                max_allowed = m + abs(resto)
-                is_error = (n > max_allowed) if m > 0 else False
-                size_list.append({
-                    "size": sz,
-                    "n": n,
-                    "m": m,
-                    "is_error": is_error
-                })
-
-            if size_list:
-                legend_result.append({
-                    "molde_name": m_name,
-                    "shape_id": molde_shape_ids.get(m_name),
-                    "sizes": size_list
-                })
-
-        return legend_result
+        """Projeção compatível da contagem física usada pela ficha."""
+        from ui.production_sheet import production_rows
+        layout = dict(self.current_layout)
+        layout.update(layers=self.layout_layers, tip_zone=self.tip_zone, layers_tip=self.layers_tip)
+        grouped = {}
+        for row in production_rows(self.placed_pieces, self.session_shapes, layout):
+            name = extract_molde_base_name(row["name"], row["size"])
+            entry = grouped.setdefault(name, {"molde_name": name,
+                                             "shape_id": row["shape_id"], "sizes": []})
+            entry["sizes"].append({"size": format_size(row["size"]), "n": row["pairs"],
+                                   "m": row["demand"], "is_error": False})
+        return list(grouped.values())
 
     def setup_ui(self):
         # 1. Barra de Ferramentas Superior
@@ -1269,1013 +1065,29 @@ class LayoutPrintDialog(tk.Toplevel):
         self.redraw()
 
     def redraw(self):
+        """A prévia usa as mesmas páginas enviadas ao PDF e à impressora."""
         self.canvas.delete("all")
+        self._sheet_photos = []
+        y = 30
+        for page in self.render_pillow_pages(dpi=200):
+            width = max(1, round(self.page_w_base * self.zoom))
+            height = max(1, round(page.height * width / page.width))
+            buffer = io.BytesIO()
+            page.resize((width, height), Image.Resampling.LANCZOS).save(buffer, format="PNG")
+            photo = tk.PhotoImage(master=self.canvas, data=buffer.getvalue())
+            self._sheet_photos.append(photo)
+            x = max(30, (self.canvas.winfo_width() - width) // 2)
+            self.canvas.create_image(x, y, anchor="nw", image=photo, tags=("print_page",))
+            y += height + 30
+        self.canvas.configure(scrollregion=(0, 0, max(self.page_w_base*self.zoom+60, self.canvas.winfo_width()), y))
+
+    def render_pillow_pages(self, dpi=150):
+        from ui.production_sheet import render_sheet
+        return render_sheet(self, dpi)
 
-        page_w = int(self.page_w_base * self.zoom)
-        page_h = int(self.page_h_base * self.zoom)
-
-        cv_w = max(self.canvas.winfo_width(), page_w + 60)
-        cv_h = max(self.canvas.winfo_height(), page_h + 60)
-
-        # Centraliza a página no canvas
-        px = max(30, (cv_w - page_w) // 2)
-        py = max(30, (cv_h - page_h) // 2)
-
-        # Sombra da folha de papel
-        self.canvas.create_rectangle(
-            px + 4, py + 4, px + page_w + 4, py + page_h + 4,
-            fill="#2c2c2c", outline=""
-        )
-
-        # Folha de papel branca pura A4
-        self.canvas.create_rectangle(
-            px, py, px + page_w, py + page_h,
-            fill="#ffffff", outline="#707070", width=1
-        )
-
-        # Fonte monoespaçada Courier escalada com zoom
-        f_size_sm = max(6, int(8 * self.zoom))
-        f_size_md = max(7, int(9 * self.zoom))
-        f_size_lg = max(9, int(13 * self.zoom))
-
-        f_mono = ("Courier", f_size_md)
-        f_mono_bold = ("Courier", f_size_md, "bold")
-        f_title = ("Courier", f_size_lg, "bold")
-        f_path = ("Courier", max(6, int(7.5 * self.zoom)))
-        f_date = ("Courier", max(6, int(8 * self.zoom)))
-
-        margin_left = px + int(36 * self.zoom)
-        margin_right = px + page_w - int(36 * self.zoom)
-        margin_top = py + int(30 * self.zoom)
-
-        # =====================================================================
-        # 1. Cabeçalho Topo
-        # =====================================================================
-        # Linha de caminho de rede no canto superior esquerdo
-        self.canvas.create_text(
-            margin_left, margin_top,
-            text=self.unc_prefix + "\\",
-            anchor="nw", font=f_path, fill="#000000"
-        )
-
-        # Logotipo da Empresa no canto superior esquerdo (se configurado)
-        logo_y = margin_top + int(12 * self.zoom)
-        max_logo_w = int(140 * self.zoom)
-        max_logo_h = int(36 * self.zoom)
-        logo_photo = self.get_scaled_logo_photo(max_logo_w, max_logo_h)
-        if logo_photo:
-            self.canvas.create_image(margin_left, logo_y, image=logo_photo, anchor="nw")
-
-        # Título alinhado ao canto esquerdo para não sobrepor o código de barras
-        logo_offset = (max_logo_w + int(14 * self.zoom)) if logo_photo else 0
-        title_x = margin_left + logo_offset
-        title_y = margin_top + int(22 * self.zoom)
-        disp_title = self.get_display_layout_name()
-        t_id = self.canvas.create_text(
-            title_x, title_y,
-            text=f"{disp_title} ({self.placa_n_de_m})",
-            anchor="nw", font=f_title, fill="#000000"
-        )
-        tb_box = self.canvas.bbox(t_id)
-        user_end_y = title_y + int(18 * self.zoom)
-        if tb_box:
-            line_bottom = tb_box[3] + 1
-            self.canvas.create_line(
-                tb_box[0] - 2, line_bottom, tb_box[2] + 2, line_bottom,
-                fill="#000000", width=max(1, int(1.5 * self.zoom))
-            )
-            user_end_y = line_bottom
-
-        # Nome de Usuário / Operador abaixo do título (conforme solicitação)
-        user_display = self.get_user_display_text()
-        if user_display:
-            user_y = user_end_y + int(5 * self.zoom)
-            u_id = self.canvas.create_text(
-                title_x, user_y,
-                text=user_display,
-                anchor="nw", font=f_mono_bold, fill="#000000",
-                tags="print_user_name"
-            )
-            u_box = self.canvas.bbox(u_id)
-            if u_box:
-                user_end_y = u_box[3]
-
-        # Data alinhada à direita no topo (alinhada com o caminho de rede à esquerda)
-        self.canvas.create_text(
-            margin_right, margin_top,
-            text=self.date_str,
-            anchor="ne", font=f_date, fill="#000000",
-            tags="print_date"
-        )
-
-        # Código de Barras Code 128 no canto superior direito (abaixo da data, isolado)
-        try:
-            from cad.barcode import draw_code128_canvas, encode_code128_b
-            bc_payload, bc_label = self.get_barcode_payload_and_label()
-            bc_mw = max(0.55, 0.72 * self.zoom)
-            bc_h = max(18.0, 22.0 * self.zoom)
-            bc_bits = encode_code128_b(bc_payload)
-            bc_w = len(bc_bits) * bc_mw
-            bc_x = margin_right - bc_w
-            bc_y = margin_top + int(18 * self.zoom)
-            f_bc_txt = ("Courier", max(5, int(6.0 * self.zoom)))
-            draw_code128_canvas(
-                self.canvas,
-                x=bc_x,
-                y=bc_y,
-                text=bc_payload,
-                height=bc_h,
-                module_width=bc_mw,
-                show_text=True,
-                label=bc_label,
-                tags="print_barcode",
-                font=f_bc_txt,
-            )
-        except Exception:
-            pass
-
-        # =====================================================================
-        # 2. Bloco de Metadados em Courier Monospace
-        # =====================================================================
-        meta_y = max(margin_top + int(82 * self.zoom), user_end_y + int(12 * self.zoom))
-        line_h = int(17 * self.zoom)
-
-        # Placa COM ponta de 2 camadas: duas linhas de folhas (longas/curtas).
-        # Placa sem ponta: cabeçalho clássico (Dimensions).
-        lines = [
-            f"Layout: {self.layout_path}",
-            f"Material: {self.material_name}",
-        ]
-        if self.dimensions_lines:
-            lines += list(self.dimensions_lines)
-        else:
-            lines += [
-                f"Dimensions:  {self.dimensions_str}",
-            ]
-        lines += [
-            f"Used Area: {self.used_area_str} - Yield:  {self.yield_pct:.2f}%",
-        ]
-
-        for line_txt in lines:
-            self.canvas.create_text(
-                margin_left, meta_y,
-                text=line_txt, anchor="nw",
-                font=f_mono, fill="#000000"
-            )
-            meta_y += line_h
-
-        # Linha inferior de metadados: Shapes, Instances, Gap e Enfesto
-        col_w = (margin_right - margin_left) // 4
-        self.canvas.create_text(
-            margin_left, meta_y,
-            text=f"Shapes: {self.shapes_count}",
-            anchor="nw", font=f_mono, fill="#000000"
-        )
-        self.canvas.create_text(
-            margin_left + col_w, meta_y,
-            text=f"Instances: {self.instances_count}",
-            anchor="nw", font=f_mono, fill="#000000"
-        )
-        self.canvas.create_text(
-            margin_left + col_w * 2, meta_y,
-            text=f"Gap: {self.gap_str}",
-            anchor="nw", font=f_mono, fill="#000000"
-        )
-        cam_suffix = "camada" if self.layout_layers == 1 else "camadas"
-        enf_display = f"Enfesto: {self.layout_layers} {cam_suffix}"
-        if getattr(self, "tip_zone", None):
-            enf_display = f"Enfesto: {self.layout_layers} cam. (ponta 2c)"
-        self.canvas.create_text(
-            margin_left + col_w * 3, meta_y,
-            text=enf_display,
-            anchor="nw", font=f_mono, fill="#000000"
-        )
-
-        # Instrução explícita de enfesto para almoxarifado/operador no cabeçalho
-        cur_layout = getattr(self, "current_layout", None) or self.layout_data.get("layout") or self.layout_data
-        tip_zone = getattr(self, "tip_zone", None)
-        if not tip_zone and isinstance(cur_layout, dict):
-            tip_zone = cur_layout.get("tip_zone")
-
-        if tip_zone:
-            meta_y += line_h
-            texto_enfesto = format_enfesto_operator_text(
-                layout=cur_layout,
-                sheet_w=self.sheet_w_mm,
-                sheet_h=self.sheet_h_mm,
-                tip_mode=getattr(self, "tip_mode", "canto")
-            )
-            f_op = ("Segoe UI", max(6, int(7.5 * self.zoom)), "bold italic")
-            header_op_text = f"📋 Almoxarifado / Operador: {texto_enfesto}"
-            avail_w = margin_right - margin_left
-            op_item = self.canvas.create_text(
-                margin_left, meta_y,
-                text=header_op_text,
-                anchor="nw", font=f_op, fill="#1d4ed8",
-                width=avail_w,
-                tags="print_meta_enfesto_op"
-            )
-            bbox = self.canvas.bbox(op_item)
-            if bbox:
-                meta_y = bbox[3] + int(2 * self.zoom)
-            else:
-                meta_y += line_h
-
-        # =====================================================================
-        # 3. Gráfico do Encaixe / Chapa de Corte (Proporcional à Folha A4)
-        # =====================================================================
-        meta_end_y = meta_y + int(18 * self.zoom)
-        footer_y = py + page_h - int(24 * self.zoom)
-
-        avail_top = meta_end_y + int(12 * self.zoom)
-        avail_bottom = footer_y - int(12 * self.zoom)
-        avail_w = max(50.0, float(margin_right - margin_left))
-        avail_h = max(50.0, float(avail_bottom - avail_top))
-
-        legend_rows = getattr(self, "legend_data", None)
-        if legend_rows is None:
-            self.legend_data = self.build_legend_data()
-            legend_rows = self.legend_data
-
-        reserved_sidebar_w = int(240 * self.zoom) if legend_rows else 0
-        avail_bed_w = max(50.0, avail_w - reserved_sidebar_w)
-
-        scale_bed_x = avail_bed_w / max(1.0, float(self.sheet_w_mm))
-        scale_bed_y = avail_h / max(1.0, float(self.sheet_h_mm))
-        bed_scale = min(scale_bed_x, scale_bed_y)
-
-        bed_w = max(10, int(round(self.sheet_w_mm * bed_scale)))
-        bed_h = max(10, int(round(self.sheet_h_mm * bed_scale)))
-
-        # Alinhamento do desenho do layout à esquerda (conforme padrão de impressão/referência)
-        bed_x = margin_left
-        bed_y = avail_top + (int(avail_h) - bed_h) // 2
-
-        # Retângulo do Material / Chapa
-        self.canvas.create_rectangle(
-            bed_x, bed_y, bed_x + bed_w, bed_y + bed_h,
-            fill="#ffffff", outline="#000000", width=1,
-            tags="print_bed"
-        )
-
-        # Grade Milimétrica e Marcações de 10 em 10 cm no Relatório (como no Editor)
-        grid_step = 100.0  # 100 mm = 10 cm
-        tick_len = max(2.0, 2.5 * self.zoom)
-        f_ruler = ("Courier", max(5, int(6.0 * self.zoom)))
-
-        cur_wx = 0.0
-        while cur_wx <= self.sheet_w_mm + 0.1:
-            gx = bed_x + cur_wx * bed_scale
-            # Linha de grade vertical sutil interna
-            if 0.5 < cur_wx < self.sheet_w_mm - 0.5:
-                self.canvas.create_line(gx, bed_y, gx, bed_y + bed_h, fill="#d0d0d0", width=1, tags="print_grid")
-
-            # Ticks superior e inferior
-            self.canvas.create_line(gx, bed_y + bed_h - tick_len, gx, bed_y + bed_h + tick_len, fill="#000000", width=1, tags="print_tick")
-            self.canvas.create_line(gx, bed_y - tick_len, gx, bed_y + tick_len, fill="#000000", width=1, tags="print_tick")
-
-            # Numeração inferior em METROS (0,1 0,2 0,3...)
-            if cur_wx > 0.5 and cur_wx < self.sheet_w_mm - 0.5:
-                self.canvas.create_text(
-                    gx, bed_y + bed_h + tick_len + 2,
-                    text=format_m(cur_wx, 1),
-                    font=f_ruler,
-                    fill="#000000",
-                    anchor="n",
-                    tags="print_label"
-                )
-
-            cur_wx += grid_step
-
-        cur_wy = 0.0
-        while cur_wy <= self.sheet_h_mm + 0.1:
-            gy = bed_y + bed_h - cur_wy * bed_scale
-            # Linha de grade horizontal sutil interna
-            if 0.5 < cur_wy < self.sheet_h_mm - 0.5:
-                self.canvas.create_line(bed_x, gy, bed_x + bed_w, gy, fill="#d0d0d0", width=1, tags="print_grid")
-
-            # Ticks esquerda e direita
-            self.canvas.create_line(bed_x - tick_len, gy, bed_x + tick_len, gy, fill="#000000", width=1, tags="print_tick")
-            self.canvas.create_line(bed_x + bed_w - tick_len, gy, bed_x + bed_w + tick_len, gy, fill="#000000", width=1, tags="print_tick")
-
-            # Numeração direita em METROS (0,1 0,2 0,3...)
-            if cur_wy > 0.5 and cur_wy < self.sheet_h_mm - 0.5:
-                self.canvas.create_text(
-                    bed_x + bed_w + tick_len + 3, gy,
-                    text=format_m(cur_wy, 1),
-                    font=f_ruler,
-                    fill="#000000",
-                    anchor="w",
-                    tags="print_label"
-                )
-
-            cur_wy += grid_step
-
-        # Desenha cada peça encaixada na chapa
-        for piece in self.placed_pieces:
-            c = piece.get("contour", [])
-            if not c:
-                continue
-            cx = piece.get("x", 0.0)
-            cy = piece.get("y", 0.0)
-            rot = piece.get("rotation", 0.0)
-            p_sz = str(piece.get("size") or (piece.get("shape", {}).get("size") if isinstance(piece.get("shape"), dict) else ""))
-            color = piece.get("color") or (piece.get("shape", {}).get("color") if isinstance(piece.get("shape"), dict) else None) or get_color_for_size(p_sz)
-            if not color or color in ("#000000", "black", "None", ""):
-                color = get_color_for_size(p_sz)
-
-            # Aplica rotação e escala aos vértices
-            rad = math.radians(rot)
-            cos_r = math.cos(rad)
-            sin_r = math.sin(rad)
-
-            scr_coords = []
-            for pt in c:
-                px_val = pt["x"] if isinstance(pt, dict) else pt[0]
-                py_val = pt["y"] if isinstance(pt, dict) else pt[1]
-                rx = px_val * cos_r - py_val * sin_r + cx
-                ry = px_val * sin_r + py_val * cos_r + cy
-
-                sx = bed_x + rx * bed_scale
-                sy = bed_y + (self.sheet_h_mm - ry) * bed_scale
-                scr_coords.extend([sx, sy])
-
-            if len(scr_coords) >= 6:
-                self.canvas.create_polygon(
-                    scr_coords,
-                    fill=color,
-                    outline="#000000",
-                    width=1
-                )
-
-        # Linha de Corte de Refile (CAM) se configurada
-        trim_cut = getattr(self, "trim_cut_line", None) or self.layout_data.get("trim_cut_line")
-        if trim_cut and trim_cut.get("enabled", True):
-            if trim_cut.get("has_cut_y", True):
-                cut_y = float(trim_cut.get("y", self.sheet_h_mm))
-                cut_sy = bed_y + (self.sheet_h_mm - cut_y) * bed_scale
-                self.canvas.create_line(
-                    bed_x - 4, cut_sy, bed_x + bed_w + 4, cut_sy,
-                    fill="#dc2626",
-                    dash=(6, 3),
-                    width=2,
-                    tags="print_trim_line"
-                )
-                self.canvas.create_text(
-                    bed_x + bed_w / 2, max(bed_y + 8, cut_sy - 8),
-                    text=f"✂ CORTE DE REFILE: {format_m(cut_y)} m",
-                    font=f_ruler,
-                    fill="#dc2626",
-                    tags="print_trim_text"
-                )
-            if trim_cut.get("has_cut_x", False):
-                cut_x = float(trim_cut.get("x", self.sheet_w_mm))
-                cut_sx = bed_x + cut_x * bed_scale
-                self.canvas.create_line(
-                    cut_sx, bed_y - 4, cut_sx, bed_y + bed_h + 4,
-                    fill="#dc2626",
-                    dash=(6, 3),
-                    width=2,
-                    tags="print_trim_line_x"
-                )
-                self.canvas.create_text(
-                    cut_sx, max(bed_y - 10, 10),
-                    text=f"✂ CORTE LATERAL: {format_m(cut_x)} m",
-                    font=f_ruler,
-                    fill="#dc2626",
-                    anchor="s",
-                    tags="print_trim_text_x"
-                )
-
-        # Ponta de 2 Camadas (Enfesto em Degrau)
-        _zona = _clamp_tip_zone(getattr(self, "tip_zone", None), self.sheet_w_mm, self.sheet_h_mm)
-        if _zona:
-            min_zx, min_zy, max_zx, max_zy = _zona
-
-            sx0 = bed_x + min_zx * bed_scale
-            sx1 = bed_x + max_zx * bed_scale
-            sy0 = bed_y + (self.sheet_h_mm - max_zy) * bed_scale
-            sy1 = bed_y + (self.sheet_h_mm - min_zy) * bed_scale
-
-            self.canvas.create_rectangle(
-                sx0, sy0, sx1, sy1,
-                outline="#2563eb",
-                dash=(5, 3),
-                width=2,
-                tags="print_tip_rect"
-            )
-            self.canvas.create_text(
-                sx0 + 4, sy0 + 4,
-                text="2 camadas (ponta)",
-                anchor="nw",
-                font=("Segoe UI", max(6, int(7 * self.zoom)), "bold"),
-                fill="#2563eb",
-                tags="print_tip_lbl"
-            )
-            # Rótulo da área principal de 4 camadas (posicionado para evitar sobreposição com a ponta)
-            if sy0 <= bed_y + int(25 * self.zoom):
-                base_lbl_y = bed_y + bed_h - int(6 * self.zoom)
-                base_anchor = "sw"
-            else:
-                base_lbl_y = bed_y + int(6 * self.zoom)
-                base_anchor = "nw"
-
-            self.canvas.create_text(
-                bed_x + int(6 * self.zoom), base_lbl_y,
-                text=f"{self.layout_layers} camadas",
-                anchor=base_anchor,
-                font=("Segoe UI", max(6, int(7 * self.zoom)), "bold"),
-                fill="#059669",
-                tags="print_base_lbl"
-            )
-
-        # =====================================================================
-        # 3.5. Legenda dos Moldes / Pares no Espaço em Branco ao Lado do Desenho
-        # =====================================================================
-        if legend_rows:
-            f_legend_name = ("Courier", f_size_md, "bold")
-            f_size_sub = max(5, int(f_size_md * 0.72))
-            f_legend_sub = ("Courier", f_size_sub)
-            f_footnote = ("Courier", max(5, int(f_size_sub * 0.92)))
-            line_step_box = max(11, int(13 * self.zoom))
-
-            # Fonte Tkinter para medição precisa de texto
-            try:
-                tk_sub_font = tkfont.Font(family="Courier", size=f_size_sub)
-                tk_name_font = tkfont.Font(family="Courier", size=f_size_md, weight="bold")
-            except Exception:
-                tk_sub_font = None
-                tk_name_font = None
-
-            def _measure_sub(txt):
-                if tk_sub_font:
-                    try:
-                        return tk_sub_font.measure(txt)
-                    except Exception:
-                        pass
-                return int(len(txt) * max(3.5, f_size_sub * 0.62))
-
-            def _measure_name(txt):
-                if tk_name_font:
-                    try:
-                        return tk_name_font.measure(txt)
-                    except Exception:
-                        pass
-                return int(len(txt) * max(4.0, f_size_md * 0.62))
-
-            ruler_end_x = bed_x + bed_w + tick_len + int(28 * self.zoom)
-            box_x = max(ruler_end_x + int(10 * self.zoom), margin_right - int(250 * self.zoom))
-            box_y = bed_y
-            box_w = margin_right - box_x
-            pad_x = int(8 * self.zoom)
-            pad_y = int(6 * self.zoom)
-            inner_w = max(40, box_w - pad_x * 2)
-            sep_w = _measure_sub(", ")
-
-            # Prepara tokens e calcula altura necessária da caixa
-            rows_prepared = []
-            total_box_h = pad_y * 2
-            for row in legend_rows:
-                m_name = row.get("molde_name", "")
-                s_id = row.get("shape_id")
-                sid_txt = format_shape_id_tag(s_id)
-
-                size_items = row.get("sizes", [])
-                tokens = []
-                for s_item in size_items:
-                    sz_str = str(s_item["size"])
-                    n_val = s_item["n"]
-                    m_val = s_item["m"]
-                    if m_val == 0:
-                        tok_str = f"{sz_str}: {n_val}"
-                    else:
-                        tok_str = f"{sz_str}: {n_val}/{m_val}"
-                    tokens.append((tok_str, bool(s_item.get("is_error", False))))
-
-                lines_of_tokens = []
-                cur_line = []
-                cur_w = 0
-                for tok_txt, is_err in tokens:
-                    tok_w = _measure_sub(tok_txt)
-                    extra = sep_w if cur_line else 0
-                    if cur_line and (cur_w + extra + tok_w > inner_w):
-                        lines_of_tokens.append(cur_line)
-                        cur_line = [(tok_txt, is_err)]
-                        cur_w = tok_w
-                    else:
-                        cur_line.append((tok_txt, is_err))
-                        cur_w += extra + tok_w
-
-                if cur_line:
-                    lines_of_tokens.append(cur_line)
-
-                row_h = line_step_box + max(1, len(lines_of_tokens)) * line_step_box + int(4 * self.zoom)
-                total_box_h += row_h
-                rows_prepared.append((m_name, sid_txt, lines_of_tokens))
-
-            total_box_h += line_step_box  # Espaço para rodapé explicativo
-
-            # Desenha o retângulo com borda no canvas (como no mockup do usuário)
-            self.canvas.create_rectangle(
-                box_x, box_y, margin_right, box_y + total_box_h,
-                fill="#ffffff", outline="#000000", width=1,
-                tags="print_legend_box"
-            )
-
-            # Renderiza os textos dentro da caixa
-            cy = box_y + pad_y
-            for m_name, sid_txt, lines_of_tokens in rows_prepared:
-                self.canvas.create_text(
-                    box_x + pad_x, cy,
-                    text=m_name, anchor="nw",
-                    font=f_legend_name, fill="#000000",
-                    tags="print_legend_name"
-                )
-                if sid_txt:
-                    nw = _measure_name(m_name)
-                    self.canvas.create_text(
-                        box_x + pad_x + nw + int(4 * self.zoom), cy + int(1.5 * self.zoom),
-                        text=sid_txt, anchor="nw",
-                        font=f_legend_sub, fill="#555555",
-                        tags="print_legend_shape_id"
-                    )
-                cy += line_step_box
-
-                for tok_line in lines_of_tokens:
-                    cur_x = box_x + pad_x
-                    for t_idx, (tok_txt, is_err) in enumerate(tok_line):
-                        if t_idx > 0:
-                            self.canvas.create_text(
-                                cur_x, cy + int(1.5 * self.zoom),
-                                text=", ", anchor="nw",
-                                font=f_legend_sub, fill="#444444",
-                                tags="print_legend_size"
-                            )
-                            cur_x += sep_w
-
-                        tok_fill = "#dc2626" if is_err else "#333333"
-                        self.canvas.create_text(
-                            cur_x, cy + int(1.5 * self.zoom),
-                            text=tok_txt, anchor="nw",
-                            font=f_legend_sub, fill=tok_fill,
-                            tags="print_legend_size"
-                        )
-                        cur_x += _measure_sub(tok_txt)
-
-                    cy += line_step_box
-
-                cy += int(4 * self.zoom)
-
-            self.canvas.create_text(
-                box_x + pad_x, cy,
-                text="n/m = pares nesta placa / pedido total",
-                anchor="nw", font=f_footnote, fill="#666666",
-                tags="print_legend_footnote"
-            )
-
-        # =====================================================================
-        # 4. Rodapé da Página: Placa N de M - Pages 1-1
-        # =====================================================================
-        footer_y = py + page_h - int(24 * self.zoom)
-        self.canvas.create_text(
-            margin_left, footer_y,
-            text=f"{self.placa_n_de_m} - Pages 1-1", anchor="nw",
-            font=f_mono, fill="#000000"
-        )
-
-        # Atualiza limites da área rolável
-        self.canvas.config(scrollregion=(0, 0, max(cv_w, px + page_w + 30), max(cv_h, py + page_h + 30)))
-
-    # =========================================================================
-    # Exportação e Impressão de Alta Resolução (300 DPI / PDF / PNG)
-    # =========================================================================
     def render_pillow_page(self, dpi=150):
-        """Gera uma imagem de alta resolução da página A4 completa usando PIL."""
-        # A4 em polegadas: 8.27 x 11.69 polegadas (retrato ou paisagem)
-        if getattr(self, "orientation", "portrait") == "landscape":
-            pw = int(11.69 * dpi)
-            ph = int(8.27 * dpi)
-        else:
-            pw = int(8.27 * dpi)
-            ph = int(11.69 * dpi)
-        scale = dpi / 72.0
-
-        im = Image.new("RGB", (pw, ph), "white")
-        draw = ImageDraw.Draw(im)
-
-        try:
-            f_mono = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSansMono.ttf", int(9 * scale))
-            f_mono_bold = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSansMono-Bold.ttf", int(9 * scale))
-            f_title = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSansMono-Bold.ttf", int(14 * scale))
-            f_small = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSansMono.ttf", int(7.5 * scale))
-            f_ruler = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSansMono.ttf", max(6, int(6.0 * scale)))
-            f_legend_sub = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSansMono.ttf", max(6, int(6.8 * scale)))
-            f_footnote = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSansMono.ttf", max(5, int(6.2 * scale)))
-            f_op_pillow = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", max(7, int(7.5 * scale)))
-        except Exception:
-            f_mono = ImageFont.load_default()
-            f_mono_bold = f_mono
-            f_title = f_mono
-            f_small = f_mono
-            f_ruler = f_mono
-            f_legend_sub = f_mono
-            f_footnote = f_mono
-            f_op_pillow = f_mono_bold
-
-        m_left = int(36 * scale)
-        m_right = pw - int(36 * scale)
-        m_top = int(30 * scale)
-
-        # Topo
-        draw.text((m_left, m_top), self.unc_prefix + "\\", fill="black", font=f_small)
-
-        # Logotipo da Empresa (se configurado)
-        if getattr(self, "company_logo_raw", None):
-            try:
-                max_w = int(140 * scale)
-                max_h = int(36 * scale)
-                ow, oh = self.company_logo_raw.size
-                if ow > 0 and oh > 0:
-                    ratio = min(max_w / ow, max_h / oh)
-                    lw = max(1, int(ow * ratio))
-                    lh = max(1, int(oh * ratio))
-                    logo_resized = self.company_logo_raw.resize((lw, lh), Image.Resampling.LANCZOS)
-                    im.paste(logo_resized, (m_left, m_top + int(12 * scale)), logo_resized)
-            except Exception:
-                pass
-
-        # Título alinhado ao canto esquerdo para não sobrepor o código de barras
-        disp_title = self.get_display_layout_name()
-        full_title = f"{disp_title} ({self.placa_n_de_m})"
-        title_bbox = draw.textbbox((0, 0), full_title, font=f_title)
-        tw = title_bbox[2] - title_bbox[0]
-        th = title_bbox[3] - title_bbox[1]
-        logo_offset_pillow = (int(140 * scale) + int(14 * scale)) if self.company_logo_raw else 0
-        tx = m_left + logo_offset_pillow
-        ty = m_top + int(22 * scale)
-        draw.text((tx, ty), full_title, fill="black", font=f_title)
-        line_y = ty + th + 3
-        draw.line([tx - 2, line_y, tx + tw + 2, line_y], fill="black", width=int(1.5 * scale))
-
-        # Nome de Usuário / Operador abaixo do título (conforme solicitação)
-        user_display = self.get_user_display_text()
-        user_end_y = line_y
-        if user_display:
-            user_ty = line_y + int(5 * scale)
-            draw.text((tx, user_ty), user_display, fill="black", font=f_mono_bold)
-            u_bbox = draw.textbbox((tx, user_ty), user_display, font=f_mono_bold)
-            user_end_y = u_bbox[3]
-
-        # Data alinhada à direita no topo (mesma linha da rede à esquerda)
-        date_bbox = draw.textbbox((0, 0), self.date_str, font=f_small)
-        dx = m_right - (date_bbox[2] - date_bbox[0])
-        draw.text((dx, m_top), self.date_str, fill="black", font=f_small)
-
-        # Código de Barras Code 128 (Pillow / PDF / Alta Resolução, isolado abaixo da data)
-        try:
-            from cad.barcode import generate_code128_pillow
-            bc_payload, bc_label = self.get_barcode_payload_and_label()
-            bc_mw = max(1, int(1.2 * (dpi / 150.0)))
-            bc_h = int(22 * scale)
-            bc_img = generate_code128_pillow(
-                bc_payload,
-                height=bc_h,
-                module_width=bc_mw,
-                show_text=True,
-                label=bc_label
-            )
-            if bc_img:
-                bw, bh = bc_img.size
-                bx = m_right - bw
-                by = m_top + int(18 * scale)
-                im.paste(bc_img, (bx, by))
-        except Exception:
-            pass
-
-        # Metadados
-        meta_y = max(m_top + int(82 * scale), user_end_y + int(12 * scale))
-        line_h = int(17 * scale)
-        # Placa COM ponta de 2 camadas: duas linhas de folhas (longas/curtas).
-        # Placa sem ponta: cabeçalho clássico (Dimensions).
-        lines = [
-            f"Layout: {self.layout_path}",
-            f"Material: {self.material_name}",
-        ]
-        if self.dimensions_lines:
-            lines += list(self.dimensions_lines)
-        else:
-            lines += [
-                f"Dimensions:  {self.dimensions_str}",
-            ]
-        lines += [
-            f"Used Area: {self.used_area_str} - Yield:  {self.yield_pct:.2f}%",
-        ]
-        for l_txt in lines:
-            draw.text((m_left, meta_y), l_txt, fill="black", font=f_mono)
-            meta_y += line_h
-
-        col_w = (m_right - m_left) // 4
-        cam_suffix = "camada" if self.layout_layers == 1 else "camadas"
-        draw.text((m_left, meta_y), f"Shapes: {self.shapes_count}", fill="black", font=f_mono)
-        draw.text((m_left + col_w, meta_y), f"Instances: {self.instances_count}", fill="black", font=f_mono)
-        draw.text((m_left + col_w * 2, meta_y), f"Gap: {self.gap_str}", fill="black", font=f_mono)
-        enf_pillow = f"Enfesto: {self.layout_layers} {cam_suffix}"
-        if getattr(self, "tip_zone", None):
-            enf_pillow = f"Enfesto: {self.layout_layers} cam. (ponta 2c)"
-        draw.text((m_left + col_w * 3, meta_y), enf_pillow, fill="black", font=f_mono)
-
-        # Instrução explícita de enfesto para almoxarifado/operador no cabeçalho
-        cur_layout = getattr(self, "current_layout", None) or self.layout_data.get("layout") or self.layout_data
-        tip_zone = getattr(self, "tip_zone", None)
-        if not tip_zone and isinstance(cur_layout, dict):
-            tip_zone = cur_layout.get("tip_zone")
-
-        if tip_zone:
-            meta_y += line_h
-            texto_enfesto = format_enfesto_operator_text(
-                layout=cur_layout,
-                sheet_w=self.sheet_w_mm,
-                sheet_h=self.sheet_h_mm,
-                tip_mode=getattr(self, "tip_mode", "canto")
-            )
-            header_op_text = f"Almoxarifado / Operador: {texto_enfesto}"
-            avail_w = m_right - m_left
-
-            words = header_op_text.split(" ")
-            wrapped_lines = []
-            cur_line = []
-            for w in words:
-                cand = (" ".join(cur_line + [w])) if cur_line else w
-                bb = draw.textbbox((0, 0), cand, font=f_op_pillow)
-                if (bb[2] - bb[0]) <= avail_w or not cur_line:
-                    cur_line.append(w)
-                else:
-                    wrapped_lines.append(" ".join(cur_line))
-                    cur_line = [w]
-            if cur_line:
-                wrapped_lines.append(" ".join(cur_line))
-
-            for wl in wrapped_lines:
-                draw.text((m_left, meta_y), wl, fill="#1d4ed8", font=f_op_pillow)
-                bb = draw.textbbox((0, 0), wl, font=f_op_pillow)
-                meta_y += (bb[3] - bb[1]) + int(3 * scale)
-
-        # =====================================================================
-        # 3. Gráfico do Encaixe Proporcional à Folha A4
-        # =====================================================================
-        meta_end_y = meta_y + int(18 * scale)
-        footer_y = ph - int(36 * scale)
-
-        avail_top = meta_end_y + int(12 * scale)
-        avail_bottom = footer_y - int(12 * scale)
-        avail_w = max(50.0, float(m_right - m_left))
-        avail_h = max(50.0, float(avail_bottom - avail_top))
-
-        legend_rows = getattr(self, "legend_data", None)
-        if legend_rows is None:
-            self.legend_data = self.build_legend_data()
-            legend_rows = self.legend_data
-
-        reserved_sidebar_w = int(240 * scale) if legend_rows else 0
-        avail_bed_w = max(50.0, avail_w - reserved_sidebar_w)
-
-        scale_bed_x = avail_bed_w / max(1.0, float(self.sheet_w_mm))
-        scale_bed_y = avail_h / max(1.0, float(self.sheet_h_mm))
-        scale_bed = min(scale_bed_x, scale_bed_y)
-
-        bed_w = max(10, int(round(self.sheet_w_mm * scale_bed)))
-        bed_h = max(10, int(round(self.sheet_h_mm * scale_bed)))
-
-        # Alinhamento do desenho do layout à esquerda (conforme padrão de impressão/referência)
-        bed_x = m_left
-        bed_y = avail_top + (int(avail_h) - bed_h) // 2
-
-        draw.rectangle([bed_x, bed_y, bed_x + bed_w, bed_y + bed_h], outline="black", width=max(1, int(scale)))
-
-        # Grade e Marcações de 10 em 10 cm na Impressão/Exportação
-        grid_step = 100.0  # 100 mm = 10 cm
-        tick_px = max(2, int(2.5 * scale))
-        line_w = max(1, int(0.75 * scale))
-
-        cur_wx = 0.0
-        while cur_wx <= self.sheet_w_mm + 0.1:
-            gx = bed_x + int(round(cur_wx * scale_bed))
-            # Linha de grade vertical interna sutil
-            if 0.5 < cur_wx < self.sheet_w_mm - 0.5:
-                draw.line([gx, bed_y, gx, bed_y + bed_h], fill="#d0d0d0", width=line_w)
-
-            # Ticks superior e inferior
-            draw.line([gx, bed_y + bed_h - tick_px, gx, bed_y + bed_h + tick_px], fill="black", width=line_w)
-            draw.line([gx, bed_y - tick_px, gx, bed_y + tick_px], fill="black", width=line_w)
-
-            # Numeração inferior em METROS (0,1 0,2 0,3...)
-            if cur_wx > 0.5 and cur_wx < self.sheet_w_mm - 0.5:
-                rotulo_x = format_m(cur_wx, 1)
-                bbox = draw.textbbox((0, 0), rotulo_x, font=f_ruler)
-                tw = bbox[2] - bbox[0]
-                draw.text((gx - tw // 2, bed_y + bed_h + tick_px + 2), rotulo_x, fill="black", font=f_ruler)
-
-            cur_wx += grid_step
-
-        cur_wy = 0.0
-        while cur_wy <= self.sheet_h_mm + 0.1:
-            gy = bed_y + bed_h - int(round(cur_wy * scale_bed))
-            # Linha de grade horizontal interna sutil
-            if 0.5 < cur_wy < self.sheet_h_mm - 0.5:
-                draw.line([bed_x, gy, bed_x + bed_w, gy], fill="#d0d0d0", width=line_w)
-
-            # Ticks esquerda e direita
-            draw.line([bed_x - tick_px, gy, bed_x + tick_px, gy], fill="black", width=line_w)
-            draw.line([bed_x + bed_w - tick_px, gy, bed_x + bed_w + tick_px, gy], fill="black", width=line_w)
-
-            # Numeração direita em METROS (0,1 0,2 0,3...)
-            if cur_wy > 0.5 and cur_wy < self.sheet_h_mm - 0.5:
-                rotulo_y = format_m(cur_wy, 1)
-                bbox = draw.textbbox((0, 0), rotulo_y, font=f_ruler)
-                th = bbox[3] - bbox[1]
-                draw.text((bed_x + bed_w + tick_px + 3, gy - th // 2), rotulo_y, fill="black", font=f_ruler)
-
-            cur_wy += grid_step
-
-        for piece in self.placed_pieces:
-            c = piece.get("contour", [])
-            if not c:
-                continue
-            cx = piece.get("x", 0.0)
-            cy = piece.get("y", 0.0)
-            rot = piece.get("rotation", 0.0)
-            p_sz = str(piece.get("size") or (piece.get("shape", {}).get("size") if isinstance(piece.get("shape"), dict) else ""))
-            color = piece.get("color") or (piece.get("shape", {}).get("color") if isinstance(piece.get("shape"), dict) else None) or get_color_for_size(p_sz)
-            if not color or color in ("#000000", "black", "None", ""):
-                color = get_color_for_size(p_sz)
-
-            rad = math.radians(rot)
-            cos_r = math.cos(rad)
-            sin_r = math.sin(rad)
-
-            poly_pts = []
-            for pt in c:
-                px_val = pt["x"] if isinstance(pt, dict) else pt[0]
-                py_val = pt["y"] if isinstance(pt, dict) else pt[1]
-                rx = px_val * cos_r - py_val * sin_r + cx
-                ry = px_val * sin_r + py_val * cos_r + cy
-                sx = bed_x + rx * scale_bed
-                sy = bed_y + (self.sheet_h_mm - ry) * scale_bed
-                poly_pts.append((sx, sy))
-
-            if len(poly_pts) >= 3:
-                draw.polygon(poly_pts, fill=color, outline="black")
-
-        # Linha de Corte de Refile (CAM) se configurada
-        trim_cut = getattr(self, "trim_cut_line", None) or self.layout_data.get("trim_cut_line")
-        if trim_cut and trim_cut.get("enabled", True):
-            if trim_cut.get("has_cut_y", True):
-                cut_y = float(trim_cut.get("y", self.sheet_h_mm))
-                cut_sy = bed_y + (self.sheet_h_mm - cut_y) * scale_bed
-                draw.line([(bed_x - int(4 * scale), cut_sy), (bed_x + bed_w + int(4 * scale), cut_sy)], fill="#dc2626", width=max(2, int(2 * scale)))
-                draw.text((bed_x + bed_w / 2 - int(50 * scale), max(bed_y + 4, cut_sy - int(12 * scale))), f"CORTE DE REFILE: {format_m(cut_y)} m", fill="#dc2626", font=f_ruler)
-            if trim_cut.get("has_cut_x", False):
-                cut_x = float(trim_cut.get("x", self.sheet_w_mm))
-                cut_sx = bed_x + cut_x * scale_bed
-                draw.line([(cut_sx, bed_y - int(4 * scale)), (cut_sx, bed_y + bed_h + int(4 * scale))], fill="#dc2626", width=max(2, int(2 * scale)))
-                draw.text((cut_sx + int(4 * scale), max(bed_y - int(14 * scale), 4)), f"CORTE LATERAL: {format_m(cut_x)} m", fill="#dc2626", font=f_ruler)
-
-        # Ponta de 2 Camadas (Enfesto em Degrau)
-        _zona = _clamp_tip_zone(getattr(self, "tip_zone", None), self.sheet_w_mm, self.sheet_h_mm)
-        if _zona:
-            min_zx, min_zy, max_zx, max_zy = _zona
-            sx0 = bed_x + min_zx * scale_bed
-            sx1 = bed_x + max_zx * scale_bed
-            sy0 = bed_y + (self.sheet_h_mm - max_zy) * scale_bed
-            sy1 = bed_y + (self.sheet_h_mm - min_zy) * scale_bed
-
-            if sx1 - sx0 > 2 and sy1 - sy0 > 2:
-                _traco = max(4, int(3 * scale))
-                _vao = max(3, int(2 * scale))
-                _larg = max(1, int(0.8 * scale))
-                _desenhar_retangulo_tracejado(
-                    draw, (sx0, sy0, sx1, sy1),
-                    cor="#2563eb", largura=_larg, traco=_traco, vao=_vao
-                )
-                draw.text((sx0 + int(4 * scale), sy0 + int(4 * scale)), "2 camadas (ponta)", fill="#2563eb", font=f_small)
-            # Rótulo da área principal de 4 camadas (posicionado para evitar sobreposição com a ponta)
-            if sy0 <= bed_y + int(25 * scale):
-                base_lbl_y = bed_y + bed_h - int(16 * scale)
-            else:
-                base_lbl_y = bed_y + int(6 * scale)
-
-        # =====================================================================
-        # 3.5. Legenda dos Moldes / Pares no Espaço em Branco ao Lado do Desenho
-        # =====================================================================
-        if legend_rows:
-            try:
-                f_legend_sub = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSansMono.ttf", max(6, int(6.5 * scale)))
-                f_footnote = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSansMono.ttf", max(6, int(6.0 * scale)))
-            except Exception:
-                try:
-                    f_legend_sub = ImageFont.truetype("cour.ttf", max(6, int(6.5 * scale)))
-                    f_footnote = ImageFont.truetype("cour.ttf", max(6, int(6.0 * scale)))
-                except Exception:
-                    f_legend_sub = f_mono
-                    f_footnote = f_small
-
-            ruler_end_x = bed_x + bed_w + tick_px + int(28 * scale)
-            box_x = max(ruler_end_x + int(10 * scale), m_right - int(250 * scale))
-            box_y = bed_y
-            box_w = m_right - box_x
-            pad_x = int(8 * scale)
-            pad_y = int(6 * scale)
-            inner_w = max(40, box_w - pad_x * 2)
-
-            def _measure_pillow(txt, font):
-                bb = draw.textbbox((0, 0), txt, font=font)
-                return bb[2] - bb[0]
-
-            sep_w = _measure_pillow(", ", f_legend_sub)
-            line_step_box = max(11, int(13 * scale))
-
-            # Prepara tokens e calcula altura necessária da caixa
-            rows_prepared = []
-            total_box_h = pad_y * 2
-            for row in legend_rows:
-                m_name = row.get("molde_name", "")
-                s_id = row.get("shape_id")
-                sid_txt = format_shape_id_tag(s_id)
-
-                size_items = row.get("sizes", [])
-                tokens = []
-                for s_item in size_items:
-                    sz_str = str(s_item["size"])
-                    n_val = s_item["n"]
-                    m_val = s_item["m"]
-                    if m_val == 0:
-                        tok_str = f"{sz_str}: {n_val}"
-                    else:
-                        tok_str = f"{sz_str}: {n_val}/{m_val}"
-                    tokens.append((tok_str, bool(s_item.get("is_error", False))))
-
-                lines_of_tokens = []
-                cur_line = []
-                cur_w = 0
-                for tok_txt, is_err in tokens:
-                    tok_w = _measure_pillow(tok_txt, f_legend_sub)
-                    extra = sep_w if cur_line else 0
-                    if cur_line and (cur_w + extra + tok_w > inner_w):
-                        lines_of_tokens.append(cur_line)
-                        cur_line = [(tok_txt, is_err)]
-                        cur_w = tok_w
-                    else:
-                        cur_line.append((tok_txt, is_err))
-                        cur_w += extra + tok_w
-
-                if cur_line:
-                    lines_of_tokens.append(cur_line)
-
-                row_h = line_step_box + max(1, len(lines_of_tokens)) * line_step_box + int(4 * scale)
-                total_box_h += row_h
-                rows_prepared.append((m_name, sid_txt, lines_of_tokens))
-
-            total_box_h += line_step_box
-
-            draw.rounded_rectangle(
-                [box_x, box_y, m_right, box_y + total_box_h],
-                radius=int(4 * scale), outline="black",
-                width=max(1, int(scale)), fill="white"
-            )
-
-            cy = box_y + pad_y
-            for m_name, sid_txt, lines_of_tokens in rows_prepared:
-                draw.text((box_x + pad_x, cy), m_name, fill="black", font=f_mono_bold)
-                if sid_txt:
-                    nw = _measure_pillow(m_name, f_mono_bold)
-                    draw.text(
-                        (box_x + pad_x + nw + int(4 * scale), cy + int(1.5 * scale)),
-                        sid_txt, fill="#555555", font=f_legend_sub
-                    )
-                cy += line_step_box
-
-                for tok_line in lines_of_tokens:
-                    cur_x = box_x + pad_x
-                    for t_idx, (tok_txt, is_err) in enumerate(tok_line):
-                        if t_idx > 0:
-                            draw.text((cur_x, cy + int(1.5 * scale)), ", ", fill="#444444", font=f_legend_sub)
-                            cur_x += sep_w
-
-                        tok_fill = "#dc2626" if is_err else "#333333"
-                        draw.text((cur_x, cy + int(1.5 * scale)), tok_txt, fill=tok_fill, font=f_legend_sub)
-                        cur_x += _measure_pillow(tok_txt, f_legend_sub)
-
-                    cy += line_step_box
-
-                cy += int(4 * scale)
-
-            draw.text((box_x + pad_x, cy), "n/m = pares nesta placa / pedido total", fill="#666666", font=f_footnote)
-
-        # Rodapé
-        footer_y = ph - int(36 * scale)
-        draw.text((m_left, footer_y), f"{self.placa_n_de_m} - Pages 1-1", fill="black", font=f_mono)
-
-        return im
+        """Compatibilidade: primeira folha. Exportação usa todas as continuações."""
+        return self.render_pillow_pages(dpi)[0]
 
     def save_as_pdf(self):
         tot_lays = len(self.layouts) if getattr(self, "layouts", None) else 1
@@ -2283,10 +1095,10 @@ class LayoutPrintDialog(tk.Toplevel):
         if tot_lays > 1:
             ans = messagebox.askyesnocancel(
                 "Salvar PDF",
-                f"A sessão possui {tot_lays} páginas/placas de impressão.\n\n"
+                f"A sessão possui {tot_lays} placas de impressão.\n\n"
                 f"Deseja exportar TODAS as páginas em um único arquivo PDF?\n\n"
-                f"• 'Sim': Exporta todas as {tot_lays} páginas em um único arquivo.\n"
-                f"• 'Não': Exporta apenas a página atual ({self.layout_name}).\n"
+                f"• 'Sim': Exporta todas as {tot_lays} placas e suas continuações.\n"
+                f"• 'Não': Exporta a placa atual e suas continuações ({self.layout_name}).\n"
                 f"• 'Cancelar': Cancela a exportação.",
                 parent=self
             )
@@ -2313,17 +1125,17 @@ class LayoutPrintDialog(tk.Toplevel):
                     try:
                         for i in range(tot_lays):
                             self.load_layout_index(i, initial=True)
-                            pages.append(self.render_pillow_page(dpi=200))
+                            pages.extend(self.render_pillow_pages(dpi=200))
                     finally:
                         self.load_layout_index(orig_idx, initial=True)
                         self.redraw()
 
                     if pages:
                         pages[0].save(file_path, "PDF", resolution=200.0, save_all=True, append_images=pages[1:])
-                        messagebox.showinfo("Exportar PDF", f"Relatório completo ({tot_lays} páginas) exportado com sucesso para:\n{file_path}", parent=self)
+                        messagebox.showinfo("Exportar PDF", f"Relatório completo ({len(pages)} folhas) exportado com sucesso para:\n{file_path}", parent=self)
                 else:
-                    im = self.render_pillow_page(dpi=200)
-                    im.save(file_path, "PDF", resolution=200.0)
+                    pages = self.render_pillow_pages(dpi=200)
+                    pages[0].save(file_path, "PDF", resolution=200.0, save_all=True, append_images=pages[1:])
                     messagebox.showinfo("Exportar PDF", f"Relatório do Layout exportado com sucesso para:\n{file_path}", parent=self)
             except Exception as e:
                 messagebox.showerror("Erro ao Salvar PDF", f"Falha ao gerar arquivo PDF:\n{str(e)}", parent=self)
@@ -2338,8 +1150,10 @@ class LayoutPrintDialog(tk.Toplevel):
         )
         if file_path:
             try:
-                im = self.render_pillow_page(dpi=200)
-                im.save(file_path, "PNG")
+                pages = self.render_pillow_pages(dpi=200)
+                for i, im in enumerate(pages):
+                    target = file_path if i == 0 else str(Path(file_path).with_name(f"{Path(file_path).stem}_{i+1}.png"))
+                    im.save(target, "PNG")
                 messagebox.showinfo("Exportar Imagem", f"Imagem do Layout salva com sucesso em:\n{file_path}", parent=self)
             except Exception as e:
                 messagebox.showerror("Erro ao Salvar Imagem", f"Falha ao salvar imagem:\n{str(e)}", parent=self)
@@ -2352,10 +1166,10 @@ class LayoutPrintDialog(tk.Toplevel):
             if tot_lays > 1:
                 ans = messagebox.askyesnocancel(
                     "Imprimir Layout",
-                    f"A sessão possui {tot_lays} páginas/placas de impressão.\n\n"
+                    f"A sessão possui {tot_lays} placas de impressão.\n\n"
                     f"Deseja imprimir TODAS as páginas?\n\n"
-                    f"• 'Sim': Imprime todas as {tot_lays} páginas.\n"
-                    f"• 'Não': Imprime apenas a página atual ({self.layout_name}).\n"
+                    f"• 'Sim': Imprime todas as {tot_lays} placas e suas continuações.\n"
+                    f"• 'Não': Imprime a placa atual e suas continuações ({self.layout_name}).\n"
                     f"• 'Cancelar': Cancela a impressão.",
                     parent=self
                 )
@@ -2363,7 +1177,11 @@ class LayoutPrintDialog(tk.Toplevel):
                     return
                 print_all = ans
 
-            tmp_pdf = Path("/tmp") / f"print_{self.layout_name.replace('.lay', '')}.pdf"
+            import tempfile
+            import subprocess
+            fd, tmp_path = tempfile.mkstemp(prefix="ficha_producao_", suffix=".pdf")
+            os.close(fd)
+            tmp_pdf = Path(tmp_path)
 
             if print_all and tot_lays > 1:
                 orig_idx = self.current_layout_index
@@ -2371,15 +1189,15 @@ class LayoutPrintDialog(tk.Toplevel):
                 try:
                     for i in range(tot_lays):
                         self.load_layout_index(i, initial=True)
-                        pages.append(self.render_pillow_page(dpi=200))
+                        pages.extend(self.render_pillow_pages(dpi=200))
                 finally:
                     self.load_layout_index(orig_idx, initial=True)
                     self.redraw()
                 if pages:
                     pages[0].save(str(tmp_pdf), "PDF", resolution=200.0, save_all=True, append_images=pages[1:])
             else:
-                im = self.render_pillow_page(dpi=200)
-                im.save(str(tmp_pdf), "PDF", resolution=200.0)
+                pages = self.render_pillow_pages(dpi=200)
+                pages[0].save(str(tmp_pdf), "PDF", resolution=200.0, save_all=True, append_images=pages[1:])
 
             if sys.platform == "win32":
                 try:
@@ -2389,8 +1207,9 @@ class LayoutPrintDialog(tk.Toplevel):
                 except Exception:
                     pass
             else:
-                ret = os.system(f"which lp > /dev/null 2>&1 && lp '{str(tmp_pdf)}'")
-                if ret == 0:
+                import shutil
+                result = subprocess.run(["lp", str(tmp_pdf)], capture_output=True, text=True) if shutil.which("lp") else None
+                if result is not None and result.returncode == 0:
                     messagebox.showinfo("Imprimir Layout", "Documento enviado para a fila de impressão (CUPS/lp).", parent=self)
                     return
 

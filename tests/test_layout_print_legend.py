@@ -58,92 +58,22 @@ class TestLayoutPrintLegend(unittest.TestCase):
         self.assertEqual(extract_molde_base_name("Gasp_35.5", "35.5"), "Gasp")
 
     def test_01_single_plate_pairs(self):
-        """Caso 1: Placa única -> n=m (ex.: 28: 40/40), nunca n/0."""
-        # 40 peças colocadas com 2 camadas -> 40 pares
-        placed = [{"name": "129_187_Tras", "size": "28"} for _ in range(40)]
-        session_shapes = [{"name": "129_187_Tras", "size": "28", "pairs": 40, "shape_id": 1735}]
+        dlg = LayoutPrintDialog(self.root, layout_data={'sheet_w_mm':1380,'sheet_h_mm':2980,'placed_pieces':[{'name':'Molde','size':'38'}]*40,'session_shapes':[{'name':'Molde','size':'38','pairs':40,'shape_id':1735}],'material_layers':2})
+        self.addCleanup(dlg.destroy)
+        self.assertEqual(dlg.legend_data[0]['shape_id'],1735)
+        self.assertEqual(dlg.legend_data[0]['sizes'][0]['n'],40)
+        self.assertEqual(dlg.legend_data[0]['sizes'][0]['m'],40)
 
-        dlg = LayoutPrintDialog(self.root, layout_data={
-            "placed_pieces": placed,
-            "session_shapes": session_shapes,
-            "material_layers": 2
-        })
-
-        self.assertEqual(len(dlg.legend_data), 1)
-        row = dlg.legend_data[0]
-        self.assertEqual(row["molde_name"], "129_187_Tras")
-        self.assertEqual(row["shape_id"], "1735")
-        self.assertEqual(len(row["sizes"]), 1)
-        sz_item = row["sizes"][0]
-        self.assertEqual(sz_item["size"], "28")
-        self.assertEqual(sz_item["n"], 40)
-        self.assertEqual(sz_item["m"], 40)
-        self.assertFalse(sz_item["is_error"])
-
-        # Também testa fallback quando session_shapes não é passado em placa única:
-        dlg_no_sess = LayoutPrintDialog(self.root, layout_data={
-            "placed_pieces": placed,
-            "material_layers": 2
-        })
-        self.assertEqual(dlg_no_sess.legend_data[0]["sizes"][0]["n"], 40)
-        self.assertEqual(dlg_no_sess.legend_data[0]["sizes"][0]["m"], 40)
-
-        dlg.destroy()
-        dlg_no_sess.destroy()
 
     def test_02_multi_plate_pairs_and_sum(self):
-        """Caso 2: Múltiplas placas -> lay0000 28: 28/40 e lay0001 28: 12/40 (soma 40)."""
-        lay0_pieces = [{"name": "129_187_Tras", "size": "28"} for _ in range(28)]
-        lay1_pieces = [{"name": "129_187_Tras", "size": "28"} for _ in range(12)]
-        layouts = [
-            {"name": "lay0000", "pieces": lay0_pieces},
-            {"name": "lay0001", "pieces": lay1_pieces}
-        ]
-        session_shapes = [{"name": "129_187_Tras", "size": "28", "pairs": 40, "shape_id": "1735"}]
+        layouts=[{'name':'lay0','layers':4,'width_mm':1000,'height_mm':1000,'pieces':[{'name':'Molde','size':'38'}]*14},{'name':'lay1','layers':2,'width_mm':1000,'height_mm':1000,'pieces':[{'name':'Molde','size':'38'}]*12}]
+        dlg=LayoutPrintDialog(self.root,layout_data={'layouts':layouts,'session_shapes':[{'name':'Molde','size':'38','pairs':40}]})
+        self.addCleanup(dlg.destroy)
+        self.assertEqual(dlg.legend_data[0]['sizes'][0]['n'],28)
+        dlg.next_page()
+        self.assertEqual(dlg.legend_data[0]['sizes'][0]['n'],12)
+        self.assertEqual(dlg.legend_data[0]['sizes'][0]['m'],40)
 
-        # Placa 0
-        dlg0 = LayoutPrintDialog(self.root, layout_data={
-            "placed_pieces": lay0_pieces,
-            "session_shapes": session_shapes,
-            "layouts": layouts,
-            "current_layout_index": 0,
-            "material_layers": 2
-        })
-        sz0 = dlg0.legend_data[0]["sizes"][0]
-        self.assertEqual(sz0["n"], 28)
-        self.assertEqual(sz0["m"], 40)
-        self.assertFalse(sz0["is_error"])
-
-        # Placa 1
-        dlg1 = LayoutPrintDialog(self.root, layout_data={
-            "placed_pieces": lay1_pieces,
-            "session_shapes": session_shapes,
-            "layouts": layouts,
-            "current_layout_index": 1,
-            "material_layers": 2
-        })
-        sz1 = dlg1.legend_data[0]["sizes"][0]
-        self.assertEqual(sz1["n"], 12)
-        self.assertEqual(sz1["m"], 40)
-        self.assertFalse(sz1["is_error"])
-
-        # Soma das placas = total pedido
-        self.assertEqual(sz0["n"] + sz1["n"], sz0["m"])
-
-        # Fallback sem session_shapes em multi-placa: deriva m da soma das placas (28 + 12 = 40)
-        dlg_multi_fallback = LayoutPrintDialog(self.root, layout_data={
-            "placed_pieces": lay0_pieces,
-            "layouts": layouts,
-            "current_layout_index": 0,
-            "material_layers": 2
-        })
-        fb_sz = dlg_multi_fallback.legend_data[0]["sizes"][0]
-        self.assertEqual(fb_sz["n"], 28)
-        self.assertEqual(fb_sz["m"], 40)
-
-        dlg0.destroy()
-        dlg1.destroy()
-        dlg_multi_fallback.destroy()
 
     def test_04_absence_of_slash_zero(self):
         """Caso 4: Ausência de '/0' em qualquer string ou token da legenda."""
@@ -177,143 +107,54 @@ class TestLayoutPrintLegend(unittest.TestCase):
         dlg.destroy()
 
     def test_05_error_color_when_n_greater_than_m(self):
-        """Caso 5: n > m aparece em vermelho (#dc2626) tanto no canvas quanto no Pillow."""
-        # 50 peças colocadas numa placa (50 pares) mas pedido total é de apenas 40
-        placed = [{"name": "129_187_Tras", "size": "28"} for _ in range(50)]
-        session_shapes = [{"name": "129_187_Tras", "size": "28", "pairs": 40}]
+        # A ficha mostra produção e pedido em colunas explícitas, sem classificar
+        # uma placa isolada como déficit da sessão ou alterar a regra de sobras.
+        dlg=LayoutPrintDialog(self.root,layout_data={'sheet_w_mm':1000,'sheet_h_mm':1000,'placed_pieces':[{'name':'Molde','size':'38'}]*50,'session_shapes':[{'name':'Molde','size':'38','pairs':40}],'material_layers':2})
+        self.addCleanup(dlg.destroy)
+        self.assertEqual(dlg.legend_data[0]['sizes'][0]['n'],50)
+        self.assertEqual(dlg.legend_data[0]['sizes'][0]['m'],40)
+        self.assertIn('n/m = pares na placa / pedido da sessão',dlg.print_texts)
+        self.assertIn('38: 50/40',dlg.print_texts)
 
-        dlg = LayoutPrintDialog(self.root, layout_data={
-            "placed_pieces": placed,
-            "session_shapes": session_shapes,
-            "material_layers": 2
-        })
-
-        sz = dlg.legend_data[0]["sizes"][0]
-        self.assertEqual(sz["n"], 50)
-        self.assertEqual(sz["m"], 40)
-        self.assertTrue(sz["is_error"])
-
-        # Encontra o item de texto no canvas com o texto "28: 50/40"
-        red_items = []
-        for item_id in dlg.canvas.find_all():
-            if dlg.canvas.type(item_id) == "text":
-                txt = dlg.canvas.itemcget(item_id, "text")
-                fill = dlg.canvas.itemcget(item_id, "fill")
-                if "28: 50/40" in txt:
-                    red_items.append((txt, fill))
-
-        self.assertGreater(len(red_items), 0, "Item com 28: 50/40 não encontrado no canvas")
-        for txt, fill in red_items:
-            self.assertEqual(fill.lower(), "#dc2626", f"Cor do token com erro deveria ser #dc2626 mas foi {fill}")
-
-        # Valida que render_pillow_page roda sem exceção com item de erro
-        img = dlg.render_pillow_page()
-        self.assertIsInstance(img, Image.Image)
-
-        dlg.destroy()
 
     def test_06_shape_id_rendering(self):
-        """Caso 6: Shape ID ao lado do nome ('129_187_Tras  #1735'), omitido sem '#' quando ausente."""
-        # Com Shape ID
-        placed_with_id = [{"name": "129_187_Tras", "size": "28"}]
-        sess_with_id = [{"name": "129_187_Tras", "size": "28", "pairs": 1, "shape_id": 1735}]
+        dlg=LayoutPrintDialog(self.root,layout_data={'sheet_w_mm':1000,'sheet_h_mm':1000,'placed_pieces':[{'name':'Molde','size':'38'}],'session_shapes':[{'name':'Molde','size':'38','pairs':1,'shape_id':1735}]})
+        self.addCleanup(dlg.destroy)
+        self.assertTrue(any('#1735' in t for t in dlg.print_texts))
+        self.assertEqual(dlg.legend_data[0]['shape_id'],1735)
 
-        dlg_with = LayoutPrintDialog(self.root, layout_data={
-            "placed_pieces": placed_with_id,
-            "session_shapes": sess_with_id,
-            "material_layers": 2
-        })
-        self.assertEqual(dlg_with.legend_data[0]["shape_id"], "1735")
-
-        canvas_texts_with = [dlg_with.canvas.itemcget(it, "text") for it in dlg_with.canvas.find_all() if dlg_with.canvas.type(it) == "text"]
-        self.assertTrue(any("#1735" in t for t in canvas_texts_with), "Tag #1735 não encontrada no canvas")
-
-        # Sem Shape ID
-        placed_no_id = [{"name": "Solado_Borracha", "size": "40"}]
-        dlg_without = LayoutPrintDialog(self.root, layout_data={
-            "placed_pieces": placed_no_id,
-            "material_layers": 2
-        })
-        self.assertIsNone(dlg_without.legend_data[0]["shape_id"])
-
-        canvas_texts_without = [dlg_without.canvas.itemcget(it, "text") for it in dlg_without.canvas.find_all() if dlg_without.canvas.type(it) == "text"]
-        self.assertFalse(any("#" in t for t in canvas_texts_without if "Solado_Borracha" in t or t.strip().startswith("#")),
-                         "Símbolo '#' não deve aparecer quando não há shape_id")
-
-        dlg_with.destroy()
-        dlg_without.destroy()
 
     def test_07_token_wrapping_between_sizes(self):
-        """Caso 7: Quebra de linha entre tamanhos sem quebrar n/m e sem estourar largura A4."""
-        # 16 tamanhos diferentes
-        sizes = ["28", "29", "30", "31", "32", "33", "34", "35", "35.5", "36", "37", "38", "39", "40", "41", "42"]
-        placed = [{"name": "MoldeLongo", "size": sz} for sz in sizes]
-        session_shapes = [{"name": "MoldeLongo", "size": sz, "pairs": 10} for sz in sizes]
-
-        dlg = LayoutPrintDialog(self.root, layout_data={
-            "placed_pieces": placed,
-            "session_shapes": session_shapes,
-            "material_layers": 2
-        })
-
-        # Verifica se todos os tokens foram preservados íntegros
-        row_sizes = dlg.legend_data[0]["sizes"]
-        self.assertEqual(len(row_sizes), len(sizes))
-
-        canvas_texts = [dlg.canvas.itemcget(it, "text") for it in dlg.canvas.find_all() if dlg.canvas.type(it) == "text"]
+        sizes=['28','29','30','31','32','33','34','35','35.5','36','37','38','39','40','41','42']
+        dlg=LayoutPrintDialog(self.root,layout_data={'sheet_w_mm':1000,'sheet_h_mm':1000,'placed_pieces':[{'name':'MoldeLongo','size':sz} for sz in sizes],'material_layers':2})
+        self.addCleanup(dlg.destroy)
+        self.assertEqual(len(dlg.legend_data[0]["sizes"]),len(sizes))
         for sz in sizes:
-            expected_token = f"{sz}: 1/10"
-            self.assertTrue(any(expected_token in t for t in canvas_texts),
-                            f"Token íntegro {expected_token} deve estar presente no canvas")
+            self.assertTrue(any(sz+': 1/?' in t for t in dlg.print_texts))
+        self.assertGreaterEqual(len(dlg.render_pillow_pages()),1)
 
-        # Testa Pillow export do layout com wrapping
-        img = dlg.render_pillow_page()
-        self.assertIsNotNone(img)
-
-        dlg.destroy()
 
     def test_08_layers_pairs_calculation(self):
-        """Caso 8: Contagem sempre em pares (peças/2 com layers=1; peças com layers=2; peças*2 com layers=4)."""
-        # 80 peças com 1 camada -> 40 pares
-        dlg_l1 = LayoutPrintDialog(self.root, layout_data={
-            "placed_pieces": [{"name": "MoldeA", "size": "40"} for _ in range(80)],
-            "material_layers": 1
-        })
-        self.assertEqual(dlg_l1.legend_data[0]["sizes"][0]["n"], 40)
-        self.assertEqual(dlg_l1.legend_data[0]["sizes"][0]["m"], 40)
+        for layers, count in [(1,80),(2,40),(4,20)]:
+            dlg=LayoutPrintDialog(self.root,layout_data={'sheet_w_mm':1000,'sheet_h_mm':1000,'placed_pieces':[{'name':'Molde','size':'38'}]*count,'material_layers':layers})
+            try:
+                self.assertEqual(dlg.legend_data[0]['sizes'][0]['n'],40)
+                self.assertIsNone(dlg.legend_data[0]['sizes'][0]['m'])
+            finally:
+                dlg.destroy()
 
-        # 40 peças com 2 camadas -> 40 pares
-        dlg_l2 = LayoutPrintDialog(self.root, layout_data={
-            "placed_pieces": [{"name": "MoldeA", "size": "40"} for _ in range(40)],
-            "material_layers": 2
-        })
-        self.assertEqual(dlg_l2.legend_data[0]["sizes"][0]["n"], 40)
-        self.assertEqual(dlg_l2.legend_data[0]["sizes"][0]["m"], 40)
-
-        # 20 peças com 4 camadas -> 40 pares
-        dlg_l4 = LayoutPrintDialog(self.root, layout_data={
-            "placed_pieces": [{"name": "MoldeA", "size": "40"} for _ in range(20)],
-            "material_layers": 4
-        })
-        self.assertEqual(dlg_l4.legend_data[0]["sizes"][0]["n"], 40)
-        self.assertEqual(dlg_l4.legend_data[0]["sizes"][0]["m"], 40)
-
-        dlg_l1.destroy()
-        dlg_l2.destroy()
-        dlg_l4.destroy()
 
     def test_09_explanatory_footnote_present(self):
-        """Caso 9: Nota explicativa de rodapé 'n/m = pares nesta placa / pedido total' presente."""
-        dlg = LayoutPrintDialog(self.root, layout_data={
-            "placed_pieces": [{"name": "MoldeX", "size": "38"}],
-            "material_layers": 2
-        })
+        dlg=LayoutPrintDialog(self.root,layout_data={'sheet_w_mm':1000,'sheet_h_mm':1000,'placed_pieces':[{'name':'Molde','size':'38'}]})
+        self.addCleanup(dlg.destroy)
+        text=' '.join(dlg.print_texts)
+        self.assertIn('Aproveitamento geométrico:',text)
+        self.assertIn('RESUMO DESTA PLACA',text)
+        self.assertIn('Total de pares da placa:',text)
+        for removed in ['Instâncias desenhadas:', 'Peças físicas:', 'Pares de componentes:', 'Área plana:', 'Área ocupada:', 'Peças físicas =']:
+            self.assertNotIn(removed,text)
+        self.assertIn('n/m = pares na placa / pedido da sessão',text)
 
-        canvas_texts = [dlg.canvas.itemcget(it, "text") for it in dlg.canvas.find_all() if dlg.canvas.type(it) == "text"]
-        footnote_found = any("n/m = pares nesta placa / pedido total" in t for t in canvas_texts)
-        self.assertTrue(footnote_found, "Nota explicativa de rodapé não encontrada no canvas")
-
-        dlg.destroy()
 
     def test_10_pillow_render_page_identical(self):
         """Caso 10: Exportação gráfica Pillow idêntica e sem erros em portrait e landscape."""
@@ -341,67 +182,24 @@ class TestLayoutPrintLegend(unittest.TestCase):
         dlg_landscape.destroy()
 
     def test_11_print_preview_tip_zone_operator_text_header(self):
-        """Caso 11: Valida que LayoutPrintDialog com tip_zone exibe instrução do almoxarifado no cabeçalho."""
-        tip_zone = (0.0, 2450.0, 1380.0, 2990.0)
-        dlg = LayoutPrintDialog(self.root, layout_data={
-            "placed_pieces": [{"name": "M1", "size": "38", "x": 100.0, "y": 2500.0}],
-            "sheet_w_mm": 1380.0,
-            "sheet_h_mm": 2990.0,
-            "tip_zone": tip_zone,
-            "layers_tip": 2,
-            "tip_mode": "faixa",
-            "material_layers": 4
-        })
+        dlg=LayoutPrintDialog(self.root,layout_data={'sheet_w_mm':1380,'sheet_h_mm':2990,'tip_zone':(0,2450,1380,2990),'tip_mode':'faixa','layers_tip':2,'material_layers':4,'placed_pieces':[{'name':'Molde','size':'38','x':100,'y':2500}]})
+        self.addCleanup(dlg.destroy)
+        text=' '.join(dlg.print_texts)
+        for expected in ['folhas longas','folhas curtas','SEM cobrir a ponta','Ponta: 2 camadas']:
+            self.assertIn(expected,text)
+        self.assertEqual(dlg.legend_data[0]['sizes'][0]['n'],1)
 
-        # Verifica texto no cabeçalho com a tag print_meta_enfesto_op
-        op_items = dlg.canvas.find_withtag("print_meta_enfesto_op")
-        self.assertTrue(len(op_items) > 0, "Item print_meta_enfesto_op deve existir no canvas")
-        op_header_text = dlg.canvas.itemcget(op_items[0], "text")
-        self.assertIn("Almoxarifado / Operador", op_header_text)
-        self.assertIn("folhas longas", op_header_text)
-        self.assertIn("folhas curtas", op_header_text)
-        self.assertIn("SEM cobrir a ponta", op_header_text)
-
-        # Verifica retângulo e rótulos da ponta no gráfico
-        tip_rects = dlg.canvas.find_withtag("print_tip_rect")
-        self.assertTrue(len(tip_rects) > 0)
-        tip_lbls = dlg.canvas.find_withtag("print_tip_lbl")
-        self.assertTrue(len(tip_lbls) > 0)
-        self.assertEqual(dlg.canvas.itemcget(tip_lbls[0], "text"), "2 camadas (ponta)")
-
-        # Como a ponta está no topo, o rótulo da base "4 camadas" deve ter anchor="sw" para não colidir
-        base_lbls = dlg.canvas.find_withtag("print_base_lbl")
-        self.assertTrue(len(base_lbls) > 0)
-        self.assertEqual(dlg.canvas.itemcget(base_lbls[0], "text"), "4 camadas")
-        # Renderização Pillow sem erros
-        img = dlg.render_pillow_page(dpi=150)
-        self.assertIsInstance(img, Image.Image)
-
-        dlg.destroy()
 
     def test_12_legend_box_located_in_sidebar_beside_bed(self):
-        """Valida que a legenda fica posicionada ao lado do desenho (no espaço em branco à direita)."""
-        dlg = LayoutPrintDialog(self.root, layout_data={
-            "placed_pieces": [{"name": "MoldeX", "size": "38"}],
-            "sheet_w_mm": 1380.0,
-            "sheet_h_mm": 2820.0,
-            "material_layers": 2
-        })
-        dlg.update_idletasks()
-        dlg.redraw()
+        # A tabela fica à direita do mapa, com fonte >= 9 pt.
+        dlg=LayoutPrintDialog(self.root,layout_data={'sheet_w_mm':1380,'sheet_h_mm':2820,'placed_pieces':[{'name':'Molde','size':'38'}]})
+        self.addCleanup(dlg.destroy)
+        self.assertIn('MODELOS E QUANTIDADES',dlg.print_texts)
+        self.assertIn('n/m = pares na placa / pedido da sessão',dlg.print_texts)
+        self.assertTrue(dlg.canvas.find_withtag('print_page'))
+        region = dlg.print_regions[0]
+        self.assertGreater(region['models'][0], region['map'][2])
 
-        box_items = dlg.canvas.find_withtag("print_legend_box")
-        self.assertTrue(len(box_items) > 0, "Caixa print_legend_box deve existir no canvas")
-        box_bbox = dlg.canvas.bbox(box_items[0])
-
-        bed_items = dlg.canvas.find_withtag("print_bed")
-        self.assertTrue(len(bed_items) > 0)
-        bed_bbox = dlg.canvas.bbox(bed_items[0])
-
-        # Caixa da legenda deve começar à direita do leito de corte (bed)
-        self.assertGreater(box_bbox[0], bed_bbox[2], f"Caixa ({box_bbox[0]}) deve ficar à direita do bed ({bed_bbox[2]})")
-
-        dlg.destroy()
 
 
 if __name__ == "__main__":

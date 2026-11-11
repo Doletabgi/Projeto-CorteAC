@@ -9,7 +9,7 @@ on:
       tag_name:
         description: 'Tag de versão SemVer (ex: v1.0.0)'
         required: false
-        default: 'v1.8.4'
+        default: 'v1.8.5'
 
 permissions:
   contents: write
@@ -221,7 +221,7 @@ jobs:
 
             ### 🪟 Para Usuários Windows (Windows 10 e Windows 11):
             1. **Instalador Oficial com Suporte a Rede (Recomendado)**:
-               - Baixe o instalador **`CorteAC-Setup-<versão>.exe`** (ex.: `CorteAC-Setup-1.8.4.exe`) abaixo na seção **Assets**.
+               - Baixe o instalador **`CorteAC-Setup-<versão>.exe`** (ex.: `CorteAC-Setup-1.8.5.exe`) abaixo na seção **Assets**.
                - Dê dois cliques e siga o assistente (permite configurar as pastas de Moldes e Sessões na rede da fábrica).
                - O instalador cria atalhos na Área de Trabalho e registra no Adicionar/Remover Programas.
             2. **Versão Portátil (.zip ou .exe direto)**:
@@ -245,13 +245,17 @@ jobs:
 
             ---
 
-            ### 🛠️ Recursos Incluídos Nesta Versão (v1.8.4):
-            - A última fileira pouco ocupada da base de 4 camadas pode ser transferida para a ponta ou para a placa separada de 2 camadas: cada posição vira duas, mantendo a produção por molde.
-            - A transferência só é aceita quando reduz o comprimento total sem aumentar o consumo estimado de material nem a quantidade de placas de sobras.
-            - O segundo preenchimento de buracos considera as bases de 4 camadas mesmo quando há placas de 2 camadas no final da sessão; a otimização final ocorre antes do refile e da gravação, na geração individual e em lote.
-            - Corrigidos o salvamento das cópias sem identificador e a reaplicação da separação após a duplicação. Alternar entre ponta e placa separada preserva a produção.
-            - Atualizações locais preservam sessões e layouts; a limpeza fica disponível por ação manual.
-            - Testes incluem conservação física, colisões, economia, rollback, refile, gravação/recarga e regressão na ordem da geração.
+            ### 🛠️ Recursos Incluídos Nesta Versão (v1.8.5):
+            - Ficha de produção A4 com mapa proporcional e quadro compacto de modelos, tamanhos e pares por placa, incluindo páginas de continuação.
+            - Grade de 100 mm e réguas em metros preservadas na ficha.
+            - Prévia, PDF, PNG e impressão usam o mesmo renderizador; identificação e código de barras permanecem nas continuações.
+            - Produção calculada pelas camadas de cada peça, incluindo ponta e placas separadas de 2 camadas; demanda e multiplicadores permanecem distintos.
+            - Medidas em metros e instruções de preparação em destaque; material, ordem e operador ausentes aparecem como não informados.
+            - Regras da barra lateral extraídas para um módulo sem interface gráfica, com testes de contagem, seleção e alterações não salvas.
+            - Documento mestre atualizado com diagnóstico e planejamento de instalação, rede, concorrência, recuperação e futura integração ANP.
+            - O banco de trabalho e o db.ini existentes são preservados pelo aplicativo; os pacotes não incluem o banco operacional do desenvolvedor. Revise configurações personalizadas antes de executar o instalador, cuja preservação parcial foi registrada no diagnóstico.
+            - Validação: 772 testes e 16 subtestes aprovados em cópia isolada, incluindo MySQL 8.0 descartável e carga de 8 clientes/1000 salvamentos. Dois testes ignorados por referências ausentes (AS74467.onx e sessão #282).
+            - ANP TCP e reconciliação automática entre SQLite e MySQL não estão implementados. Impressão física/leitor e homologação com máquinas reais permanecem pendentes.
           files: |
             dist-release/**/CorteAC.exe
             dist-release/**/CorteAC-Setup-*.exe

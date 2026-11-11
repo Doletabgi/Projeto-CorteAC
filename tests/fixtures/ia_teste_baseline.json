@@ -1,0 +1,53 @@
+{
+  "load": {
+    "pieces": 300,
+    "sheet": [
+      2000.0,
+      1200.0
+    ],
+    "gap": 1.0,
+    "seed": 42
+  },
+  "engines": {
+    "flashnestsheet_python": {
+      "median_ms": 78.43,
+      "avg_ms": 80.27,
+      "min_ms": 78.0,
+      "max_ms": 88.08,
+      "yield_pct": 55.65,
+      "g00_mm": 39333.19,
+      "pieces_placed": 300,
+      "sheets_count": 5
+    },
+    "flashnestsheet_nfp": {
+      "median_ms": 16.84,
+      "avg_ms": 18.11,
+      "min_ms": 16.68,
+      "max_ms": 21.83,
+      "yield_pct": 55.65,
+      "g00_mm": 40025.48,
+      "pieces_placed": 300,
+      "sheets_count": 5
+    },
+    "tape_a": {
+      "median_ms": 28.94,
+      "avg_ms": 28.9,
+      "min_ms": 28.49,
+      "max_ms": 29.47,
+      "yield_pct": 55.65,
+      "g00_mm": 40890.75,
+      "pieces_placed": 300,
+      "sheets_count": 5
+    },
+    "IA-teste": {
+      "median_ms": 737.47,
+      "avg_ms": 734.98,
+      "min_ms": 727.12,
+      "max_ms": 739.86,
+      "yield_pct": 69.56,
+      "g00_mm": 41558.03,
+      "pieces_placed": 300,
+      "sheets_count": 4
+    }
+  }
+}

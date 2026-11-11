@@ -48,23 +48,18 @@ class TestImpressaoEmMetros(unittest.TestCase):
         return dlg
 
     def test_regua_numerada_em_metros(self):
-        dlg = self._dlg()
-        labels = [dlg.canvas.itemcget(i, "text") for i in dlg.canvas.find_withtag("print_label")]
-        self.assertTrue(any("," in t for t in labels), f"esperava vírgula decimal (metros): {labels[:8]}")
-        self.assertIn("0,1", labels)
-        self.assertIn("1,3", labels)          # 1380 mm -> última marcação antes da borda
-        for texto in labels:
-            self.assertNotRegex(texto, r"^\d{2,3}$", f"marcação em cm encontrada: {texto}")
+        dlg=self._dlg()
+        text=' '.join(dlg.print_texts)
+        self.assertIn('Largura × comprimento: 1,38 x 2,98 m',text)
+        self.assertNotIn('Medidas de corte:',text)
+        self.assertNotIn('Placa:',text)
+        self.assertNotIn(' mm',text)
+        self.assertNotIn(' cm',text)
+
 
     def test_cabecalho_dimensoes_em_metros(self):
         dlg = self._dlg(dimensions_str="1,38 x 2,98 m")
-        textos = []
-        for item in dlg.canvas.find_all():
-            try:
-                if dlg.canvas.type(item) == "text":
-                    textos.append(dlg.canvas.itemcget(item, "text"))
-            except Exception:
-                continue
+        textos = list(dlg.print_texts)
         cabecalho = " | ".join(textos)
         self.assertIn("1,38 x 2,98 m", cabecalho, f"cabeçalho sem dimensões em metros: {cabecalho[:200]}")
         self.assertNotIn("cm", cabecalho, "a impressão não deve mais usar centímetros")
@@ -231,11 +226,7 @@ class TestCabecalhoSemDescription(unittest.TestCase):
         dlg.update_idletasks()
         dlg.redraw()
 
-        textos = [
-            dlg.canvas.itemcget(i, "text")
-            for i in dlg.canvas.find_all()
-            if dlg.canvas.type(i) == "text"
-        ]
+        textos = list(dlg.print_texts)
         self.assertFalse(any("Description" in t for t in textos), f"linha Description ainda presente: {textos[:12]}")
 
         # A renderização do PDF/imagem não pode falhar após a remoção
@@ -281,12 +272,12 @@ class TestCabecalhoFolhas(unittest.TestCase):
             "layout_name": "lay0001.lay", "sheet_w_mm": 1350.0, "sheet_h_mm": 1130.0,
             "dimensions_str": "1,35 x 1,13 m",
             "dimensions_lines": format_dimensions_folhas(lay),
+            "tip_zone": lay["tip_zone"], "material_layers":4,
             "mat_area_str": "1.53 sq.M.",
         })
         dlg.update_idletasks()
         dlg.redraw()
-        textos = [dlg.canvas.itemcget(i, "text") for i in dlg.canvas.find_all()
-                  if dlg.canvas.type(i) == "text"]
+        textos = list(dlg.print_texts)
         self.assertTrue(any("folhas longas" in t for t in textos), textos[:12])
         self.assertTrue(any("folhas curtas" in t for t in textos), textos[:12])
         self.assertFalse(any("Material Area" in t for t in textos), "Material Area deveria ter sido removida")
@@ -326,9 +317,9 @@ class TestCabecalhoSomenteNaPlacaComPonta(unittest.TestCase):
         })
         dlg.update_idletasks()
         dlg.redraw()
-        textos = [dlg.canvas.itemcget(i, "text") for i in dlg.canvas.find_all()
-                  if dlg.canvas.type(i) == "text"]
-        self.assertTrue(any(t.startswith("Dimensions:") for t in textos), textos[:10])
+        textos = list(dlg.print_texts)
+        self.assertTrue(any(t.startswith("Separar ") for t in textos), textos[:10])
+        self.assertFalse(any(t.startswith("Placa:") for t in textos))
         self.assertFalse(any(t.startswith("Material Area:") for t in textos), "Material Area não deve constar na folha")
         self.assertFalse(any(t.startswith("Refile:") for t in textos), "Refile não deve constar na folha")
         self.assertFalse(any("folhas longas" in t for t in textos))
@@ -354,11 +345,11 @@ class TestCabecalhoSomenteNaPlacaComPonta(unittest.TestCase):
             "layout_name": "lay0001.lay", "sheet_w_mm": 1350.0, "sheet_h_mm": 1130.0,
             "dimensions_str": "1,35 x 1,13 m", "mat_area_str": "1.53 sq.M.",
             "dimensions_lines": format_dimensions_folhas(lay),
+            "tip_zone": lay["tip_zone"], "material_layers":4,
         })
         dlg.update_idletasks()
         dlg.redraw()
-        textos = [dlg.canvas.itemcget(i, "text") for i in dlg.canvas.find_all()
-                  if dlg.canvas.type(i) == "text"]
+        textos = list(dlg.print_texts)
         self.assertTrue(any("folhas longas" in t for t in textos), textos[:10])
         self.assertTrue(any("folhas curtas" in t for t in textos), textos[:10])
         self.assertFalse(any(t.startswith("Material Area:") for t in textos))
