@@ -6,7 +6,7 @@
 > **Regra de ouro:** o que está marcado `[CONFIRMADO]` veio do relatório, do código ou do usuário. O que está `[NÃO CONFIRMADO]` é suposição e não deve virar "fato" sem validação. O que está `[PREENCHER]` a IA deve completar lendo o código real.
 
 <!-- AUTO:header:start -->
-**Última sincronização com o código:** 2026-11-11 11:17 (HEAD ao gerar: `10389ab`; 181 arquivos Python, ~83321 linhas)
+**Última sincronização com o código:** 2026-11-11 11:24 (HEAD ao gerar: `e0b9a26`; 181 arquivos Python, ~83321 linhas)
 <!-- AUTO:header:end -->
 **Versão deste documento:** 2
 
@@ -30,7 +30,7 @@
 
 A tentativa da tag `v1.8.5` concluiu Windows e Inno Setup, mas o job Linux falhou na instalação das dependências de sistema com saída 100; o job de publicação foi ignorado. A anotação do GitHub também informou a migração de `ubuntu-latest` para Ubuntu 26. A correção fixa os jobs Linux/publicação em `ubuntu-24.04`, imagem suportada no [inventário oficial de runners](https://github.com/actions/runner-images), e só executa APT se o Python configurado não carregar Tk/Tcl. A tag anterior é mantida; não foi reescrita.
 
-A versão 1.8.6 entrega a ficha A4 e a manutenção descritas abaixo, com o mesmo código funcional que passou nos 772 testes e 16 subtestes; mudam a versão e o empacotamento/CI. Dois testes dependentes de referências ausentes continuam ignorados. ANP, sincronização offline/central e homologação física permanecem pendentes. Build local Linux regenerada por `build_linux.sh`, pacote TAR.GZ e CLI `CorteAC 1.8.6` conferidos; executáveis e atalho locais atualizados com backups. Testes SemVer: 8 aprovados e 6 subtestes aprovados. O workflow oficial verificará Windows, Linux e Inno Setup antes da conferência dos cinco assets.
+A versão 1.8.6 entrega a ficha A4 e a manutenção descritas abaixo, com o mesmo código funcional que passou nos 772 testes e 16 subtestes; mudam a versão e o empacotamento/CI. Dois testes dependentes de referências ausentes continuam ignorados. ANP, sincronização offline/central e homologação física permanecem pendentes. Build local Linux regenerada por `build_linux.sh`, pacote TAR.GZ e CLI `CorteAC 1.8.6` conferidos; executáveis e atalho locais atualizados com backups. Testes SemVer: 8 aprovados e 6 subtestes aprovados. **Publicação confirmada:** [CorteAC v1.8.6](https://github.com/Doletabgi/Projeto-CorteAC/releases/tag/v1.8.6), com [workflow oficial concluído com sucesso](https://github.com/Doletabgi/Projeto-CorteAC/actions/runs/43037058227) em Windows, Linux e publicação. Os cinco assets foram baixados e conferidos: `CorteAC.exe`, `CorteAC-Windows-x64.zip`, `CorteAC-Setup-1.8.6.exe`, `corteac_linux` e `CorteAC-Linux-x64.tar.gz`. Ambos os executáveis contêm a versão 1.8.6 e os novos módulos, com banco embutido sem layouts/peças; os arquivos ZIP/TAR contêm os mesmos executáveis publicados separadamente. Os hashes locais coincidem com os digests informados pelo GitHub. Banco operacional preservado. A conferência do instalador abrange build bem-sucedida, nome/versão e integridade do arquivo; instalação em Windows de fábrica e homologação física continuam pendentes.
 
 ### Versão 1.8.5 — ficha de produção A4 e manutenção gradual (11/11/2026)
 
@@ -4975,6 +4975,7 @@ Com dados confiáveis e validações definidas, avaliar comparação do aproveit
 <!-- AUTO:gitlog:start -->
 | Commit | Data | Autor | Mensagem |
 |---|---|---|---|
+| `e0b9a26` | 2026-11-11 | Doletabgi | fix(ci): estabiliza build Linux e prepara v1.8.6 |
 | `10389ab` | 2026-11-11 | Doletabgi | fix(print): ficha de producao e manutencao gradual v1.8.5 |
 | `856b186` | 2026-11-09 | Doletabgi | fix(release): publica apenas instalador com versao |
 | `e1ae4bc` | 2026-11-09 | Doletabgi | feat: otimiza sobras em ponta e placa separada v1.8.4 |
@@ -4989,7 +4990,6 @@ Com dados confiáveis e validações definidas, avaliar comparação do aproveit
 | `097f102` | 2026-11-07 | Doletabgi | feat(shapes): ferramenta de backup e restauracao de moldes no menu ferramentas (v1.6.43) |
 | `032f7a4` | 2026-11-07 | Doletabgi | feat(layout): identificar placas dos moldes na barra lateral (v1.6.42) |
 | `5193122` | 2026-11-07 | Doletabgi | feat(toolbar): retirar botao exportar g-code da toolbar e adicionar no menu ferramentas (v1.6.41) |
-| `79deff7` | 2026-11-07 | Doletabgi | feat(menu): remover opcoes de criar producao e pastas de moldes do menu ferramentas (v1.6.40) |
 <!-- AUTO:gitlog:end -->
 
 ---
@@ -5071,6 +5071,8 @@ Com dados confiáveis e validações definidas, avaliar comparação do aproveit
 | Qua, 11/11/2026 | — | Codex + usuário | Preparação da release v1.8.5: ficha A4 compartilhada com paginação e camadas por peça, metadados sem valores fictícios, regras da barra lateral extraídas e planejamento de rede/ANP consolidado. Validação e builds registradas na abertura deste documento. | `ui/production_sheet.py`, `ui/layout_print_dialog.py`, `ui/layout_editor_view.py`, `ui/main_window.py`, `cad/sidebar_rules.py`, `tests/`, `config.py`, `.github/workflows/release.yml`, `packaging/corteac_setup.iss`, `docs/PROJETO_ATOM_JOBMANAGER.md` |
 
 | Qua, 11/11/2026 | — | Codex | Fechamento v1.8.6 após falha da build Linux de v1.8.5 na etapa APT (saída 100); Windows e Inno já aprovados. Runner Linux/publicação fixado em Ubuntu 24.04 e APT condicional à ausência de Tk/Tcl. Código funcional preservado; tags mantidas sem reescrita. | `.github/workflows/release.yml`, `config.py`, `packaging/corteac_setup.iss`, `docs/PROJETO_ATOM_JOBMANAGER.md` |
+
+| Qua, 11/11/2026 | — | Codex | Release v1.8.6 publicada: builds Windows/Linux, Inno Setup e publicação aprovados no workflow 43037058227. Cinco assets baixados, hashes e conteúdo dos pacotes conferidos; versões/módulos e base limpa verificados nos executáveis de ambas as plataformas. Banco operacional preservado; validação física permanece pendente. | `docs/PROJETO_ATOM_JOBMANAGER.md` |
 
 ## 11. Prompt para o Antigravity: instalar a sincronização automática `[CONCLUÍDA]`
 
