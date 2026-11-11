@@ -1,12 +1,12 @@
 # PROJETO ATOM JobManager Reborn: Documento Vivo
 
 > **Finalidade:** Documento mestre estruturado e autocontido projetado para alimentar e contextualizar qualquer Inteligência Artificial (Antigravity, Claude, ChatGPT, etc.) ou engenheiro sobre 100% do projeto — regras de negócio de calçados/couro (ATOM), arquitetura técnica, schemas de banco (MySQL/SQLite), formatos proprietários (.LAY, .ONX/CZLIB), algoritmos de nesting/CAM, UI/UX e histórico — em um único arquivo de referência imediata.
-**Atalho de leitura:** o comportamento ATUAL de encaixe, sobras, impressão, atalho, entrega para a máquina, código de barras e gestão de usuários/operadores está consolidado na **§8.47**, **§8.48**, **§8.49**, **§8.50**, **§8.51**, **§8.52** e **§8.53**; as seções §8.26–§8.46 são o histórico de como se chegou lá. A manutenção gradual de 11/11/2026 está na **§8.66** e a ficha de produção A4 da versão 1.8.5 na **§8.67**; o diagnóstico e planejamento de rede/ANP estão na **§9.4**.
+**Atalho de leitura:** o comportamento ATUAL de encaixe, sobras, impressão, atalho, entrega para a máquina, código de barras e gestão de usuários/operadores está consolidado na **§8.47**, **§8.48**, **§8.49**, **§8.50**, **§8.51**, **§8.52** e **§8.53**; as seções §8.26–§8.46 são o histórico de como se chegou lá. A manutenção gradual de 11/11/2026 está na **§8.66** e a ficha de produção A4 entregue com 1.8.6 na **§8.67**; o diagnóstico e planejamento de rede/ANP estão na **§9.4**.
 >
 > **Regra de ouro:** o que está marcado `[CONFIRMADO]` veio do relatório, do código ou do usuário. O que está `[NÃO CONFIRMADO]` é suposição e não deve virar "fato" sem validação. O que está `[PREENCHER]` a IA deve completar lendo o código real.
 
 <!-- AUTO:header:start -->
-**Última sincronização com o código:** 2026-11-11 11:06 (HEAD ao gerar: `856b186`; 181 arquivos Python, ~83321 linhas)
+**Última sincronização com o código:** 2026-11-11 11:17 (HEAD ao gerar: `10389ab`; 181 arquivos Python, ~83321 linhas)
 <!-- AUTO:header:end -->
 **Versão deste documento:** 2
 
@@ -26,13 +26,19 @@
 ---
 
 
+### Versão 1.8.6 — correção da build Linux (11/11/2026)
+
+A tentativa da tag `v1.8.5` concluiu Windows e Inno Setup, mas o job Linux falhou na instalação das dependências de sistema com saída 100; o job de publicação foi ignorado. A anotação do GitHub também informou a migração de `ubuntu-latest` para Ubuntu 26. A correção fixa os jobs Linux/publicação em `ubuntu-24.04`, imagem suportada no [inventário oficial de runners](https://github.com/actions/runner-images), e só executa APT se o Python configurado não carregar Tk/Tcl. A tag anterior é mantida; não foi reescrita.
+
+A versão 1.8.6 entrega a ficha A4 e a manutenção descritas abaixo, com o mesmo código funcional que passou nos 772 testes e 16 subtestes; mudam a versão e o empacotamento/CI. Dois testes dependentes de referências ausentes continuam ignorados. ANP, sincronização offline/central e homologação física permanecem pendentes. Build local Linux regenerada por `build_linux.sh`, pacote TAR.GZ e CLI `CorteAC 1.8.6` conferidos; executáveis e atalho locais atualizados com backups. Testes SemVer: 8 aprovados e 6 subtestes aprovados. O workflow oficial verificará Windows, Linux e Inno Setup antes da conferência dos cinco assets.
+
 ### Versão 1.8.5 — ficha de produção A4 e manutenção gradual (11/11/2026)
 
 Entrega solicitada pelo responsável nesta conversa. A ficha A4 compartilha o renderizador entre prévia, PDF, PNG e impressão; preserva grade de 100 mm e réguas em metros, pagina a lista de modelos/tamanhos, mantém o mapa proporcional, usa medidas em metros e calcula produção com as camadas de cada peça/placa, incluindo a ponta. Material, ordem e operador ausentes são indicados sem valores fictícios. A regra de correspondência/contagem da barra lateral foi extraída para `cad/sidebar_rules.py`, preservando os chamadores do editor.
 
 O diagnóstico e o planejamento de implantação em rede/ANP permanecem na §9.4. Não há cliente ANP ou sincronização automática implementados nesta versão. Configurações e dados operacionais existentes são preservados; o banco do operador e os artefatos da sessão 188 não são incluídos no commit. As builds usam a base de distribuição versionada, em cópia isolada, com limpeza apenas dessa cópia.
 
-**Validação para publicação:** suíte completa em cópia isolada: **772 testes aprovados, 2 ignorados e 16 subtestes aprovados em 77,21 s**. MySQL 8.0 descartável com schema próprio validou acesso, conflitos e a carga de 8 clientes/1000 salvamentos, sem executar testes contra o banco central da fábrica. As duas referências ausentes são `AS74467.onx` e a sessão #282. Build local Linux e pacote TAR.GZ gerados por `build_linux.sh`; módulos novos presentes no executável e CLI confirmada como `CorteAC 1.8.5`. Binários locais atualizados com backups. SHA-256 do banco operacional inalterado. As builds oficiais Windows/Linux e o Inno Setup serão executados pelo workflow da tag `v1.8.5`; confirmar os cinco assets na release. A conferência em papel/leitor e em máquinas ATOM permanece pendente.
+**Validação para publicação:** suíte completa em cópia isolada: **772 testes aprovados, 2 ignorados e 16 subtestes aprovados em 77,21 s**. MySQL 8.0 descartável com schema próprio validou acesso, conflitos e a carga de 8 clientes/1000 salvamentos, sem executar testes contra o banco central da fábrica. As duas referências ausentes são `AS74467.onx` e a sessão #282. Build local Linux e pacote TAR.GZ gerados por `build_linux.sh`; módulos novos presentes no executável e CLI confirmada como `CorteAC 1.8.5`. Binários locais atualizados com backups. SHA-256 do banco operacional inalterado. A build oficial Windows/Inno passou, mas o Linux falhou nas dependências de sistema e impediu a publicação pela tag `v1.8.5`; a correção de CI e o novo fechamento estão em 1.8.6. A conferência em papel/leitor e em máquinas ATOM permanece pendente.
 
 ### Publicação do instalador — somente nome com versão (09/11/2026)
 
@@ -4969,6 +4975,7 @@ Com dados confiáveis e validações definidas, avaliar comparação do aproveit
 <!-- AUTO:gitlog:start -->
 | Commit | Data | Autor | Mensagem |
 |---|---|---|---|
+| `10389ab` | 2026-11-11 | Doletabgi | fix(print): ficha de producao e manutencao gradual v1.8.5 |
 | `856b186` | 2026-11-09 | Doletabgi | fix(release): publica apenas instalador com versao |
 | `e1ae4bc` | 2026-11-09 | Doletabgi | feat: otimiza sobras em ponta e placa separada v1.8.4 |
 | `6168ca7` | 2026-11-09 | Doletabgi | feat: destino das sobras e correção do salvamento v1.8.0 |
@@ -4983,7 +4990,6 @@ Com dados confiáveis e validações definidas, avaliar comparação do aproveit
 | `032f7a4` | 2026-11-07 | Doletabgi | feat(layout): identificar placas dos moldes na barra lateral (v1.6.42) |
 | `5193122` | 2026-11-07 | Doletabgi | feat(toolbar): retirar botao exportar g-code da toolbar e adicionar no menu ferramentas (v1.6.41) |
 | `79deff7` | 2026-11-07 | Doletabgi | feat(menu): remover opcoes de criar producao e pastas de moldes do menu ferramentas (v1.6.40) |
-| `b4d724d` | 2026-11-07 | Doletabgi | fix(print): remover extensao .lay do titulo principal na folha de impressao (v1.6.39) |
 <!-- AUTO:gitlog:end -->
 
 ---
@@ -5063,6 +5069,8 @@ Com dados confiáveis e validações definidas, avaliar comparação do aproveit
 | Qua, 11/11/2026 | — | Codex + usuário | Extração local das regras da barra lateral (§8.66; 103 testes aprovados, 1 ignorado); centralização do registro anterior e planejamento da integração ATOM/rede (§9.4). Diagnóstico diferencia exportação de arquivos e ANP futuro, preservação parcial do INI, fallback SQLite, concorrência e cobertura de backup. Sem integração ANP, alteração de regra industrial ou nova release nesta revisão. | `cad/sidebar_rules.py`, `ui/layout_editor_view.py`, `tests/test_sidebar_rules.py`, `docs/PROJETO_ATOM_JOBMANAGER.md`, `.gitignore` |
 
 | Qua, 11/11/2026 | — | Codex + usuário | Preparação da release v1.8.5: ficha A4 compartilhada com paginação e camadas por peça, metadados sem valores fictícios, regras da barra lateral extraídas e planejamento de rede/ANP consolidado. Validação e builds registradas na abertura deste documento. | `ui/production_sheet.py`, `ui/layout_print_dialog.py`, `ui/layout_editor_view.py`, `ui/main_window.py`, `cad/sidebar_rules.py`, `tests/`, `config.py`, `.github/workflows/release.yml`, `packaging/corteac_setup.iss`, `docs/PROJETO_ATOM_JOBMANAGER.md` |
+
+| Qua, 11/11/2026 | — | Codex | Fechamento v1.8.6 após falha da build Linux de v1.8.5 na etapa APT (saída 100); Windows e Inno já aprovados. Runner Linux/publicação fixado em Ubuntu 24.04 e APT condicional à ausência de Tk/Tcl. Código funcional preservado; tags mantidas sem reescrita. | `.github/workflows/release.yml`, `config.py`, `packaging/corteac_setup.iss`, `docs/PROJETO_ATOM_JOBMANAGER.md` |
 
 ## 11. Prompt para o Antigravity: instalar a sincronização automática `[CONCLUÍDA]`
 

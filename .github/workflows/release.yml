@@ -9,7 +9,7 @@ on:
       tag_name:
         description: 'Tag de versão SemVer (ex: v1.0.0)'
         required: false
-        default: 'v1.8.5'
+        default: 'v1.8.6'
 
 permissions:
   contents: write
@@ -91,7 +91,7 @@ jobs:
 
   build-linux:
     name: Compilar Binário Linux (Standalone)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
 
     steps:
       - name: Baixar Código (Checkout)
@@ -105,8 +105,11 @@ jobs:
 
       - name: Instalar Dependências do Sistema e Python
         run: |
-          sudo apt-get update
-          sudo apt-get install -y python3-tk
+          # setup-python pode fornecer Tk/Tcl completos; só usa APT se necessário.
+          if ! python -c "import tkinter; tkinter.Tcl().eval('info library')"; then
+            sudo apt-get -o Acquire::Retries=3 update
+            sudo apt-get install -y python3-tk
+          fi
           python -m pip install --upgrade pip
           pip install -r requirements.txt
           pip install pyinstaller
@@ -144,7 +147,7 @@ jobs:
   publish-release:
     name: Publicar Release Oficial no GitHub
     needs: [build-windows, build-linux]
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     permissions:
       contents: write
 
@@ -221,7 +224,7 @@ jobs:
 
             ### 🪟 Para Usuários Windows (Windows 10 e Windows 11):
             1. **Instalador Oficial com Suporte a Rede (Recomendado)**:
-               - Baixe o instalador **`CorteAC-Setup-<versão>.exe`** (ex.: `CorteAC-Setup-1.8.5.exe`) abaixo na seção **Assets**.
+               - Baixe o instalador **`CorteAC-Setup-<versão>.exe`** (ex.: `CorteAC-Setup-1.8.6.exe`) abaixo na seção **Assets**.
                - Dê dois cliques e siga o assistente (permite configurar as pastas de Moldes e Sessões na rede da fábrica).
                - O instalador cria atalhos na Área de Trabalho e registra no Adicionar/Remover Programas.
             2. **Versão Portátil (.zip ou .exe direto)**:
@@ -245,8 +248,9 @@ jobs:
 
             ---
 
-            ### 🛠️ Recursos Incluídos Nesta Versão (v1.8.5):
+            ### 🛠️ Recursos Incluídos Nesta Versão (v1.8.6):
             - Ficha de produção A4 com mapa proporcional e quadro compacto de modelos, tamanhos e pares por placa, incluindo páginas de continuação.
+            - Build Linux fixada em Ubuntu 24.04; evita a transição implícita de ubuntu-latest e instalação redundante de Tk/Tcl.
             - Grade de 100 mm e réguas em metros preservadas na ficha.
             - Prévia, PDF, PNG e impressão usam o mesmo renderizador; identificação e código de barras permanecem nas continuações.
             - Produção calculada pelas camadas de cada peça, incluindo ponta e placas separadas de 2 camadas; demanda e multiplicadores permanecem distintos.
