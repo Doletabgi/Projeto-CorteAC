@@ -983,9 +983,6 @@ class ShapeEditorView(tk.Frame):
     # Transformações e Operações CAD
     # =========================================================================
     def choose_symbolic(self):
-        if self.geometry_locked.get():
-            self.lbl_sbar_status.config(text="Geometria bloqueada. Ative 'Editar Geometria' para inserir simbólica.")
-            return
         if len(self.shape.get("contour", [])) < 3:
             self.lbl_sbar_status.config(text="Abra uma peça com contorno para inserir simbólica.")
             return
@@ -996,9 +993,6 @@ class ShapeEditorView(tk.Frame):
             self.canvas.focus_set()
 
     def add_symbolic_at(self, wx, wy):
-        if self.geometry_locked.get():
-            self.lbl_sbar_status.config(text="Geometria bloqueada. Ative 'Editar Geometria' para inserir simbólica.")
-            return False
         try:
             contour, added = insert_symbol(
                 self.shape.get("contour", []), wx, wy, self.symbolic_kind,

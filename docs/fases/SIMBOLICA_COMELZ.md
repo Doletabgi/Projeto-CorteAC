@@ -2,11 +2,13 @@
 
 Implementação em código em 12/11/2026, a partir de
 `docs/02_Comelz_CAM_22A18.md` e da confirmação do operador: ativar a função,
-escolher o tipo e clicar na peça. Não foi gerado um novo executável nesta etapa.
+escolher o tipo e clicar na peça. A correção de uso integra a versão 1.8.9.
 
 ## Uso no OpenCorte
 
-1. Abra a peça no editor de moldes e ative **Editar Geometria**.
+1. Abra a peça no editor de moldes. A Simbólica funciona com a trava de
+   geometria ativa: escolher a ferramenta autoriza essa inserção específica,
+   mantendo bloqueado o arraste de vértices.
 2. Clique em **Simbólica** e escolha o tipo; o diálogo mostra uma prévia.
 3. Clique próximo à borda onde deseja os piques. A posição é projetada na
    aresta mais próxima (tolerância de 12 pixels).
@@ -20,8 +22,10 @@ Na sequência, 0 = dois grandes; 1–4 = um a quatro pequenos; 5 = um grande;
 exigem escolha manual nesta implementação.
 
 Cada pique é um V voltado para dentro e incorporado ao contorno de corte.
-O grupo deve caber em uma única aresta, sem alcançar os cantos ou cruzar outro
-trecho do contorno. Posições inválidas são rejeitadas sem alterar a peça nem
+O grupo pode ocupar vários segmentos consecutivos de uma borda reta ou curva,
+inclusive atravessando o ponto inicial do contorno. A largura acompanha a
+distância ao longo da borda. Cantos com mudança acumulada de direção superior
+a 45 graus no trecho do grupo e cruzamentos com outro trecho são rejeitados. Posições inválidas são rejeitadas sem alterar a peça nem
 criar uma entrada no histórico. A marcação acompanha rotações e espelhamentos
 por pertencer ao próprio contorno. Não é convertida em furo de broca.
 
@@ -89,3 +93,7 @@ simbólica na cópia de teste, reproduziu exatamente as seis falhas. Elas envolv
 o molde fixo de ID 27 ausente no banco de teste e expectativas antigas de texto
 dos botões após a migração de ícones já presente no checkout. Não foram
 alterados testes/dados operacionais para mascarar essas falhas.
+
+Regressão da inserção: seleção pelo botão com trava ativa, clique em molde
+com segmentos de 1 mm, gravação, desfazer, curvas nos dois sentidos, fechamento
+explícito, passagem pelo primeiro vértice e conservação dos pontos entre piques.

@@ -4,6 +4,7 @@ Equivalente funcional da ferramenta de simbólica; não interpreta comandos .smb
 As proporções de referência vêm de conf/_standard_.smk da Comelz.
 """
 import copy
+from bisect import bisect_left, bisect_right
 import math
 import re
 
@@ -81,23 +82,71 @@ def insert_symbol(contour, x, y, kind, size="", max_distance=8.0):
             best = candidate
     if best is None or best[0] > max_distance:
         raise ValueError("Clique próximo à borda da peça para adicionar a simbólica.")
-    _, edge, center, length, ux, uy = best
+    _, edge, center, _, _, _ = best
     spacing = 1.0
     width = sum(w for w, _ in pattern) + spacing*(len(pattern)-1)
-    start = center-width/2
-    if start <= 1e-6 or start+width >= length-1e-6:
-        raise ValueError("A simbólica não cabe nesta aresta. Clique mais longe do canto ou escolha um pique menor.")
+    lengths = [math.dist(a, b) for a, b in zip(pts, pts[1:]+pts[:1])]
+    distances = [0.0]
+    for length in lengths:
+        distances.append(distances[-1]+length)
+    perimeter = distances[-1]
+    if width >= perimeter-1e-6:
+        raise ValueError("A simbólica não cabe neste contorno. Escolha um pique menor.")
+    start = (distances[edge]+center-width/2) % perimeter
+    end = start+width
+    # Duas voltas permitem inserir também no trecho que passa pelo primeiro ponto.
+    extended = distances[:-1]+[perimeter+d for d in distances]
+
+    def point_at(distance):
+        index = min(bisect_right(extended, distance)-1, 2*n-1)
+        a, b = pts[index % n], pts[(index+1) % n]
+        length = lengths[index % n]
+        t = (distance-extended[index])/length if length > 1e-8 else 0
+        return a[0]+t*(b[0]-a[0]), a[1]+t*(b[1]-a[1])
+
+    first = bisect_right(extended, start)-1
+    after = bisect_right(extended, end+1e-8)
+    # Vários segmentos curtos de uma curva são uma borda contínua. Cantos reais
+    # continuam protegidos: não atravessamos uma mudança brusca de direção.
+    turn = 0.0
+    for index in range(first+1, bisect_left(extended, end)):
+        a, b, c = pts[(index-1) % n], pts[index % n], pts[(index+1) % n]
+        ux, uy = b[0]-a[0], b[1]-a[1]
+        vx, vy = c[0]-b[0], c[1]-b[1]
+        if math.hypot(ux, uy) > 1e-8 and math.hypot(vx, vy) > 1e-8:
+            turn += abs(math.atan2(ux*vy-uy*vx, ux*vx+uy*vy))
+    if turn > math.pi/4:
+        raise ValueError("A simbólica não cabe neste canto. Clique mais longe do canto ou escolha um pique menor.")
     sign = 1 if area2 > 0 else -1
-    nx, ny = -uy*sign, ux*sign
-    ax, ay = pts[edge]
     added = []
+    position = start
     for w, depth in pattern:
-        for along, inward in ((start, 0), (start+w/2, depth), (start+w, 0)):
-            added.append({"x": ax+along*ux+inward*nx, "y": ay+along*uy+inward*ny,
-                          "symbolic_notch": True})
-        start += w+spacing
+        left, right = point_at(position), point_at(position+w)
+        middle = point_at(position+w/2)
+        dx, dy = right[0]-left[0], right[1]-left[1]
+        chord = math.hypot(dx, dy)
+        if chord < 1e-8:
+            raise ValueError("Não há espaço para a simbólica nesta posição.")
+        apex = (middle[0]-dy/chord*sign*depth, middle[1]+dx/chord*sign*depth)
+        for px, py in (left, apex, right):
+            added.append({"x": px, "y": py, "symbolic_notch": True})
+        position += w+spacing
     raw = copy.deepcopy(list(contour[:-1] if closed else contour))
-    result = raw[:edge+1] + added + raw[edge+1:]
+    # Conserva os vértices fora da área do pique e os trechos entre piques.
+    result = [raw[first % n]]
+    position = start
+    for notch, (w, _) in enumerate(pattern):
+        result.extend(added[notch*3:notch*3+3])
+        gap_start, gap_end = position+w, position+w+spacing
+        if notch < len(pattern)-1:
+            result.extend(copy.deepcopy(raw[i % n]) for i in range(
+                bisect_right(extended, gap_start+1e-8), bisect_left(extended, gap_end-1e-8)))
+        position = gap_end
+    result.extend(copy.deepcopy(raw[i % n]) for i in range(after, first+n))
+    # Se a inserção começa exatamente num vértice, não duplique a base do V.
+    if len(result) > 1 and math.dist((result[0]["x"], result[0]["y"]),
+                                    (result[1]["x"], result[1]["y"])) < 1e-8:
+        result.pop(0)
     xy = [(p["x"], p["y"]) for p in result]
     m = len(xy)
     for i in range(m):

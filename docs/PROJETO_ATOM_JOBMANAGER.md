@@ -14,9 +14,9 @@ pré-requisitos, escopo dos testes e regras de retomada.
 > **Regra de ouro:** o que está marcado `[CONFIRMADO]` veio do relatório, do código ou do usuário. O que está `[NÃO CONFIRMADO]` é suposição e não deve virar "fato" sem validação. O que está `[PREENCHER]` a IA deve completar lendo o código real.
 
 <!-- AUTO:header:start -->
-**Versão do aplicativo:** `1.8.8`
+**Versão do aplicativo:** `1.8.9`
 
-**Última sincronização com o código:** 2026-11-12 10:40 (HEAD ao gerar: `5d008da`; 197 arquivos Python, ~87739 linhas)
+**Última sincronização com o código:** 2026-11-12 10:48 (HEAD ao gerar: `6af24e9`; 197 arquivos Python, ~87838 linhas)
 <!-- AUTO:header:end -->
 **Versão deste documento:** 2
 
@@ -879,7 +879,7 @@ ui/user_dialog.py                                    # JobManager 2000 (Python E
 - `class TestStrategyRemoval` (linha 19, 9 métodos)
 
 ### `tests/test_symbolic_notches.py`
-- funções: `test_notch_is_inward_on_each_edge_and_winding`, `test_duplicate_closing_point_and_double_notch`, `test_size_rules_use_last_digit_and_reject_ambiguous_sizes`, `test_invalid_placement_is_rejected_without_mutating`, `test_thin_piece_rejects_cut_through_opposite_edge`, `test_die_roundtrip_preserves_notch`, `editor`, `test_editor_lock_click_dirty_undo_and_escape`, `test_failed_editor_click_creates_no_undo`, `test_database_and_package_keep_manual_symbols_over_old_library`, `test_dialog_accept_and_cancel`
+- funções: `test_notch_is_inward_on_each_edge_and_winding`, `test_duplicate_closing_point_and_double_notch`, `test_size_rules_use_last_digit_and_reject_ambiguous_sizes`, `test_invalid_placement_is_rejected_without_mutating`, `test_thin_piece_rejects_cut_through_opposite_edge`, `test_die_roundtrip_preserves_notch`, `editor`, `test_editor_lock_click_dirty_undo_and_escape`, `test_failed_editor_click_creates_no_undo`, `test_database_and_package_keep_manual_symbols_over_old_library`, `test_dialog_accept_and_cancel`, `test_dense_contour_accepts_notch_across_several_segments`, `test_curved_contour_and_wraparound_keep_valid_notch`, `test_toolbar_click_on_dense_piece_and_save_with_lock`
 
 ### `tests/test_tools_menu_items.py`
 - `class TestToolsMenuItems` (linha 10, 4 métodos)
@@ -5073,6 +5073,7 @@ Com dados confiáveis e validações definidas, avaliar comparação do aproveit
 <!-- AUTO:gitlog:start -->
 | Commit | Data | Autor | Mensagem |
 |---|---|---|---|
+| `6af24e9` | 2026-11-12 | Doletabgi | chore(release): OpenCorte v1.8.8 |
 | `5d008da` | 2026-11-12 | Doletabgi | chore(release): OpenCorte v1.8.7 |
 | `2e6caf9` | 2026-11-11 | Doletabgi | docs: registra publicacao e validacao da v1.8.6 [skip ci] |
 | `e0b9a26` | 2026-11-11 | Doletabgi | fix(ci): estabiliza build Linux e prepara v1.8.6 |
@@ -5087,7 +5088,6 @@ Com dados confiáveis e validações definidas, avaliar comparação do aproveit
 | `f6e3a63` | 2026-11-08 | Doletabgi | feat(layout): visualização das placas da sessão em cascata e lado a lado (v1.6.46) |
 | `368e251` | 2026-11-08 | Doletabgi | feat(shape-editor): inicializacao em branco ao abrir por menu ou atalho (v1.6.45) |
 | `07ccbc2` | 2026-11-07 | Doletabgi | feat(shapes): programacao de datas e horas de backup automatico de moldes (v1.6.44) |
-| `097f102` | 2026-11-07 | Doletabgi | feat(shapes): ferramenta de backup e restauracao de moldes no menu ferramentas (v1.6.43) |
 <!-- AUTO:gitlog:end -->
 
 ---

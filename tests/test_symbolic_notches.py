@@ -87,15 +87,15 @@ def editor():
 
 
 def test_editor_lock_click_dirty_undo_and_escape(editor):
-    assert not editor.add_symbolic_at(50, 0)
+    assert editor.geometry_locked.get()
     assert len(editor.undo_stack) == 0
-    editor.geometry_locked.set(False)
     editor.set_tool_mode('symbolic')
     sx, sy = editor.world_to_screen(50, 0)
     editor.on_canvas_click(SimpleNamespace(x=sx, y=sy))
     assert len(editor.shape['contour']) == 7
     assert editor.open_shapes[0]['is_dirty']
     assert editor.tool_mode == 'symbolic'
+    assert editor.geometry_locked.get()  # a ferramenta não libera o arraste de vértices
     assert len(editor.undo_stack) == 1
     editor.undo_or_revert()
     assert editor.shape['contour'] == RECT
@@ -139,9 +139,7 @@ def test_dialog_accept_and_cancel(editor):
         dialog._accept()
     editor.after(10, accept)
     editor.choose_symbolic()
-    assert editor.symbolic_kind == SMALL  # bloqueado: não abre o diálogo
-    editor.geometry_locked.set(False)
-    editor.choose_symbolic()
+    assert editor.geometry_locked.get()  # escolher simbólica funciona com a trava ativa
     assert editor.symbolic_kind == DOUBLE
     assert editor.tool_mode == 'symbolic'
     editor.set_tool_mode('select')
@@ -150,3 +148,61 @@ def test_dialog_accept_and_cancel(editor):
     editor.after(10, cancel)
     editor.choose_symbolic()
     assert editor.tool_mode == 'select'
+
+
+@pytest.mark.parametrize("reverse", [False, True])
+@pytest.mark.parametrize("closed", [False, True])
+@pytest.mark.parametrize("kind", [SMALL, DOUBLE, SIZE])
+def test_dense_contour_accepts_notch_across_several_segments(reverse, closed, kind):
+    dense = ([{"x": float(x), "y": 0., "original": x} for x in range(101)] +
+             [{"x": 100., "y": 50.}, {"x": 0., "y": 50.}])
+    if reverse:
+        dense.reverse()
+    if closed:
+        dense.append(dense[0].copy())
+    original = copy.deepcopy(dense)
+    result, added = insert_symbol(dense, 50, 0, kind, size='49')
+    expected_area = 5000-sum(w*d/2 for w, d in symbol_pattern(kind, '49'))
+    assert polygon_area(result) == pytest.approx(expected_area)
+    assert dense == original
+    assert len(added) == 3*len(symbol_pattern(kind, '49'))
+    assert any(p.get('original') == 10 for p in result)
+    assert (result[0] == result[-1]) == closed
+
+
+@pytest.mark.parametrize("reverse", [False, True])
+@pytest.mark.parametrize("angle", [0, 0.7, 2.5])
+def test_curved_contour_and_wraparound_keep_valid_notch(reverse, angle):
+    contour = [{"x": 50*math.cos(i*2*math.pi/360),
+                "y": 50*math.sin(i*2*math.pi/360)} for i in range(360)]
+    if reverse:
+        contour.reverse()
+    result, added = insert_symbol(contour, 50*math.cos(angle), 50*math.sin(angle), DOUBLE)
+    assert polygon_area(result) < polygon_area(contour)
+    assert len(added) == 6
+    assert all(math.hypot(p['x'], p['y']) <= 50+1e-8 for p in added)
+    assert all(math.dist((a['x'], a['y']), (b['x'], b['y'])) > 1e-8
+               for a, b in zip(result, result[1:]+result[:1]))
+
+
+def test_toolbar_click_on_dense_piece_and_save_with_lock(editor, monkeypatch):
+    import ui.shape_editor_view as module
+    dense = ([{"x": float(x), "y": 0.} for x in range(101)] +
+             [{"x": 100., "y": 50.}, {"x": 0., "y": 50.}])
+    editor.shape['contour'] = copy.deepcopy(dense)
+    editor.original_shape = copy.deepcopy(editor.shape)
+    saved = []
+    editor.on_save_cb = lambda shape: saved.append(copy.deepcopy(shape))
+    monkeypatch.setattr(module, 'SymbolicDialog', lambda *a, **kw: SimpleNamespace(result=SMALL))
+    monkeypatch.setattr(module.messagebox, 'showinfo', lambda *a, **kw: None)
+    assert editor.geometry_locked.get()
+    editor.btn_tool_symbolic.invoke()
+    sx, sy = editor.world_to_screen(50, 0)
+    editor.on_canvas_click(SimpleNamespace(x=sx, y=sy))
+    assert editor.open_shapes[0]['is_dirty']
+    assert editor.geometry_locked.get()
+    assert sum(bool(p.get('symbolic_notch')) for p in editor.shape['contour']) == 3
+    assert polygon_area(editor.shape['contour']) == pytest.approx(4997.75)
+    editor.save_changes()
+    assert saved[0]['contour'] == editor.shape['contour']
+    assert not editor.open_shapes[0]['is_dirty']
