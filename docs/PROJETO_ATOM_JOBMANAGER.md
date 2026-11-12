@@ -14,9 +14,9 @@ pré-requisitos, escopo dos testes e regras de retomada.
 > **Regra de ouro:** o que está marcado `[CONFIRMADO]` veio do relatório, do código ou do usuário. O que está `[NÃO CONFIRMADO]` é suposição e não deve virar "fato" sem validação. O que está `[PREENCHER]` a IA deve completar lendo o código real.
 
 <!-- AUTO:header:start -->
-**Versão do aplicativo:** `1.8.9`
+**Versão do aplicativo:** `1.8.10`
 
-**Última sincronização com o código:** 2026-11-12 10:48 (HEAD ao gerar: `6af24e9`; 197 arquivos Python, ~87838 linhas)
+**Última sincronização com o código:** 2026-11-12 11:00 (HEAD ao gerar: `79ed30e`; 199 arquivos Python, ~88082 linhas)
 <!-- AUTO:header:end -->
 **Versão deste documento:** 2
 
@@ -214,6 +214,7 @@ db/__init__.py                                       # Camada de Acesso a Dados 
 db/config.py                                         # JobManager 2000 - Configuração de Banco de Dados Central
 db/connection.py                                     # JobManager 2000 - Camada Única de Acesso a Banco de Dados
 db/connection_settings.py                            # Configuração e teste independente da conexão em uso pelo aplicativo.
+db/installation_settings.py                          # Configuração do setup: modo local ou um único endereço de rede.
 db/schema_mysql.sql
 db/migrations/001_initial_mysql_schema.sql
 db/migrations/002_add_layout_multisheet_columns.sql
@@ -242,6 +243,7 @@ docs/fases/FASE6_2_POLIMENTO_CATALOGO.md
 docs/fases/FASE6_2_WARNING_ANALYSIS.md
 docs/fases/FASE6_4_ROTACAO_INTERATIVA.md
 docs/fases/FORMATO_LAY.md
+docs/fases/INSTALACAO_LOCAL_OU_REDE.md
 docs/fases/LAYOUT_EDITOR_RE.md
 docs/fases/MOTORES_NESTING_PARAMETROS.md
 docs/fases/RELATORIO_IMPLEMENTACAO_MELHORIAS.md
@@ -271,6 +273,7 @@ tests/test_delete_order.py
 tests/test_desktop_shortcut.py                       # tests/test_desktop_shortcut.py
 tests/test_dual_exporter.py                          # JobManager 2000 (Python Edition)
 tests/test_exporter_tsp.py                           # tests/test_exporter_tsp.py
+tests/test_installation_settings.py                  # Setup local/rede sem tocar na instalação ou nos bancos do operador.
 tests/test_lay_parser.py                             # Testes Unitários para o Parser e Gerador de Arquivos .lay (ATOM $$LAYOUT.v3$$)
 tests/test_layers_pairs_nesting.py                   # Testes unitários para validação da regra de camadas (layers) no cálculo de peças
 tests/test_layers_resto.py                           # Testes unitários e de integração para a regra de camadas e cálculo de resto (calc_resto).
@@ -422,8 +425,8 @@ ui/user_dialog.py                                    # JobManager 2000 (Python E
 ### `atualizar.py`
 - `class UpdateError` (linha 46, 0 métodos)
 - `class GitHub` (linha 162, 3 métodos)
-- `class Updater` (linha 978, 10 métodos)
-- funções: `command`, `git`, `current_version`, `set_version`, `next_version`, `allowed_source`, `source_files`, `fingerprint`, `snapshot`, `isolated_env`, `repository_name`, `atomic_copy`, `execution_lock`, `doc_document_brand`, `doc_read` (+26)
+- `class Updater` (linha 1008, 10 métodos)
+- funções: `command`, `git`, `current_version`, `set_version`, `next_version`, `allowed_source`, `source_files`, `fingerprint`, `snapshot`, `isolated_env`, `repository_name`, `atomic_copy`, `execution_lock`, `doc_document_brand`, `doc_read` (+27)
 
 ### `database.py`
 - `class DatabaseManager` (linha 46, 70 métodos)
@@ -560,6 +563,9 @@ ui/user_dialog.py                                    # JobManager 2000 (Python E
 - `class ConnectionSettings` (linha 20, 0 métodos)
 - funções: `_read_ini`, `_absolute_sqlite_path`, `load_settings`, `validate_settings`, `save_settings`, `probe_connection`
 
+### `db/installation_settings.py`
+- funções: `resolve_server`, `configure_installation`, `installer_main`
+
 ### `tests/_catalog_fixtures.py`
 - funções: `make_temp_catalog_db`
 
@@ -635,6 +641,9 @@ ui/user_dialog.py                                    # JobManager 2000 (Python E
 ### `tests/test_exporter_tsp.py`
 - `class TestExporterTSP` (linha 38, 13 métodos)
 - funções: `calculate_tour_distance`
+
+### `tests/test_installation_settings.py`
+- funções: `test_single_address_resolves_database_host_and_shared_root`, `test_invalid_address_does_not_change_existing_configuration`, `read_config`, `test_network_configures_all_three_destinations_without_creating_data`, `test_network_reconfiguration_keeps_custom_credentials_and_unrelated_options`, `test_switching_to_local_clears_both_network_paths_without_touching_data`, `test_failed_write_and_invalid_ini_preserve_original`, `test_setup_command_uses_installation_directory_and_reports_failures`
 
 ### `tests/test_lay_parser.py`
 - `class TestLayParser` (linha 33, 14 métodos)
@@ -4919,7 +4928,7 @@ Leitura do checkout em 11/11/2026. As constatações abaixo dizem respeito ao cl
 | Tema | Evidência no repositório | Limite e trabalho pendente |
 |---|---|---|
 | Entrega à máquina | `cad/project_packager.py:export_session`, `tools/export_session.py` e `LayoutEditorView.export_session_to_machine` exportam layouts, moldes e manifesto para diretório de destino; há uso por rede/pendrive. O manifesto contém metadados e hashes dos moldes. | Exportação de arquivos não confirma recebimento nem execução na máquina. Não foi encontrado cliente ANP TCP implementado; `anp_client.py` continua ausente. Portas 4000/4001 são referências do planejamento histórico, não requisitos confirmados do equipamento. |
-| Instalador existente | `packaging/corteac_setup.iss` configura pastas e host; `.github/workflows/release.yml` compila o Inno Setup e publica `CorteAC-Setup-<versão>.exe`. | Revisar o instalador existente, preservando sua integração ao release. Não propor outro instalador sem demonstrar necessidade. |
+| Instalador existente | `packaging/corteac_setup.iss` oferece modo local ou rede com um único endereço; `db/installation_settings.py` deriva host e pastas, preserva credenciais e grava o INI atomicamente. Atualizações sem mudanças preservam o INI existente. `.github/workflows/release.yml` compila o Inno Setup e publica `CorteAC-Setup-<versão>.exe`. Consulte `docs/fases/INSTALACAO_LOCAL_OU_REDE.md`. | Revisar o instalador existente, preservando sua integração ao release. Não propor outro instalador sem demonstrar necessidade. |
 | Atualização e configuração | `NextButtonClick` recupera pastas e host de `db.ini`. Em `ssPostInstall`, `CurStepChanged` regrava o backend; com host preenchido, também regrava porta, usuário, senha padrão e nome do banco. Campos de pastas vazios não apagam valores existentes. | A preservação atual é parcial: uma atualização pode substituir credenciais e parâmetros personalizados. Instalação silenciosa também precisa ser testada. Não alterar esses comportamentos nesta etapa de diagnóstico. |
 | Credenciais e escrita | `db/config.py` lê `db.ini` ao importar o módulo, com variáveis de ambiente prioritárias. A senha padrão consta no exemplo, nos defaults e no instalador. `config.py` cria exports/backups junto ao aplicativo; o Inno exige administrador por padrão e não declara ACLs específicas em `[Dirs]`. | Definir provisionamento e troca de credenciais, acesso ao INI e locais graváveis para usuário comum. Validar permissões NTFS e de compartilhamento no ambiente instalado. Não copiar senhas para logs ou relatórios. |
 | Conexão e queda de rede | `db/connection.py` expõe o backend ativo e o pool verifica conexões ao obtê-las. `DatabaseManager.get_connection`, no caminho sem `db_path` explícito, captura `ServerUnreachableError` e troca o backend global para SQLite; `init_db` também trata esse erro com fallback. `MainWindow.create_status_bar` não apresenta estado dedicado da conexão. | Reconexão de uma conexão MySQL não equivale a retorno automático após troca para SQLite. Não foi identificado fluxo automático de reconciliação. Falhas durante transações e caminhos com banco explícito precisam de testes próprios; o fallback não cobre indistintamente todas as operações. |
@@ -5073,6 +5082,7 @@ Com dados confiáveis e validações definidas, avaliar comparação do aproveit
 <!-- AUTO:gitlog:start -->
 | Commit | Data | Autor | Mensagem |
 |---|---|---|---|
+| `79ed30e` | 2026-11-12 | Doletabgi | chore(release): OpenCorte v1.8.9 |
 | `6af24e9` | 2026-11-12 | Doletabgi | chore(release): OpenCorte v1.8.8 |
 | `5d008da` | 2026-11-12 | Doletabgi | chore(release): OpenCorte v1.8.7 |
 | `2e6caf9` | 2026-11-11 | Doletabgi | docs: registra publicacao e validacao da v1.8.6 [skip ci] |
@@ -5087,7 +5097,6 @@ Com dados confiáveis e validações definidas, avaliar comparação do aproveit
 | `849ce20` | 2026-11-08 | Doletabgi | feat(backup): suporte a backup, restauracao e agendamento de sessoes de corte e layouts (v1.6.47) |
 | `f6e3a63` | 2026-11-08 | Doletabgi | feat(layout): visualização das placas da sessão em cascata e lado a lado (v1.6.46) |
 | `368e251` | 2026-11-08 | Doletabgi | feat(shape-editor): inicializacao em branco ao abrir por menu ou atalho (v1.6.45) |
-| `07ccbc2` | 2026-11-07 | Doletabgi | feat(shapes): programacao de datas e horas de backup automatico de moldes (v1.6.44) |
 <!-- AUTO:gitlog:end -->
 
 ---

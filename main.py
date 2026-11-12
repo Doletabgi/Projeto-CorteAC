@@ -23,9 +23,13 @@ if sys.platform == "win32":
             os.environ["TK_LIBRARY"] = tk_dir
 
 import multiprocessing
-from ui.main_window import MainWindow
 
 def main():
+    if "--configurar-instalacao" in sys.argv:
+        from db.installation_settings import installer_main
+        args = [a for a in sys.argv[1:] if a != "--configurar-instalacao"]
+        raise SystemExit(installer_main(args))
+
     # Consultar a versão da build não deve apontar o atalho para uma pasta temporária.
     if "--version" in sys.argv or "-v" in sys.argv:
         from config import APP_NAME, APP_VERSION
@@ -87,6 +91,7 @@ def main():
     print("  OpenCorte (Edição Python para Windows 10 / 11)")
     print("  Recriação Moderna do Sistema Jm2k & ATOM Nesting")
     print("=" * 60)
+    from ui.main_window import MainWindow
     app = MainWindow()
     app.mainloop()
 

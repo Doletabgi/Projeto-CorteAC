@@ -35,7 +35,7 @@ SOURCE_SUFFIXES = {'.py', '.md', '.rst', '.txt', '.sql', '.ini', '.toml', '.yml'
                    '.gif', '.jpg', '.jpeg', '.svg', '.ttf', '.otf', '.css', '.html',
                    '.die', '.lay', '.onx', '.cmz'}
 CHECKS = ['tests/test_atualizar.py', 'tests/test_semver.py', 'tests/test_desktop_shortcut.py',
-          'tests/test_database_cleanup.py',
+          'tests/test_database_cleanup.py', 'tests/test_installation_settings.py',
           'tests/test_production_sheet.py', 'tests/test_layout_print_legend.py',
           'tests/test_symbolic_notches.py', 'tests/test_project_packager.py',
           'tests/test_dual_exporter.py', 'tests/test_connection_settings.py']
@@ -919,6 +919,35 @@ def build_windows_installer(stage, version, compiler):
     return artifact
 
 
+def verify_installer_configuration(executable):
+    """Exercita o comando real do setup em uma pasta descartável, sem rede."""
+    import configparser
+    with tempfile.TemporaryDirectory(prefix='opencorte-config-check-') as temp:
+        folder = Path(temp)
+        binary = folder/executable.name
+        shutil.copy2(executable,binary)
+        database = folder/'jobmanager.db'
+        database.write_bytes(b'preservar dados existentes')
+        for mode in ('rede', 'local'):
+            args = [binary, '--configurar-instalacao', '--modo', mode]
+            if mode == 'rede':
+                args.extend(['--servidor', r'\\SERVIDOR\Fabrica'])
+            command(args,folder,timeout=60)
+            parser = configparser.ConfigParser(interpolation=None)
+            parser.read(folder/'db.ini',encoding='utf-8')
+            expected = 'mysql' if mode == 'rede' else 'sqlite'
+            if parser.get('database','backend',fallback='') != expected:
+                raise UpdateError('O comando de configuração do setup não confirmou o modo escolhido.')
+            for key, suffix in (('shapes_dir','Moldes'),('sessions_dir','Sessoes')):
+                value = r'\\SERVIDOR\Fabrica'+'\\'+suffix if mode == 'rede' else ''
+                if parser.get('paths',key,fallback=None) != value:
+                    raise UpdateError('O setup não configurou as pastas escolhidas.')
+            if mode == 'rede' and parser.get('database','host') != 'SERVIDOR':
+                raise UpdateError('O setup não configurou o servidor escolhido.')
+            if database.read_bytes() != b'preservar dados existentes':
+                raise UpdateError('A configuração do setup alterou um banco existente.')
+
+
 def build_distribution(stage):
     """Única receita PyInstaller para build local e para o GitHub Actions."""
     windows = sys.platform == 'win32'
@@ -944,6 +973,7 @@ def build_distribution(stage):
     version = current_version(stage)
     if reported.strip() != f"OpenCorte {version}":
         raise UpdateError('O executável gerado não confirmou a versão esperada.')
+    verify_installer_configuration(executable)
     artifacts = package_distribution(stage,executable,version)
     if windows:
         compiler = windows_installer_compiler()

@@ -5,7 +5,7 @@
 
 #define MyAppName "OpenCorte"
 #ifndef MyAppVersion
-  #define MyAppVersion "1.8.9"
+  #define MyAppVersion "1.8.10"
 #endif
 #define MyAppPublisher "ATOM / OpenCorte Industrial"
 #define MyAppURL "https://github.com/Doletabgi/Projeto-CorteAC"
@@ -64,90 +64,139 @@ Filename: "{app}\{#MyAppExeName}"; Description: "{cm:LaunchProgram,{#StringChang
 
 [Code]
 var
-  NetworkConfigPage: TInputQueryWizardPage;
-  EditShapesDirIndex: Integer;
-  EditSessionsDirIndex: Integer;
-  EditMySqlHostIndex: Integer;
+  InstallModePage: TInputOptionWizardPage;
+  ServerPage: TInputQueryWizardPage;
+  LoadedIniPath: String;
+  OriginalMode: Integer;
+  OriginalAddress: String;
 
 procedure InitializeWizard;
 begin
-  NetworkConfigPage := CreateInputQueryPage(
+  InstallModePage := CreateInputOptionPage(
     wpSelectDir,
-    'Configurações de Rede da Fábrica',
-    'Pastas Compartilhadas e Conexão de Banco de Dados',
-    'Informe os caminhos compartilhados de Moldes e Sessões na rede local da fábrica.' + #13#10 +
-    'Deixe em branco para usar pastas locais ou para configurar manualmente depois no db.ini.'
+    'Onde o OpenCorte vai guardar os dados?',
+    'Escolha como este computador vai trabalhar',
+    'Local: os dados ficam neste computador.' + #13#10 +
+    'Rede: moldes, sessoes e banco usam um unico servidor.' + #13#10 + #13#10 +
+    'Ao atualizar, a configuracao existente sera mantida se voce nao alterar esta escolha ou o endereco.',
+    True, False
   );
+  InstallModePage.Add('Instalar localmente (neste computador)');
+  InstallModePage.Add('Usar um servidor na rede');
+  InstallModePage.SelectedValueIndex := 0;
 
-  EditShapesDirIndex := NetworkConfigPage.Add(
-    'Pasta de Moldes na Rede (ex: \\SERVIDOR\Fabrica\Moldes ou Z:\Moldes):',
-    False
+  ServerPage := CreateInputQueryPage(
+    InstallModePage.ID,
+    'Servidor da rede',
+    'Um unico endereco para moldes, sessoes e banco',
+    'Informe o nome/IP do servidor ou a pasta compartilhada.' + #13#10 +
+    'Exemplos: SERVIDOR, 192.168.1.100 ou \\SERVIDOR\Fabrica.' + #13#10 + #13#10 +
+    'O OpenCorte usa as subpastas Moldes e Sessoes e conecta ao banco nesse mesmo servidor.' + #13#10 +
+    'Ao informar somente nome/IP, a pasta compartilhada usada e Fabrica.'
   );
-  EditSessionsDirIndex := NetworkConfigPage.Add(
-    'Pasta de Sessões/Máquinas (ex: \\SERVIDOR\Fabrica\Sessoes ou Z:\Sessoes):',
-    False
-  );
-  EditMySqlHostIndex := NetworkConfigPage.Add(
-    'Endereço IP do Servidor MySQL Central (deixe vazio para SQLite local):',
-    False
-  );
+  ServerPage.Add('Endereco do servidor ou da pasta compartilhada:', False);
+end;
+
+function ShouldSkipPage(PageID: Integer): Boolean;
+begin
+  Result := (PageID = ServerPage.ID) and (InstallModePage.SelectedValueIndex = 0);
 end;
 
 function NextButtonClick(CurPageID: Integer): Boolean;
 var
-  IniPath: String;
+  IniPath, ShapesDir, SessionsDir, Address, Host: String;
+  I: Integer;
 begin
   Result := True;
   if CurPageID = wpSelectDir then
   begin
     IniPath := ExpandConstant('{app}\db.ini');
-    if FileExists(IniPath) then
+    // Voltar/avancar nao descarta o que o operador acabou de escolher.
+    if LoadedIniPath <> IniPath then
     begin
-      if NetworkConfigPage.Values[EditShapesDirIndex] = '' then
-        NetworkConfigPage.Values[EditShapesDirIndex] := GetIniString('paths', 'shapes_dir', '', IniPath);
-      if NetworkConfigPage.Values[EditSessionsDirIndex] = '' then
-        NetworkConfigPage.Values[EditSessionsDirIndex] := GetIniString('paths', 'sessions_dir', '', IniPath);
-      if NetworkConfigPage.Values[EditMySqlHostIndex] = '' then
-        NetworkConfigPage.Values[EditMySqlHostIndex] := GetIniString('database', 'host', '', IniPath);
+      LoadedIniPath := IniPath;
+      OriginalMode := 0;
+      OriginalAddress := '';
+      if FileExists(IniPath) then
+      begin
+        ShapesDir := GetIniString('paths', 'shapes_dir', '', IniPath);
+        SessionsDir := GetIniString('paths', 'sessions_dir', '', IniPath);
+        if (GetIniString('database', 'backend', 'mysql', IniPath) = 'mysql') or
+           (ShapesDir <> '') or (SessionsDir <> '') then
+          OriginalMode := 1;
+        OriginalAddress := GetIniString('installation', 'server_address', '', IniPath);
+        if (OriginalAddress = '') and (Copy(ShapesDir, 1, 2) = '\\') and
+           (CompareText(ExtractFileName(ShapesDir), 'Moldes') = 0) and
+           (CompareText(ExtractFileName(SessionsDir), 'Sessoes') = 0) and
+           (CompareText(ExtractFileDir(ShapesDir), ExtractFileDir(SessionsDir)) = 0) then
+          OriginalAddress := ExtractFileDir(ShapesDir);
+        if OriginalAddress = '' then
+          OriginalAddress := GetIniString('database', 'host', '', IniPath);
+      end;
+      InstallModePage.SelectedValueIndex := OriginalMode;
+      ServerPage.Values[0] := OriginalAddress;
     end;
+  end;
+  if CurPageID = ServerPage.ID then
+  begin
+    Address := Trim(ServerPage.Values[0]);
+    while (Length(Address) > 2) and (Copy(Address, Length(Address), 1) = '\') do
+      Delete(Address, Length(Address), 1);
+    ServerPage.Values[0] := Address;
+    // Sem alteracoes, preserva inclusive configuracoes antigas personalizadas.
+    if FileExists(LoadedIniPath) and (OriginalMode = InstallModePage.SelectedValueIndex) and
+       (Address = OriginalAddress) then
+      Exit;
+    Result := Address <> '';
+    if (Copy(Address, 1, 2) <> '\\') and (Pos('\', Address) > 0) then
+      Result := False;
+    for I := 1 to Length(Address) do
+      if (Ord(Address[I]) < 32) or (Pos(Address[I], '/:*?"<>|') > 0) then
+        Result := False;
+    Host := Address;
+    if Copy(Host, 1, 2) = '\\' then
+      Delete(Host, 1, 2);
+    I := Pos('\', Host);
+    if I > 0 then
+      Host := Copy(Host, 1, I - 1);
+    if Host = '' then Result := False;
+    for I := 1 to Length(Host) do
+      if Pos(Lowercase(Host[I]), 'abcdefghijklmnopqrstuvwxyz0123456789_-.') = 0 then
+        Result := False;
+    if not Result then
+      MsgBox('Informe o nome/IP do servidor ou um caminho como \\SERVIDOR\Fabrica.', mbError, MB_OK);
   end;
 end;
 
 procedure CurStepChanged(CurStep: TSetupStep);
 var
-  IniPath: String;
-  ShapesDir: String;
-  SessionsDir: String;
-  MySqlHost: String;
-  Backend: String;
+  IniPath, Mode, Address, Parameters, ErrorPath, ErrorText: String;
+  ErrorContents: AnsiString;
+  ResultCode: Integer;
 begin
   if CurStep = ssPostInstall then
   begin
     IniPath := ExpandConstant('{app}\db.ini');
-    ShapesDir := Trim(NetworkConfigPage.Values[EditShapesDirIndex]);
-    SessionsDir := Trim(NetworkConfigPage.Values[EditSessionsDirIndex]);
-    MySqlHost := Trim(NetworkConfigPage.Values[EditMySqlHostIndex]);
-
-    if MySqlHost <> '' then
-      Backend := 'mysql'
-    else
-      Backend := 'sqlite';
-
-    // Grava no arquivo db.ini
-    SetIniString('database', 'backend', Backend, IniPath);
-    if MySqlHost <> '' then
+    Address := Trim(ServerPage.Values[0]);
+    if FileExists(IniPath) and (OriginalMode = InstallModePage.SelectedValueIndex) and
+       (Address = OriginalAddress) then
     begin
-      SetIniString('database', 'host', MySqlHost, IniPath);
-      SetIniString('database', 'port', '3306', IniPath);
-      SetIniString('database', 'user', 'jm_app', IniPath);
-      SetIniString('database', 'password', 'jm_factory_2026', IniPath);
-      SetIniString('database', 'database', 'jobmanager', IniPath);
+      Log('Configuracao existente preservada.');
+      Exit;
     end;
-
-    if ShapesDir <> '' then
-      SetIniString('paths', 'shapes_dir', ShapesDir, IniPath);
-
-    if SessionsDir <> '' then
-      SetIniString('paths', 'sessions_dir', SessionsDir, IniPath);
+    if InstallModePage.SelectedValueIndex = 1 then Mode := 'rede' else Mode := 'local';
+    ErrorPath := ExpandConstant('{tmp}\opencorte-config-error.txt');
+    Parameters := '--configurar-instalacao --modo ' + Mode + ' --erro-arquivo "' + ErrorPath + '"';
+    if Mode = 'rede' then
+      Parameters := Parameters + ' --servidor "' + Address + '"';
+    if not Exec(ExpandConstant('{app}\{#MyAppExeName}'), Parameters,
+                ExpandConstant('{app}'), SW_HIDE, ewWaitUntilTerminated, ResultCode) or
+       (ResultCode <> 0) then
+    begin
+      ErrorText := 'Nao foi possivel salvar a configuracao do OpenCorte. Verifique o endereco e a permissao da pasta de instalacao.';
+      if LoadStringFromFile(ErrorPath, ErrorContents) then
+        ErrorText := String(ErrorContents);
+      RaiseException(ErrorText);
+    end;
   end;
 end;

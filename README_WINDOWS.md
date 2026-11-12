@@ -96,3 +96,8 @@ O pacote Windows traz `criar_atalho_windows.ps1` e `versao.txt`. Clique com o bo
 Ele cria o atalho **`CorteAC-<versão>.lnk`** (ex.: `CorteAC-1.6.11.lnk`) apontando para o
 `CorteAC.exe`, usando o ícone embutido no executável, e **remove os atalhos antigos** do OpenCorte
 da Área de Trabalho. Assim o operador sempre sabe qual build está instalado.
+
+O setup oferece **Instalar localmente** ou **Usar um servidor na rede**. No modo
+de rede, informe apenas nome/IP ou uma raiz como `\\SERVIDOR\Fabrica`: o setup
+deriva as pastas Moldes e Sessoes e o host MySQL. Veja
+[Instalação local ou rede](docs/fases/INSTALACAO_LOCAL_OU_REDE.md).
