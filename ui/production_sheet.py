@@ -161,6 +161,14 @@ def render_sheet(dialog, dpi=150):
                 barcode = generate_code128_pillow(payload,height=round(23*scale),module_width=1,show_text=True,label=label)
             im.paste(barcode,(round(margin*scale),round(y*scale)))
             y += barcode.height/scale + 8
+        layout_path = str(getattr(dialog, 'layout_path', '') or source.get('layout_path') or '').strip()
+        path_label = ('Caminho da sessão: ' + layout_path if layout_path else
+                      'Caminho da sessão: não informado (exporte a sessão para a máquina).')
+        # Mantém o caminho completo e legível, inclusive UNC longo, em cada folha.
+        for path_line in wrap(path_label, w-2*margin, 9):
+            text(margin, y, path_line, 9)
+            y += 14
+        y += 3
         line(y); y += 8
     new_page()
     paragraph(f'Ordem: {order} | Operador (usuário ativo): {dialog.active_user or missing}',bold=True)

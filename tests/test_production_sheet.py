@@ -221,3 +221,74 @@ def test_cabecalho_placa_n_de_total_da_sessao_no_lote():
     d.current_layout_index = 2
     render_sheet(d,110)
     assert any('Placa 2 de 2' in t for t in d.print_texts)
+
+
+def test_caminho_da_sessao_aparece_abaixo_do_barcode_em_cada_folha():
+    d = fixture(100)
+    d.layout_path = r'\\SERVIDOR\Fabrica\Sessoes\SESS-188\lay0000.lay'
+    positions = []
+    original = ImageDraw.ImageDraw.text
+    def record(draw, xy, value, *args, **kwargs):
+        if str(value).startswith('Caminho da sessão:'):
+            assert xy[1] > 100  # abaixo do código, antes do corpo
+            positions.append(xy)
+        return original(draw, xy, value, *args, **kwargs)
+    with patch.object(ImageDraw.ImageDraw, 'text', record):
+        pages = render_sheet(d, 100)
+    assert len(positions) == len(pages)
+    assert d.print_texts.count('Caminho da sessão: ' + d.layout_path) == len(pages)
+
+
+def test_caminho_unc_longo_quebra_sem_cortar_ou_invadiar_margens():
+    for orientation in ('portrait', 'landscape'):
+        d = fixture(orientation=orientation)
+        d.layout_path = '\\\\SERVIDOR\\' + ('PastaDeProducao\\'*15) + 'SESS-188\\lay0000.lay'
+        original = ImageDraw.ImageDraw.text
+        def record(draw, xy, value, *args, **kwargs):
+            box = draw.textbbox(xy, str(value), font=kwargs.get('font'))
+            assert box[2] < draw._image.width-20
+            assert box[3] < draw._image.height-15
+            return original(draw, xy, value, *args, **kwargs)
+        with patch.object(ImageDraw.ImageDraw, 'text', record):
+            render_sheet(d, 100)
+        assert d.layout_path in ''.join(d.print_texts)
+
+
+def test_sem_caminho_nao_imprime_endereco_de_exemplo():
+    d = fixture()
+    render_sheet(d, 100)
+    assert any('Caminho da sessão: não informado' in t for t in d.print_texts)
+    assert 'Lab-inf' not in ''.join(d.print_texts)
+
+
+def test_dialogo_lote_usa_caminho_da_placa_e_sessao_corretas():
+    import json
+    import tkinter as tk
+    import pytest
+    from ui.layout_print_dialog import LayoutPrintDialog
+    try:
+        root = tk.Tk()
+    except tk.TclError:
+        pytest.skip('Display Tk indisponível')
+    root.withdraw()
+    paths = {
+        'machine_export_paths:188': json.dumps({0: r'\\SERVIDOR\SESS-188\lay0000.lay',
+                                               1: r'\\SERVIDOR\SESS-188\lay0001.lay'}),
+        'machine_export_paths:999': json.dumps({0: r'\\OUTRO\SESS-999\lay0000.lay'}),
+    }
+    root.db = SimpleNamespace(get_setting=lambda key, default='': paths.get(key, default))
+    layouts = [dict(session_id=188, name='lay0000', width_mm=1000, height_mm=500),
+               dict(session_id=999, name='lay0000', width_mm=1000, height_mm=500),
+               dict(session_id=188, name='lay0001', width_mm=1000, height_mm=500)]
+    try:
+        dialog = LayoutPrintDialog(root, layout_data={'layouts': layouts})
+        assert dialog.layout_path == r'\\SERVIDOR\SESS-188\lay0000.lay'
+        dialog.load_layout_index(1)
+        assert dialog.layout_path == r'\\OUTRO\SESS-999\lay0000.lay'
+        dialog.load_layout_index(2)
+        assert dialog.layout_path == r'\\SERVIDOR\SESS-188\lay0001.lay'
+        dialog.render_pillow_pages(100)
+        assert any(r'\\SERVIDOR\SESS-188\lay0001.lay' in t for t in dialog.print_texts)
+        dialog.destroy()
+    finally:
+        root.destroy()

@@ -14,9 +14,9 @@ pré-requisitos, escopo dos testes e regras de retomada.
 > **Regra de ouro:** o que está marcado `[CONFIRMADO]` veio do relatório, do código ou do usuário. O que está `[NÃO CONFIRMADO]` é suposição e não deve virar "fato" sem validação. O que está `[PREENCHER]` a IA deve completar lendo o código real.
 
 <!-- AUTO:header:start -->
-**Versão do aplicativo:** `1.8.10`
+**Versão do aplicativo:** `1.8.11`
 
-**Última sincronização com o código:** 2026-11-12 11:00 (HEAD ao gerar: `79ed30e`; 199 arquivos Python, ~88082 linhas)
+**Última sincronização com o código:** 2026-11-12 11:19 (HEAD ao gerar: `359c9b0`; 199 arquivos Python, ~88228 linhas)
 <!-- AUTO:header:end -->
 **Versão deste documento:** 2
 
@@ -518,7 +518,7 @@ ui/user_dialog.py                                    # JobManager 2000 (Python E
 - `class LayoutAsset` (linha 113, 1 métodos): Um layout (placa) exportado.
 - `class ExportResult` (linha 135, 3 métodos): Resultado completo de uma exportação de sessão.
 - `class DieSourceIndex` (linha 311, 4 métodos): Índice nome-do-arquivo -> caminho, opcional, para achar .die na rede.
-- funções: `_as_list`, `_as_float`, `_as_int`, `_safe_component`, `_safe_filename`, `_write_bytes_atomic`, `_write_json_atomic`, `_die_code`, `_is_die_file`, `_resolve_sidecar`, `_existing_die_path`, `_normalize_shape`, `_normalize_piece`, `_normalize_layout`, `_shape_has_geometry` (+9)
+- funções: `_as_list`, `_as_float`, `_as_int`, `_safe_component`, `_safe_filename`, `_write_bytes_atomic`, `_write_json_atomic`, `_die_code`, `_is_die_file`, `_resolve_sidecar`, `_existing_die_path`, `_normalize_shape`, `_normalize_piece`, `_normalize_layout`, `_shape_has_geometry` (+10)
 
 ### `cad/semver.py`
 - `class SemVer` (linha 24, 8 métodos)
@@ -782,11 +782,11 @@ ui/user_dialog.py                                    # JobManager 2000 (Python E
 - funções: `test_weighted_yield_and_session_date_filters`, `test_missing_invalid_and_empty_data_are_not_presented_as_measured`, `test_fetch_data_reads_persisted_rows_without_inventing_layouts`, `test_dashboard_window_shows_unavailable_and_filters`, `test_legacy_yield_pct_is_used_when_primary_is_empty`
 
 ### `tests/test_production_sheet.py`
-- funções: `piece`, `test_degrau_e_sobras_4c_2c_nao_usam_demanda_como_producao`, `test_impar_preserva_peca_sem_par_e_nao_soma_pares_de_moldes`, `test_fator_6x1_e_formato_na_instancia`, `fixture`, `test_paginacao_sem_cortar_linhas_e_identificacao_em_todas_as_folhas`, `test_paisagem_e_nome_longo_nao_estouram_margem`, `test_moldes_com_mesmo_nome_e_tamanhos_distintos_preservam_demanda`, `test_export_pdf_preserva_continuacoes_e_restaura_placa`, `test_spool_usa_argumentos_sem_shell_e_inclui_continuacoes`, `test_preparacao_em_metros_preserva_precisao_sem_milimetros`, `test_totais_lineares_somam_placas_da_sessao_com_camadas_individuais`, `test_metragem_sem_refile_e_medida_invalida`, `test_modelos_ao_lado_do_mapa_ampliado_em_todas_as_continuacoes`, `test_resumo_lateral_destaca_pares_efetivos_da_ponta_e_fator` (+3)
+- funções: `piece`, `test_degrau_e_sobras_4c_2c_nao_usam_demanda_como_producao`, `test_impar_preserva_peca_sem_par_e_nao_soma_pares_de_moldes`, `test_fator_6x1_e_formato_na_instancia`, `fixture`, `test_paginacao_sem_cortar_linhas_e_identificacao_em_todas_as_folhas`, `test_paisagem_e_nome_longo_nao_estouram_margem`, `test_moldes_com_mesmo_nome_e_tamanhos_distintos_preservam_demanda`, `test_export_pdf_preserva_continuacoes_e_restaura_placa`, `test_spool_usa_argumentos_sem_shell_e_inclui_continuacoes`, `test_preparacao_em_metros_preserva_precisao_sem_milimetros`, `test_totais_lineares_somam_placas_da_sessao_com_camadas_individuais`, `test_metragem_sem_refile_e_medida_invalida`, `test_modelos_ao_lado_do_mapa_ampliado_em_todas_as_continuacoes`, `test_resumo_lateral_destaca_pares_efetivos_da_ponta_e_fator` (+7)
 
 ### `tests/test_project_packager.py`
 - `class FakeDB` (linha 39, 4 métodos): Banco mínimo, com a mesma interface usada pelo packager.
-- funções: `_piece`, `_session`, `_read_lay`, `_lay_value`, `test_export_all_layouts_and_only_referenced_dies`, `test_lay_line2_and_dlib_point_to_export_folder`, `test_generated_die_is_valid_fustella`, `test_original_die_is_copied_byte_for_byte`, `test_shapes_search_root_finds_nested_original`, `test_missing_die_is_reported_and_can_be_strict`, `test_same_die_in_two_layouts_is_deduplicated`, `test_no_subfolder_writes_directly_to_target`, `test_reference_mode_does_not_copy_dies_and_uses_dlib_override`, `test_pack_session_folder_creates_zip_with_relative_names`, `test_export_session_cac_returns_cac_and_cleans_temp` (+8)
+- funções: `_piece`, `_session`, `_read_lay`, `_lay_value`, `test_export_all_layouts_and_only_referenced_dies`, `test_lay_line2_and_dlib_point_to_export_folder`, `test_generated_die_is_valid_fustella`, `test_original_die_is_copied_byte_for_byte`, `test_shapes_search_root_finds_nested_original`, `test_missing_die_is_reported_and_can_be_strict`, `test_same_die_in_two_layouts_is_deduplicated`, `test_no_subfolder_writes_directly_to_target`, `test_reference_mode_does_not_copy_dies_and_uses_dlib_override`, `test_pack_session_folder_creates_zip_with_relative_names`, `test_export_session_cac_returns_cac_and_cleans_temp` (+11)
 
 ### `tests/test_semver.py`
 - `class TestSemVer` (linha 12, 8 métodos)
@@ -1965,8 +1965,8 @@ A ordem de corte do `.lay` para a mesa **não pode** ser aleatória:
 | Atalho | Local | Linha |
 |---|---|---|
 | Alt+Down | `ui/session_view.py:3924` | `entry.bind("<Alt-Down>", lambda e: adjust_number(-1))` |
-| Alt+Left | `ui/layout_print_dialog.py:995` | `self.bind("<Alt-Left>", self.prev_page)` |
-| Alt+Right | `ui/layout_print_dialog.py:994` | `self.bind("<Alt-Right>", self.next_page)` |
+| Alt+Left | `ui/layout_print_dialog.py:1001` | `self.bind("<Alt-Left>", self.prev_page)` |
+| Alt+Right | `ui/layout_print_dialog.py:1000` | `self.bind("<Alt-Right>", self.next_page)` |
 | Alt+Up | `ui/session_view.py:3923` | `entry.bind("<Alt-Up>", lambda e: adjust_number(+1))` |
 | Backspace | `ui/cad_canvas.py:72` | `self.master.bind("<BackSpace>", lambda e: self.delete_selected())` |
 | Backspace | `ui/dieproc_dialog.py:88` | `self.preset_listbox.bind("<BackSpace>", lambda e: self.on_delete_clicked())` |
@@ -2030,8 +2030,8 @@ A ordem de corte do `.lay` para a mesa **não pode** ser aleatória:
 | Ctrl+P | `ui/layout_editor_view.py:783` | `self.bind("<Control-P>", lambda e: self.print_layout())` |
 | Ctrl+P | `ui/layout_editor_view.py:1030` | `w.bind("<Control-p>", lambda e: (self.print_layout(), "break")[1])` |
 | Ctrl+P | `ui/layout_editor_view.py:1031` | `w.bind("<Control-P>", lambda e: (self.print_layout(), "break")[1])` |
-| Ctrl+P | `ui/layout_print_dialog.py:988` | `self.bind("<Control-p>", lambda e: self.do_print())` |
-| Ctrl+P | `ui/layout_print_dialog.py:989` | `self.bind("<Control-P>", lambda e: self.do_print())` |
+| Ctrl+P | `ui/layout_print_dialog.py:994` | `self.bind("<Control-p>", lambda e: self.do_print())` |
+| Ctrl+P | `ui/layout_print_dialog.py:995` | `self.bind("<Control-P>", lambda e: self.do_print())` |
 | Ctrl+P | `ui/main_window.py:98` | `self.bind("<Control-p>", self.handle_ctrl_p)` |
 | Ctrl+P | `ui/main_window.py:99` | `self.bind("<Control-P>", self.handle_ctrl_p)` |
 | Ctrl+P | `ui/session_view.py:1156` | `self.tree_lays.bind("<Control-p>", lambda e: (self.print_current_layout(), "brea` |
@@ -2097,10 +2097,10 @@ A ordem de corte do `.lay` para a mesa **não pode** ser aleatória:
 | Delete | `ui/layout_editor_view.py:1102` | `self.bind_all("<Delete>", lambda e: self.delete_selected())` |
 | Delete | `ui/main_window.py:304` | `edit_menu.add_command(label="Excluir", accelerator="Del", command=self.on_global` |
 | Delete | `ui/main_window.py:701` | `self.bind_all("<Delete>", self.on_global_delete_key, add="+")` |
-| Delete | `ui/main_window.py:3718` | `accelerator="Del",` |
-| Delete | `ui/main_window.py:3737` | `accelerator="Del",` |
-| Delete | `ui/main_window.py:4014` | `accelerator="Del",` |
-| Delete | `ui/main_window.py:4033` | `accelerator="Del",` |
+| Delete | `ui/main_window.py:3716` | `accelerator="Del",` |
+| Delete | `ui/main_window.py:3735` | `accelerator="Del",` |
+| Delete | `ui/main_window.py:4012` | `accelerator="Del",` |
+| Delete | `ui/main_window.py:4031` | `accelerator="Del",` |
 | Delete | `ui/session_view.py:903` | `self.tree_shapes.bind("<Delete>", lambda e: self._on_tree_shapes_delete())` |
 | Delete | `ui/session_view.py:1062` | `w.bind("<Delete>", self.remove_session_material)` |
 | Delete | `ui/session_view.py:1063` | `w.bind("<Key-Delete>", self.remove_session_material)` |
@@ -2120,10 +2120,10 @@ A ordem de corte do `.lay` para a mesa **não pode** ser aleatória:
 | Escape | `ui/layout_converter_dialog.py:71` | `self.bind("<Escape>", lambda e: self.destroy())` |
 | Escape | `ui/layout_editor_view.py:984` | `self.canvas.bind("<Escape>", self.on_canvas_escape)` |
 | Escape | `ui/layout_editor_view.py:1094` | `w.bind("<Escape>", self.cancel_drag)` |
-| Escape | `ui/layout_print_dialog.py:991` | `self.bind("<Escape>", self.on_escape)` |
+| Escape | `ui/layout_print_dialog.py:997` | `self.bind("<Escape>", self.on_escape)` |
 | Escape | `ui/main_window.py:95` | `self.bind("<Escape>", self.exit_fullscreen)` |
 | Escape | `ui/main_window.py:700` | `self.bind_all("<Escape>", self.dismiss_popup_menus, add="+")` |
-| Escape | `ui/main_window.py:4341` | `dialog.bind("<Escape>", lambda e: dialog.destroy())` |
+| Escape | `ui/main_window.py:4339` | `dialog.bind("<Escape>", lambda e: dialog.destroy())` |
 | Escape | `ui/material_codes_view.py:509` | `dlg.bind("<Escape>", lambda e: dlg.destroy())` |
 | Escape | `ui/options_dialog.py:41` | `self.bind("<Escape>", lambda e: self.on_cancel())` |
 | Escape | `ui/session_view.py:3360` | `entry.bind("<Escape>", cancel)` |
@@ -2138,7 +2138,7 @@ A ordem de corte do `.lay` para a mesa **não pode** ser aleatória:
 | Escape | `ui/user_dialog.py:60` | `self.bind("<Escape>", lambda e: self.destroy())` |
 | F1 | `ui/layout_editor_view.py:1074` | `w.bind("<F1>", self.on_f1_press)` |
 | F1 | `ui/layout_editor_view.py:1075` | `w.bind("<Key-F1>", self.on_f1_press)` |
-| F11 | `ui/layout_print_dialog.py:990` | `self.bind("<F11>", self.toggle_fullscreen)` |
+| F11 | `ui/layout_print_dialog.py:996` | `self.bind("<F11>", self.toggle_fullscreen)` |
 | F11 | `ui/main_window.py:94` | `self.bind("<F11>", self.toggle_fullscreen)` |
 | F11 | `ui/shape_editor_view.py:610` | `self.bind("<F11>", self.on_f11_fullscreen)` |
 | F11 | `ui/shape_editor_view.py:611` | `self.canvas.bind("<F11>", self.on_f11_fullscreen)` |
@@ -2164,8 +2164,8 @@ A ordem de corte do `.lay` para a mesa **não pode** ser aleatória:
 | Kp_up | `ui/session_view.py:3909` | `entry.bind("<KP_Up>", move_up)` |
 | Left | `ui/layout_editor_view.py:1107` | `self.bind_all("<Left>", lambda e: self.bump_selection_vector(-1, 0))` |
 | Left | `ui/shape_catalog_view.py:265` | `self.bind("<Left>", lambda e: self.navigate_selection(-1, 0))` |
-| Next | `ui/layout_print_dialog.py:992` | `self.bind("<Next>", self.next_page)` |
-| Prior | `ui/layout_print_dialog.py:993` | `self.bind("<Prior>", self.prev_page)` |
+| Next | `ui/layout_print_dialog.py:998` | `self.bind("<Next>", self.next_page)` |
+| Prior | `ui/layout_print_dialog.py:999` | `self.bind("<Prior>", self.prev_page)` |
 | R | `ui/cad_canvas.py:69` | `self.master.bind("<r>", lambda e: self.rotate_selected(45))` |
 | R | `ui/cad_canvas.py:70` | `self.master.bind("<R>", lambda e: self.rotate_selected(45))` |
 | R | `ui/layout_editor_view.py:1100` | `self.bind_all("<Key-r>", lambda e: self.rotate_selected(45))` |
@@ -2177,7 +2177,7 @@ A ordem de corte do `.lay` para a mesa **não pode** ser aleatória:
 | Return | `ui/import_materials_dialog.py:85` | `self.ent_filepath.bind("<Return>", lambda e: self.load_file_from_path(self.ent_f` |
 | Return | `ui/main_window.py:569` | `self.tree_main.bind("<Return>", self.on_tree_key_return)` |
 | Return | `ui/main_window.py:616` | `self.grid_lower.bind("<Return>", self.on_grid_double_click)` |
-| Return | `ui/main_window.py:4340` | `dialog.bind("<Return>", lambda e: save())` |
+| Return | `ui/main_window.py:4338` | `dialog.bind("<Return>", lambda e: save())` |
 | Return | `ui/material_codes_view.py:211` | `self.tree.bind("<Return>", lambda e: self.open_edit_selected_dialog())` |
 | Return | `ui/material_codes_view.py:508` | `dlg.bind("<Return>", lambda e: save_action())` |
 | Return | `ui/session_view.py:621` | `self.entry_gap.bind("<Return>", self._on_gap_entry_change)` |
@@ -4695,6 +4695,17 @@ Essas etapas não foram executadas nem homologadas nesta extração.
 
 ## 8.67. Ficha de produção A4 — versão 1.8.5 (11/11/2026)
 
+Atualização 1.8.11 (12/11/2026): abaixo do código de barras, cada folha mostra
+**Caminho da sessão**, incluindo o arquivo `.lay` da placa. A exportação para
+máquina registra os caminhos por sessão e índice; exportações `.cac` temporárias
+não substituem essa referência. Caminhos longos quebram em linhas e continuam
+legíveis. A impressão em lote resolve cada sessão separadamente. Sem caminho
+registrado ou fornecido pelo layout, a ficha informa a ausência e orienta
+exportar para a máquina; o endereço fictício antigo foi removido. Sessões
+exportadas antes dessa atualização precisam ser exportadas novamente uma vez
+para registrar o caminho. A impressão não altera geometrias ou arquivos.
+
+
 Registro consolidado da implementação local. Os ajustes abaixo preservam sua sequência; a disposição final usa quadro compacto ao lado do mapa, instrução de preparação em destaque e resumo de aproveitamento/pares por placa. A homologação física permanece pendente.
 
 
@@ -5082,6 +5093,7 @@ Com dados confiáveis e validações definidas, avaliar comparação do aproveit
 <!-- AUTO:gitlog:start -->
 | Commit | Data | Autor | Mensagem |
 |---|---|---|---|
+| `359c9b0` | 2026-11-12 | Doletabgi | chore(release): OpenCorte v1.8.10 |
 | `79ed30e` | 2026-11-12 | Doletabgi | chore(release): OpenCorte v1.8.9 |
 | `6af24e9` | 2026-11-12 | Doletabgi | chore(release): OpenCorte v1.8.8 |
 | `5d008da` | 2026-11-12 | Doletabgi | chore(release): OpenCorte v1.8.7 |
@@ -5096,7 +5108,6 @@ Com dados confiáveis e validações definidas, avaliar comparação do aproveit
 | `c3c5e13` | 2026-11-08 | Doletabgi | feat(layout): alterar medidas da chapa apos encaixe e correcao de limites em refile (v1.6.48) |
 | `849ce20` | 2026-11-08 | Doletabgi | feat(backup): suporte a backup, restauracao e agendamento de sessoes de corte e layouts (v1.6.47) |
 | `f6e3a63` | 2026-11-08 | Doletabgi | feat(layout): visualização das placas da sessão em cascata e lado a lado (v1.6.46) |
-| `368e251` | 2026-11-08 | Doletabgi | feat(shape-editor): inicializacao em branco ao abrir por menu ou atalho (v1.6.45) |
 <!-- AUTO:gitlog:end -->
 
 ---

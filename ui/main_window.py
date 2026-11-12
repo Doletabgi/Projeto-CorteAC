@@ -2864,9 +2864,7 @@ class MainWindow(tk.Tk):
 
             l_name = ly_copy.get("name") or f"lay{idx:04d}.lay"
             ly_copy["name"] = l_name if str(l_name).lower().endswith(".lay") else f"{l_name}.lay"
-            if not ly_copy.get("layout_path"):
-                sub_path = f"{job_name}\\{sess_title}" if job_name else sess_title
-                ly_copy["layout_path"] = rf"\\Lab-inf\NSDATAv1\Compiti\{sub_path}\{ly_copy['name']}"
+            ly_copy["machine_layout_index"] = ly_copy.get("layout_index", idx)
 
             enriched_layouts.append(ly_copy)
 

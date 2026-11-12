@@ -332,7 +332,7 @@ class LayoutPrintDialog(tk.Toplevel):
         self.zoom = 1.0
         self.logo_img = None
 
-        self.unc_prefix = self.layout_data.get("unc_prefix", r"\\Lab-inf\NSDATAv1")
+        self.unc_prefix = self.layout_data.get("unc_prefix", "")
         self.description = self.layout_data.get("description", "fn98 - v1.2.36 - 12.09.2012")
         self.date_str = self.layout_data.get("date_str") or datetime.now().strftime("%d/%m/%Y %H:%M")
         self.gap_str = self.layout_data.get("gap_str", "1.00 mm")
@@ -505,15 +505,21 @@ class LayoutPrintDialog(tk.Toplevel):
         else:
             self.title(f"Print Preview - [{self.layout_name}]")
 
-        if self.current_layout.get("layout_path"):
-            self.layout_path = self.current_layout["layout_path"]
-        elif sess_title:
+        from cad.project_packager import get_session_export_paths
+        session = self.current_layout.get("session") or self.layout_data.get("session") or {}
+        sid = self.current_layout.get("session_id") or session.get("id") or self.layout_data.get("session_id")
+        plate_index = self.current_layout.get("layout_index", self.current_layout.get("machine_layout_index"))
+        if plate_index is None:
+            # No lote, o índice global do diálogo difere do índice dentro da sessão.
+            plate_index = sum(1 for plate in self.layouts[:index]
+                              if str(plate.get("session_id") or (plate.get("session") or {}).get("id") or sid) == str(sid))
+        plate_index = int(plate_index)
+        paths = get_session_export_paths(getattr(self.master, "db", None), sid)
+        self.layout_path = paths.get(plate_index) or self.current_layout.get("layout_path") or ""
+        if not self.layout_path and len(self.layouts) == 1:
+            self.layout_path = self.layout_data.get("layout_path") or ""
+        if not self.layout_path and self.unc_prefix and sess_title:
             self.layout_path = rf"{self.unc_prefix}\Compiti\{sess_title}\{self.layout_name}"
-        else:
-            self.layout_path = self.current_layout.get(
-                "layout_path",
-                rf"{self.unc_prefix}\Compiti\SEM 46-UP046_2°\129.046\10100\{self.layout_name}"
-            )
 
         # 2. Dimensões da chapa
         sheet_w = self.current_layout.get("width_mm") or self.current_layout.get("sheet_w_mm")

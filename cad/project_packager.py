@@ -655,6 +655,24 @@ def _layout_filename(layout: dict, used: set[str]) -> str:
 # API principal
 # ---------------------------------------------------------------------------
 
+def get_session_export_paths(db, session_id):
+    """Últimos arquivos realmente exportados, sem consultar a pasta de rede."""
+    if db is None or session_id is None or not callable(getattr(db, 'get_setting', None)):
+        return {}
+    try:
+        raw = db.get_setting(f'machine_export_paths:{int(session_id)}', '')
+        data = json.loads(raw) if isinstance(raw, str) and raw else {}
+        if not isinstance(data, dict):
+            return {}
+        return {int(index): path for index, path in data.items()
+                if isinstance(path, str) and path.strip()}
+    except (ValueError, TypeError, AttributeError):
+        return {}
+    except Exception:
+        # A impressão permanece disponível quando o banco não responde.
+        return {}
+
+
 def export_session(
     db: Any,
     session_id: int,
@@ -668,6 +686,7 @@ def export_session(
     die_index: Optional[DieSourceIndex] = None,
     strict: bool = False,
     clean_existing_layouts: bool = True,
+    remember_paths: bool = True,
     progress: Optional[Callable[[str, int, int], None]] = None,
 ) -> ExportResult:
     """
@@ -942,6 +961,12 @@ def export_session(
         "warnings": result.warnings,
     }
     _write_json_atomic(manifest_path, manifest)
+    if remember_paths and callable(getattr(db, 'set_setting', None)):
+        try:
+            db.set_setting(f'machine_export_paths:{int(session_id)}', json.dumps(
+                {str(asset.index): asset.path for asset in result.layouts}, ensure_ascii=False))
+        except Exception:
+            result.warnings.append('Arquivos exportados, mas não foi possível registrar o caminho para impressão. Exporte novamente para registrar.')
     return result
 
 
@@ -991,6 +1016,8 @@ def export_session_cac(
         target = cleanup
     else:
         target = Path(target_dir)
+    if cleanup is not None:
+        export_kwargs['remember_paths'] = False  # o .cac não deixa esses .lay no disco
     result = export_session(db, session_id, target, **export_kwargs)
     result.cac_path = pack_session_folder(result.session_dir, output_cac)
     if cleanup is not None:
@@ -1012,6 +1039,7 @@ __all__ = [
     "ExportResult",
     "DieSourceIndex",
     "export_session",
+    "get_session_export_paths",
     "pack_session_folder",
     "export_session_cac",
 ]

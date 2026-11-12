@@ -505,3 +505,38 @@ def test_nested_shape_geometry_from_batch_layout(tmp_path):
     result = export_session(FakeDB(session, shapes=[]), 42, tmp_path)
     assert result.complete
     assert (result.shapes_dir / "Gaspea_41.die").is_file()
+
+
+def test_export_records_real_paths_for_print_and_updates_only_that_session(tmp_path):
+    from cad.project_packager import get_session_export_paths
+    db = FakeDB(_session())
+    settings = {'machine_export_paths:99': json.dumps({'0': r'\\OUTRO\SESS-99\lay0000.lay'})}
+    db.set_setting = lambda key, value: settings.update({key: value})
+    db.get_setting = lambda key, default='': settings.get(key, default)
+    first = export_session(db, 42, tmp_path/'primeiro')
+    assert get_session_export_paths(db, 42) == {asset.index: asset.path for asset in first.layouts}
+    second = export_session(db, 42, tmp_path/'segundo', create_subfolder=False)
+    assert get_session_export_paths(db, 42) == {asset.index: asset.path for asset in second.layouts}
+    assert get_session_export_paths(db, 99) == {0: r'\\OUTRO\SESS-99\lay0000.lay'}
+    assert all(Path(path).is_file() for path in get_session_export_paths(db, 42).values())
+
+
+def test_print_path_reader_accepts_missing_legacy_or_invalid_records():
+    from types import SimpleNamespace
+    from cad.project_packager import get_session_export_paths
+    assert get_session_export_paths(None, 42) == {}
+    for raw in ('', 'invalido', '[]', '{"nao-e-indice": "arquivo"}'):
+        db = SimpleNamespace(get_setting=lambda *args: raw)
+        assert get_session_export_paths(db, 42) == {}
+
+
+def test_temporary_cac_export_does_not_replace_machine_print_paths(tmp_path):
+    from cad.project_packager import get_session_export_paths
+    db = FakeDB(_session())
+    settings = {}
+    db.set_setting = lambda key, value: settings.update({key: value})
+    db.get_setting = lambda key, default='': settings.get(key, default)
+    export_session(db, 42, tmp_path/'maquina')
+    before = get_session_export_paths(db, 42)
+    export_session_cac(db, 42, tmp_path/'arquivo.cac')
+    assert get_session_export_paths(db, 42) == before
