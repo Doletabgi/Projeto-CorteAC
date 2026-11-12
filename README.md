@@ -77,6 +77,15 @@ O indicador **Já na sessão** evita duplicação e preserva as quantidades exis
 
 No seletor **Visualização**, escolha **Cartões grandes**, **Cartões compactos**, **Lista com prévias** ou **Tabela de detalhes**. A seleção e os pares permanecem ao trocar de modo. Na tabela, clique nos títulos das colunas para ordenar por nome, tamanho, pasta, medidas, área do contorno ou situação.
 
+## Painel de Produção
+
+Abra **Ferramentas → Painel de Produção** e selecione o período e o material.
+Use **Salvar PDF...** para salvar o relatório ou **Imprimir...** para enviá-lo à
+impressora padrão. As duas ações aplicam os filtros atuais e incluem o resumo,
+as tabelas **Por material** e **Evolução por dia** e os avisos sobre os dados.
+O relatório usa páginas A4 em paisagem e inclui todas as linhas das tabelas.
+Se a impressão direta estiver indisponível, use o PDF em um leitor para imprimir.
+
 ## 📦 Como Gerar o Executável Standalone Localmente
 
 ### No Linux:

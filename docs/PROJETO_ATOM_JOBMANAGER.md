@@ -14,9 +14,9 @@ pré-requisitos, escopo dos testes e regras de retomada.
 > **Regra de ouro:** o que está marcado `[CONFIRMADO]` veio do relatório, do código ou do usuário. O que está `[NÃO CONFIRMADO]` é suposição e não deve virar "fato" sem validação. O que está `[PREENCHER]` a IA deve completar lendo o código real.
 
 <!-- AUTO:header:start -->
-**Versão do aplicativo:** `1.8.11`
+**Versão do aplicativo:** `1.8.12`
 
-**Última sincronização com o código:** 2026-11-12 11:19 (HEAD ao gerar: `359c9b0`; 199 arquivos Python, ~88228 linhas)
+**Última sincronização com o código:** 2026-11-12 14:09 (HEAD ao gerar: `9b065e9`; 201 arquivos Python, ~88659 linhas)
 <!-- AUTO:header:end -->
 **Versão deste documento:** 2
 
@@ -312,6 +312,7 @@ tests/test_preencher_buracos.py                      # tests/test_preencher_bura
 tests/test_print_layout_abre.py                      # tests/test_print_layout_abre.py
 tests/test_print_metros.py                           # tests/test_print_metros.py
 tests/test_production_dashboard.py
+tests/test_production_dashboard_export.py            # Exportação e impressão do painel, com dados isolados e sem impressora real.
 tests/test_production_sheet.py                       # Regressões industriais e de paginação da ficha, sem gravar no banco real.
 tests/test_project_packager.py                       # Testes do empacotador de sessão multi-placa (cad/project_packager.py).
 tests/test_semver.py                                 # Testes Automatizados para o Sistema de Versionamento SemVer (MAJOR.MINOR.PATCH)
@@ -404,6 +405,7 @@ ui/options_dialog.py                                 # JobManager 2000 (Python E
 ui/order_view.py                                     # JobManager 2000 (Python Edition)
 ui/params_dialog.py                                  # JobManager 2000 (Python Edition)
 ui/production_dashboard.py                           # Painel gerencial: dados de planejamento, sem inferir execução de corte.
+ui/production_dashboard_report.py                    # Relatório A4 do painel, com paginação independente da área visível da tela.
 ui/production_sheet.py                               # Ficha de produção: projeção somente leitura das regras industriais existentes.
 ui/session_view.py                                   # JobManager 2000 (Python Edition)
 ui/shape_backup_restore_dialog.py                    # JobManager 2000 / OpenCorte (Python Edition)
@@ -781,6 +783,9 @@ ui/user_dialog.py                                    # JobManager 2000 (Python E
 ### `tests/test_production_dashboard.py`
 - funções: `test_weighted_yield_and_session_date_filters`, `test_missing_invalid_and_empty_data_are_not_presented_as_measured`, `test_fetch_data_reads_persisted_rows_without_inventing_layouts`, `test_dashboard_window_shows_unavailable_and_filters`, `test_legacy_yield_pct_is_used_when_primary_is_empty`
 
+### `tests/test_production_dashboard_export.py`
+- funções: `panel`, `test_report_applies_current_filters_and_contains_both_tables`, `test_pdf_saved_and_cancel_does_not_render`, `test_invalid_filters_block_save_and_print`, `test_print_sends_pdf_as_argument_and_cleans_spool_file`, `test_rejected_print_does_not_claim_success`, `test_windows_print_keeps_pdf_for_async_reader`, `test_report_paginates_all_rows_without_clipping`, `test_empty_report_keeps_limitations_and_both_sections`, `test_no_spooler_keeps_pdf_and_explains_fallback`
+
 ### `tests/test_production_sheet.py`
 - funções: `piece`, `test_degrau_e_sobras_4c_2c_nao_usam_demanda_como_producao`, `test_impar_preserva_peca_sem_par_e_nao_soma_pares_de_moldes`, `test_fator_6x1_e_formato_na_instancia`, `fixture`, `test_paginacao_sem_cortar_linhas_e_identificacao_em_todas_as_folhas`, `test_paisagem_e_nome_longo_nao_estouram_margem`, `test_moldes_com_mesmo_nome_e_tamanhos_distintos_preservam_demanda`, `test_export_pdf_preserva_continuacoes_e_restaura_placa`, `test_spool_usa_argumentos_sem_shell_e_inclui_continuacoes`, `test_preparacao_em_metros_preserva_precisao_sem_milimetros`, `test_totais_lineares_somam_placas_da_sessao_com_camadas_individuais`, `test_metragem_sem_refile_e_medida_invalida`, `test_modelos_ao_lado_do_mapa_ampliado_em_todas_as_continuacoes`, `test_resumo_lateral_destaca_pares_efetivos_da_ponta_e_fator` (+7)
 
@@ -1074,7 +1079,10 @@ ui/user_dialog.py                                    # JobManager 2000 (Python E
 - `class NestingParamsDialog` (linha 11, 2 métodos)
 
 ### `ui/production_dashboard.py`
-- `class ProductionDashboard` (linha 10, 4 métodos)
+- `class ProductionDashboard` (linha 16, 7 métodos)
+
+### `ui/production_dashboard_report.py`
+- funções: `render_report`, `save_report_pdf`
 
 ### `ui/production_sheet.py`
 - funções: `plate_length_mm`, `production_rows`, `render_sheet`
@@ -5093,6 +5101,7 @@ Com dados confiáveis e validações definidas, avaliar comparação do aproveit
 <!-- AUTO:gitlog:start -->
 | Commit | Data | Autor | Mensagem |
 |---|---|---|---|
+| `9b065e9` | 2026-11-12 | Doletabgi | chore(release): OpenCorte v1.8.11 |
 | `359c9b0` | 2026-11-12 | Doletabgi | chore(release): OpenCorte v1.8.10 |
 | `79ed30e` | 2026-11-12 | Doletabgi | chore(release): OpenCorte v1.8.9 |
 | `6af24e9` | 2026-11-12 | Doletabgi | chore(release): OpenCorte v1.8.8 |
@@ -5107,7 +5116,6 @@ Com dados confiáveis e validações definidas, avaliar comparação do aproveit
 | `368490c` | 2026-11-08 | Doletabgi | feat(packaging): instalador inno setup com suporte a pastas na rede e release automatica (v1.6.49) |
 | `c3c5e13` | 2026-11-08 | Doletabgi | feat(layout): alterar medidas da chapa apos encaixe e correcao de limites em refile (v1.6.48) |
 | `849ce20` | 2026-11-08 | Doletabgi | feat(backup): suporte a backup, restauracao e agendamento de sessoes de corte e layouts (v1.6.47) |
-| `f6e3a63` | 2026-11-08 | Doletabgi | feat(layout): visualização das placas da sessão em cascata e lado a lado (v1.6.46) |
 <!-- AUTO:gitlog:end -->
 
 ---

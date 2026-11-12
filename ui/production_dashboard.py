@@ -1,8 +1,14 @@
 """Painel gerencial: dados de planejamento, sem inferir execução de corte."""
 import tkinter as tk
 from ui.icon_widgets import IconNotebook, IconTtkButton
-from tkinter import messagebox, ttk
+from tkinter import filedialog, messagebox, ttk
 from datetime import date
+import os
+from pathlib import Path
+import shutil
+import subprocess
+import sys
+import tempfile
 from analytics.production_dashboard import fetch_data, summarize
 from config import THEME
 
@@ -38,6 +44,10 @@ class ProductionDashboard(tk.Toplevel):
         self.material_box = ttk.Combobox(filters, textvariable=self.material, state='readonly', width=25)
         self.material_box.pack(side='left', padx=6)
         IconTtkButton(filters, text='Atualizar', command=self.refresh).pack(side='left', padx=5)
+        actions = ttk.Frame(root)
+        actions.pack(fill='x', pady=4)
+        IconTtkButton(actions, text='Imprimir...', icon='print', command=self.do_print).pack(side='left')
+        IconTtkButton(actions, text='Salvar PDF...', icon='save', command=self.save_as_pdf).pack(side='left', padx=6)
         ttk.Label(root, textvariable=self.summary, justify='left', font=('Segoe UI', 10, 'bold')).pack(anchor='w', pady=10)
         ttk.Label(root, textvariable=self.notice, justify='left', wraplength=970).pack(anchor='w', pady=(0, 8))
         notebook = IconNotebook(root)
@@ -78,7 +88,7 @@ class ProductionDashboard(tk.Toplevel):
             data = summarize(sessions, layouts, start, end, self._materials[self.material.get()])
         except Exception as exc:
             messagebox.showerror('Painel de Produção', f'Não foi possível carregar o painel: {exc}', parent=self)
-            return
+            return False
         rate = f"{data['yield_pct']:.2f}%" if data['yield_pct'] is not None else 'Indisponível'
         area = f"{data['area_m2_per_layer']:.2f} m²" if data['yield_pct'] is not None else 'Indisponível'
         pairs = f"{data['pairs_planned']}" if not data['sessions_missing_pairs'] else f"{data['pairs_planned']} (parcial)"
@@ -91,3 +101,70 @@ class ProductionDashboard(tk.Toplevel):
                 name = f'{key[0]} — {key[1]}' if material else key or 'Sem data'
                 rate = f"{row['yield_pct']:.2f}" if row['yield_pct'] is not None else 'Indisponível'
                 tree.insert('', 'end', values=(name, row['layouts'], f"{row['area']:.2f}", rate, f"{max(0, row['area'] - row['used']):.2f}"))
+        return True
+
+    def _report(self):
+        # Aplica os filtros atuais antes de salvar ou imprimir; não exporta dados antigos
+        # se a validação ou a consulta falhar.
+        if not self.refresh():
+            return None
+        return {
+            'filters': f"Período: {self.start.get().strip() or 'Sem limite inicial'} até {self.end.get().strip() or 'Sem limite final'} | Material: {self.material.get()}",
+            'summary': self.summary.get(),
+            'notice': self.notice.get(),
+            'tables': [
+                (title, tuple(tree['columns']), [tuple(tree.item(item, 'values')) for item in tree.get_children()])
+                for title, tree in [('Por material', self.material_tree), ('Evolução por dia', self.day_tree)]
+            ],
+        }
+
+    def save_as_pdf(self):
+        report = self._report()
+        if report is None:
+            return
+        path = filedialog.asksaveasfilename(
+            parent=self, title='Salvar Painel de Produção', defaultextension='.pdf',
+            initialfile=f'painel_producao_{date.today().isoformat()}.pdf',
+            filetypes=[('Documento PDF', '*.pdf')],
+        )
+        if not path:
+            return
+        try:
+            from ui.production_dashboard_report import save_report_pdf
+            save_report_pdf(report, path)
+            messagebox.showinfo('Painel de Produção', f'Relatório salvo em:\n{path}', parent=self)
+        except Exception as exc:
+            messagebox.showerror('Salvar Painel de Produção', f'Não foi possível salvar o relatório:\n{exc}', parent=self)
+
+    def do_print(self):
+        report = self._report()
+        if report is None:
+            return
+        path = None
+        keep_file = False
+        try:
+            from ui.production_dashboard_report import save_report_pdf
+            fd, name = tempfile.mkstemp(prefix='painel_producao_', suffix='.pdf')
+            os.close(fd)
+            path = Path(name)
+            save_report_pdf(report, path)
+            if sys.platform == 'win32':
+                os.startfile(str(path), 'print')
+                # O leitor de PDF do Windows pode consumir o arquivo de forma assíncrona.
+                keep_file = True
+            elif shutil.which('lp'):
+                result = subprocess.run(['lp', str(path)], capture_output=True, text=True)
+                if result.returncode:
+                    raise RuntimeError(result.stderr.strip() or 'A fila de impressão recusou o documento.')
+            else:
+                keep_file = True
+                messagebox.showinfo('Imprimir Painel de Produção',
+                                    f'Impressão direta indisponível. Abra o PDF para imprimir:\n{path}', parent=self)
+                return
+            messagebox.showinfo('Imprimir Painel de Produção', 'Documento enviado para a impressora padrão.', parent=self)
+        except Exception as exc:
+            messagebox.showerror('Imprimir Painel de Produção',
+                                 f'Não foi possível imprimir o relatório:\n{exc}\n\nUse Salvar PDF para imprimir pelo leitor de PDF.', parent=self)
+        finally:
+            if path is not None and not keep_file:
+                path.unlink(missing_ok=True)
