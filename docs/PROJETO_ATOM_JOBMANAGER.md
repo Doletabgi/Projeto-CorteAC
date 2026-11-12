@@ -14,9 +14,9 @@ pré-requisitos, escopo dos testes e regras de retomada.
 > **Regra de ouro:** o que está marcado `[CONFIRMADO]` veio do relatório, do código ou do usuário. O que está `[NÃO CONFIRMADO]` é suposição e não deve virar "fato" sem validação. O que está `[PREENCHER]` a IA deve completar lendo o código real.
 
 <!-- AUTO:header:start -->
-**Versão do aplicativo:** `1.8.7`
+**Versão do aplicativo:** `1.8.8`
 
-**Última sincronização com o código:** 2026-11-12 10:28 (HEAD ao gerar: `2e6caf9`; 197 arquivos Python, ~87711 linhas)
+**Última sincronização com o código:** 2026-11-12 10:40 (HEAD ao gerar: `5d008da`; 197 arquivos Python, ~87739 linhas)
 <!-- AUTO:header:end -->
 **Versão deste documento:** 2
 
@@ -625,7 +625,7 @@ ui/user_dialog.py                                    # JobManager 2000 (Python E
 
 ### `tests/test_desktop_shortcut.py`
 - `class TestDesktopShortcut` (linha 20, 6 métodos)
-- `class TestSincronizacaoAutomatica` (linha 101, 4 métodos): O app sincroniza o atalho existente para a versão atual ao iniciar (Linux).
+- `class TestSincronizacaoAutomatica` (linha 103, 5 métodos): O app sincroniza o atalho existente para a versão atual ao iniciar (Linux).
 
 ### `tests/test_dual_exporter.py`
 - `class TestCZLIB` (linha 22, 4 métodos): Validação do container de compressão CZLIB da Comelz.
@@ -5073,6 +5073,7 @@ Com dados confiáveis e validações definidas, avaliar comparação do aproveit
 <!-- AUTO:gitlog:start -->
 | Commit | Data | Autor | Mensagem |
 |---|---|---|---|
+| `5d008da` | 2026-11-12 | Doletabgi | chore(release): OpenCorte v1.8.7 |
 | `2e6caf9` | 2026-11-11 | Doletabgi | docs: registra publicacao e validacao da v1.8.6 [skip ci] |
 | `e0b9a26` | 2026-11-11 | Doletabgi | fix(ci): estabiliza build Linux e prepara v1.8.6 |
 | `10389ab` | 2026-11-11 | Doletabgi | fix(print): ficha de producao e manutencao gradual v1.8.5 |
@@ -5087,7 +5088,6 @@ Com dados confiáveis e validações definidas, avaliar comparação do aproveit
 | `368e251` | 2026-11-08 | Doletabgi | feat(shape-editor): inicializacao em branco ao abrir por menu ou atalho (v1.6.45) |
 | `07ccbc2` | 2026-11-07 | Doletabgi | feat(shapes): programacao de datas e horas de backup automatico de moldes (v1.6.44) |
 | `097f102` | 2026-11-07 | Doletabgi | feat(shapes): ferramenta de backup e restauracao de moldes no menu ferramentas (v1.6.43) |
-| `032f7a4` | 2026-11-07 | Doletabgi | feat(layout): identificar placas dos moldes na barra lateral (v1.6.42) |
 <!-- AUTO:gitlog:end -->
 
 ---

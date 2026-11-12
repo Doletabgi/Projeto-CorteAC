@@ -1,5 +1,5 @@
 """
-CorteAC (Edição Python para Windows 10 / 11)
+OpenCorte (Edição Python para Windows 10 / 11)
 Main Window - Cópia 100% fiel das telas do Job Manager original (Windows XP)
 """
 
@@ -363,7 +363,7 @@ class MainWindow(tk.Tk):
 
         # Ajuda
         help_menu = IconMenu(menubar, tearoff=0, bg=THEME["bg_surface"], fg=THEME["text_main"], activebackground=THEME["select_bg"], activeforeground=THEME["select_fg"])
-        help_menu.add_command(label="Sobre CorteAC", command=lambda: messagebox.showinfo("Sobre", f"{APP_NAME} - {APP_VERSION}\nRecriação moderna em Python para Windows 10 / 11"))
+        help_menu.add_command(label="Sobre OpenCorte", command=lambda: messagebox.showinfo("Sobre", f"{APP_NAME} - {APP_VERSION}\nRecriação moderna em Python para Windows 10 / 11"))
         menubar.add_cascade(label="Ajuda", menu=help_menu)
 
         self.config(menu=menubar)

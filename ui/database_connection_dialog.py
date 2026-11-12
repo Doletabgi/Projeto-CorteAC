@@ -159,7 +159,7 @@ class DatabaseConnectionDialog(tk.Toplevel):
         self.status_label.pack(side='bottom', fill='x', pady=(12, 0))
         footer = tk.Frame(self, bg='#ffffff', padx=20, pady=12)
         footer.pack(fill='x')
-        tk.Label(footer, text='A mudança vale ao reabrir o CorteAC. Os dados existentes não serão transferidos.',
+        tk.Label(footer, text='A mudança vale ao reabrir o OpenCorte. Os dados existentes não serão transferidos.',
                  bg='#ffffff', fg='#475569', font=('Segoe UI', 8), wraplength=585,
                  justify='left').pack(anchor='w', pady=(0, 12))
         buttons = tk.Frame(footer, bg='#ffffff')
@@ -207,7 +207,7 @@ class DatabaseConnectionDialog(tk.Toplevel):
             self._resize()
 
     def _choose_file(self):
-        filename = filedialog.askopenfilename(parent=self, title='Escolher o banco local do CorteAC',
+        filename = filedialog.askopenfilename(parent=self, title='Escolher o banco local do OpenCorte',
                                               initialdir=str(Path(self.sqlite_path.get()).parent),
                                               filetypes=[('Banco SQLite', '*.db *.sqlite *.sqlite3'), ('Todos os arquivos', '*.*')])
         if filename:
@@ -309,7 +309,7 @@ class DatabaseConnectionDialog(tk.Toplevel):
             self._show_error(exc)
             return
         self.settings = settings
-        self._set_status('Configuração salva! Feche e abra o CorteAC para começar a usar esta conexão.', success=True)
+        self._set_status('Configuração salva! Feche e abra o OpenCorte para começar a usar esta conexão.', success=True)
         self._resize()
 
     def destroy(self):

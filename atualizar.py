@@ -670,14 +670,14 @@ case "$VERSAO" in
     *) VERSAO="$VERSAO_PADRAO" ;;
 esac
 
-NOME="CorteAC-$VERSAO"
-ARQ="corteac-$VERSAO.desktop"
+NOME="OpenCorte-$VERSAO"
+ARQ="opencorte-$VERSAO.desktop"
 APPS="$HOME/.local/share/applications"
 mkdir -p "$APPS"
 
 # 2. Remove atalhos de versões anteriores (mantém sempre um único ícone na mesa).
 #    Cobre os antigos criados à mão ("CorteAC.desktop") e a pasta pt-BR do Mint.
-rm -f "$APPS"/corteac.desktop "$APPS"/corteac-*.desktop "$APPS"/CorteAC*.desktop 2>/dev/null || true
+rm -f "$APPS"/[cC]orte[aA][cC]*.desktop "$APPS"/[oO]pen[cC]orte*.desktop 2>/dev/null || true
 
 DESKTOP_DIR="$(xdg-user-dir DESKTOP 2>/dev/null || true)"
 if [ -z "$DESKTOP_DIR" ] || [ ! -d "$DESKTOP_DIR" ]; then
@@ -689,7 +689,7 @@ if [ -z "$DESKTOP_DIR" ]; then DESKTOP_DIR="$HOME/Desktop"; fi
 
 for d in "$DESKTOP_DIR" "$HOME/Desktop" "$HOME/Área de Trabalho" "$HOME/Area de Trabalho"; do
     [ -d "$d" ] || continue
-    rm -f "$d"/corteac.desktop "$d"/corteac-*.desktop "$d"/CorteAC*.desktop 2>/dev/null || true
+    rm -f "$d"/[cC]orte[aA][cC]*.desktop "$d"/[oO]pen[cC]orte*.desktop 2>/dev/null || true
 done
 
 # 3. Gera o .desktop (Exec= aspeado: o caminho pode conter espaços)
@@ -752,11 +752,11 @@ if ([string]::IsNullOrWhiteSpace($versao)) {
 }
 if ([string]::IsNullOrWhiteSpace($versao)) { $versao = 'dev' }
 
-$nome = "CorteAC-$versao.lnk"
+$nome = "OpenCorte-$versao.lnk"
 $desktop = [Environment]::GetFolderPath('Desktop')
 
 # Remove atalhos antigos do CorteAC na Area de Trabalho (CorteAC.lnk e CorteAC-*.lnk)
-Get-ChildItem -Path $desktop -Filter 'CorteAC*.lnk' -ErrorAction SilentlyContinue | Remove-Item -Force -ErrorAction SilentlyContinue
+Get-ChildItem -Path $desktop -Filter '*.lnk' -ErrorAction SilentlyContinue | Where-Object { $_.Name -match '^(CorteAC|OpenCorte).*\.lnk$' } | Remove-Item -Force -ErrorAction SilentlyContinue
 
 $atalho = Join-Path $desktop $nome
 $ws = New-Object -ComObject WScript.Shell
@@ -764,7 +764,7 @@ $s = $ws.CreateShortcut($atalho)
 $s.TargetPath = $exe
 $s.WorkingDirectory = $pasta
 $s.IconLocation = "$exe,0"
-$s.Description = "CorteAC $versao - JobManager 2000 Reborn"
+$s.Description = "OpenCorte $versao - JobManager 2000 Reborn"
 $s.Save()
 
 Write-Host "Atalho criado: $nome" -ForegroundColor Green
@@ -942,7 +942,7 @@ def build_distribution(stage):
     executable = stage/'dist'/('CorteAC.exe' if windows else 'CorteAC')
     reported = command([executable,'--version'],stage,capture=True,env=env,timeout=60)
     version = current_version(stage)
-    if reported.split()[-1:] != [version]:
+    if reported.strip() != f"OpenCorte {version}":
         raise UpdateError('O executável gerado não confirmou a versão esperada.')
     artifacts = package_distribution(stage,executable,version)
     if windows:

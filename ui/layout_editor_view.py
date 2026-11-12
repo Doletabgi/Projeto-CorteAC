@@ -6878,7 +6878,7 @@ class LayoutEditorView(tk.Frame):
         """
         try:
             dlg = tk.Toplevel(self)
-            dlg.title("Conflito de Concorrência - CorteAC")
+            dlg.title("Conflito de Concorrência - OpenCorte")
             dlg.transient(self)
             dlg.grab_set()
             dlg.resizable(False, False)
@@ -7197,7 +7197,7 @@ class LayoutEditorView(tk.Frame):
     def about_layout(self):
         info = (
             "ATOM LayoutNT / Layout Editor v3.2.7.0\n"
-            "CorteAC Integration Suite\n"
+            "OpenCorte Integration Suite\n"
             "(C) ATOM S.p.A. - Vigevano, Italy\n\n"
             "Atalhos de Operação CAM:\n"
             "• F1: Ajuste Fino (+2° Esquerda / Anti-horário)\n"

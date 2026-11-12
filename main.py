@@ -1,5 +1,5 @@
 """
-CorteAC (Python Edition para Windows 10 / 11)
+OpenCorte (Python Edition para Windows 10 / 11)
 Ponto de Entrada da Aplicação
 """
 
@@ -34,14 +34,14 @@ def main():
 
     # Mantém o atalho da Área de Trabalho/Menu com a versão atual (Linux).
     # Roda antes de qualquer saída (--version/--check-db) e só reescreve se já
-    # existir atalho do CorteAC — não cria atalho sem o operador ter um.
+    # existir atalho do OpenCorte — não cria atalho sem o operador ter um.
     try:
         from config import APP_VERSION
         from ui.desktop_shortcut import sincronizar_atalho
         info = (sincronizar_atalho(APP_VERSION)
                 if getattr(sys, "frozen", False) and len(sys.argv) == 1 else {})
         if info.get("acao") == "atualizado":
-            print(f"Atalho da Área de Trabalho atualizado para CorteAC-{APP_VERSION}")
+            print(f"Atalho da Área de Trabalho atualizado para OpenCorte-{APP_VERSION}")
     except Exception as exc:  # noqa: BLE001
         print(f"[AVISO] Não foi possível atualizar o atalho: {exc}")
 
@@ -50,7 +50,7 @@ def main():
         from ui.desktop_shortcut import sincronizar_atalho
         info = sincronizar_atalho(APP_VERSION, criar_se_ausente=True)
         if info.get("criados"):
-            print(f"Atalho criado/atualizado: CorteAC-{APP_VERSION}")
+            print(f"Atalho criado/atualizado: OpenCorte-{APP_VERSION}")
             for caminho in info["criados"]:
                 print(f"  {caminho}")
             for removido in info.get("removidos", []):
@@ -84,7 +84,7 @@ def main():
         sys.exit(0)
 
     print("=" * 60)
-    print("  CorteAC (Edição Python para Windows 10 / 11)")
+    print("  OpenCorte (Edição Python para Windows 10 / 11)")
     print("  Recriação Moderna do Sistema Jm2k & ATOM Nesting")
     print("=" * 60)
     app = MainWindow()

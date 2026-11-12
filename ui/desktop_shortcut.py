@@ -1,11 +1,11 @@
 """
 ui/desktop_shortcut.py
 
-Mantém o atalho da Área de Trabalho/Menu do CorteAC com a VERSÃO no nome.
+Mantém o atalho da Área de Trabalho/Menu do OpenCorte com a VERSÃO no nome.
 
 Roda no início da aplicação (Linux): se já existir QUALQUER atalho do CorteAC —
 inclusive os antigos, criados à mão, com nome fixo "CorteAC" — ele é substituído
-por `corteac-<versão>.desktop` (nome "CorteAC-<versão>"), apontando para o
+por `opencorte-<versão>.desktop` (nome "OpenCorte-<versão>"), apontando para o
 executável e o ícone atuais. Sem atalho existente, nada é criado (não invadimos a
 mesa do operador sem ele ter um atalho).
 
@@ -49,7 +49,7 @@ def _atalhos_existentes(apps_dir: Path, desktops: list[Path]) -> list[Path]:
             continue
         for p in base.glob("*.desktop"):
             nome = p.name.lower()
-            if nome.startswith("corteac") or nome.startswith("corteac-"):
+            if nome.startswith(("corteac", "opencorte")):
                 achados.append(p)
     return achados
 
@@ -125,8 +125,8 @@ def sincronizar_atalho(versao: str, exe_path: Optional[str] = None, icon_path: O
         return resultado  # não cria atalho do nada sem o operador pedir
 
     icone = _instalar_icone(icone)
-    nome = f"CorteAC-{versao}"
-    arq = f"corteac-{versao.lower()}.desktop"
+    nome = f"OpenCorte-{versao}"
+    arq = f"opencorte-{versao.lower()}.desktop"
     conteudo = _conteudo_desktop(nome, versao, exe, diretorio, icone)
 
     # Remove os atalhos antigos (inclusive versionados de outra versão)

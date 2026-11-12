@@ -55,15 +55,15 @@ class TestDesktopShortcut(unittest.TestCase):
             self.assertEqual(res.returncode, 0, res.stderr)
 
             apps = home / ".local/share/applications"
-            desk_file = apps / "corteac-1.6.11.desktop"
+            desk_file = apps / "opencorte-1.6.11.desktop"
             self.assertTrue(desk_file.exists(), f"atalho esperado em {desk_file}")
             conteudo = desk_file.read_text()
-            self.assertIn("Name=CorteAC-1.6.11", conteudo)
+            self.assertIn("Name=OpenCorte-1.6.11", conteudo)
             self.assertIn("X-CorteAC-Version=1.6.11", conteudo)
             self.assertIn('Exec="', conteudo)  # caminho aspeado (espaços)
             self.assertIn(str(pkg / "corteac.png"), conteudo)
 
-            desktop_copy = home / "Desktop" / "corteac-1.6.11.desktop"
+            desktop_copy = home / "Desktop" / "opencorte-1.6.11.desktop"
             self.assertTrue(desktop_copy.exists(), "atalho não copiado para a Área de Trabalho")
 
     def test_versao_lida_do_binario(self):
@@ -76,7 +76,7 @@ class TestDesktopShortcut(unittest.TestCase):
             res = self._rodar(pkg, home)
             self.assertEqual(res.returncode, 0, res.stderr)
             apps = home / ".local/share/applications"
-            self.assertTrue((apps / "corteac-2.5.7.desktop").exists())
+            self.assertTrue((apps / "opencorte-2.5.7.desktop").exists())
 
     def test_versao_anterior_e_removida(self):
         """Atualizar não pode deixar dois ícones na mesa."""
@@ -89,12 +89,14 @@ class TestDesktopShortcut(unittest.TestCase):
             (apps / "corteac-1.0.0.desktop").write_text("[Desktop Entry]\n")
             (home / "Desktop" / "corteac-1.0.0.desktop").write_text("[Desktop Entry]\n")
 
+            (home / "Desktop" / "OpenCorte-1.0.0.desktop").write_text("[Desktop Entry]\n")
             pkg = self._montar_pacote(tmp, "1.6.11")
             res = self._rodar(pkg, home)
             self.assertEqual(res.returncode, 0, res.stderr)
+            self.assertFalse((home / "Desktop" / "OpenCorte-1.0.0.desktop").exists())
             self.assertFalse((apps / "corteac-1.0.0.desktop").exists())
             self.assertFalse((home / "Desktop" / "corteac-1.0.0.desktop").exists())
-            self.assertTrue((apps / "corteac-1.6.11.desktop").exists())
+            self.assertTrue((apps / "opencorte-1.6.11.desktop").exists())
 
 
 
@@ -130,14 +132,40 @@ class TestSincronizacaoAutomatica(unittest.TestCase):
                 info = sincronizar_atalho("9.9.9", exe_path=str(exe), icon_path=str(icone))
 
             self.assertEqual(info["acao"], "atualizado")
-            novo = area / "corteac-9.9.9.desktop"
+            novo = area / "opencorte-9.9.9.desktop"
             self.assertTrue(novo.exists(), info)
             conteudo = novo.read_text()
-            self.assertIn("Name=CorteAC-9.9.9", conteudo)
+            self.assertIn("Name=OpenCorte-9.9.9", conteudo)
             self.assertIn('Exec="', conteudo)
             self.assertFalse((area / "CorteAC.desktop").exists(), "atalho antigo deveria sair")
-            apps_novo = home / ".local/share/applications" / "corteac-9.9.9.desktop"
+            apps_novo = home / ".local/share/applications" / "opencorte-9.9.9.desktop"
             self.assertTrue(apps_novo.exists(), "atalho do menu não criado")
+
+    def test_migra_dois_nomes_e_nao_recria_duplicatas(self):
+        from unittest.mock import patch
+        from ui.desktop_shortcut import sincronizar_atalho
+
+        with tempfile.TemporaryDirectory() as td:
+            tmp = Path(td)
+            home, area = self._home_fake(tmp, True)
+            manual = area / "OpenCorte-1.8.7.desktop"
+            manual.write_text("[Desktop Entry]\nName=CorteAC-1.8.7\nName[pt_BR]=OpenCorte-1.8.7\n")
+            other = area / "Celeste.desktop"
+            other.write_text("[Desktop Entry]\nName=Celeste\n")
+            exe = tmp / "corteac_linux"
+            exe.write_text("binary")
+            icon = tmp / "icon.png"
+            icon.write_bytes(b"icon")
+            with patch.dict(os.environ, {"HOME": str(home)}), patch("ui.desktop_shortcut._desktop_dirs", return_value=[area]):
+                for _ in range(2):
+                    info = sincronizar_atalho("1.8.8", str(exe), str(icon))
+                    self.assertIsNone(info["erro"])
+            self.assertEqual(sorted(p.name for p in area.glob("*.desktop")),
+                             ["Celeste.desktop", "opencorte-1.8.8.desktop"])
+            content = (area / "opencorte-1.8.8.desktop").read_text()
+            self.assertIn("Name=OpenCorte-1.8.8\n", content)
+            self.assertNotIn("Name[pt_BR]", content)
+            self.assertIn(f'Exec="{exe}"', content)
 
     def test_sem_atalho_nao_cria_nada(self):
         from unittest.mock import patch

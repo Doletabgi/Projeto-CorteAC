@@ -107,3 +107,5 @@ a suíte completa nem inclui ensaios de máquina ou MySQL de produção.
 O acompanhamento consulta a
 [API de execuções do GitHub Actions](https://docs.github.com/en/rest/actions/workflow-runs)
 e a publicação usa [push atômico do Git](https://git-scm.com/docs/git-push).
+
+O nome exibido no programa e nos atalhos é **OpenCorte**. A atualização remove os atalhos antigos CorteAC e OpenCorte, inclusive cópias renomeadas manualmente, e mantém um atalho OpenCorte com a versão atual em cada Área de Trabalho. Os nomes técnicos dos executáveis e pacotes existentes são preservados por compatibilidade.

@@ -1,5 +1,5 @@
 """
-JobManager 2000 / CorteAC (Python Edition)
+JobManager 2000 / OpenCorte (Python Edition)
 UI: Diálogo de Backup e Restauração de Moldes Cadastrados
 Interface gráfica para geração e importação de pacotes de backup compactados (.zip / .csh),
 e agendamento programado de datas e horas de backup automático.
@@ -151,7 +151,7 @@ class ShapeBackupRestoreDialog(tk.Toplevel):
         self.destroy()
 
     def setup_ui(self):
-        # 1. Cabeçalho estilizado padrão CorteAC / Windows XP
+        # 1. Cabeçalho estilizado padrão OpenCorte / Windows XP
         header_frame = tk.Frame(self, bg=THEME["title_bar_bg"], height=42, padx=14, pady=6)
         header_frame.pack(fill="x")
 
@@ -1488,10 +1488,10 @@ class ShapeBackupRestoreDialog(tk.Toplevel):
 
         chosen = filedialog.asksaveasfilename(
             parent=self,
-            title="Salvar Arquivo de Backup do CorteAC",
+            title="Salvar Arquivo de Backup do OpenCorte",
             initialdir=init_dir,
             initialfile=init_name,
-            filetypes=[("Pacote Compactado ZIP", "*.zip"), ("CorteAC Shape Archive", "*.csh"), ("Todos os Arquivos", "*.*")]
+            filetypes=[("Pacote Compactado ZIP", "*.zip"), ("OpenCorte Shape Archive", "*.csh"), ("Todos os Arquivos", "*.*")]
         )
         if chosen:
             if not (chosen.lower().endswith(".zip") or chosen.lower().endswith(".csh")):
@@ -1636,7 +1636,7 @@ class ShapeBackupRestoreDialog(tk.Toplevel):
             messagebox.showerror("Arquivo Inválido", f"O arquivo selecionado não é um backup válido:\n\n{inspection.error}", parent=self)
             return
 
-        badge_text = "Coleção legada de arquivos .die" if inspection.is_legacy_die_zip else f"Backup CorteAC ({inspection.app_version})"
+        badge_text = "Coleção legada de arquivos .die" if inspection.is_legacy_die_zip else f"Backup OpenCorte ({inspection.app_version})"
         det_parts = []
         if inspection.has_shapes:
             det_parts.append(f"{inspection.total_shapes} moldes em {inspection.total_folders} pasta(s)")

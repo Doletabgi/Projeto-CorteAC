@@ -3,11 +3,11 @@
 ; Gera o instalador Windows oficial com assistente de configuração de rede
 ; =====================================================================
 
-#define MyAppName "CorteAC"
+#define MyAppName "OpenCorte"
 #ifndef MyAppVersion
-  #define MyAppVersion "1.8.7"
+  #define MyAppVersion "1.8.8"
 #endif
-#define MyAppPublisher "ATOM / CorteAC Industrial"
+#define MyAppPublisher "ATOM / OpenCorte Industrial"
 #define MyAppURL "https://github.com/Doletabgi/Projeto-CorteAC"
 #define MyAppExeName "CorteAC.exe"
 
@@ -48,6 +48,11 @@ Source: "..\README_WINDOWS.txt"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\db.example.ini"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\assets\app_icon.ico"; DestDir: "{app}\assets"; Flags: ignoreversion
 Source: "..\assets\app_icon.png"; DestDir: "{app}\assets"; Flags: ignoreversion
+
+[InstallDelete]
+Type: files; Name: "{autodesktop}\CorteAC*.lnk"
+Type: files; Name: "{autodesktop}\OpenCorte-*.lnk"
+Type: files; Name: "{group}\CorteAC*.lnk"
 
 [Icons]
 Name: "{group}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; IconFilename: "{app}\assets\app_icon.ico"
