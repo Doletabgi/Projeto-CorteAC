@@ -1,7 +1,7 @@
 # RELATÓRIO TÉCNICO DE CONCLUSÃO — FASE 6.2
 ## Polimento Essencial do ShapeCatalogView
 
-**Projeto:** CorteAC / JobManager 2000 (Python Edition)  
+**Projeto:** OpenCorte / JobManager 2000 (Python Edition)\
 **Missão:** Implementar Zoom/Pan vetorial, filtros por tamanho e peça, resolver pendências de 3 botões complexos e validar warning de pytest  
 **Fase:** 6.2 — Polimento Essencial do ShapeCatalogView  
 **Status:** ✅ **CONCLUÍDA COM 100% DE APROVAÇÃO**  

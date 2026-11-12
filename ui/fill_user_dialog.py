@@ -17,6 +17,7 @@ Os rótulos exatos são [INFERIDO] e marcados com # CONFIRMAR NO WINDOWS.
 from dataclasses import dataclass
 from typing import Optional, Tuple, Dict, Any
 import tkinter as tk
+from ui.icon_widgets import IconButton
 from tkinter import ttk
 
 from config import THEME
@@ -249,13 +250,13 @@ class FillUserDialog(tk.Toplevel):
         btn_box = tk.Frame(container, bg=bg)
         btn_box.grid(row=12, column=0, columnspan=2, sticky="e", pady=(8, 0))
 
-        btn_cancel = tk.Button(
+        btn_cancel = IconButton(
             btn_box, text="Cancelar", width=10, command=self.on_cancel,
             bg=THEME.get("bg_card", "#ffffff"), fg=fg, font=("Segoe UI", 9)
         )
         btn_cancel.pack(side="right", padx=(6, 0))
 
-        btn_ok = tk.Button(
+        btn_ok = IconButton(
             btn_box, text="OK", width=10, command=self.on_ok,
             bg=accent, fg="#ffffff", activebackground="#1d4ed8", font=("Segoe UI", 9, "bold")
         )

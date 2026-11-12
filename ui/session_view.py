@@ -9,6 +9,7 @@ import copy
 import json
 from typing import Dict, Any, Optional, List
 import tkinter as tk
+from ui.icon_widgets import IconButton, IconLabel, IconMenu, IconNotebook
 from tkinter import ttk, messagebox, simpledialog, colorchooser, filedialog
 from pathlib import Path
 from config import THEME
@@ -222,7 +223,7 @@ class SobrasConfigDialog(tk.Toplevel):
         frame_btns = tk.Frame(pad, bg=THEME["bg_card"])
         frame_btns.pack(side="bottom", fill="x")
 
-        btn_cancel = tk.Button(
+        btn_cancel = IconButton(
             frame_btns,
             text="Cancelar",
             command=self.destroy,
@@ -231,7 +232,7 @@ class SobrasConfigDialog(tk.Toplevel):
         )
         btn_cancel.pack(side="right", padx=(6, 0))
 
-        btn_save = tk.Button(
+        btn_save = IconButton(
             frame_btns,
             text="Salvar",
             command=self._on_save,
@@ -268,7 +269,7 @@ class SobrasConfigDialog(tk.Toplevel):
 
 
 class SessionView(tk.Frame):
-    def __init__(self, parent, session_data=None, canvas_ref=None, on_close=None, on_minimize=None, on_maximize=None, on_edit_shape=None, on_delete_shape=None, on_import_die=None, on_open_layout_editor=None, on_material_change=None, on_nest=None, on_standby=None, on_rewind=None, on_cut=None, on_strategy_change=None, on_add_shapes=None, all_shapes_catalog=None, db=None, on_open_dieproc=None, on_cancel=None, on_export_machine=None, **kwargs):
+    def __init__(self, parent, session_data=None, canvas_ref=None, on_close=None, on_minimize=None, on_maximize=None, on_edit_shape=None, on_delete_shape=None, on_import_die=None, on_open_layout_editor=None, on_material_change=None, on_nest=None, on_standby=None, on_rewind=None, on_cut=None, on_strategy_change=None, on_add_shapes=None, all_shapes_catalog=None, db=None, on_open_dieproc=None, on_cancel=None, on_export_machine=None, on_open_catalog=None, **kwargs):
         super().__init__(parent, bg=THEME["bg_surface"], relief="ridge", bd=2, **kwargs)
         self.session_data = session_data or {
             "id": 91,
@@ -296,6 +297,7 @@ class SessionView(tk.Frame):
         self.on_strategy_change_cb = on_strategy_change
         self.on_add_shapes_cb = on_add_shapes
         self.on_export_machine_cb = on_export_machine
+        self.on_open_catalog_cb = on_open_catalog
         self.all_shapes_catalog = all_shapes_catalog or []
         self.shapes_list = list(self.session_data.get("shapes", []))
         self.selected_shape = None
@@ -328,11 +330,11 @@ class SessionView(tk.Frame):
         # Botões de janela clássicos: Minimizar, Maximizar, Fechar
         btn_box = tk.Frame(title_bar, bg=THEME["title_bar_bg"])
         btn_box.pack(side="right")
-        self.btn_min = tk.Button(btn_box, text="_", relief="raised", bd=1, bg=THEME["bg_surface"], fg=THEME["text_main"], font=("Segoe UI", 7, "bold"), width=2, height=1, padx=0, pady=0, command=self.on_minimize_click)
+        self.btn_min = IconButton(btn_box, text="_", relief="raised", bd=1, bg=THEME["bg_surface"], fg=THEME["text_main"], font=("Segoe UI", 7, "bold"), width=2, height=1, padx=0, pady=0, command=self.on_minimize_click)
         self.btn_min.pack(side="left", padx=1)
-        self.btn_max = tk.Button(btn_box, text="□", relief="raised", bd=1, bg=THEME["bg_surface"], fg=THEME["text_main"], font=("Segoe UI", 7, "bold"), width=2, height=1, padx=0, pady=0, command=self.on_maximize_click)
+        self.btn_max = IconButton(btn_box, text="□", relief="raised", bd=1, bg=THEME["bg_surface"], fg=THEME["text_main"], font=("Segoe UI", 7, "bold"), width=2, height=1, padx=0, pady=0, command=self.on_maximize_click)
         self.btn_max.pack(side="left", padx=1)
-        self.btn_close = tk.Button(btn_box, text="✕", relief="raised", bd=1, bg=THEME["bg_surface"], fg=THEME["text_main"], font=("Segoe UI", 7, "bold"), width=2, height=1, padx=0, pady=0, command=self.on_close_click)
+        self.btn_close = IconButton(btn_box, text="✕", relief="raised", bd=1, bg=THEME["bg_surface"], fg=THEME["text_main"], font=("Segoe UI", 7, "bold"), width=2, height=1, padx=0, pady=0, command=self.on_close_click)
         self.btn_close.pack(side="left", padx=1)
 
         # Arrastar janela pelo título em modo flutuante/lado a lado
@@ -343,7 +345,7 @@ class SessionView(tk.Frame):
         self.bind("<Button-1>", lambda e: self.lift(), add="+")
 
         # Notebook com as 5 abas originais do print
-        self.notebook = ttk.Notebook(self)
+        self.notebook = IconNotebook(self)
         self.notebook.pack(fill="both", expand=True, padx=3, pady=3)
 
         tab_gen = tk.Frame(self.notebook, bg=THEME["bg_card"], padx=14, pady=12)
@@ -443,7 +445,7 @@ class SessionView(tk.Frame):
         params_header = tk.Frame(col_left, bg=THEME["bg_card"])
         params_header.pack(fill="x", pady=(0, 2))
 
-        self.btn_dieproc_cfg = tk.Button(
+        self.btn_dieproc_cfg = IconButton(
             params_header,
             text="⚙️ Configurar...",
             bg=THEME["bg_surface"],
@@ -517,7 +519,7 @@ class SessionView(tk.Frame):
         )
         self.chk_separar_sobras.pack(side="left", anchor="w")
 
-        self.btn_config_sobras = tk.Button(
+        self.btn_config_sobras = IconButton(
             frame_checks,
             text="⚙ Configurar…",
             command=self.open_sobras_config_dialog,
@@ -590,7 +592,7 @@ class SessionView(tk.Frame):
         gap_spin_frame = tk.Frame(col_right, bg=THEME["bg_card"])
         gap_spin_frame.pack(anchor="w", pady=(0, 4))
 
-        self.btn_gap_minus = tk.Button(
+        self.btn_gap_minus = IconButton(
             gap_spin_frame,
             text="-",
             width=3,
@@ -618,7 +620,7 @@ class SessionView(tk.Frame):
         self.entry_gap.bind("<FocusOut>", self._on_gap_entry_change)
         self.entry_gap.bind("<Return>", self._on_gap_entry_change)
 
-        self.btn_gap_plus = tk.Button(
+        self.btn_gap_plus = IconButton(
             gap_spin_frame,
             text="+",
             width=3,
@@ -706,7 +708,7 @@ class SessionView(tk.Frame):
         row_btn1 = tk.Frame(btn_action_box, bg=THEME["bg_card"])
         row_btn1.pack(fill="x", pady=(0, 4))
 
-        self.btn_action_nest = tk.Button(
+        self.btn_action_nest = IconButton(
             row_btn1,
             text="Gerar",
             width=11,
@@ -719,7 +721,7 @@ class SessionView(tk.Frame):
         )
         self.btn_action_nest.pack(side="left", padx=(0, 6))
 
-        self.btn_action_standby = tk.Button(
+        self.btn_action_standby = IconButton(
             row_btn1,
             text="Em espera",
             width=12,
@@ -732,7 +734,7 @@ class SessionView(tk.Frame):
         )
         self.btn_action_standby.pack(side="left", padx=4)
 
-        self.btn_action_rewind = tk.Button(
+        self.btn_action_rewind = IconButton(
             row_btn1,
             text="Refazer",
             width=12,
@@ -767,7 +769,7 @@ class SessionView(tk.Frame):
         )
         self.lbl_progress.pack(side="left", padx=(0, 8))
 
-        self.btn_action_cancel = tk.Button(
+        self.btn_action_cancel = IconButton(
             self.frame_progress,
             text="⏹ Cancelar",
             bg=THEME.get("danger", "#dc3545"),
@@ -921,62 +923,62 @@ class SessionView(tk.Frame):
         shp_bot_bar = tk.Frame(tab_shapes, bg=THEME["bg_surface"], pady=4, padx=6)
         shp_bot_bar.pack(side="bottom", fill="x")
 
-        tk.Button(
+        IconButton(
             shp_bot_bar, text="➕ Adicionar Molde...",
             relief="raised", bd=2, bg=THEME["bg_surface"], fg=THEME["text_main"],
             font=("Segoe UI", 9, "bold"), command=self.on_add_shape_click
         ).pack(side="left", padx=2)
 
-        tk.Button(
+        IconButton(
             shp_bot_bar, text="📂 Importar .die...",
             relief="raised", bd=2, bg=THEME["bg_surface"], fg=THEME["text_main"],
             font=("Segoe UI", 9), command=self.on_import_button_click
         ).pack(side="left", padx=2)
 
-        tk.Button(
+        IconButton(
             shp_bot_bar, text="🗑️ Remover",
             relief="raised", bd=2, bg=THEME["bg_surface"], fg=THEME["text_main"],
             font=("Segoe UI", 9), command=self.delete_selected_shape
         ).pack(side="left", padx=2)
 
-        tk.Button(
+        IconButton(
             shp_bot_bar, text="✏️ Pares...",
             relief="raised", bd=2, bg=THEME["bg_surface"], fg=THEME["text_main"],
             font=("Segoe UI", 9, "bold"), command=self.change_selected_shape_pairs
         ).pack(side="left", padx=2)
 
-        tk.Button(
+        IconButton(
             shp_bot_bar, text="🔢 Sequência...",
             relief="raised", bd=2, bg=THEME["bg_surface"], fg=THEME["text_main"],
             font=("Segoe UI", 9, "bold"), command=self.change_selected_shape_sequence
         ).pack(side="left", padx=2)
 
-        tk.Button(
+        IconButton(
             shp_bot_bar, text="⬆️ Subir",
             relief="raised", bd=2, bg=THEME["bg_surface"], fg=THEME["text_main"],
             font=("Segoe UI", 9), command=self.move_selected_shape_up
         ).pack(side="left", padx=2)
 
-        tk.Button(
+        IconButton(
             shp_bot_bar, text="⬇️ Descer",
             relief="raised", bd=2, bg=THEME["bg_surface"], fg=THEME["text_main"],
             font=("Segoe UI", 9), command=self.move_selected_shape_down
         ).pack(side="left", padx=2)
 
-        self.btn_sort = tk.Button(
+        self.btn_sort = IconButton(
             shp_bot_bar, text="🔽 Classificar ▾",
             relief="raised", bd=2, bg=THEME["bg_surface"], fg=THEME["text_main"],
             font=("Segoe UI", 9, "bold"), command=self.show_sort_menu
         )
         self.btn_sort.pack(side="left", padx=2)
 
-        tk.Button(
+        IconButton(
             shp_bot_bar, text="⚙️ Configurar...",
             relief="raised", bd=2, bg=THEME["bg_surface"], fg=THEME["text_main"],
             font=("Segoe UI", 9), command=self.open_edit_selected_shape_dialog
         ).pack(side="left", padx=2)
 
-        tk.Button(
+        IconButton(
             shp_bot_bar, text="🎨 Cor...",
             relief="raised", bd=2, bg=THEME["bg_surface"], fg=THEME["text_main"],
             font=("Segoe UI", 9, "bold"), command=self.change_selected_shape_color
@@ -1016,7 +1018,7 @@ class SessionView(tk.Frame):
         # Barra inferior com botão de edição, remoção e dica de uso
         mat_bot_bar = tk.Frame(self.tab_mat, bg=THEME["bg_surface"], pady=4, padx=6)
         mat_bot_bar.pack(fill="x")
-        btn_edit_mat = tk.Button(
+        btn_edit_mat = IconButton(
             mat_bot_bar,
             text="✏️ Editar Parâmetros do Material...",
             relief="raised",
@@ -1028,7 +1030,7 @@ class SessionView(tk.Frame):
         )
         btn_edit_mat.pack(side="left", padx=2)
 
-        self.btn_remove_mat = tk.Button(
+        self.btn_remove_mat = IconButton(
             mat_bot_bar,
             text="🗑️ Remover Material (Del)",
             relief="raised",
@@ -1040,7 +1042,7 @@ class SessionView(tk.Frame):
         )
         self.btn_remove_mat.pack(side="left", padx=2)
 
-        lbl_hint = tk.Label(
+        lbl_hint = IconLabel(
             mat_bot_bar,
             text="💡 Dica: Clique na célula para editar ou tecle Delete para remover o material (disponível quando sem layout calculado).",
             bg=THEME["bg_surface"],
@@ -1104,19 +1106,19 @@ class SessionView(tk.Frame):
         lays_bot_bar = tk.Frame(lays_table_frame, bg=THEME["bg_surface"], pady=3, padx=4)
         lays_bot_bar.pack(side="bottom", fill="x")
 
-        tk.Button(
+        IconButton(
             lays_bot_bar, text="📂 Abrir .lay...",
             relief="raised", bd=2, bg=THEME["bg_surface"], fg=THEME["text_main"],
             font=("Segoe UI", 9, "bold"), command=self.import_lay_file
         ).pack(side="left", padx=2)
 
-        tk.Button(
+        IconButton(
             lays_bot_bar, text="💾 Exportar .lay...",
             relief="raised", bd=2, bg=THEME["bg_surface"], fg=THEME["text_main"],
             font=("Segoe UI", 9), command=self.export_lay_file
         ).pack(side="left", padx=2)
 
-        self.btn_open_editor = tk.Button(
+        self.btn_open_editor = IconButton(
             lays_bot_bar, text="✏️ Editor...",
             relief="raised", bd=2, bg=THEME["bg_surface"], fg=THEME["text_main"],
             font=("Segoe UI", 9), command=self.on_layout_row_double_click
@@ -1125,7 +1127,7 @@ class SessionView(tk.Frame):
         has_pieces = bool(self.session_data.get("placed_pieces") or self.session_data.get("layouts")) if isinstance(self.session_data, dict) else False
         self.btn_open_editor.config(state="normal" if has_pieces else "disabled")
 
-        self.btn_print_layout = tk.Button(
+        self.btn_print_layout = IconButton(
             lays_bot_bar, text="🖨️ Imprimir...",
             relief="raised", bd=2, bg=THEME["bg_surface"], fg=THEME["text_main"],
             font=("Segoe UI", 9), command=self.print_current_layout
@@ -1133,7 +1135,7 @@ class SessionView(tk.Frame):
         self.btn_print_layout.pack(side="left", padx=2)
         self.btn_print_layout.config(state="normal" if has_pieces else "disabled")
 
-        tk.Button(
+        IconButton(
             lays_bot_bar, text="🗑️ Limpar",
             relief="raised", bd=2, bg=THEME["bg_surface"], fg=THEME["text_main"],
             font=("Segoe UI", 9), command=self.clear_current_layout
@@ -1142,7 +1144,7 @@ class SessionView(tk.Frame):
         self.tree_lays.pack(fill="both", expand=True)
 
         # Menu de contexto com clique direito
-        self.lay_menu = tk.Menu(self, tearoff=0, bg=THEME["bg_surface"], fg=THEME["text_main"])
+        self.lay_menu = IconMenu(self, tearoff=0, bg=THEME["bg_surface"], fg=THEME["text_main"])
         self.lay_menu.add_command(label="📂 Abrir / Importar .lay...", command=self.import_lay_file)
         self.lay_menu.add_command(label="💾 Exportar para .lay...", command=self.export_lay_file)
         self.lay_menu.add_command(label="📤 Salvar Sessão para Máquina...", command=self.export_session_to_machine)
@@ -1165,7 +1167,7 @@ class SessionView(tk.Frame):
         preview_box_lay.pack(side="right", fill="both", padx=(0, 2), pady=2)
         preview_box_lay.pack_propagate(False)
 
-        self.btn_preview_open_editor = tk.Button(
+        self.btn_preview_open_editor = IconButton(
             preview_box_lay,
             text="🔍 Abrir Placa Selecionada no Editor",
             relief="raised", bd=1, bg=THEME["bg_surface"], fg=THEME["text_main"],
@@ -3104,7 +3106,7 @@ class SessionView(tk.Frame):
         if row_id:
             self.tree_mat.selection_set(row_id)
         self.dismiss_context_menu()
-        menu = tk.Menu(self, tearoff=0, bg=THEME["bg_surface"], fg=THEME["text_main"], font=("Segoe UI", 9))
+        menu = IconMenu(self, tearoff=0, bg=THEME["bg_surface"], fg=THEME["text_main"], font=("Segoe UI", 9))
         menu.add_command(label="📝 Editar Todos os Parâmetros... (Propriedades)", command=self.open_material_edit_dialog)
         menu.add_command(label="🗑️ Remover Material da Sessão (Del)", command=self.remove_session_material)
         menu.add_separator()
@@ -3467,9 +3469,9 @@ class SessionView(tk.Frame):
             self.notify_material_changed()
             dialog.destroy()
 
-        btn_ok = tk.Button(btn_box, text="OK", width=10, relief="raised", bd=2, bg=THEME["bg_surface"], fg=THEME["text_main"], font=("Segoe UI", 9, "bold"), command=save)
+        btn_ok = IconButton(btn_box, text="OK", width=10, relief="raised", bd=2, bg=THEME["bg_surface"], fg=THEME["text_main"], font=("Segoe UI", 9, "bold"), command=save)
         btn_ok.pack(side="right", padx=4)
-        btn_can = tk.Button(btn_box, text="Cancelar", width=10, relief="raised", bd=2, bg=THEME["bg_surface"], fg=THEME["text_main"], font=("Segoe UI", 9), command=dialog.destroy)
+        btn_can = IconButton(btn_box, text="Cancelar", width=10, relief="raised", bd=2, bg=THEME["bg_surface"], fg=THEME["text_main"], font=("Segoe UI", 9), command=dialog.destroy)
         btn_can.pack(side="right", padx=4)
 
         dialog.bind("<Return>", lambda e: save())
@@ -4099,7 +4101,7 @@ class SessionView(tk.Frame):
 
     def show_sort_menu(self, event=None):
         """Exibe menu dropdown/popup com opções rápidas de classificação de moldes e tamanhos."""
-        menu = tk.Menu(self, tearoff=0, bg=THEME["bg_surface"], fg=THEME["text_main"], activebackground=THEME["select_bg"], activeforeground=THEME["select_fg"])
+        menu = IconMenu(self, tearoff=0, bg=THEME["bg_surface"], fg=THEME["text_main"], activebackground=THEME["select_bg"], activeforeground=THEME["select_fg"])
         menu.add_command(
             label="🔽 Tamanho: Maior → Menor (ex: 36a → 22a)",
             command=lambda: self.sort_shapes_by("tamanho", force_desc=True)
@@ -4249,6 +4251,9 @@ class SessionView(tk.Frame):
             EditShapeInSessionDialog(self, target, on_save_callback=on_save_cb, on_open_editor_callback=on_open_editor_cb)
 
     def on_add_shape_click(self):
+        if self.on_open_catalog_cb:
+            self.on_open_catalog_cb(self.session_data.get("id"))
+            return
         catalog = getattr(self, "all_shapes_catalog", [])
         AddShapesDialog(
             self,
@@ -4341,7 +4346,7 @@ class SessionView(tk.Frame):
                 curr_sel = self.tree_shapes.selection()
                 if iid not in curr_sel:
                     self.tree_shapes.selection_set(iid)
-        menu = tk.Menu(self, tearoff=0, bg=THEME["bg_surface"], fg=THEME["text_main"], activebackground=THEME["select_bg"], activeforeground=THEME["select_fg"])
+        menu = IconMenu(self, tearoff=0, bg=THEME["bg_surface"], fg=THEME["text_main"], activebackground=THEME["select_bg"], activeforeground=THEME["select_fg"])
         menu.add_command(label="➕ Adicionar Molde do Catálogo...", command=self.on_add_shape_click)
         menu.add_command(label="📂 Importar .die...", command=self.on_import_button_click)
         if self.tree_shapes.selection() and self.shapes_list:
@@ -4355,7 +4360,7 @@ class SessionView(tk.Frame):
             menu.add_command(label="⚙️ Configurar Molde na Sessão...", command=self.open_edit_selected_shape_dialog)
             menu.add_command(label="📐 Abrir no Shape Editor", command=self.on_edit_button_click)
             menu.add_separator()
-            sort_sub = tk.Menu(menu, tearoff=0, bg=THEME["bg_surface"], fg=THEME["text_main"], activebackground=THEME["select_bg"], activeforeground=THEME["select_fg"])
+            sort_sub = IconMenu(menu, tearoff=0, bg=THEME["bg_surface"], fg=THEME["text_main"], activebackground=THEME["select_bg"], activeforeground=THEME["select_fg"])
             sort_sub.add_command(label="🔽 Tamanho: Maior → Menor (ex: 36a → 22a)", command=lambda: self.sort_shapes_by("tamanho", force_desc=True))
             sort_sub.add_command(label="🔼 Tamanho: Menor → Maior (ex: 22a → 36a)", command=lambda: self.sort_shapes_by("tamanho", force_desc=False))
             sort_sub.add_separator()

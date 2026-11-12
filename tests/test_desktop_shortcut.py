@@ -1,8 +1,8 @@
 """
 tests/test_desktop_shortcut.py
 
-Atalho da Área de Trabalho com a VERSÃO no nome (ex.: CorteAC-1.6.11), gerado pelo
-template `packaging/instalar_atalho.sh` no empacotamento (build local e CI).
+Atalho da Área de Trabalho com a VERSÃO no nome, gerado pelo atualizador central
+durante o empacotamento local e CI.
 """
 
 import os
@@ -14,7 +14,7 @@ import unittest
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-TEMPLATE = ROOT / "packaging" / "instalar_atalho.sh"
+from atualizar import linux_shortcut_installer
 
 
 class TestDesktopShortcut(unittest.TestCase):
@@ -23,8 +23,6 @@ class TestDesktopShortcut(unittest.TestCase):
             self.skipTest("atalho .desktop é específico do Linux")
         if shutil.which("bash") is None:
             self.skipTest("bash indisponível")
-        if not TEMPLATE.exists():
-            self.fail(f"template ausente: {TEMPLATE}")
 
     def _montar_pacote(self, tmp: Path, versao: str, binario_reporta: str | None = None):
         pkg = tmp / "CorteAC"
@@ -34,7 +32,7 @@ class TestDesktopShortcut(unittest.TestCase):
         saida = binario_reporta or f"CorteAC {versao}"
         binario.write_text(f"#!/usr/bin/env bash\necho '{saida}'\n")
         binario.chmod(0o755)
-        script = (TEMPLATE.read_text()).replace("@VERSAO@", versao)
+        script = linux_shortcut_installer(versao)
         dest = pkg / "instalar_atalho.sh"
         dest.write_text(script)
         dest.chmod(0o755)

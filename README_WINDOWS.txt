@@ -1,5 +1,5 @@
 ============================================================
-  CorteAC (Python Edition para Windows 10 e Windows 11)
+  OpenCorte (Python Edition para Windows 10 e Windows 11)
   Recriacao Moderna do Sistema Jm2k & ATOM Nesting
 ============================================================
 

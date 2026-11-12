@@ -1,7 +1,7 @@
 # RELATÓRIO TÉCNICO DE CONCLUSÃO — FASE 6.1.1
 ## Renderização de Stitching no ShapeEditorView
 
-**Projeto:** CorteAC / JobManager 2000 (Python Edition)  
+**Projeto:** OpenCorte / JobManager 2000 (Python Edition)\
 **Missão:** Corrigir bug latente identificado na Fase 6.0 — renderização de costuras internas (`stitching_json`) no editor CAD  
 **Fase:** 6.1.1 — Renderização de Stitching no ShapeEditorView  
 **Status:** ✅ **CONCLUÍDA COM 100% DE SUCESSO**  

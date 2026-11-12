@@ -4,7 +4,7 @@
 > **Alvo Primário:** `Layout.exe` (v3.2.7.0, 28/03/2013, ATOM S.p.A. / FlashCut CAM)  
 > **Módulo Complementar:** `FreeNest.exe` (v1.0.8.1, 26/07/2010) & `SMPNst.dll` (v1.0.13.0, 04/02/2003)  
 > **Sistema Original:** JobManager 2000 / ATOM FlashCut (Linhas Flex, Flash, Intelli)  
-> **Aplicação Alvo de Comparação:** `LayoutEditorView` (CorteAC / `ui/layout_editor_view.py`)  
+> **Aplicação Alvo de Comparação:** `LayoutEditorView` (OpenCorte / `ui/layout_editor_view.py`)\
 > **Data da Análise:** Sábado, 24 de Outubro de 2026  
 
 ---
@@ -369,7 +369,7 @@ A desmontagem das rotinas `OnRButtonDown` (`0x418550`), `OnMouseMove` (`0x4269c4
 
 ## Seção H: Funções Especiais do Layout.exe
 
-> **Status no CorteAC (v1.5.5):** o Bump Magnético está implementado nos dois modos —
+> **Status no OpenCorte (v1.5.5):** o Bump Magnético está implementado nos dois modos —
 > setas (`bump_selection_vector`) e mouse (botão do meio com seleção, duplo-clique +
 > arrasto e Ctrl+Shift + arrasto). Conflito do botão do meio resolvido como no original:
 > **com seleção = bump**, **sem seleção = pan**. Cursor `circle` (equivalente Tk ao ID 149),
@@ -456,28 +456,28 @@ Foram extraídos 23 diálogos Win32 (`RT_DIALOG`) do `Layout.exe`. A tabela a se
 
 ---
 
-## Seção K: Comparação Sistemática com o LayoutEditorView do CorteAC
+## Seção K: Comparação Sistemática com o LayoutEditorView do OpenCorte
 
-A tabela a seguir confronta, item a item, todos os recursos identificados no editor original contra a implementação atual no `LayoutEditorView` (`ui/layout_editor_view.py`) do CorteAC:
+A tabela a seguir confronta, item a item, todos os recursos identificados no editor original contra a implementação atual no `LayoutEditorView` (`ui/layout_editor_view.py`) do OpenCorte:
 
-| Recurso / Item | Comportamento no Original + Certeza | Implementação no CorteAC Hoje | Situação | Esforço | Observação Arquitetural |
+| Recurso / Item | Comportamento no Original + Certeza | Implementação no OpenCorte Hoje | Situação | Esforço | Observação Arquitetural |
 |---|---|---|---|---|---|
 | **Rotação Livre 360° com Botão Direito** | Arrasto com botão direito pressionado (>= 2.65 px) gera 2 raios e arco anti-horário de ~42 px com rotação contínua [EVIDÊNCIA] | Implementado com deadzone de 2.65 px, rotação contínua 360°, suporte a grupo com Ctrl, indicador na barra de status e cancelamento com Escape. | **IGUAL** | P | Validado por múltiplos testes unitários. |
-| **Rotação por Roda do Mouse (Wheel)** | Gira a peça selecionada em torno do centro em passos configuráveis (2° ou 5°) [EVIDÊNCIA] | Roda do mouse faz Zoom in/out centrado no cursor | **DIVERGENTE** | P | No original a roda é dedicada à rotação; no CorteAC é usada para zoom CAD contemporâneo. Opção: permitir configurar se a roda dá zoom ou gira. |
+| **Rotação por Roda do Mouse (Wheel)** | Gira a peça selecionada em torno do centro em passos configuráveis (2° ou 5°) [EVIDÊNCIA] | Roda do mouse faz Zoom in/out centrado no cursor | **DIVERGENTE** | P | No original a roda é dedicada à rotação; no OpenCorte é usada para zoom CAD contemporâneo. Opção: permitir configurar se a roda dá zoom ou gira. |
 | **Setas do Teclado (Arrow Keys)** | Setas sozinhas disparam BUMP magnético na direção até encostar. Ctrl+Setas faz nudge fino (0.5 mm) [EVIDÊNCIA] | Setas sozinhas = bump magnético (v1.5.5); Ctrl+Setas = nudge fino 0,5 mm | **IGUAL** | M | Implementado: as setas chamam `bump_selection_vector`, o mesmo núcleo do bump com mouse. |
 | **Atalhos de Giro F1, F2, F3, F4** | F1/F2 giro fino (1°-2°), F3 giro 90°, F4 flip 180° [EVIDÊNCIA] | F1/F2 giro fino 2°, F3 ciclo 90°, F4 flip 180°, Shift+F3 bloqueado | **IGUAL** | P | 100% idêntico e validado por 13 testes unitários. |
 | **Atalho F5 (Espelhar / Mirror)** | F5 espelha a peça selecionada (Mirror) [EVIDÊNCIA] | Inexistente no LayoutEditorView (F5 atualiza a janela principal) | **AUSENTE** | P | Fácil implementação: chamar flip_piece_horizontal/vertical ou alternar flag de espelhamento. |
 | **Desfazer (Undo / Ctrl+Z)** | Ctrl+Z e Alt+BackSpace desfazem até 100 níveis. Não existe Ctrl+Y [EVIDÊNCIA] | Ctrl+Z com 100 níveis e bloqueio estrito de Ctrl+Y | **IGUAL** | P | Fiel ao original. |
 | **Salvar Layout (Ctrl+S)** | Ctrl+S salva o layout ativo [EVIDÊNCIA] | Ctrl+S salva concorrente no MySQL 8.0 e regrava .lay | **IGUAL** | P | Implementado com indicador de modificado '*' na barra de título. |
 | **Painel Lateral / Catálogo de Moldes** | Splitter bar à direita com miniaturas e dois pares de contadores (normais e espelhados: colocadas / a colocar) [EVIDÊNCIA] | Painel lateral com miniaturas e contadores implementado, mas integrado à esquerda/direita dependendo da tela | **PARCIAL** | M | Os contadores foram corrigidos para a regra de camadas, mas falta o layout visual 1:1 com bordas e duplo-clique para reorganizar. |
-| **Check Overlay (Hachura Xadrez de Colisão)** | Botão na toolbar e atalho Ctrl+E geram padrão quadriculado xadrez nas sobreposições [EVIDÊNCIA] | Detecção de colisão desenha contorno vermelho nas peças sobrepostas | **DIVERGENTE** | M | O CorteAC sinaliza em vermelho em tempo real; o original desenha um padrão xadrez (hachura) sobre a área de interseção. |
+| **Check Overlay (Hachura Xadrez de Colisão)** | Botão na toolbar e atalho Ctrl+E geram padrão quadriculado xadrez nas sobreposições [EVIDÊNCIA] | Detecção de colisão desenha contorno vermelho nas peças sobrepostas | **DIVERGENTE** | M | O OpenCorte sinaliza em vermelho em tempo real; o original desenha um padrão xadrez (hachura) sobre a área de interseção. |
 | **Edit Position (Ajuste Fino Numérico)** | Diálogo flutuante (ID 141) com caixas Absolutas e Relativas (+/-) para X, Y e Rotação [EVIDÊNCIA] | Inexistente (apenas nudge por setas e atalhos F1-F4) | **AUSENTE** | M | Útil para alinhamento milimétrico exato exigido por modelistas de calçado. |
 | **Bump Interativo com Mouse (Arco/Linha)** | Duplo clique na peça ou botão do meio inicia linha elástica de bump direcional [EVIDÊNCIA] | **IMPLEMENTADO (v1.5.5)**: 3 gatilhos (botão do meio com seleção, duplo-clique + arrasto, Ctrl+Shift + arrasto), linha elástica XOR-equivalente, direção livre, Esc cancela | **IGUAL** | M | Cursor `circle` (equivalente ao ID 149), limiar de 3 px para arrasto curto, encosto por busca binária com o gap da sessão e 1 undo atômico. |
 | **History (Reprodução Passo a Passo)** | Menu View->History com Home, End, +, - para avançar/retroceder peças da sequência [EVIDÊNCIA] | Inexistente no editor (existe apenas simulação linear de corte no CADCanvas legado) | **AUSENTE** | M | Permite auditar a lógica do motor de nesting. |
 | **Sequência de Corte Interativa (Cutting Order)** | Menu Tools->Cutting Order permite clicar nas peças para reordenar numeração de corte CNC [EVIDÊNCIA] | A ordem é definida na tabela de moldes da sessão, não diretamente clicando nas peças do canvas | **PARCIAL** | M | No original, o operador clica diretamente nas peças da mesa com cursor em cruz. |
 | **Preenchimento Regular (Fill Row / Sheet)** | Menus Edit/Contexto com Row, Column, Sheet, Sheet Alternate (0°/180°) e User... [EVIDÊNCIA] | Menu de Contexto 102 e Edit 100% implementados: Fill Row (ID 52103), Fill Row Alternate 0°/180° (ID 52104), Fill Column (ID 50007), Fill Sheet (ID 52105), Fill Sheet Alternate (ID 52106) e Fill User... (Dialog 159, ID 50003) via encosto contorno a contorno por busca binária SAT e 1 nível de Undo atômico. Validado por 25 testes unitários. | **IMPLEMENTADO** | M | Usado para repetições manuais de tiras, solados e palmilhas. Decisões do Dialog 159 e Sheet marcadas com [INFERIDO] / # CONFIRMAR NO WINDOWS. |
-| **Refilar Layout Automático (Trim)** | Não existe botão direto de refilar na toolbar do Layout.exe clássico (era feito na máquina ou via macro) [EVIDÊNCIA] | Botão 'Refilar' na toolbar com atalho Ctrl+T e diálogo dedicado | **EXTRA** | P | Recurso exclusivo e de alto valor agregado do CorteAC para a fábrica. |
-| **Dupla Saída (.lay + .onx)** | Apenas formato nativo .lay e exportação .b [EVIDÊNCIA] | Botão 'Dupla Saída' na toolbar gerando simultaneamente .lay para ATOM e .onx para Comelz | **EXTRA** | P | Recurso exclusivo do CorteAC permitindo rodar mesas ATOM e Comelz lado a lado. |
+| **Refilar Layout Automático (Trim)** | Não existe botão direto de refilar na toolbar do Layout.exe clássico (era feito na máquina ou via macro) [EVIDÊNCIA] | Botão 'Refilar' na toolbar com atalho Ctrl+T e diálogo dedicado | **EXTRA** | P | Recurso exclusivo e de alto valor agregado do OpenCorte para a fábrica. |
+| **Dupla Saída (.lay + .onx)** | Apenas formato nativo .lay e exportação .b [EVIDÊNCIA] | Botão 'Dupla Saída' na toolbar gerando simultaneamente .lay para ATOM e .onx para Comelz | **EXTRA** | P | Recurso exclusivo do OpenCorte permitindo rodar mesas ATOM e Comelz lado a lado. |
 | **Nesting em Múltiplas Placas (Multi-Sheet) e Navegação (Ctrl+L / Ctrl+Shift+L)** | Suporte a layouts sequenciais da sessão com `Open Next` (`Ctrl+L` ID 51111) e `Open Previous` (`Ctrl+Shift+L`) [EVIDÊNCIA] | Loop completo `nest_multi_sheet` gerando N placas sequenciais (`lay0000`, `lay0001`, ...) até zerar a demanda de pares solicitada. Navegação entre placas no Layout Editor via `Ctrl+L` / `Ctrl+Shift+L`, menubar `File > Open Next / Previous`, indicador no título/status `Layout X/Y (layXXXX)`, pilhas de Undo isoladas por placa, contadores na barra lateral (`{cnt} placa | {tot}/{req}`) e exportação dual sequencial. Validado por 10 testes unitários. | **IMPLEMENTADO** | A | Reproduz exatamente o fluxo de produção de 200 pares em chapas finitas do operador. |
 
 
@@ -513,4 +513,4 @@ Este roteiro foi estruturado para que o operador possa testar diretamente na má
 - **Total de Barras de Ferramentas:** 4 toolbars (31 botões mapeados).
 - **Total de Caixas de Diálogo:** 23 diálogos Win32 mapeados com dimensões e controles.
 - **Total de Aceleradores de Teclado:** 3 tabelas de aceleradores decodificadas.
-- **Total de Linhas de Comparação no CorteAC:** 16 áreas de recursos comparadas.
+- **Total de Linhas de Comparação no OpenCorte:** 16 áreas de recursos comparadas.

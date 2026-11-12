@@ -15,6 +15,7 @@ import json
 import os
 import threading
 import tkinter as tk
+from ui.icon_widgets import IconButton
 from tkinter import filedialog, messagebox, ttk
 from typing import Any, Callable, Dict, Optional
 
@@ -138,7 +139,7 @@ class DebugPanel(tk.LabelFrame):
         row3 = tk.Frame(self, bg=card_bg)
         row3.pack(fill="x", pady=(2, 0))
 
-        self.btn_clear_cache = tk.Button(
+        self.btn_clear_cache = IconButton(
             row3,
             text="🗑️ Limpar caches",
             bg=THEME.get("bg_surface", "#e0e0e0"),
@@ -153,7 +154,7 @@ class DebugPanel(tk.LabelFrame):
         )
         self.btn_clear_cache.pack(side="left", padx=(0, 8))
 
-        self.btn_export_bench = tk.Button(
+        self.btn_export_bench = IconButton(
             row3,
             text="📊 Exportar benchmark",
             bg=THEME.get("bg_surface", "#e0e0e0"),

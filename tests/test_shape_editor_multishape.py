@@ -204,7 +204,11 @@ class TestShapeEditorMultiShape(unittest.TestCase):
         # Arrasto para cima: (50, 125) no mundo -> ângulo 90.0°
         drag_sx, drag_sy = editor.world_to_screen(50.0, 125.0)
         editor.on_canvas_drag(MockEvent(drag_sx, drag_sy))
-        self.assertIn("Girando todos os 2 moldes: 90.0°", editor.lbl_sbar_status.cget("text"))
+        status = editor.lbl_sbar_status.cget("text")
+        self.assertIn("Girando todos os 2 moldes:", status)
+        # Eventos usam pixels inteiros; a escala da área útil afeta o arredondamento.
+        angle = float(status.rsplit(":", 1)[1].rstrip("°"))
+        self.assertAlmostEqual(angle, 90.0, delta=0.2)
 
         # Verifica se ambos os moldes foram modificados
         shape_0 = editor.open_shapes[0]["shape"]

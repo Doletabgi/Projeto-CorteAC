@@ -1,6 +1,6 @@
 # RELATÓRIO TÉCNICO DE CONCLUSÃO — FASE 5.1
 
-## Otimização do Motor IA-teste (JobManager 2000 / CorteAC Python Edition)
+## Otimização do Motor IA-teste (JobManager 2000 / OpenCorte Python Edition)
 
 **Data:** 29 de outubro de 2026  
 **Status:** CONCLUÍDO COM SUCESSO (TODOS OS 5 CRITÉRIOS BLOQUEANTES ATENDIDOS)  

@@ -9,7 +9,7 @@ por `corteac-<versão>.desktop` (nome "CorteAC-<versão>"), apontando para o
 executável e o ícone atuais. Sem atalho existente, nada é criado (não invadimos a
 mesa do operador sem ele ter um atalho).
 
-No Windows o atalho é criado pelo `criar_atalho_windows.ps1` do pacote.
+No Windows o atualizador central gera o instalador de atalho dentro do pacote.
 """
 
 from __future__ import annotations

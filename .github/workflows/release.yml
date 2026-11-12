@@ -1,21 +1,19 @@
-name: Release CorteAC (Windows & Linux)
+name: Release OpenCorte (Windows & Linux)
 
 on:
   push:
-    branches: [ master, main ]
     tags: [ 'v*' ]
   workflow_dispatch:
     inputs:
       tag_name:
         description: 'Tag de versão SemVer (ex: v1.0.0)'
         required: false
-        default: 'v1.8.6'
+        default: ''
 
 permissions:
   contents: write
 
-# master, main e a tag disparam o mesmo release: serializa para não criar/atualizar
-# a release em paralelo (era a causa de falhas e de assets faltando).
+# Uma publicação por tag; o push da branch não duplica a mesma release.
 concurrency:
   group: corteac-release
   cancel-in-progress: false
@@ -41,42 +39,13 @@ jobs:
           pip install -r requirements.txt
           pip install pyinstaller
 
-      - name: Limpar Banco de Dados para Release
-        run: |
-          python tools/clean_database.py
-
-      - name: Compilar Executável Standalone com PyInstaller
-        run: |
-          pyinstaller --clean --onefile --noconsole --icon "assets/app_icon.ico" --add-data "assets;assets" --add-data "samples;samples" --add-data "jobmanager.db;." --add-data "db.example.ini;." --hidden-import pymysql --hidden-import cryptography --hidden-import cad.project_packager --hidden-import cad.barcode --hidden-import cad.layout_converter --hidden-import cad.czlib --hidden-import cad.onx_exporter --hidden-import cad.dual_exporter --hidden-import cad.shape_backup --hidden-import cad.shape_backup_scheduler --hidden-import ui.user_dialog --hidden-import ui.layout_converter_dialog --hidden-import ui.shape_backup_restore_dialog --hidden-import ui.alter_sheet_dialog --hidden-import ui.production_dashboard --hidden-import analytics.production_dashboard --name "CorteAC" main.py
-
-      - name: Empacotar Pacote Portátil ZIP
-        shell: pwsh
-        run: |
-          New-Item -ItemType Directory -Path "dist_package\CorteAC" -Force
-          Copy-Item "dist\CorteAC.exe" -Destination "dist_package\CorteAC\"
-          Copy-Item "README_WINDOWS.txt" -Destination "dist_package\CorteAC\"
-          Copy-Item "db.example.ini" -Destination "dist_package\CorteAC\"
-          Copy-Item "packaging\criar_atalho_windows.ps1" -Destination "dist_package\CorteAC\"
-          python -c "import config; open('dist_package/CorteAC/versao.txt','w').write(config.APP_VERSION)"
-          python -c "import config; open('versao.txt','w').write(config.APP_VERSION)"
-          Compress-Archive -Path "dist_package\CorteAC\*" -DestinationPath "dist\CorteAC-Windows-x64.zip"
-
       - name: Instalar Inno Setup
-        run: |
-          choco install innosetup -y
+        run: choco install innosetup -y
 
-      - name: Compilar Instalador Oficial com Inno Setup
-        shell: pwsh
-        run: |
-          $appVersion = (Get-Content versao.txt).Trim()
-          Write-Host "Compilando CorteAC-Setup para a versao $appVersion..." -ForegroundColor Cyan
-          & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" "/DMyAppVersion=$appVersion" packaging\corteac_setup.iss
-          if (Test-Path "dist\CorteAC-Setup-$appVersion.exe") {
-            Write-Host "Instalador Inno Setup gerado com sucesso!" -ForegroundColor Green
-          } else {
-            Write-Error "Falha ao gerar o instalador Inno Setup"
-            exit 1
-          }
+      - name: Compilar e empacotar com o atualizador central
+        env:
+          OPEN_CORTE_TAG: ${{ github.event.inputs.tag_name }}
+        run: python atualizar.py --build
 
       - name: Upload Artefatos Windows
         uses: actions/upload-artifact@v4
@@ -114,26 +83,10 @@ jobs:
           pip install -r requirements.txt
           pip install pyinstaller
 
-      - name: Limpar Banco de Dados para Release
-        run: |
-          python3 tools/clean_database.py
-
-      - name: Compilar Executável Standalone Linux com PyInstaller
-        run: |
-          pyinstaller --clean --onefile --add-data "assets:assets" --add-data "samples:samples" --add-data "jobmanager.db:." --add-data "db.example.ini:." --hidden-import pymysql --hidden-import cryptography --hidden-import cad.project_packager --hidden-import cad.barcode --hidden-import cad.layout_converter --hidden-import cad.czlib --hidden-import cad.onx_exporter --hidden-import cad.dual_exporter --hidden-import cad.shape_backup --hidden-import cad.shape_backup_scheduler --hidden-import ui.user_dialog --hidden-import ui.layout_converter_dialog --hidden-import ui.shape_backup_restore_dialog --hidden-import ui.alter_sheet_dialog --hidden-import ui.production_dashboard --hidden-import analytics.production_dashboard --name "corteac_linux" main.py
-
-      - name: Empacotar Pacote Portátil TAR.GZ
-        run: |
-          mkdir -p dist_linux/CorteAC
-          cp dist/corteac_linux dist_linux/CorteAC/
-          cp README_LINUX.txt dist_linux/CorteAC/
-          cp run.sh dist_linux/CorteAC/
-          cp db.example.ini dist_linux/CorteAC/
-          cp assets/app_icon.png dist_linux/CorteAC/corteac.png
-          VERSAO_APP="$(python3 -c "import config; print(config.APP_VERSION)")"
-          sed "s/@VERSAO@/${VERSAO_APP}/g" packaging/instalar_atalho.sh > dist_linux/CorteAC/instalar_atalho.sh
-          chmod +x dist_linux/CorteAC/corteac_linux dist_linux/CorteAC/run.sh dist_linux/CorteAC/instalar_atalho.sh
-          tar -czf dist/CorteAC-Linux-x64.tar.gz -C dist_linux CorteAC
+      - name: Compilar e empacotar com o atualizador central
+        env:
+          OPEN_CORTE_TAG: ${{ github.event.inputs.tag_name }}
+        run: python atualizar.py --build
 
       - name: Upload Artefatos Linux
         uses: actions/upload-artifact@v4
@@ -210,13 +163,13 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ steps.release_tag.outputs.tag }}
-          name: CorteAC ${{ steps.release_tag.outputs.tag }} (Windows & Linux)
+          name: OpenCorte ${{ steps.release_tag.outputs.tag }} (Windows & Linux)
           # Sem allowUpdates o run que encontra a release já criada FALHA
           # (era o caso dos pushes de master/main/tag na mesma versão).
           allowUpdates: true
           overwrite_files: true
           body: |
-            # CorteAC — Lançamento Oficial para Windows 10/11 e Linux 64-bit
+            # OpenCorte — Lançamento Oficial para Windows 10/11 e Linux 64-bit
 
             Versões executáveis compiladas e prontas para testes em produção. Não é necessário instalar Python nem configurar terminal.
 
@@ -224,7 +177,7 @@ jobs:
 
             ### 🪟 Para Usuários Windows (Windows 10 e Windows 11):
             1. **Instalador Oficial com Suporte a Rede (Recomendado)**:
-               - Baixe o instalador **`CorteAC-Setup-<versão>.exe`** (ex.: `CorteAC-Setup-1.8.6.exe`) abaixo na seção **Assets**.
+               - Baixe o instalador **`CorteAC-Setup-<versão>.exe`** correspondente à versão desta release, abaixo na seção **Assets**.
                - Dê dois cliques e siga o assistente (permite configurar as pastas de Moldes e Sessões na rede da fábrica).
                - O instalador cria atalhos na Área de Trabalho e registra no Adicionar/Remover Programas.
             2. **Versão Portátil (.zip ou .exe direto)**:
@@ -248,18 +201,10 @@ jobs:
 
             ---
 
-            ### 🛠️ Recursos Incluídos Nesta Versão (v1.8.6):
-            - Ficha de produção A4 com mapa proporcional e quadro compacto de modelos, tamanhos e pares por placa, incluindo páginas de continuação.
-            - Build Linux fixada em Ubuntu 24.04; evita a transição implícita de ubuntu-latest e instalação redundante de Tk/Tcl.
-            - Grade de 100 mm e réguas em metros preservadas na ficha.
-            - Prévia, PDF, PNG e impressão usam o mesmo renderizador; identificação e código de barras permanecem nas continuações.
-            - Produção calculada pelas camadas de cada peça, incluindo ponta e placas separadas de 2 camadas; demanda e multiplicadores permanecem distintos.
-            - Medidas em metros e instruções de preparação em destaque; material, ordem e operador ausentes aparecem como não informados.
-            - Regras da barra lateral extraídas para um módulo sem interface gráfica, com testes de contagem, seleção e alterações não salvas.
-            - Documento mestre atualizado com diagnóstico e planejamento de instalação, rede, concorrência, recuperação e futura integração ANP.
-            - O banco de trabalho e o db.ini existentes são preservados pelo aplicativo; os pacotes não incluem o banco operacional do desenvolvedor. Revise configurações personalizadas antes de executar o instalador, cuja preservação parcial foi registrada no diagnóstico.
-            - Validação: 772 testes e 16 subtestes aprovados em cópia isolada, incluindo MySQL 8.0 descartável e carga de 8 clientes/1000 salvamentos. Dois testes ignorados por referências ausentes (AS74467.onx e sessão #282).
-            - ANP TCP e reconciliação automática entre SQLite e MySQL não estão implementados. Impressão física/leitor e homologação com máquinas reais permanecem pendentes.
+            ### Alterações desta versão
+            Consulte as notas geradas a partir dos commits e o documento `docs/PROJETO_ATOM_JOBMANAGER.md` da tag publicada.
+            A compilação dos pacotes não substitui a homologação operacional em máquina.
+          generate_release_notes: true
           files: |
             dist-release/**/CorteAC.exe
             dist-release/**/CorteAC-Setup-*.exe

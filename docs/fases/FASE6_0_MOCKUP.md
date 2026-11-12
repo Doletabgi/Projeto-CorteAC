@@ -1,6 +1,6 @@
 # FASE 6.0 — MOCKUPS VISUAIS DO SHAPE CATALOG VIEW (GRID VIEW)
 
-**Projeto:** CorteAC / JobManager 2000 (Python Edition)  
+**Projeto:** OpenCorte / JobManager 2000 (Python Edition)\
 **Módulo:** `ui/shape_catalog_view.py`  
 **Referência:** Shape Editor Comelz (`MA166_166_207.cmz - 22A.18-9d3a10c2`)  
 **Data:** 29/10/2026  
@@ -177,7 +177,7 @@ Inspirado 1:1 na identidade visual do software Comelz Calzature:
 
 ### 4.1 Descrição Estética e Racional Técnico
 O **Mockup C** resolve com perfeição o dilema entre a **Regra de Ouro #3 (Preservação Win32)** e a **ergonomia visual dos softwares modernos de corte CAM/CAD**:
-1. **Estrutura Externa 100% Win32:** A moldura MDI, barra de título (`#0a246a`), barra de status e contornos de janelas respeitam rigorosamente a identidade do CorteAC / JobManager 2000.
+1. **Estrutura Externa 100% Win32:** A moldura MDI, barra de título (`#0a246a`), barra de status e contornos de janelas respeitam rigorosamente a identidade do OpenCorte / JobManager 2000.
 2. **Área Interna Técnica de Alto Contraste:** A grade de células do Canvas utiliza fundo técnico escuro (`#262626` / `#1e293b`), permitindo que as linhas vetoriais brancas (`#ffffff`), as costuras em magenta vibrante (`#ff00ff`) e os piques/furos amarelos (`#facc15`) tenham visibilidade imediata sem cansaço visual.
 3. **Sidebar de Tamanhos com Acento Ciano:** Destaca os números dos tamanhos com fundo suave (`#e2e8f0` ou ciano sutil `#0891b2` com texto legível).
 4. **Painel de Ações Rebaixado / Win32 Organizado:** Mantém os 10 botões clássicos Win32 com ícones e agrupamentos lógicos.

@@ -12,6 +12,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Tuple
 import tkinter as tk
+from ui.icon_widgets import IconButton, IconLabel
 from tkinter import ttk, messagebox, filedialog
 from PIL import Image
 
@@ -63,7 +64,7 @@ def open_company_logo_dialog(parent_window, on_update_callback=None):
     dlg.configure(bg=THEME["bg_surface"], padx=16, pady=16)
 
     # Cabeçalho
-    tk.Label(
+    IconLabel(
         dlg, text="🏢 Logotipo da Empresa para Relatórios",
         font=("Segoe UI", 11, "bold"), bg=THEME["bg_surface"], fg=THEME["text_main"]
     ).pack(anchor="w", pady=(0, 4))
@@ -169,14 +170,14 @@ def open_company_logo_dialog(parent_window, on_update_callback=None):
     btn_bar = tk.Frame(dlg, bg=THEME["bg_surface"])
     btn_bar.pack(fill="x")
 
-    tk.Button(
+    IconButton(
         btn_bar, text="📂 Escolher Nova Logo...",
         bg="#2563eb", fg="#ffffff", activebackground="#1d4ed8", activeforeground="#ffffff",
         font=("Segoe UI", 9, "bold"), relief="raised", bd=1, padx=10, pady=4, cursor="hand2",
         command=on_choose_logo
     ).pack(side="left", padx=(0, 6))
 
-    btn_remove[0] = tk.Button(
+    btn_remove[0] = IconButton(
         btn_bar, text="🗑️ Remover Logo",
         bg=THEME["bg_surface"], fg="#dc2626", font=("Segoe UI", 9),
         relief="raised", bd=1, padx=8, pady=4, cursor="hand2",
@@ -184,7 +185,7 @@ def open_company_logo_dialog(parent_window, on_update_callback=None):
     )
     btn_remove[0].pack(side="left", padx=2)
 
-    tk.Button(
+    IconButton(
         btn_bar, text="✓ Concluir",
         bg=THEME["bg_surface"], fg=THEME["text_main"],
         font=("Segoe UI", 9), relief="raised", bd=1, padx=12, pady=4, cursor="hand2",
@@ -864,27 +865,27 @@ class LayoutPrintDialog(tk.Toplevel):
         tb = tk.Frame(self, bg=THEME["bg_surface"], relief="raised", bd=1, padx=6, pady=4)
         tb.pack(side="top", fill="x")
 
-        tk.Button(
+        IconButton(
             tb, text="🖨️ Imprimir...", bg=THEME["bg_surface"], fg=THEME["text_main"],
             relief="raised", bd=2, font=("Segoe UI", 9, "bold"), padx=8, command=self.do_print
         ).pack(side="left", padx=2)
 
-        tk.Button(
+        IconButton(
             tb, text="💾 Salvar PDF...", bg=THEME["bg_surface"], fg=THEME["text_main"],
             relief="raised", bd=2, font=("Segoe UI", 9), padx=6, command=self.save_as_pdf
         ).pack(side="left", padx=2)
 
-        tk.Button(
+        IconButton(
             tb, text="🖼️ Salvar Imagem...", bg=THEME["bg_surface"], fg=THEME["text_main"],
             relief="raised", bd=2, font=("Segoe UI", 9), padx=6, command=self.save_as_png
         ).pack(side="left", padx=2)
 
-        tk.Button(
+        IconButton(
             tb, text="🏢 Logotipo...", bg=THEME["bg_surface"], fg=THEME["text_main"],
             relief="raised", bd=2, font=("Segoe UI", 9, "bold"), padx=6, command=self.open_logo_manager_dialog
         ).pack(side="left", padx=2)
 
-        tk.Button(
+        IconButton(
             tb, text="👤 Usuário...", bg=THEME["bg_surface"], fg=THEME["text_main"],
             relief="raised", bd=2, font=("Segoe UI", 9, "bold"), padx=6, command=self.open_user_manager_dialog
         ).pack(side="left", padx=2)
@@ -892,7 +893,7 @@ class LayoutPrintDialog(tk.Toplevel):
         ttk.Separator(tb, orient="vertical").pack(side="left", fill="y", padx=8, pady=2)
 
         # Navegação de Páginas / Placas de Impressão
-        self.btn_prev = tk.Button(
+        self.btn_prev = IconButton(
             tb, text="◀ Anterior", bg=THEME["bg_surface"], fg=THEME["text_main"],
             relief="raised", bd=2, font=("Segoe UI", 9), padx=6, command=self.prev_page
         )
@@ -907,7 +908,7 @@ class LayoutPrintDialog(tk.Toplevel):
         )
         self.lbl_page.pack(side="left", padx=2)
 
-        self.btn_next = tk.Button(
+        self.btn_next = IconButton(
             tb, text="Próxima ▶", bg=THEME["bg_surface"], fg=THEME["text_main"],
             relief="raised", bd=2, font=("Segoe UI", 9, "bold"), padx=6, command=self.next_page
         )
@@ -922,33 +923,33 @@ class LayoutPrintDialog(tk.Toplevel):
 
         ttk.Separator(tb, orient="vertical").pack(side="left", fill="y", padx=8, pady=2)
 
-        tk.Button(
+        IconButton(
             tb, text="🔍 Zoom +", bg=THEME["bg_surface"], fg=THEME["text_main"],
             relief="raised", bd=2, font=("Segoe UI", 9), padx=4, command=lambda: self.change_zoom(1.2)
         ).pack(side="left", padx=2)
 
-        tk.Button(
+        IconButton(
             tb, text="🔍 Zoom -", bg=THEME["bg_surface"], fg=THEME["text_main"],
             relief="raised", bd=2, font=("Segoe UI", 9), padx=4, command=lambda: self.change_zoom(0.833)
         ).pack(side="left", padx=2)
 
-        tk.Button(
+        IconButton(
             tb, text="100%", bg=THEME["bg_surface"], fg=THEME["text_main"],
             relief="raised", bd=2, font=("Segoe UI", 9), padx=4, command=lambda: self.set_zoom(1.0)
         ).pack(side="left", padx=2)
 
-        tk.Button(
+        IconButton(
             tb, text="📐 Ajustar à Página", bg=THEME["bg_surface"], fg=THEME["text_main"],
             relief="raised", bd=2, font=("Segoe UI", 9), padx=4, command=self.fit_to_page
         ).pack(side="left", padx=2)
 
-        self.btn_fullscreen = tk.Button(
+        self.btn_fullscreen = IconButton(
             tb, text="⛶ Tela Cheia", bg=THEME["bg_surface"], fg=THEME["text_main"],
             relief="raised", bd=2, font=("Segoe UI", 9), padx=4, command=self.toggle_fullscreen
         )
         self.btn_fullscreen.pack(side="left", padx=2)
 
-        tk.Button(
+        IconButton(
             tb, text="❌ Fechar", bg=THEME["bg_surface"], fg=THEME["text_main"],
             relief="raised", bd=2, font=("Segoe UI", 9), padx=8, command=self.destroy
         ).pack(side="right", padx=4)

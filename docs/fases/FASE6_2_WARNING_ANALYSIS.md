@@ -1,6 +1,6 @@
 # ANÁLISE DE WARNING DO PYTEST — FASE 6.2
 
-**Projeto:** CorteAC / JobManager 2000 (Python Edition)  
+**Projeto:** OpenCorte / JobManager 2000 (Python Edition)\
 **Documento:** Análise e Diagnóstico de Warning Persistente  
 **Data:** 30/10/2026  
 **Revisor Externo:** DeepSeek  

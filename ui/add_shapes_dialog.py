@@ -6,6 +6,7 @@ Diálogo para Seleção e Adição de Moldes à Sessão de Corte (Aba Moldes)
 import copy
 from pathlib import Path
 import tkinter as tk
+from ui.icon_widgets import IconButton, IconLabel
 from tkinter import ttk, messagebox, filedialog
 from config import THEME
 from ui.sort_utils import natural_sort_key, size_sort_key
@@ -68,7 +69,7 @@ class AddShapesDialog(tk.Toplevel):
         filter_bar = tk.Frame(top_frame, bg=THEME["bg_surface"])
         filter_bar.pack(fill="x")
 
-        tk.Label(filter_bar, text="🔍 Buscar:", bg=THEME["bg_surface"], fg=THEME["text_main"], font=("Segoe UI", 9)).pack(side="left", padx=(0, 4))
+        IconLabel(filter_bar, text="🔍 Buscar:", bg=THEME["bg_surface"], fg=THEME["text_main"], font=("Segoe UI", 9)).pack(side="left", padx=(0, 4))
         self.entry_search = ttk.Entry(filter_bar, font=("Segoe UI", 9))
         self.entry_search.pack(side="left", fill="x", expand=True, padx=(0, 10))
         self.entry_search.bind("<KeyRelease>", lambda e: self.filter_tree())
@@ -82,7 +83,7 @@ class AddShapesDialog(tk.Toplevel):
         self.cb_folder.bind("<<ComboboxSelected>>", lambda e: self.filter_tree())
 
         # Botão para escolher pasta / arquivos .die do disco
-        self.btn_import_disk = tk.Button(
+        self.btn_import_disk = IconButton(
             filter_bar,
             text="📂 Do Disco (.die)...",
             relief="raised", bd=1,
@@ -97,13 +98,13 @@ class AddShapesDialog(tk.Toplevel):
         bar_actions = tk.Frame(self, bg=THEME["bg_card"], padx=10, pady=6, relief="groove", bd=1)
         bar_actions.pack(side="top", fill="x", padx=8, pady=(0, 6))
 
-        tk.Button(
+        IconButton(
             bar_actions, text="☑️ Marcar Todos", relief="raised", bd=1,
             bg=THEME["bg_surface"], fg=THEME["text_main"], font=("Segoe UI", 8),
             command=self.select_all
         ).pack(side="left", padx=2)
 
-        tk.Button(
+        IconButton(
             bar_actions, text="⬜ Desmarcar Todos", relief="raised", bd=1,
             bg=THEME["bg_surface"], fg=THEME["text_main"], font=("Segoe UI", 8),
             command=self.deselect_all
@@ -115,7 +116,7 @@ class AddShapesDialog(tk.Toplevel):
         self.spin_pairs.set("24")
         self.spin_pairs.pack(side="left")
 
-        tk.Button(
+        IconButton(
             bar_actions, text="Aplicar aos Selecionados", relief="raised", bd=1,
             bg=THEME["bg_surface"], fg=THEME["text_main"], font=("Segoe UI", 8),
             command=self.apply_pairs_to_selected
@@ -165,13 +166,13 @@ class AddShapesDialog(tk.Toplevel):
         )
         self.lbl_sel_count.pack(side="left")
 
-        tk.Button(
+        IconButton(
             bot_bar, text="✕ Cancelar", relief="raised", bd=2, width=12,
             bg=THEME["bg_surface"], fg=THEME["text_main"], font=("Segoe UI", 9),
             command=self.destroy
         ).pack(side="right", padx=(6, 0))
 
-        self.btn_confirm = tk.Button(
+        self.btn_confirm = IconButton(
             bot_bar, text=self.action_button_text, relief="raised", bd=2, width=22,
             bg="#2563eb", fg="#ffffff", font=("Segoe UI", 9, "bold"),
             command=self.confirm_add

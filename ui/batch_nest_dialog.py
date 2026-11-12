@@ -4,6 +4,7 @@ ui/batch_nest_dialog.py - Diálogo de Configuração e Execução de Auto-Nest e
 """
 
 import tkinter as tk
+from ui.icon_widgets import IconButton, IconCheckbutton, IconLabel
 from tkinter import ttk, messagebox, filedialog
 from typing import List, Dict, Any, Optional, Callable
 
@@ -129,7 +130,7 @@ class BatchAutoNestDialog(tk.Toplevel):
         self.tree_sess.tag_configure("warn", background="#fef08a")
 
         if has_warning:
-            lbl_warn = tk.Label(
+            lbl_warn = IconLabel(
                 table_frame,
                 text="⚠️ Sessões destacadas em amarelo não contêm moldes e serão ignoradas no cálculo.",
                 font=("Segoe UI", 8, "italic"),
@@ -197,7 +198,7 @@ class BatchAutoNestDialog(tk.Toplevel):
         r4.pack(fill="x", pady=(4, 2))
 
         self.var_refile = tk.BooleanVar(value=bool(self.initial_config.get("refile_auto", True)))
-        chk_refile = tk.Checkbutton(
+        chk_refile = IconCheckbutton(
             r4,
             text="✂ Refile automático dos layouts (final das peças + 1.0 mm)",
             variable=self.var_refile,
@@ -209,7 +210,7 @@ class BatchAutoNestDialog(tk.Toplevel):
         chk_refile.pack(side="left", padx=(0, 16))
 
         self.var_sobras = tk.BooleanVar(value=bool(self.initial_config.get("separar_sobras", True)))
-        chk_sobras = tk.Checkbutton(
+        chk_sobras = IconCheckbutton(
             r4,
             text="🗂️ Separar sobras de 4 camadas em layout de 2 camadas",
             variable=self.var_sobras,
@@ -225,7 +226,7 @@ class BatchAutoNestDialog(tk.Toplevel):
         r5.pack(fill="x", pady=(2, 0))
 
         self.var_save_db = tk.BooleanVar(value=True)
-        chk_save = tk.Checkbutton(
+        chk_save = IconCheckbutton(
             r5,
             text="💾 Salvar permanentemente estas configurações no banco de dados para todas as sessões",
             variable=self.var_save_db,
@@ -241,7 +242,7 @@ class BatchAutoNestDialog(tk.Toplevel):
         r6.pack(fill="x", pady=(6, 0))
 
         self.var_export_machine = tk.BooleanVar(value=bool(self.initial_config.get("export_machine", False)))
-        chk_machine = tk.Checkbutton(
+        chk_machine = IconCheckbutton(
             r6,
             text="📤 Salvar cada sessão na pasta da máquina após o cálculo",
             variable=self.var_export_machine,
@@ -258,7 +259,7 @@ class BatchAutoNestDialog(tk.Toplevel):
         self.var_machine_dir = tk.StringVar(value=str(self.initial_config.get("machine_target_dir", "") or ""))
         ent_machine = tk.Entry(r6b, textvariable=self.var_machine_dir, width=48, relief="sunken", bd=1)
         ent_machine.pack(side="left", fill="x", expand=True)
-        btn_machine = tk.Button(
+        btn_machine = IconButton(
             r6b, text="...", width=3, relief="raised", bd=1,
             bg=THEME["bg_surface"], fg=THEME["text_main"],
             command=self._choose_machine_dir
@@ -269,7 +270,7 @@ class BatchAutoNestDialog(tk.Toplevel):
         btn_bar = tk.Frame(self, bg=THEME["bg_surface"], padx=12, pady=10)
         btn_bar.pack(fill="x", side="bottom")
 
-        btn_cancel = tk.Button(
+        btn_cancel = IconButton(
             btn_bar,
             text="Cancelar",
             width=12,
@@ -282,7 +283,7 @@ class BatchAutoNestDialog(tk.Toplevel):
         )
         btn_cancel.pack(side="right", padx=(6, 0))
 
-        btn_start = tk.Button(
+        btn_start = IconButton(
             btn_bar,
             text="⚡ Iniciar Cálculo em Massa",
             width=26,
@@ -442,7 +443,7 @@ class BatchProgressDialog(tk.Toplevel):
         self.txt_log.configure(yscrollcommand=sb_log.set)
 
         # Botão de cancelamento
-        self.btn_cancel = tk.Button(
+        self.btn_cancel = IconButton(
             pad,
             text="Cancelar Lote",
             width=16,

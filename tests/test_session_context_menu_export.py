@@ -151,8 +151,10 @@ class TestSessionContextMenuExport(unittest.TestCase):
                 except Exception:
                     pass
 
-        self.assertIn("📤 Salvar Sessão para Máquina...", menu_labels)
-        idx = menu_labels.index("📤 Salvar Sessão para Máquina...")
+        self.assertIn("Salvar Sessão para Máquina...", menu_labels)
+        idx = menu_labels.index("Salvar Sessão para Máquina...")
+
+        self.assertTrue(sv.lay_menu.entrycget(idx, "image"))
 
         # Dispara via invoke
         sv.lay_menu.invoke(idx)

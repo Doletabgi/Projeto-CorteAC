@@ -1,6 +1,6 @@
 # FASE 6.0 — DECISÕES DE DESIGN PARA O OPERADOR HUMANO
 
-**Projeto:** CorteAC / JobManager 2000 (Python Edition)  
+**Projeto:** OpenCorte / JobManager 2000 (Python Edition)\
 **Fase:** 6.0 — Diagnóstico e Design do Shape Catalog View  
 **Data:** 29/10/2026  
 **Status:** Aguardando deliberação do operador  
@@ -40,7 +40,7 @@ Na imagem de referência do Shape Editor Comelz, o interior dos contornos vetori
 
 ## Pergunta 2 — Significado do Badge "[2*]" no Header de Peças
 
-No topo de cada coluna de peças no catálogo Comelz (ex: `FoCa`, `Gasp`, `Pala`, etc.), há um badge destacado exibindo **`2*`** (ou `1*`, `4*`). Qual é a regra de negócio exata que esse badge deve refletir no CorteAC?
+No topo de cada coluna de peças no catálogo Comelz (ex: `FoCa`, `Gasp`, `Pala`, etc.), há um badge destacado exibindo **`2*`** (ou `1*`, `4*`). Qual é a regra de negócio exata que esse badge deve refletir no OpenCorte?
 
 ### Alternativas:
 - **(a) Camadas de corte simultâneas (Layers do Colchão)**  
@@ -62,12 +62,12 @@ No topo de cada coluna de peças no catálogo Comelz (ex: `FoCa`, `Gasp`, `Pala`
 
 ## Pergunta 3 — Paleta e Identidade Visual (Mockup)
 
-Conforme a **Regra de Ouro #3** do projeto CorteAC ("*Preservação visual Win32 MDI — as cores do Comelz não podem substituir a identidade Win32 do CorteAC*"), apresentamos 3 opções de acabamento estético em `docs/FASE6_0_MOCKUP.md`:
+Conforme a **Regra de Ouro #3** do projeto OpenCorte ("*Preservação visual Win32 MDI — as cores do Comelz não podem substituir a identidade Win32 do OpenCorte*"), apresentamos 3 opções de acabamento estético em `docs/FASE6_0_MOCKUP.md`:
 
 ### Alternativas:
 - **(a) Fiel ao Comelz (Teal Escuro + Verde Oliva)**  
   *Descrição:* Janela e moldura inteiramente em tom teal escuro (`#13383e`), painel de botões oliva (`#4e5d43`) e grid cinza asfalto. Visual idêntico ao software Comelz original.  
-  *Atenção:* Pode causar descontinuidade visual em relação às demais janelas MDI do CorteAC (`OrderView`, `LayoutEditorView`).
+  *Atenção:* Pode causar descontinuidade visual em relação às demais janelas MDI do OpenCorte (`OrderView`, `LayoutEditorView`).
 
 - **(b) Win32 Clássico Rigoroso (Cinza Windows XP / Windows 2000)**  
   *Descrição:* 100% cinza neutro Win32 (`#d4d0c8`), título azul marinho (`#0a246a`), botões clássicos 3D em relevo e células do grid em fundo branco (`#ffffff`) com borda rebaixada.  

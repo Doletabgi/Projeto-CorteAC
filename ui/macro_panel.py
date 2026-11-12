@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import json
 import tkinter as tk
+from ui.icon_widgets import IconButton
 from tkinter import messagebox, ttk
 from typing import Any, Callable, Dict, List, Optional
 
@@ -90,7 +91,7 @@ class MacroPanel(tk.LabelFrame):
         )
         self.lbl_auto_badge.pack(side="left", padx=(0, 8))
 
-        self.btn_edit_macro = tk.Button(
+        self.btn_edit_macro = IconButton(
             row1,
             text="📝 Editar Macro...",
             bg=THEME.get("bg_surface", "#e0e0e0"),
@@ -138,7 +139,7 @@ class MacroPanel(tk.LabelFrame):
         )
         self.chk_continuous.pack(side="left")
 
-        self.btn_reset = tk.Button(
+        self.btn_reset = IconButton(
             row3,
             text="🔄 Resetar Aprendizado",
             bg=THEME.get("bg_surface", "#e0e0e0"),

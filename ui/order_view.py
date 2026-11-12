@@ -4,6 +4,7 @@ Order View Form - Recriação fiel das telas frmOrderGeneral.gif e frmOrderArtic
 """
 
 import tkinter as tk
+from ui.icon_widgets import IconButton, IconNotebook
 from tkinter import ttk
 from config import THEME
 
@@ -35,11 +36,11 @@ class OrderView(tk.Frame):
         # Botões de janela clássicos: Minimizar, Maximizar, Fechar
         btn_box = tk.Frame(title_bar, bg=THEME["title_bar_bg"])
         btn_box.pack(side="right")
-        self.btn_min = tk.Button(btn_box, text="_", relief="raised", bd=1, bg=THEME["bg_surface"], fg=THEME["text_main"], font=("Segoe UI", 7, "bold"), width=2, height=1, padx=0, pady=0, command=self.on_minimize_click)
+        self.btn_min = IconButton(btn_box, text="_", relief="raised", bd=1, bg=THEME["bg_surface"], fg=THEME["text_main"], font=("Segoe UI", 7, "bold"), width=2, height=1, padx=0, pady=0, command=self.on_minimize_click)
         self.btn_min.pack(side="left", padx=1)
-        self.btn_max = tk.Button(btn_box, text="□", relief="raised", bd=1, bg=THEME["bg_surface"], fg=THEME["text_main"], font=("Segoe UI", 7, "bold"), width=2, height=1, padx=0, pady=0, command=self.on_maximize_click)
+        self.btn_max = IconButton(btn_box, text="□", relief="raised", bd=1, bg=THEME["bg_surface"], fg=THEME["text_main"], font=("Segoe UI", 7, "bold"), width=2, height=1, padx=0, pady=0, command=self.on_maximize_click)
         self.btn_max.pack(side="left", padx=1)
-        self.btn_close = tk.Button(btn_box, text="✕", relief="raised", bd=1, bg=THEME["bg_surface"], fg=THEME["text_main"], font=("Segoe UI", 7, "bold"), width=2, height=1, padx=0, pady=0, command=self.on_close_click)
+        self.btn_close = IconButton(btn_box, text="✕", relief="raised", bd=1, bg=THEME["bg_surface"], fg=THEME["text_main"], font=("Segoe UI", 7, "bold"), width=2, height=1, padx=0, pady=0, command=self.on_close_click)
         self.btn_close.pack(side="left", padx=1)
 
         # Arrastar janela pelo título em modo flutuante/lado a lado
@@ -50,7 +51,7 @@ class OrderView(tk.Frame):
         self.bind("<Button-1>", lambda e: self.lift(), add="+")
 
         # Notebook com as 5 abas idênticas ao print frmOrderGeneral.gif
-        notebook = ttk.Notebook(self)
+        notebook = IconNotebook(self)
         notebook.pack(fill="both", expand=True, padx=3, pady=3)
 
         tab_general = tk.Frame(notebook, bg=THEME["bg_card"], padx=16, pady=16)

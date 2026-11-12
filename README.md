@@ -1,6 +1,12 @@
-# CorteAC — Edição Python para Windows 10 / 11
+# OpenCorte — Edição Python para Windows 10 / 11
 
-Recriação moderna em **Python** do sistema industrial **CorteAC** (evolução direta do legado **JobManager 2000 / Jm2k** e **ATOM Nesting System**, originalmente desenvolvido em Visual Basic 6 para Windows XP).
+Para atualizar versão, documentação, builds, Área de Trabalho e GitHub com um
+único comando, execute `python3 atualizar.py` na pasta do projeto. Para conferir
+as etapas sem alterar nada, use `python3 atualizar.py --simular`. Depois de uma
+falha, use `python3 atualizar.py --retomar` para continuar a mesma versão.
+Veja o [guia da atualização completa](docs/fases/ATUALIZACAO_UNIFICADA.md).
+
+Recriação moderna em **Python** do sistema industrial **OpenCorte** (evolução direta do legado **JobManager 2000 / Jm2k** e **ATOM Nesting System**, originalmente desenvolvido em Visual Basic 6 para Windows XP).
 
 ---
 
@@ -57,12 +63,26 @@ python main.py
 
 ---
 
+## Catálogo visual de moldes
+
+Abra **Catálogo** na barra superior ou **Ferramentas → Catálogo de Moldes**.
+
+1. Busque pelo nome, pasta, modelo ou tamanho. A busca também encontra nomes sem digitar os acentos.
+2. Use as pastas e o filtro de tamanho para reduzir os resultados.
+3. Clique nos moldes para selecioná-los. A seleção permanece ao trocar os filtros.
+4. Escolha a **Sessão de destino** e ajuste os pares de cada molde, ou use **Aplicar a todos**.
+5. Clique em **Adicionar à sessão**. Os moldes são salvos no banco e a sessão aberta é atualizada.
+
+O indicador **Já na sessão** evita duplicação e preserva as quantidades existentes. Você pode trocar a sessão de destino para reutilizar a seleção. O botão **Adicionar Molde** da sessão também abre essa biblioteca com o destino já escolhido.
+
+No seletor **Visualização**, escolha **Cartões grandes**, **Cartões compactos**, **Lista com prévias** ou **Tabela de detalhes**. A seleção e os pares permanecem ao trocar de modo. Na tabela, clique nos títulos das colunas para ordenar por nome, tamanho, pasta, medidas, área do contorno ou situação.
+
 ## 📦 Como Gerar o Executável Standalone Localmente
 
 ### No Linux:
 Para compilar o executável standalone no Linux:
 ```bash
-./build_linux.sh
+python3 atualizar.py --build
 ```
 O executável gerado estará em:
 ```bash
@@ -71,7 +91,7 @@ O executável gerado estará em:
 
 ### No Windows 10 / 11:
 Para gerar o executável `.exe` direto no Windows:
-1. Dê um duplo clique no arquivo `build_exe_windows.bat`.
+1. Execute `python atualizar.py --build` no terminal da pasta do projeto.
 2. Ele instalará o PyInstaller e gerará o executável em `dist\CorteAC.exe`.
 3. Pronto! O arquivo `dist\CorteAC.exe` pode ser levado para qualquer Windows 10/11 sem precisar do Python instalado.
 
@@ -88,7 +108,7 @@ python3 main.py
 
 ## 🗄️ Arquitetura de Banco de Dados Central (MySQL 8.0)
 
-O **CorteAC** opera conectado a uma instância central do **MySQL 8.0** na rede local da fábrica, atendendo até **8 PCs simultâneos** com suporte a alta concorrência (>1000 layouts/dia).
+O **OpenCorte** opera conectado a uma instância central do **MySQL 8.0** na rede local da fábrica, atendendo até **8 PCs simultâneos** com suporte a alta concorrência (>1000 layouts/dia).
 
 O banco local **SQLite (`jobmanager.db`)** é mantido estritamente como **reserva offline / emergência / demonstração**.
 
@@ -201,4 +221,4 @@ Se o servidor MySQL estiver fora do ar ou o terminal for levado para campo/demon
    ```ini
    backend = sqlite
    ```
-3. O CorteAC inicializará instantaneamente utilizando o banco local `jobmanager.db`, garantindo 100% das funcionalidades operacionais mesmo sem conexão com a rede.
+3. O OpenCorte inicializará instantaneamente utilizando o banco local `jobmanager.db`, garantindo 100% das funcionalidades operacionais mesmo sem conexão com a rede.

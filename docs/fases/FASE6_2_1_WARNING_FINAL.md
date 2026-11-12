@@ -1,6 +1,6 @@
 # RELATÓRIO TÉCNICO DE FECHAMENTO — FASE 6.2.1
 
-**Projeto:** CorteAC / JobManager 2000 (Python Edition)  
+**Projeto:** OpenCorte / JobManager 2000 (Python Edition)\
 **Missão:** Fechamento Definitivo do Warning do Pytest e Teste de Interação Filtro + Zoom  
 **Fase:** 6.2.1 — Fechamento do Warning  
 **Status do Warning:** ✅ **`[RESOLVIDO]`** (Zero Warnings na Suíte Global)  

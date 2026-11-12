@@ -1,7 +1,7 @@
 # RELATÓRIO DE IMPLEMENTAÇÃO — FASE 6.1
 ## Shape Catalog View (Catálogo de Moldes em Grid View Matrix)
 
-**Projeto:** CorteAC / JobManager 2000 (Python Edition)  
+**Projeto:** OpenCorte / JobManager 2000 (Python Edition)\
 **Módulo:** `ui/shape_catalog_view.py`  
 **Fase:** 6.1 — Implementação do ShapeCatalogView  
 **Revisor Externo:** DeepSeek  
@@ -12,7 +12,7 @@
 
 ## 1. ShapeCatalogView Entregue
 
-O **`ShapeCatalogView`** foi implementado com sucesso em `ui/shape_catalog_view.py`, trazendo para o CorteAC a matriz bidimensional de **Peças (Colunas) × Tamanhos (Linhas)** inspirada no Shape Editor Comelz (`MA166_166_207.cmz`), preservando integralmente a casca clássica Win32 MDI (Regra de Ouro #3) combinada com um Canvas técnico escuro de alto contraste (Decisão 3).
+O **`ShapeCatalogView`** foi implementado com sucesso em `ui/shape_catalog_view.py`, trazendo para o OpenCorte a matriz bidimensional de **Peças (Colunas) × Tamanhos (Linhas)** inspirada no Shape Editor Comelz (`MA166_166_207.cmz`), preservando integralmente a casca clássica Win32 MDI (Regra de Ouro #3) combinada com um Canvas técnico escuro de alto contraste (Decisão 3).
 
 ### 1.1 Diagrama ASCII da Matriz Renderizada (Artigo 1)
 

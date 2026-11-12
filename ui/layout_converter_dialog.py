@@ -12,6 +12,7 @@ from pathlib import Path
 from typing import Optional, List, Dict, Any
 
 import tkinter as tk
+from ui.icon_widgets import IconButton, IconLabel, IconRadiobutton
 from tkinter import ttk, filedialog, messagebox
 
 from config import THEME, APP_NAME
@@ -74,7 +75,7 @@ class LayoutConverterDialog(tk.Toplevel):
         header_frame = tk.Frame(self, bg=THEME["title_bar_bg"], height=38, padx=12, pady=6)
         header_frame.pack(fill="x")
 
-        lbl_title = tk.Label(
+        lbl_title = IconLabel(
             header_frame,
             text="🔄 Conversor de Arquivos de Corte (.lay ⇄ .onx)",
             bg=THEME["title_bar_bg"],
@@ -111,7 +112,7 @@ class LayoutConverterDialog(tk.Toplevel):
         row_modes = tk.Frame(mode_frame, bg=THEME["bg_surface"])
         row_modes.pack(fill="x")
 
-        rb1 = tk.Radiobutton(
+        rb1 = IconRadiobutton(
             row_modes,
             text="🔄 Detecção Automática (.lay ⇄ .onx)",
             variable=self.var_mode,
@@ -123,7 +124,7 @@ class LayoutConverterDialog(tk.Toplevel):
         )
         rb1.pack(side="left", padx=(0, 16))
 
-        rb2 = tk.Radiobutton(
+        rb2 = IconRadiobutton(
             row_modes,
             text="🔵 Forçar ATOM (.lay) ➔ Comelz (.onx)",
             variable=self.var_mode,
@@ -135,7 +136,7 @@ class LayoutConverterDialog(tk.Toplevel):
         )
         rb2.pack(side="left", padx=(0, 16))
 
-        rb3 = tk.Radiobutton(
+        rb3 = IconRadiobutton(
             row_modes,
             text="🟠 Forçar Comelz (.onx) ➔ ATOM (.lay)",
             variable=self.var_mode,
@@ -162,7 +163,7 @@ class LayoutConverterDialog(tk.Toplevel):
         tb_files = tk.Frame(files_frame, bg=THEME["bg_surface"])
         tb_files.pack(fill="x", pady=(0, 6))
 
-        btn_add = tk.Button(
+        btn_add = IconButton(
             tb_files,
             text="➕ Adicionar Arquivos...",
             command=self.on_add_files_clicked,
@@ -175,7 +176,7 @@ class LayoutConverterDialog(tk.Toplevel):
         )
         btn_add.pack(side="left", padx=(0, 6))
 
-        btn_add_dir = tk.Button(
+        btn_add_dir = IconButton(
             tb_files,
             text="📁 Adicionar Pasta...",
             command=self.on_add_folder_clicked,
@@ -188,7 +189,7 @@ class LayoutConverterDialog(tk.Toplevel):
         )
         btn_add_dir.pack(side="left", padx=(0, 6))
 
-        btn_rem = tk.Button(
+        btn_rem = IconButton(
             tb_files,
             text="➖ Remover Selecionado",
             command=self.on_remove_selected,
@@ -201,7 +202,7 @@ class LayoutConverterDialog(tk.Toplevel):
         )
         btn_rem.pack(side="left", padx=(0, 6))
 
-        btn_clr = tk.Button(
+        btn_clr = IconButton(
             tb_files,
             text="🗑️ Limpar Lista",
             command=self.on_clear_list,
@@ -265,7 +266,7 @@ class LayoutConverterDialog(tk.Toplevel):
         row_dest1 = tk.Frame(dest_frame, bg=THEME["bg_surface"])
         row_dest1.pack(fill="x", pady=(2, 2))
 
-        rb_same = tk.Radiobutton(
+        rb_same = IconRadiobutton(
             row_dest1,
             text="Salvar na mesma pasta do arquivo de origem",
             variable=self.var_dest_mode,
@@ -289,7 +290,7 @@ class LayoutConverterDialog(tk.Toplevel):
         row_dest2 = tk.Frame(dest_frame, bg=THEME["bg_surface"])
         row_dest2.pack(fill="x", pady=(2, 4))
 
-        rb_custom = tk.Radiobutton(
+        rb_custom = IconRadiobutton(
             row_dest2,
             text="Salvar em pasta personalizada:",
             variable=self.var_dest_mode,
@@ -308,7 +309,7 @@ class LayoutConverterDialog(tk.Toplevel):
         )
         self.ent_dest.pack(side="left", fill="x", expand=True, padx=(0, 6))
 
-        btn_browse = tk.Button(
+        btn_browse = IconButton(
             row_dest2,
             text="Procurar...",
             command=self.on_browse_dest_dir,
@@ -374,7 +375,7 @@ class LayoutConverterDialog(tk.Toplevel):
         footer = tk.Frame(self, bg=THEME["bg_surface"], padx=10, pady=8)
         footer.pack(fill="x")
 
-        self.btn_convert = tk.Button(
+        self.btn_convert = IconButton(
             footer,
             text="▶ Iniciar Conversão",
             command=self.start_conversion,
@@ -390,7 +391,7 @@ class LayoutConverterDialog(tk.Toplevel):
         )
         self.btn_convert.pack(side="left")
 
-        self.btn_open_folder = tk.Button(
+        self.btn_open_folder = IconButton(
             footer,
             text="📂 Abrir Pasta de Destino",
             command=self.open_destination_folder,
@@ -404,7 +405,7 @@ class LayoutConverterDialog(tk.Toplevel):
         )
         self.btn_open_folder.pack(side="left", padx=(10, 0))
 
-        btn_close = tk.Button(
+        btn_close = IconButton(
             footer,
             text="Fechar",
             command=self.destroy,

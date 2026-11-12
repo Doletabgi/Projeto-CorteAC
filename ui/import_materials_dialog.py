@@ -7,6 +7,7 @@ de novos / atualizados / erros, gerar modelo de exemplo e gravar no banco de dad
 
 import os
 import tkinter as tk
+from ui.icon_widgets import IconButton, IconLabel
 from tkinter import ttk, messagebox, filedialog
 from pathlib import Path
 from typing import Optional, Callable
@@ -53,7 +54,7 @@ class ImportMaterialsDialog(tk.Toplevel):
         hdr = tk.Frame(self, bg=THEME["title_bar_bg"], height=28, padx=8, pady=4)
         hdr.pack(fill="x")
 
-        tk.Label(
+        IconLabel(
             hdr,
             text="📥 Importar Lista de Materiais para o Estoque",
             bg=THEME["title_bar_bg"],
@@ -83,7 +84,7 @@ class ImportMaterialsDialog(tk.Toplevel):
         self.ent_filepath.pack(side="left", fill="x", expand=True, padx=(0, 4))
         self.ent_filepath.bind("<Return>", lambda e: self.load_file_from_path(self.ent_filepath.get()))
 
-        btn_browse = tk.Button(
+        btn_browse = IconButton(
             row_file,
             text="📂 Procurar...",
             bg=THEME["bg_surface"],
@@ -96,7 +97,7 @@ class ImportMaterialsDialog(tk.Toplevel):
         )
         btn_browse.pack(side="left", padx=2)
 
-        btn_template = tk.Button(
+        btn_template = IconButton(
             row_file,
             text="📄 Baixar Modelo CSV...",
             bg=THEME["bg_surface"],
@@ -197,7 +198,7 @@ class ImportMaterialsDialog(tk.Toplevel):
         btn_bar = tk.Frame(self, bg=THEME["bg_surface"], padx=8, pady=6)
         btn_bar.pack(fill="x")
 
-        self.btn_import = tk.Button(
+        self.btn_import = IconButton(
             btn_bar,
             text="✔ Confirmar Importação",
             bg=THEME["bg_surface"],
@@ -211,7 +212,7 @@ class ImportMaterialsDialog(tk.Toplevel):
         )
         self.btn_import.pack(side="right", padx=4)
 
-        btn_cancel = tk.Button(
+        btn_cancel = IconButton(
             btn_bar,
             text="Cancelar",
             bg=THEME["bg_surface"],

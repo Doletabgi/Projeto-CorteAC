@@ -4,17 +4,29 @@ import math
 from pathlib import Path
 import re
 from PIL import Image, ImageDraw, ImageFont
-from cad.layers_rule import layers_for_piece, shape_multiplier, clamp_tip_zone, format_enfesto_operator_text
+from cad.layers_rule import layers_for_piece, shape_multiplier, clamp_tip_zone, format_enfesto_operator_text, resolve_layout_layers
 from cad.geometry import transform_contour
 from cad.barcode import generate_code128_pillow
 from ui.units import format_m
 
 
-def _material_m(mm):
-    """Metros com precisão de 0,01 mm; omite zeros extras após duas casas."""
-    value = format_m(mm, 5)
-    whole, fraction = value.split(',')
-    return whole + ',' + fraction.rstrip('0').ljust(2, '0')
+def plate_length_mm(plate, defaults=None):
+    """Metragem linear: comprimento original × camadas, antes do refile."""
+    data = {**(defaults or {}), **plate}
+    trim = data.get('trim_cut_line') or {}
+    height = data.get('height_mm') or data.get('sheet_h_mm')
+    if trim.get('enabled', True) and trim.get('orig_h'):
+        height = trim['orig_h']
+    try:
+        height = float(height)
+        layers = resolve_layout_layers(
+            layout=data, session=data.get('session'), material=data.get('material'),
+            default=data.get('material_layers') or 2,
+        )
+        total = height * layers
+    except (TypeError, ValueError, OverflowError):
+        return None
+    return total if math.isfinite(total) and height > 0 and layers > 0 else None
 
 
 def production_rows(pieces, shapes, layout):
@@ -159,10 +171,20 @@ def render_sheet(dialog, dpi=150):
         paragraph(format_enfesto_operator_text(layout=layout,sheet_w=dialog.sheet_w_mm,sheet_h=dialog.sheet_h_mm,tip_mode=dialog.tip_mode),bold=True)
     else:
         paragraph(f'Separar {dialog.layout_layers} folhas de {dialog.dimensions_str}.',14,True)
-    paragraph(dialog.refile_display_str)
-    trim_source = dialog.trim_cut_line or {}
-    if trim_source.get('enabled', True) and trim_source.get('orig_w') and trim_source.get('orig_h'):
-        paragraph(f"Referência antes do refile: {_material_m(trim_source['orig_w'])} × {_material_m(trim_source['orig_h'])} m")
+    current_plate = {**dialog.current_layout, 'sheet_h_mm': dialog.sheet_h_mm,
+                     'layers': dialog.layout_layers, 'trim_cut_line': dialog.trim_cut_line}
+    plate_total = plate_length_mm(current_plate)
+    # Medidas e refile da placa aberta não são padrões das outras placas.
+    session_defaults = {key: dialog.layout_data[key]
+                        for key in ('session', 'material', 'material_layers', 'layers')
+                        if key in dialog.layout_data}
+    session_lengths = [
+        plate_length_mm(current_plate if i == dialog.current_layout_index else layouts[i], session_defaults)
+        for i in session_indices
+    ]
+    layout_total = sum(session_lengths) if session_lengths and all(value is not None for value in session_lengths) else None
+    paragraph(f"Total do layout: {format_m(layout_total) + ' m' if layout_total is not None else 'não informado'}",bold=True)
+    paragraph(f"Total da placa em Metros: {format_m(plate_total) + ' m' if plate_total is not None else 'não informado'}",bold=True)
     paragraph('RESUMO DESTA PLACA',11,True)
     paragraph(f'Aproveitamento geométrico: {dialog.yield_pct:.2f}%',bold=True)
     paragraph(f"Total de pares da placa: {sum(r['pairs'] for r in rows)}",bold=True)

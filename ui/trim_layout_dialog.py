@@ -7,6 +7,7 @@ e aplicar uma linha de corte transversal de guilhotina na máquina de corte.
 
 import math
 import tkinter as tk
+from ui.icon_widgets import IconButton, IconLabel
 from tkinter import ttk, messagebox
 
 from config import THEME
@@ -114,7 +115,7 @@ class TrimLayoutDialog(tk.Toplevel):
         header_frame = tk.Frame(main_frame, bg=THEME["bg_surface"])
         header_frame.pack(fill="x", pady=(0, 10))
 
-        tk.Label(
+        IconLabel(
             header_frame,
             text="✂ Refilamento de Chapa e Corte Automático",
             bg=THEME["bg_surface"],
@@ -226,7 +227,7 @@ class TrimLayoutDialog(tk.Toplevel):
 
         tk.Label(row_c, text="Ajustes Rápidos:", bg=THEME["bg_surface"], fg=THEME["text_main"], font=("Segoe UI", 8), width=14, anchor="w").pack(side="left")
 
-        tk.Button(
+        IconButton(
             row_c,
             text=f"Gap {self.default_gap:.1f} mm",
             bg=THEME["bg_surface"],
@@ -238,7 +239,7 @@ class TrimLayoutDialog(tk.Toplevel):
             command=lambda: self.set_preset_gap(self.default_gap)
         ).pack(side="left", padx=2)
 
-        tk.Button(
+        IconButton(
             row_c,
             text="Margem 10 mm",
             bg=THEME["bg_surface"],
@@ -250,7 +251,7 @@ class TrimLayoutDialog(tk.Toplevel):
             command=lambda: self.set_preset_gap(10.0)
         ).pack(side="left", padx=2)
 
-        tk.Button(
+        IconButton(
             row_c,
             text="2,08 m (Sugerido)",
             bg=THEME["bg_surface"],
@@ -297,7 +298,7 @@ class TrimLayoutDialog(tk.Toplevel):
         btn_bar = tk.Frame(main_frame, bg=THEME["bg_surface"])
         btn_bar.pack(fill="x", side="bottom")
 
-        btn_cancel = tk.Button(
+        btn_cancel = IconButton(
             btn_bar,
             text="Cancelar",
             bg=THEME["bg_surface"],
@@ -311,7 +312,7 @@ class TrimLayoutDialog(tk.Toplevel):
         )
         btn_cancel.pack(side="right", padx=(6, 0))
 
-        btn_apply = tk.Button(
+        btn_apply = IconButton(
             btn_bar,
             text="✂ Refilar Layout",
             bg="#0f766e",

@@ -6,6 +6,7 @@ do nome do operador na folha de impressão A4.
 """
 
 import tkinter as tk
+from ui.icon_widgets import IconButton, IconLabel
 from tkinter import ttk, messagebox
 from typing import Optional, Callable
 from config import THEME
@@ -63,7 +64,7 @@ class UserManagementDialog(tk.Toplevel):
         main_box.pack(fill="both", expand=True)
 
         # Cabeçalho
-        tk.Label(
+        IconLabel(
             main_box, text="👤 Cadastro de Usuários / Operadores",
             font=("Segoe UI", 11, "bold"), bg=THEME["bg_surface"], fg=THEME["text_main"]
         ).pack(anchor="w", pady=(0, 2))
@@ -91,7 +92,7 @@ class UserManagementDialog(tk.Toplevel):
         self.entry_name.pack(side="left", fill="x", expand=True, padx=(0, 8))
         self.entry_name.bind("<Return>", lambda e: self.on_add_user())
 
-        btn_add = tk.Button(
+        btn_add = IconButton(
             add_frame, text="➕ Cadastrar", bg="#2563eb", fg="#ffffff",
             activebackground="#1d4ed8", activeforeground="#ffffff",
             font=("Segoe UI", 9, "bold"), relief="raised", bd=1, padx=10, pady=2,
@@ -129,7 +130,7 @@ class UserManagementDialog(tk.Toplevel):
         btn_col = tk.Frame(content_list, bg=THEME["bg_surface"])
         btn_col.pack(side="right", fill="y")
 
-        self.btn_set_active = tk.Button(
+        self.btn_set_active = IconButton(
             btn_col, text="✓ Definir Ativo", bg="#16a34a", fg="#ffffff",
             activebackground="#15803d", activeforeground="#ffffff",
             font=("Segoe UI", 8, "bold"), relief="raised", bd=1, padx=6, pady=4,
@@ -137,7 +138,7 @@ class UserManagementDialog(tk.Toplevel):
         )
         self.btn_set_active.pack(fill="x", pady=(0, 6))
 
-        self.btn_delete = tk.Button(
+        self.btn_delete = IconButton(
             btn_col, text="🗑️ Excluir", bg=THEME["bg_surface"], fg="#dc2626",
             activebackground="#fee2e2", activeforeground="#b91c1c",
             font=("Segoe UI", 8), relief="raised", bd=1, padx=6, pady=4,
@@ -203,14 +204,14 @@ class UserManagementDialog(tk.Toplevel):
         btn_bar = tk.Frame(self, bg=THEME["bg_surface"], padx=14, pady=8)
         btn_bar.pack(fill="x", side="bottom")
 
-        tk.Button(
+        IconButton(
             btn_bar, text="✓ Concluir", bg="#2563eb", fg="#ffffff",
             activebackground="#1d4ed8", activeforeground="#ffffff",
             font=("Segoe UI", 9, "bold"), relief="raised", bd=1, padx=14, pady=4,
             cursor="hand2", command=self.on_close
         ).pack(side="right", padx=(4, 0))
 
-        tk.Button(
+        IconButton(
             btn_bar, text="Fechar", bg=THEME["bg_surface"], fg=THEME["text_main"],
             font=("Segoe UI", 9), relief="raised", bd=1, padx=10, pady=4,
             cursor="hand2", command=self.destroy

@@ -6,6 +6,8 @@ linha de inserção [*] e cadastro rápido de materiais no estoque.
 """
 
 import tkinter as tk
+from ui.icons import get_icon
+from ui.icon_widgets import IconButton, IconMenu
 from tkinter import ttk, messagebox
 from pathlib import Path
 from config import THEME
@@ -25,14 +27,11 @@ class MaterialCodesView(tk.Frame):
         self.refresh_table()
 
     def load_icons(self):
-        assets_dir = Path(__file__).resolve().parent.parent / "assets"
-        for name in ["btn_mat.png", "mode_mat.png", "app_icon_16.png"]:
-            p = assets_dir / name
-            if p.exists():
-                try:
-                    self.icons[name.replace(".png", "")] = tk.PhotoImage(file=str(p))
-                except Exception:
-                    pass
+        self.icons = {
+            "btn_mat": get_icon(self, "materials"),
+            "mode_mat": get_icon(self, "materials"),
+            "app_icon_16": get_icon(self, "app", 16),
+        }
 
     def setup_ui(self):
         # -------------------------------------------------------------
@@ -61,11 +60,11 @@ class MaterialCodesView(tk.Frame):
         btn_box = tk.Frame(title_bar, bg=THEME["title_bar_bg"])
         btn_box.pack(side="right")
 
-        self.btn_min = tk.Button(btn_box, text="_", relief="raised", bd=1, bg=THEME["bg_surface"], fg=THEME["text_main"], font=("Segoe UI", 7, "bold"), width=2, height=1, padx=0, pady=0, command=self.on_minimize_click)
+        self.btn_min = IconButton(btn_box, text="_", relief="raised", bd=1, bg=THEME["bg_surface"], fg=THEME["text_main"], font=("Segoe UI", 7, "bold"), width=2, height=1, padx=0, pady=0, command=self.on_minimize_click)
         self.btn_min.pack(side="left", padx=1)
-        self.btn_max = tk.Button(btn_box, text="□", relief="raised", bd=1, bg=THEME["bg_surface"], fg=THEME["text_main"], font=("Segoe UI", 7, "bold"), width=2, height=1, padx=0, pady=0, command=self.on_maximize_click)
+        self.btn_max = IconButton(btn_box, text="□", relief="raised", bd=1, bg=THEME["bg_surface"], fg=THEME["text_main"], font=("Segoe UI", 7, "bold"), width=2, height=1, padx=0, pady=0, command=self.on_maximize_click)
         self.btn_max.pack(side="left", padx=1)
-        self.btn_close = tk.Button(btn_box, text="✕", relief="raised", bd=1, bg=THEME["bg_surface"], fg=THEME["text_main"], font=("Segoe UI", 7, "bold"), width=2, height=1, padx=0, pady=0, command=self.on_close_click)
+        self.btn_close = IconButton(btn_box, text="✕", relief="raised", bd=1, bg=THEME["bg_surface"], fg=THEME["text_main"], font=("Segoe UI", 7, "bold"), width=2, height=1, padx=0, pady=0, command=self.on_close_click)
         self.btn_close.pack(side="left", padx=1)
 
         # Arrastar janela pelo título em modo flutuante
@@ -81,7 +80,7 @@ class MaterialCodesView(tk.Frame):
         toolbar = tk.Frame(self, bg=THEME["bg_surface"], relief="groove", bd=1, height=28, padx=4, pady=2)
         toolbar.pack(fill="x")
 
-        btn_new = tk.Button(
+        btn_new = IconButton(
             toolbar,
             text="➕ Novo Material",
             bg=THEME["bg_surface"],
@@ -94,7 +93,7 @@ class MaterialCodesView(tk.Frame):
         )
         btn_new.pack(side="left", padx=2)
 
-        btn_edit = tk.Button(
+        btn_edit = IconButton(
             toolbar,
             text="✎ Editar",
             bg=THEME["bg_surface"],
@@ -107,7 +106,7 @@ class MaterialCodesView(tk.Frame):
         )
         btn_edit.pack(side="left", padx=2)
 
-        btn_del = tk.Button(
+        btn_del = IconButton(
             toolbar,
             text="🗑 Excluir",
             bg=THEME["bg_surface"],
@@ -120,7 +119,7 @@ class MaterialCodesView(tk.Frame):
         )
         btn_del.pack(side="left", padx=2)
 
-        btn_refresh = tk.Button(
+        btn_refresh = IconButton(
             toolbar,
             text="↻ Atualizar",
             bg=THEME["bg_surface"],
@@ -133,7 +132,7 @@ class MaterialCodesView(tk.Frame):
         )
         btn_refresh.pack(side="left", padx=2)
 
-        btn_import = tk.Button(
+        btn_import = IconButton(
             toolbar,
             text="📥 Importar Lista...",
             bg=THEME["bg_surface"],
@@ -212,7 +211,7 @@ class MaterialCodesView(tk.Frame):
         self.tree.bind("<Return>", lambda e: self.open_edit_selected_dialog())
 
         # Menu de contexto com botão direito na tabela
-        self.ctx_menu = tk.Menu(self, tearoff=0, bg=THEME["bg_surface"], fg=THEME["text_main"], activebackground=THEME["select_bg"], activeforeground=THEME["select_fg"])
+        self.ctx_menu = IconMenu(self, tearoff=0, bg=THEME["bg_surface"], fg=THEME["text_main"], activebackground=THEME["select_bg"], activeforeground=THEME["select_fg"])
         self.ctx_menu.add_command(label="➕ Novo material...", command=self.open_new_material_dialog)
         self.ctx_menu.add_command(label="✎ Editar material...", command=self.open_edit_selected_dialog)
         self.ctx_menu.add_command(label="🗑 Excluir material", command=self.delete_selected_material)
@@ -500,10 +499,10 @@ class MaterialCodesView(tk.Frame):
             if self.on_material_changed_cb:
                 self.on_material_changed_cb()
 
-        btn_save = tk.Button(btn_box, text="Salvar", bg=THEME["bg_surface"], activebackground=THEME["bg_hover"], relief="raised", bd=1, font=("Segoe UI", 9, "bold"), width=10, command=save_action)
+        btn_save = IconButton(btn_box, text="Salvar", bg=THEME["bg_surface"], activebackground=THEME["bg_hover"], relief="raised", bd=1, font=("Segoe UI", 9, "bold"), width=10, command=save_action)
         btn_save.pack(side="right", padx=4)
 
-        btn_cancel = tk.Button(btn_box, text="Cancelar", bg=THEME["bg_surface"], activebackground=THEME["bg_hover"], relief="raised", bd=1, font=("Segoe UI", 9), width=10, command=dlg.destroy)
+        btn_cancel = IconButton(btn_box, text="Cancelar", bg=THEME["bg_surface"], activebackground=THEME["bg_hover"], relief="raised", bd=1, font=("Segoe UI", 9), width=10, command=dlg.destroy)
         btn_cancel.pack(side="right", padx=4)
 
         dlg.bind("<Return>", lambda e: save_action())

@@ -505,7 +505,13 @@ def _resolve_die(
     if source_path is None:
         source_path = _find_die_in_index(index, original_code, name)
 
-    if source_path is not None:
+    # Piques adicionados no editor pertencem à revisão do contorno no banco.
+    # Um original da biblioteca pode anteceder a edição e omitir os piques.
+    has_manual_symbols = any(
+        isinstance(point, dict) and point.get("symbolic_notch")
+        for point in shape.get("contour", [])
+    )
+    if source_path is not None and not has_manual_symbols:
         try:
             data = source_path.read_bytes()
         except OSError as exc:

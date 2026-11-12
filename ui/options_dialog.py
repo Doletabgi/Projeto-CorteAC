@@ -6,6 +6,7 @@ Conexões com o banco de dados SQLite e com as rotinas do sistema.
 """
 
 import tkinter as tk
+from ui.icon_widgets import IconButton, IconNotebook
 from tkinter import ttk, messagebox
 from config import THEME
 from ui.dieproc_dialog import DieProcDialog
@@ -62,7 +63,7 @@ class OptionsDialog(tk.Toplevel):
                   background=[("selected", "#ffffff")],
                   foreground=[("selected", "#000000")])
 
-        self.notebook = ttk.Notebook(main_box, style="WinClassic.TNotebook")
+        self.notebook = IconNotebook(main_box, style="WinClassic.TNotebook")
         self.notebook.pack(fill="both", expand=True)
 
         # 5 Abas Oficiais
@@ -89,21 +90,21 @@ class OptionsDialog(tk.Toplevel):
         btn_bar = tk.Frame(self, bg=THEME["bg_surface"], padx=12, pady=10)
         btn_bar.pack(fill="x", side="bottom")
 
-        self.btn_apply = tk.Button(
+        self.btn_apply = IconButton(
             btn_bar, text="Aplicar", width=10, relief="raised", bd=1,
             bg=THEME["bg_surface"], fg=THEME["text_main"], font=("Segoe UI", 9),
             state="disabled", command=self.on_apply
         )
         self.btn_apply.pack(side="right", padx=(4, 0))
 
-        self.btn_cancel = tk.Button(
+        self.btn_cancel = IconButton(
             btn_bar, text="Cancelar", width=10, relief="raised", bd=1,
             bg=THEME["bg_surface"], fg=THEME["text_main"], font=("Segoe UI", 9),
             command=self.on_cancel
         )
         self.btn_cancel.pack(side="right", padx=4)
 
-        self.btn_ok = tk.Button(
+        self.btn_ok = IconButton(
             btn_bar, text="OK", width=10, relief="raised", bd=2,
             bg=THEME["bg_surface"], fg=THEME["text_main"], font=("Segoe UI", 9, "bold"),
             command=self.on_ok
@@ -174,7 +175,7 @@ class OptionsDialog(tk.Toplevel):
         )
         self.lbl_active_user_disp.pack(anchor="w", pady=(0, 4))
 
-        tk.Button(
+        IconButton(
             user_box, text="👤 Cadastrar / Gerenciar...", bg=THEME["bg_surface"], fg=THEME["text_main"],
             font=("Segoe UI", 8), relief="raised", bd=1, padx=6, pady=2, cursor="hand2",
             command=self._open_user_management
@@ -277,7 +278,7 @@ class OptionsDialog(tk.Toplevel):
         footer_frame = tk.Frame(outer_box, bg=THEME["bg_surface"])
         footer_frame.pack(fill="x", pady=(6, 0))
 
-        btn_q = tk.Button(
+        btn_q = IconButton(
             footer_frame, text="?", relief="raised", bd=2, width=3, height=1,
             bg=THEME["bg_surface"], fg="#cc0000", font=("Segoe UI", 12, "bold"),
             command=lambda: messagebox.showinfo("Ajuda", "Modo de contagem por pares: organiza os pares espelhados conforme a ordem de produção.", parent=self)
@@ -396,7 +397,7 @@ class OptionsDialog(tk.Toplevel):
         self.cb_die_proc.pack(side="left")
         self.cb_die_proc.bind("<<ComboboxSelected>>", self.mark_changed)
 
-        btn_dp_cfg = tk.Button(
+        btn_dp_cfg = IconButton(
             dp_frame, text="⚙️ Configurar...", bg=THEME["bg_surface"], fg=THEME["text_main"],
             font=("Segoe UI", 8), relief="raised", bd=1, cursor="hand2", padx=4,
             command=self._open_dieproc_config

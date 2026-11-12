@@ -14,6 +14,7 @@ from __future__ import annotations
 import logging
 from typing import Any, Callable, Dict, List, Optional, Tuple
 import tkinter as tk
+from ui.icon_widgets import IconTtkButton
 from tkinter import ttk, messagebox
 
 from config import THEME
@@ -289,10 +290,10 @@ class AlterSheetDialog(tk.Toplevel):
         btn_frame = tk.Frame(container, bg=THEME.get("bg_surface", "#f0f0f0"))
         btn_frame.pack(fill="x", side="bottom")
 
-        self.btn_cancel = ttk.Button(btn_frame, text="Cancelar", command=self.on_cancel, width=10)
+        self.btn_cancel = IconTtkButton(btn_frame, text="Cancelar", command=self.on_cancel, width=10)
         self.btn_cancel.pack(side="right", padx=(6, 0))
 
-        self.btn_ok = ttk.Button(btn_frame, text="OK", command=self.on_confirm, width=10)
+        self.btn_ok = IconTtkButton(btn_frame, text="OK", command=self.on_confirm, width=10)
         self.btn_ok.pack(side="right")
 
         # Aliases de conveniência

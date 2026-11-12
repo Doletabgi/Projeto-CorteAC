@@ -14,6 +14,7 @@ from pathlib import Path
 from typing import Optional, List, Dict, Any, Callable, Union
 
 import tkinter as tk
+from ui.icon_widgets import IconButton, IconLabel, IconNotebook
 from tkinter import ttk, filedialog, messagebox
 
 from config import THEME, APP_NAME, APP_VERSION, EXPORTS_DIR
@@ -154,7 +155,7 @@ class ShapeBackupRestoreDialog(tk.Toplevel):
         header_frame = tk.Frame(self, bg=THEME["title_bar_bg"], height=42, padx=14, pady=6)
         header_frame.pack(fill="x")
 
-        lbl_title = tk.Label(
+        lbl_title = IconLabel(
             header_frame,
             text="📦 Backup e Restauração de Moldes e Sessões de Corte",
             bg=THEME["title_bar_bg"],
@@ -176,7 +177,7 @@ class ShapeBackupRestoreDialog(tk.Toplevel):
         main_box = tk.Frame(self, bg=THEME["bg_surface"], padx=8, pady=8)
         main_box.pack(fill="both", expand=True)
 
-        self.notebook = ttk.Notebook(main_box)
+        self.notebook = IconNotebook(main_box)
         self.notebook.pack(fill="both", expand=True)
 
         self.tab_backup = tk.Frame(self.notebook, bg=THEME["bg_surface"], padx=10, pady=10)
@@ -221,7 +222,7 @@ class ShapeBackupRestoreDialog(tk.Toplevel):
         self.card_sched_banner = tk.Frame(self.tab_backup, bg="#f0fdf4", bd=1, relief="solid", padx=10, pady=5)
         self.card_sched_banner.pack(fill="x", pady=(0, 6))
 
-        self.lbl_sched_banner_text = tk.Label(
+        self.lbl_sched_banner_text = IconLabel(
             self.card_sched_banner,
             text="⏰ Agendamento Automático: Verificando...",
             bg="#f0fdf4",
@@ -230,7 +231,7 @@ class ShapeBackupRestoreDialog(tk.Toplevel):
         )
         self.lbl_sched_banner_text.pack(side="left")
 
-        btn_sched_goto = tk.Button(
+        btn_sched_goto = IconButton(
             self.card_sched_banner,
             text="Configurar Agendamento ➔",
             bg="#ffffff",
@@ -411,7 +412,7 @@ class ShapeBackupRestoreDialog(tk.Toplevel):
         self.ent_backup_dest = ttk.Entry(f_dest_entry, textvariable=self.var_backup_dest_path, font=("Segoe UI", 9))
         self.ent_backup_dest.pack(side="left", fill="x", expand=True, padx=(0, 8))
 
-        btn_browse_dest = tk.Button(
+        btn_browse_dest = IconButton(
             f_dest_entry,
             text="Procurar...",
             bg=THEME["bg_surface"],
@@ -437,7 +438,7 @@ class ShapeBackupRestoreDialog(tk.Toplevel):
         self.prog_backup = ttk.Progressbar(f_bottom, orient="horizontal", mode="determinate")
         self.prog_backup.pack(fill="x", pady=(0, 6))
 
-        self.btn_run_backup = tk.Button(
+        self.btn_run_backup = IconButton(
             f_bottom,
             text="💾 Gerar Arquivo de Backup...",
             bg="#0284c7",
@@ -474,7 +475,7 @@ class ShapeBackupRestoreDialog(tk.Toplevel):
         self.ent_restore_src = ttk.Entry(f_file_row, textvariable=self.var_restore_src_path, font=("Segoe UI", 9))
         self.ent_restore_src.pack(side="left", fill="x", expand=True, padx=(0, 8))
 
-        btn_browse_src = tk.Button(
+        btn_browse_src = IconButton(
             f_file_row,
             text="📂 Selecionar Backup...",
             bg=THEME["bg_surface"],
@@ -498,7 +499,7 @@ class ShapeBackupRestoreDialog(tk.Toplevel):
         self.lbl_inspect_summary.pack(fill="x")
 
         # Container com Abas para Pré-visualização (Moldes e Sessões)
-        self.nb_inspect = ttk.Notebook(self.tab_restore)
+        self.nb_inspect = IconNotebook(self.tab_restore)
         self.nb_inspect.pack(fill="both", expand=True, pady=(0, 6))
 
         # Aba de Pré-visualização de Moldes
@@ -734,7 +735,7 @@ class ShapeBackupRestoreDialog(tk.Toplevel):
         self.prog_restore = ttk.Progressbar(f_bottom_res, orient="horizontal", mode="determinate")
         self.prog_restore.pack(fill="x", pady=(0, 6))
 
-        self.btn_run_restore = tk.Button(
+        self.btn_run_restore = IconButton(
             f_bottom_res,
             text="📥 Iniciar Restauração no Banco...",
             bg="#16a34a",
@@ -944,7 +945,7 @@ class ShapeBackupRestoreDialog(tk.Toplevel):
 
         tk.Label(self.f_times_row, text="Atalhos rápidos:", bg=THEME["bg_surface"], font=("Segoe UI", 8)).pack(side="left", padx=(0, 4))
         for preset in ["12:00", "18:00", "12:00, 18:00", "22:00"]:
-            btn_p = tk.Button(
+            btn_p = IconButton(
                 self.f_times_row,
                 text=preset,
                 bg="#ffffff",
@@ -1000,8 +1001,8 @@ class ShapeBackupRestoreDialog(tk.Toplevel):
         ent_sdir = ttk.Entry(f_dest_line, textvariable=self.var_sched_backup_dir, font=("Segoe UI", 9))
         ent_sdir.pack(side="left", fill="x", expand=True, padx=(0, 6))
 
-        tk.Button(f_dest_line, text="Procurar...", bg=THEME["bg_surface"], padx=6, command=self._on_browse_sched_dir).pack(side="left", padx=(0, 4))
-        tk.Button(f_dest_line, text="📂 Abrir Pasta", bg=THEME["bg_surface"], padx=6, command=self._on_open_sched_dir).pack(side="left")
+        IconButton(f_dest_line, text="Procurar...", bg=THEME["bg_surface"], padx=6, command=self._on_browse_sched_dir).pack(side="left", padx=(0, 4))
+        IconButton(f_dest_line, text="📂 Abrir Pasta", bg=THEME["bg_surface"], padx=6, command=self._on_open_sched_dir).pack(side="left")
 
         f_ret_line = tk.Frame(grp_dest_ret, bg=THEME["bg_surface"])
         f_ret_line.pack(fill="x")
@@ -1025,7 +1026,7 @@ class ShapeBackupRestoreDialog(tk.Toplevel):
         f_sched_actions = tk.Frame(self.tab_schedule, bg=THEME["bg_surface"])
         f_sched_actions.pack(fill="x", pady=(0, 6))
 
-        btn_save_sched = tk.Button(
+        btn_save_sched = IconButton(
             f_sched_actions,
             text="💾 Salvar Configurações de Agendamento",
             bg="#0284c7",
@@ -1040,7 +1041,7 @@ class ShapeBackupRestoreDialog(tk.Toplevel):
         )
         btn_save_sched.pack(side="left", padx=(0, 8))
 
-        btn_run_sched_now = tk.Button(
+        btn_run_sched_now = IconButton(
             f_sched_actions,
             text="⚡ Executar Backup Agora",
             bg="#16a34a",
@@ -1055,7 +1056,7 @@ class ShapeBackupRestoreDialog(tk.Toplevel):
         )
         btn_run_sched_now.pack(side="left", padx=(0, 8))
 
-        btn_refresh_hist = tk.Button(
+        btn_refresh_hist = IconButton(
             f_sched_actions,
             text="🔄 Atualizar Lista",
             bg=THEME["bg_surface"],
@@ -1098,7 +1099,7 @@ class ShapeBackupRestoreDialog(tk.Toplevel):
         f_hist_bottom = tk.Frame(grp_hist, bg=THEME["bg_surface"])
         f_hist_bottom.pack(side="bottom", fill="x", pady=(4, 0))
 
-        btn_restore_selected = tk.Button(
+        btn_restore_selected = IconButton(
             f_hist_bottom,
             text="📥 Restaurar Backup Selecionado...",
             bg=THEME["bg_surface"],

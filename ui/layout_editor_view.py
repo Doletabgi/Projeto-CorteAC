@@ -14,6 +14,8 @@ import time
 from datetime import datetime
 from typing import Optional, List, Dict, Any
 import tkinter as tk
+from ui.icons import get_icon
+from ui.icon_widgets import IconButton, IconMenu
 from tkinter import ttk, messagebox, colorchooser, filedialog, simpledialog
 from pathlib import Path
 
@@ -311,7 +313,7 @@ class LayoutSubWindow(tk.Frame):
         self.lbl_title.pack(side="left", fill="x", expand=True, padx=4)
 
         # Botão Maximizar (□)
-        self.btn_max = tk.Button(
+        self.btn_max = IconButton(
             self.title_bar,
             text="□",
             relief="raised",
@@ -477,7 +479,7 @@ class LayoutSubWindow(tk.Frame):
             if 0 < tx_mm < w_mm:
                 screen_tx = x1 + tx_mm * scale
                 self.canvas.create_line(screen_tx, y1, screen_tx, y2, fill="#dc2626", width=2.0, dash=(6, 3))
-                self.canvas.create_text(screen_tx, y1 + 10, text="✂", fill="#dc2626", font=("Segoe UI", 9, "bold"))
+                self.canvas.create_image(screen_tx, y1 + 10, image=get_icon(self, "cut", 16))
 
         # 4. Zona de ponta (tip zone) se presente
         tip_zone = self.layout_data.get("tip_zone")
@@ -729,24 +731,13 @@ class LayoutEditorView(tk.Frame):
         self.init_default_layout()
 
     def load_layout_icons(self):
-        assets_dir = Path(__file__).resolve().parent.parent / "assets" / "layout"
-        if not assets_dir.exists():
-            return
-
-        icon_files = [
-            "btn_bump_down.png", "btn_bump_right.png", "btn_bump_left.png", "btn_bump_up.png",
-            "btn_new.png", "btn_open.png", "btn_save.png", "btn_dual.png", "btn_cut.png", "btn_copy.png", "btn_paste.png", "btn_print.png",
-            "btn_outline.png", "btn_zoom_fit.png", "btn_zoom.png", "btn_add.png", "btn_move.png", "btn_grid.png",
-            "layout_icon.png"
-        ]
-
-        for fname in icon_files:
-            p = assets_dir / fname
-            if p.exists():
-                try:
-                    self.icons[fname.replace(".png", "")] = tk.PhotoImage(file=str(p))
-                except Exception:
-                    pass
+        names = (
+            "btn_bump_down", "btn_bump_right", "btn_bump_left", "btn_bump_up",
+            "btn_new", "btn_open", "btn_save", "btn_dual", "btn_cut", "btn_copy",
+            "btn_paste", "btn_print", "btn_outline", "btn_zoom_fit", "btn_zoom",
+            "btn_add", "btn_move", "btn_grid", "layout_icon",
+        )
+        self.icons.update({name: get_icon(self, name) for name in names})
 
     def setup_ui(self):
         # -------------------------------------------------------------
@@ -773,11 +764,11 @@ class LayoutEditorView(tk.Frame):
         # Botões da janela (Minimizar, Maximizar, Fechar)
         btn_box = tk.Frame(title_bar, bg=THEME["title_bar_bg"])
         btn_box.pack(side="right")
-        self.btn_min = tk.Button(btn_box, text="_", relief="raised", bd=1, bg=THEME["bg_surface"], fg=THEME["text_main"], font=("Segoe UI", 7, "bold"), width=2, height=1, padx=0, pady=0, command=self.on_minimize_click)
+        self.btn_min = IconButton(btn_box, text="_", relief="raised", bd=1, bg=THEME["bg_surface"], fg=THEME["text_main"], font=("Segoe UI", 7, "bold"), width=2, height=1, padx=0, pady=0, command=self.on_minimize_click)
         self.btn_min.pack(side="left", padx=1)
-        self.btn_max = tk.Button(btn_box, text="□", relief="raised", bd=1, bg=THEME["bg_surface"], fg=THEME["text_main"], font=("Segoe UI", 7, "bold"), width=2, height=1, padx=0, pady=0, command=self.on_maximize_click)
+        self.btn_max = IconButton(btn_box, text="□", relief="raised", bd=1, bg=THEME["bg_surface"], fg=THEME["text_main"], font=("Segoe UI", 7, "bold"), width=2, height=1, padx=0, pady=0, command=self.on_maximize_click)
         self.btn_max.pack(side="left", padx=1)
-        self.btn_close = tk.Button(btn_box, text="✕", relief="raised", bd=1, bg=THEME["bg_surface"], fg=THEME["text_main"], font=("Segoe UI", 7, "bold"), width=2, height=1, padx=0, pady=0, command=self.on_close_click)
+        self.btn_close = IconButton(btn_box, text="✕", relief="raised", bd=1, bg=THEME["bg_surface"], fg=THEME["text_main"], font=("Segoe UI", 7, "bold"), width=2, height=1, padx=0, pady=0, command=self.on_close_click)
         self.btn_close.pack(side="left", padx=1)
 
         # Arrastar janela pelo título em modo flutuante e duplo clique para maximizar/restaurar
@@ -803,7 +794,7 @@ class LayoutEditorView(tk.Frame):
         for m in menus:
             btn_m = tk.Menubutton(menubar, text=m, bg=THEME["bg_surface"], fg=THEME["text_main"], font=("Segoe UI", 8), activebackground=THEME["select_bg"], activeforeground=THEME["select_fg"], relief="flat", bd=0)
             btn_m.pack(side="left", padx=4)
-            menu_obj = tk.Menu(btn_m, tearoff=0)
+            menu_obj = IconMenu(btn_m, tearoff=0)
             btn_m.config(menu=menu_obj)
             self.populate_menu(m, menu_obj)
 
@@ -822,7 +813,7 @@ class LayoutEditorView(tk.Frame):
         self.create_tb_btn(tb_row, "btn_open", "Abrir Layout (Ctrl+O)", self.open_layout_dialog)
         self.create_tb_btn(tb_row, "btn_save", "Salvar Layout (Ctrl+S)", self.save_layout)
         self.create_tb_btn(tb_row, "btn_dual", "⚡ Dupla Saída ATOM (.lay) + Comelz (.onx)", lambda: self.export_layout_dialog(target_format="dual"))
-        self.btn_machine = tk.Button(
+        self.btn_machine = IconButton(
             tb_row,
             text="📤",
             bg=THEME["bg_surface"],
@@ -895,7 +886,7 @@ class LayoutEditorView(tk.Frame):
         self.create_tb_sep(tb_row)
 
         # Grupo 7: Operações CAM de Acabamento (Refilar / Corte Automático)
-        self.btn_trim = tk.Button(
+        self.btn_trim = IconButton(
             tb_row,
             text="✂ Refilar",
             bg=THEME["bg_surface"],
@@ -924,7 +915,7 @@ class LayoutEditorView(tk.Frame):
         self.btn_trim._tooltip = ToolTip(self.btn_trim, tip_trim)
 
         # Grupo 8: Simulação de Corte CAM do Layout
-        self.btn_sim = tk.Button(
+        self.btn_sim = IconButton(
             tb_row,
             text="▶ Simular",
             bg=THEME["bg_surface"],
@@ -1214,7 +1205,7 @@ class LayoutEditorView(tk.Frame):
 
     def create_tb_btn(self, parent, icon_key, tooltip, command):
         img = self.icons.get(icon_key)
-        btn = tk.Button(
+        btn = IconButton(
             parent,
             image=img if img else None,
             text="" if img else icon_key,
@@ -1280,7 +1271,7 @@ class LayoutEditorView(tk.Frame):
             menu_obj.add_command(label="Excluir\tDel", command=self.delete_selected)
             menu_obj.add_separator()
             # Submenu Preencher (Fill)
-            edit_fill_sub = tk.Menu(menu_obj, tearoff=0)
+            edit_fill_sub = IconMenu(menu_obj, tearoff=0)
             edit_fill_sub.add_command(label="Linha", command=lambda: self.fill_row())
             edit_fill_sub.add_command(label="Linha Alternada", command=lambda: self.fill_row_alternate())
             edit_fill_sub.add_command(label="Coluna", command=lambda: self.fill_column())
@@ -2059,7 +2050,7 @@ class LayoutEditorView(tk.Frame):
 
     def show_add_shape_context_menu(self, event):
         """Menu rápido no botão direito do (+) para escolher entre catálogo por pasta ou arquivo .die direto no disco."""
-        menu = tk.Menu(self, tearoff=0)
+        menu = IconMenu(self, tearoff=0)
         menu.add_command(
             label="📁 Escolher Shape por Pasta (Catálogo)...",
             command=self.open_add_shape_dialog
@@ -3376,11 +3367,9 @@ class LayoutEditorView(tk.Frame):
                 width=2.5,
                 tags=("trim_cut_line", "trim_item")
             )
-            self.canvas.create_text(
+            self.canvas.create_image(
                 x1 - 16, sy_cut,
-                text="✂",
-                fill="#dc2626",
-                font=("Segoe UI", 12, "bold"),
+                image=get_icon(self, "cut"),
                 tags=("trim_cut_icon_left", "trim_item")
             )
 
@@ -3390,18 +3379,14 @@ class LayoutEditorView(tk.Frame):
                 width=2.5,
                 tags=("trim_cut_line_v", "trim_item")
             )
-            self.canvas.create_text(
+            self.canvas.create_image(
                 sx_cut, y1 - 16,
-                text="✂",
-                fill="#dc2626",
-                font=("Segoe UI", 12, "bold"),
+                image=get_icon(self, "cut"),
                 tags=("trim_cut_icon_v_top", "trim_item")
             )
-            self.canvas.create_text(
+            self.canvas.create_image(
                 sx_cut, y2 + 16,
-                text="✂",
-                fill="#dc2626",
-                font=("Segoe UI", 12, "bold"),
+                image=get_icon(self, "cut"),
                 tags=("trim_cut_icon_v_bot", "trim_item")
             )
 
@@ -4218,10 +4203,10 @@ class LayoutEditorView(tk.Frame):
         Constrói o Menu de Contexto 102 Win32 original (Layout.exe).
         Ordem estrita conforme captura media_1792931613851.jpg e LAYOUT_EDITOR_RE.md.
         """
-        self.context_menu_102 = tk.Menu(self, tearoff=0)
+        self.context_menu_102 = IconMenu(self, tearoff=0)
 
         # Submenu Fill (ordem estrita Win32 ID 52103, 52104, 50007, 52105, 52106, 50003)
-        self.fill_submenu = tk.Menu(self.context_menu_102, tearoff=0)
+        self.fill_submenu = IconMenu(self.context_menu_102, tearoff=0)
         self.fill_submenu.add_command(label="Row", command=lambda: self.fill_row())  # Win32 ID 52103
         self.fill_submenu.add_command(label="Row Alternate", command=lambda: self.fill_row_alternate())  # Win32 ID 52104
         self.fill_submenu.add_command(label="Column", command=lambda: self.fill_column())  # Win32 ID 50007
@@ -6936,7 +6921,7 @@ class LayoutEditorView(tk.Frame):
                 result["action"] = "cancel"
                 dlg.destroy()
 
-            btn_copy = tk.Button(
+            btn_copy = IconButton(
                 btn_frame,
                 text="Salvar Cópia",
                 font=("Segoe UI", 9, "bold"),
@@ -6952,7 +6937,7 @@ class LayoutEditorView(tk.Frame):
             )
             btn_copy.pack(side="left", padx=4)
 
-            btn_reload = tk.Button(
+            btn_reload = IconButton(
                 btn_frame,
                 text="Recarregar do Servidor",
                 font=("Segoe UI", 9),
@@ -6968,7 +6953,7 @@ class LayoutEditorView(tk.Frame):
             )
             btn_reload.pack(side="left", padx=4)
 
-            btn_cancel = tk.Button(
+            btn_cancel = IconButton(
                 btn_frame,
                 text="Cancelar",
                 font=("Segoe UI", 9),

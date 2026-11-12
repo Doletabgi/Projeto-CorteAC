@@ -1,4 +1,12 @@
-# PROJETO ATOM JobManager Reborn: Documento Vivo
+# OpenCorte — Documento Vivo do Projeto ATOM JobManager Reborn
+
+**Atualização unificada (12/11/2026):** `python3 atualizar.py` coordena aumento
+de versão, sincronização deste documento, verificações e build em cópia isolada,
+instalação local, atalho da Área de Trabalho e publicação de commit/tag no GitHub.
+Espera as builds Windows/Linux e os cinco artefatos da release antes de concluir.
+`--simular` apenas mostra as etapas; `--retomar` continua a mesma versão após
+falha. Consulte [ATUALIZACAO_UNIFICADA.md](fases/ATUALIZACAO_UNIFICADA.md) para
+pré-requisitos, escopo dos testes e regras de retomada.
 
 > **Finalidade:** Documento mestre estruturado e autocontido projetado para alimentar e contextualizar qualquer Inteligência Artificial (Antigravity, Claude, ChatGPT, etc.) ou engenheiro sobre 100% do projeto — regras de negócio de calçados/couro (ATOM), arquitetura técnica, schemas de banco (MySQL/SQLite), formatos proprietários (.LAY, .ONX/CZLIB), algoritmos de nesting/CAM, UI/UX e histórico — em um único arquivo de referência imediata.
 **Atalho de leitura:** o comportamento ATUAL de encaixe, sobras, impressão, atalho, entrega para a máquina, código de barras e gestão de usuários/operadores está consolidado na **§8.47**, **§8.48**, **§8.49**, **§8.50**, **§8.51**, **§8.52** e **§8.53**; as seções §8.26–§8.46 são o histórico de como se chegou lá. A manutenção gradual de 11/11/2026 está na **§8.66** e a ficha de produção A4 entregue com 1.8.6 na **§8.67**; o diagnóstico e planejamento de rede/ANP estão na **§9.4**.
@@ -6,7 +14,9 @@
 > **Regra de ouro:** o que está marcado `[CONFIRMADO]` veio do relatório, do código ou do usuário. O que está `[NÃO CONFIRMADO]` é suposição e não deve virar "fato" sem validação. O que está `[PREENCHER]` a IA deve completar lendo o código real.
 
 <!-- AUTO:header:start -->
-**Última sincronização com o código:** 2026-11-11 11:24 (HEAD ao gerar: `e0b9a26`; 181 arquivos Python, ~83321 linhas)
+**Versão do aplicativo:** `1.8.7`
+
+**Última sincronização com o código:** 2026-11-12 10:28 (HEAD ao gerar: `2e6caf9`; 197 arquivos Python, ~87711 linhas)
 <!-- AUTO:header:end -->
 **Versão deste documento:** 2
 
@@ -30,7 +40,7 @@
 
 A tentativa da tag `v1.8.5` concluiu Windows e Inno Setup, mas o job Linux falhou na instalação das dependências de sistema com saída 100; o job de publicação foi ignorado. A anotação do GitHub também informou a migração de `ubuntu-latest` para Ubuntu 26. A correção fixa os jobs Linux/publicação em `ubuntu-24.04`, imagem suportada no [inventário oficial de runners](https://github.com/actions/runner-images), e só executa APT se o Python configurado não carregar Tk/Tcl. A tag anterior é mantida; não foi reescrita.
 
-A versão 1.8.6 entrega a ficha A4 e a manutenção descritas abaixo, com o mesmo código funcional que passou nos 772 testes e 16 subtestes; mudam a versão e o empacotamento/CI. Dois testes dependentes de referências ausentes continuam ignorados. ANP, sincronização offline/central e homologação física permanecem pendentes. Build local Linux regenerada por `build_linux.sh`, pacote TAR.GZ e CLI `CorteAC 1.8.6` conferidos; executáveis e atalho locais atualizados com backups. Testes SemVer: 8 aprovados e 6 subtestes aprovados. **Publicação confirmada:** [CorteAC v1.8.6](https://github.com/Doletabgi/Projeto-CorteAC/releases/tag/v1.8.6), com [workflow oficial concluído com sucesso](https://github.com/Doletabgi/Projeto-CorteAC/actions/runs/43037058227) em Windows, Linux e publicação. Os cinco assets foram baixados e conferidos: `CorteAC.exe`, `CorteAC-Windows-x64.zip`, `CorteAC-Setup-1.8.6.exe`, `corteac_linux` e `CorteAC-Linux-x64.tar.gz`. Ambos os executáveis contêm a versão 1.8.6 e os novos módulos, com banco embutido sem layouts/peças; os arquivos ZIP/TAR contêm os mesmos executáveis publicados separadamente. Os hashes locais coincidem com os digests informados pelo GitHub. Banco operacional preservado. A conferência do instalador abrange build bem-sucedida, nome/versão e integridade do arquivo; instalação em Windows de fábrica e homologação física continuam pendentes.
+A versão 1.8.6 entrega a ficha A4 e a manutenção descritas abaixo, com o mesmo código funcional que passou nos 772 testes e 16 subtestes; mudam a versão e o empacotamento/CI. Dois testes dependentes de referências ausentes continuam ignorados. ANP, sincronização offline/central e homologação física permanecem pendentes. Build local Linux regenerada por `build_linux.sh`, pacote TAR.GZ e CLI `CorteAC 1.8.6` conferidos; executáveis e atalho locais atualizados com backups. Testes SemVer: 8 aprovados e 6 subtestes aprovados. **Publicação confirmada:** [OpenCorte v1.8.6](https://github.com/Doletabgi/Projeto-CorteAC/releases/tag/v1.8.6), com [workflow oficial concluído com sucesso](https://github.com/Doletabgi/Projeto-CorteAC/actions/runs/43037058227) em Windows, Linux e publicação. Os cinco assets foram baixados e conferidos: `CorteAC.exe`, `CorteAC-Windows-x64.zip`, `CorteAC-Setup-1.8.6.exe`, `corteac_linux` e `CorteAC-Linux-x64.tar.gz`. Ambos os executáveis contêm a versão 1.8.6 e os novos módulos, com banco embutido sem layouts/peças; os arquivos ZIP/TAR contêm os mesmos executáveis publicados separadamente. Os hashes locais coincidem com os digests informados pelo GitHub. Banco operacional preservado. A conferência do instalador abrange build bem-sucedida, nome/versão e integridade do arquivo; instalação em Windows de fábrica e homologação física continuam pendentes.
 
 ### Versão 1.8.5 — ficha de produção A4 e manutenção gradual (11/11/2026)
 
@@ -162,20 +172,19 @@ flowchart TD
 ```
 README.md
 README_WINDOWS.md
-build_exe_windows.bat
-build_linux.sh
-config.py                                            # CorteAC (Python Edition)
+atualizar.py                                         # Atualização completa do OpenCorte: versão, documentação, build, mesa e GitHub.
+config.py                                            # OpenCorte (Python Edition)
 database.py                                          # JobManager 2000 (Python Edition)
 db.example.ini
 docker-compose.yml
 executar_windows.bat
-main.py                                              # CorteAC (Python Edition para Windows 10 / 11)
+main.py                                              # OpenCorte (Python Edition para Windows 10 / 11)
 run.bat
 run.sh
 analytics/__init__.py
 analytics/production_dashboard.py                    # Indicadores de planejamento a partir de sessões e layouts persistidos.
 cad/ai_learner.py                                    # JobManager 2000 (Python Edition)
-cad/barcode.py                                       # CorteAC - Barcode Engine (Code 128 Subset B)
+cad/barcode.py                                       # OpenCorte - Barcode Engine (Code 128 Subset B)
 cad/colors.py                                        # JobManager 2000 (Python Edition)
 cad/czlib.py                                         # JobManager 2000 (Python Edition)
 cad/die_parser.py                                    # JobManager 2000 (Python Edition)
@@ -186,22 +195,25 @@ cad/geometry.py                                      # JobManager 2000 (Python E
 cad/lay_parser.py                                    # JobManager 2000 (Python Edition)
 cad/layers_rule.py                                   # JobManager 2000 (Python Edition)
 cad/layers_split.py                                  # JobManager 2000 (Python Edition)
-cad/layout_converter.py                              # JobManager 2000 / CorteAC (Python Edition)
+cad/layout_converter.py                              # JobManager 2000 / OpenCorte (Python Edition)
 cad/macro_engine.py                                  # JobManager 2000 (Python Edition)
 cad/material_importer.py                             # JobManager 2000 (Python Edition)
-cad/nesting_backend.py                               # cad/nesting_backend.py - Abstração e Gerenciamento de Backends de Nesting para CorteAC
+cad/nesting_backend.py                               # cad/nesting_backend.py - Abstração e Gerenciamento de Backends de Nesting para OpenCorte
 cad/nesting_engine.py                                # JobManager 2000 (Python Edition)
-cad/nfp.py                                           # cad/nfp.py - Motor No-Fit Polygon (NFP) em Python Puro para CorteAC / JobManager 2000
+cad/nfp.py                                           # cad/nfp.py - Motor No-Fit Polygon (NFP) em Python Puro para OpenCorte / JobManager 2000
 cad/onx_exporter.py                                  # JobManager 2000 (Python Edition)
-cad/project_packager.py                              # CorteAC - Exportação de Sessão Multi-Placa para a Máquina ATOM.
+cad/project_packager.py                              # OpenCorte - Exportação de Sessão Multi-Placa para a Máquina ATOM.
 cad/semver.py                                        # Sistema de Versionamento SemVer (Semantic Versioning 2.0.0)
-cad/shape_backup.py                                  # JobManager 2000 / CorteAC (Python Edition)
-cad/shape_backup_scheduler.py                        # JobManager 2000 / CorteAC (Python Edition)
+cad/shape_backup.py                                  # JobManager 2000 / OpenCorte (Python Edition)
+cad/shape_backup_scheduler.py                        # JobManager 2000 / OpenCorte (Python Edition)
+cad/shape_library.py                                 # Busca e inclusão de moldes do catálogo, preservando os dados da sessão.
 cad/sidebar_rules.py                                 # Regras de correspondência e contagem da barra lateral, sem dependência de UI.
+cad/symbolic_notches.py                              # Piques manuais incorporados ao contorno, em milímetros.
 cad/trim_engine.py                                   # JobManager 2000 (Python Edition)
 db/__init__.py                                       # Camada de Acesso a Dados do JobManager (MySQL 8.0 / SQLite Reserva)
 db/config.py                                         # JobManager 2000 - Configuração de Banco de Dados Central
 db/connection.py                                     # JobManager 2000 - Camada Única de Acesso a Banco de Dados
+db/connection_settings.py                            # Configuração e teste independente da conexão em uso pelo aplicativo.
 db/schema_mysql.sql
 db/migrations/001_initial_mysql_schema.sql
 db/migrations/002_add_layout_multisheet_columns.sql
@@ -211,6 +223,9 @@ db/migrations/005_add_session_layers.sql
 db/migrations/006_add_layout_layers.sql
 db/migrations/007_add_layout_trim_and_tip.sql
 db/migrations/008_add_shape_format.sql
+docs/02_Comelz_CAM_22A18.md
+docs/fases/ALERTAS_ANTES_DO_CORTE.md
+docs/fases/ATUALIZACAO_UNIFICADA.md
 docs/fases/FASE4_RELATORIO_PRODUCAO.md
 docs/fases/FASE5B_FRESH_LEARNING.md
 docs/fases/FASE5_1_OTIMIZACAO_IA_TESTE.md
@@ -232,22 +247,25 @@ docs/fases/MOTORES_NESTING_PARAMETROS.md
 docs/fases/RELATORIO_IMPLEMENTACAO_MELHORIAS.md
 docs/fases/RELATORIO_REVERSA_COMELZ_ONX.md
 docs/fases/RELATORIO_SISTEMA_COMPLETO.md
+docs/fases/SIMBOLICA_COMELZ.md
 docs/ref/layout_re/help_topics.json
 output/pdf/validacao-sessao-188.json
-packaging/instalar_atalho.sh
 tests/_catalog_fixtures.py                           # tests/_catalog_fixtures.py
 tests/conftest.py                                    # tests/conftest.py
 tests/test_alter_sheet.py                            # Testes Automatizados para a Funcionalidade "Alterar chapa":
+tests/test_atualizar.py                              # Validação da atualização unificada sem acessar GitHub, banco ou atalhos reais.
 tests/test_auto_trim_checkbox.py                     # Testes Unitários: Checkbox de Refile Automático e Recorte Pós-Nesting (test_auto_trim_checkbox.py)
 tests/test_barcode_print.py                          # Testes automatizados para a geração de código de barras Code 128 (Subset B)
 tests/test_batch_autonest.py                         # JobManager 2000 (Python Edition)
 tests/test_batch_print_sessions.py                   # Testes unitários automatizados para a Impressão em Massa (Batch Print) de Sessões.
 tests/test_company_logo_print.py                     # Testes Automatizados para a Remoção do Logotipo ATOM e Suporte a Logotipo Personalizado da Empresa
 tests/test_comparar_nesting.py                       # Regressões da comparação diagnóstica de nesting.
-tests/test_converter.py                              # JobManager 2000 / CorteAC (Python Edition)
+tests/test_connection_settings.py                    # Configuração e sondagens sem usar o banco do operador ou um servidor real.
+tests/test_converter.py                              # JobManager 2000 / OpenCorte (Python Edition)
 tests/test_create_session_left_click.py              # Testes Unitários: Criação de Sessão clicando com o botão esquerdo na pasta (duplo clique, menu, atalhos).
 tests/test_data_integrity.py                         # tests/test_data_integrity.py
 tests/test_database_cleanup.py                       # tests/test_database_cleanup.py
+tests/test_database_connection_dialog.py             # Fluxos reais da tela, com arquivos temporários e teste MySQL simulado.
 tests/test_db_layer.py                               # Testes Unitários da Camada de Banco de Dados Central (MySQL 8.0 & SQLite Reserva)
 tests/test_delete_order.py
 tests/test_desktop_shortcut.py                       # tests/test_desktop_shortcut.py
@@ -273,9 +291,11 @@ tests/test_layout_print_material.py                  # Testes unitários para va
 tests/test_layout_print_pagination.py                # tests/test_layout_print_pagination.py
 tests/test_layout_print_user.py
 tests/test_layout_save_refile.py                     # tests/test_layout_save_refile.py
+tests/test_library_presentations.py                  # Trocas de apresentação mantêm os moldes, filtros e quantidades do operador.
 tests/test_macro_engine_ia_teste.py                  # Testes de Homologação para o Motor de Cálculo "IA-teste":
 tests/test_macro_engine_ia_teste_optimized.py        # JobManager 2000 (Python Edition)
 tests/test_material_import.py                        # JobManager 2000 (Python Edition)
+tests/test_modern_icons.py                           # Valida o ciclo de vida dos ícones nos controles reais do Tk.
 tests/test_multisheet_nesting.py                     # Testes automatizados completos para Nesting em Múltiplas Placas (Multi-Sheet Nesting).
 tests/test_multisheet_progress.py                    # tests/test_multisheet_progress.py - Suíte de testes para a Fase 6.6 (Multi-sheet e Progresso Determinado)
 tests/test_mysql_concurrency.py                      # JobManager 2000 (Python Edition)
@@ -309,6 +329,8 @@ tests/test_shape_editor_multishape.py                # tests/test_shape_editor_m
 tests/test_shape_editor_security.py                  # tests/test_shape_editor_security.py
 tests/test_shape_editor_stitching.py
 tests/test_shape_format_multiplier.py                # tests/test_shape_format_multiplier.py
+tests/test_shape_library.py                          # Busca global, quantidades e inclusão transacional do catálogo.
+tests/test_shape_library_view.py                     # Fluxos do catálogo visual usando um banco temporário de verdade.
 tests/test_shape_session_backup.py                   # Testes automatizados para backup e restauração de sessões de corte e layouts
 tests/test_shape_sorting.py                          # Testes Unitários: Classificação e Ordenação de Moldes e Tamanhos (Maior para Menor / Menor para Maior)
 tests/test_shapes_resto.py                           # Testes unitários e de integração para a coluna 'Resto' na grade de Moldes da SessionView.
@@ -318,6 +340,7 @@ tests/test_sidebar_rules.py                          # Regressões das regras da
 tests/test_sobras_destino.py
 tests/test_sobras_dobra.py                           # tests/test_sobras_dobra.py
 tests/test_strategy_removal.py                       # Testes automatizados para validação da remoção da estratégia flashnestroll (bobinas contínuas):
+tests/test_symbolic_notches.py
 tests/test_tools_menu_items.py                       # Testes Automatizados para validação dos itens do menu Ferramentas na MainWindow.
 tests/test_tooltip.py                                # tests/test_tooltip.py
 tests/test_user_management.py
@@ -335,19 +358,16 @@ tools/capture_alter_sheet_evidence.py                # tools/capture_alter_sheet
 tools/capture_catalog_screenshots.py                 # tools/capture_catalog_screenshots.py
 tools/capture_editor_screenshots.py                  # Ferramenta para captura e comparação de screenshots do ShapeEditorView
 tools/capture_layout_screenshots.py                  # tools/capture_layout_screenshots.py
-tools/check_release_cadence.py                       # Verificador de Cadência de Release (Regra dos 5 Commits)
-tools/clean_database.py                              # tools/clean_database.py
 tools/comparar_nesting.py                            # Comparação diagnóstica de estratégias; não salva nem escolhe layouts.
 tools/compare_ia_teste_yield.py                      # tools/compare_ia_teste_yield.py
 tools/compare_learning_states.py                     # tools/compare_learning_states.py
-tools/export_session.py                              # Exporta uma sessão multi-placa do CorteAC para uma pasta pronta para a máquina ATOM.
-tools/generate_modern_icons.py                       # tools/generate_modern_icons.py
+tools/export_session.py                              # Exporta uma sessão multi-placa do OpenCorte para uma pasta pronta para a máquina ATOM.
+tools/generate_modern_icons.py                       # Gera toda a família de ícones: python3 tools/generate_modern_icons.py.
 tools/migrate_sqlite_to_mysql.py                     # tools/migrate_sqlite_to_mysql.py - Migra jobmanager.db (SQLite) para MySQL 8.0 Central.
 tools/profile_drag.py                                # tools/profile_drag.py
 tools/profile_ia_teste.py                            # tools/profile_ia_teste.py
 tools/profile_nest.py                                # tools/profile_nest.py
 tools/scrub_all_sessions_shapes.py                   # tools/scrub_all_sessions_shapes.py
-tools/semver.py                                      # Sistema de Versionamento SemVer (Semantic Versioning 2.0.0)
 tools/verify_fresh_learning.py                       # tools/verify_fresh_learning.py
 tools/fresh_test/settings_snapshot.json
 tools/re_dump/build_layout_inventory.py              # tools/re_dump/build_layout_inventory.py
@@ -359,17 +379,22 @@ ui/add_shapes_dialog.py                              # JobManager 2000 (Python E
 ui/alter_sheet_dialog.py                             # JobManager 2000 (Python Edition)
 ui/batch_nest_dialog.py                              # JobManager 2000 (Python Edition)
 ui/cad_canvas.py                                     # JobManager 2000 (Python Edition)
+ui/database_connection_dialog.py                     # Configuração guiada de banco local ou servidor MySQL.
 ui/debug_panel.py                                    # JobManager 2000 (Python Edition)
 ui/desktop_shortcut.py                               # ui/desktop_shortcut.py
 ui/dieproc_dialog.py                                 # JobManager 2000 (Python Edition)
 ui/edit_shape_in_session_dialog.py                   # JobManager 2000 (Python Edition)
 ui/fill_user_dialog.py                               # JobManager 2000 (Python Edition)
+ui/icon_art.py                                       # Ícones desenhados em uma grade de 24 unidades, sem fontes ou rede.
+ui/icon_widgets.py                                   # Controles com ícones uniformes, sem alterar classes globais do Tkinter.
+ui/icons.py                                          # Carregamento compartilhado de ícones, com cache por interpretador Tcl.
 ui/import_materials_dialog.py                        # JobManager 2000 (Python Edition)
-ui/layout_converter_dialog.py                        # JobManager 2000 / CorteAC (Python Edition)
+ui/layout_converter_dialog.py                        # JobManager 2000 / OpenCorte (Python Edition)
 ui/layout_editor_view.py                             # JobManager 2000 (Python Edition)
 ui/layout_print_dialog.py                            # JobManager 2000 (Python Edition)
+ui/library_presentations.py                          # Medidas e ordenação usadas pelas apresentações do catálogo.
 ui/macro_panel.py                                    # JobManager 2000 (Python Edition)
-ui/main_window.py                                    # CorteAC (Edição Python para Windows 10 / 11)
+ui/main_window.py                                    # OpenCorte (Edição Python para Windows 10 / 11)
 ui/material_codes_view.py                            # JobManager 2000 (Python Edition)
 ui/nesting_mode_widget.py                            # JobManager 2000 (Python Edition)
 ui/options_dialog.py                                 # JobManager 2000 (Python Edition)
@@ -378,10 +403,12 @@ ui/params_dialog.py                                  # JobManager 2000 (Python E
 ui/production_dashboard.py                           # Painel gerencial: dados de planejamento, sem inferir execução de corte.
 ui/production_sheet.py                               # Ficha de produção: projeção somente leitura das regras industriais existentes.
 ui/session_view.py                                   # JobManager 2000 (Python Edition)
-ui/shape_backup_restore_dialog.py                    # JobManager 2000 / CorteAC (Python Edition)
+ui/shape_backup_restore_dialog.py                    # JobManager 2000 / OpenCorte (Python Edition)
 ui/shape_catalog_view.py                             # JobManager 2000 (Python Edition)
 ui/shape_editor_view.py                              # JobManager 2000 (Python Edition)
+ui/shape_library_view.py                             # Biblioteca visual de moldes e preparação da seleção para uma sessão.
 ui/sort_utils.py                                     # JobManager 2000 (Python Edition)
+ui/symbolic_dialog.py                                # Escolha da simbólica antes da colocação manual no molde.
 ui/tooltip.py                                        # ui/tooltip.py - Tooltip flutuante para os botões do Layout Editor.
 ui/trim_layout_dialog.py                             # JobManager 2000 (Python Edition)
 ui/units.py                                          # ui/units.py - Formatação e leitura de medidas em METROS para o operador.
@@ -392,8 +419,14 @@ ui/user_dialog.py                                    # JobManager 2000 (Python E
 ### 3.0 Classes e funções por arquivo (automático)
 
 <!-- AUTO:symbols:start -->
+### `atualizar.py`
+- `class UpdateError` (linha 46, 0 métodos)
+- `class GitHub` (linha 162, 3 métodos)
+- `class Updater` (linha 978, 10 métodos)
+- funções: `command`, `git`, `current_version`, `set_version`, `next_version`, `allowed_source`, `source_files`, `fingerprint`, `snapshot`, `isolated_env`, `repository_name`, `atomic_copy`, `execution_lock`, `doc_document_brand`, `doc_read` (+26)
+
 ### `database.py`
-- `class DatabaseManager` (linha 46, 69 métodos)
+- `class DatabaseManager` (linha 46, 70 métodos)
 - funções: `get_current_operator`
 
 ### `main.py`
@@ -497,14 +530,21 @@ ui/user_dialog.py                                    # JobManager 2000 (Python E
 - `class ShapeBackupScheduler` (linha 510, 5 métodos): Serviço em segundo plano gerenciador do agendamento de backups.
 - funções: `get_default_schedule_config`, `normalize_schedule_config`, `get_schedule_config`, `save_schedule_config`, `get_next_scheduled_run`, `is_backup_due`, `apply_retention_policy`, `list_backup_history`, `execute_scheduled_backup`
 
+### `cad/shape_library.py`
+- `class AdditionResult` (linha 67, 0 métodos)
+- funções: `search_text`, `shape_folder`, `contour_points`, `validate_pairs`, `filter_shapes`, `add_shapes_to_session`
+
 ### `cad/sidebar_rules.py`
 - funções: `piece_matches_target`, `count_pieces_for_target`, `get_plates_for_target`
+
+### `cad/symbolic_notches.py`
+- funções: `symbol_pattern`, `_cross`, `_intersects`, `insert_symbol`
 
 ### `cad/trim_engine.py`
 - funções: `calculate_layout_trim_bounds`, `trim_layout_dict`
 
 ### `db/config.py`
-- funções: `_get_val`, `_get_int`
+- funções: `_get_val`, `_get_int`, `read_mysql_password`
 
 ### `db/connection.py`
 - `class ServerUnreachableError` (linha 16, 1 métodos): Lançada quando o servidor MySQL central estiver inacessível.
@@ -515,6 +555,11 @@ ui/user_dialog.py                                    # JobManager 2000 (Python E
 - `class SimpleMySQLPool` (linha 199, 4 métodos): Pool simples e thread-safe de conexões MySQL com reconexão automática.
 - funções: `translate_query_for_mysql`, `get_active_backend`, `set_active_backend`, `get_connection`, `get_memory_connection`
 
+### `db/connection_settings.py`
+- `class SettingsError` (linha 13, 1 métodos)
+- `class ConnectionSettings` (linha 20, 0 métodos)
+- funções: `_read_ini`, `_absolute_sqlite_path`, `load_settings`, `validate_settings`, `save_settings`, `probe_connection`
+
 ### `tests/_catalog_fixtures.py`
 - funções: `make_temp_catalog_db`
 
@@ -523,6 +568,9 @@ ui/user_dialog.py                                    # JobManager 2000 (Python E
 
 ### `tests/test_alter_sheet.py`
 - `class TestAlterSheet` (linha 40, 16 métodos)
+
+### `tests/test_atualizar.py`
+- funções: `repository`, `arguments`, `test_version_increment_and_read_without_import`, `test_operational_files_excluded`, `test_snapshot_and_commit_never_copy_or_publish_operational_data`, `test_source_change_after_build_prevents_commit`, `test_dry_run_does_not_write_state_or_call_network`, `test_atomic_copy_preserves_original_once_and_is_repeatable`, `test_isolation_overrides_production_database_and_network`, `test_github_requires_success_and_all_five_assets`, `test_repository_url_validation`, `test_main_version_does_not_touch_shortcuts`, `test_resume_phase_skips_completed_action`, `test_resume_after_github_failure_reuses_version_commit_and_build`, `test_version_updates_installer_fallback_without_loading_config` (+5)
 
 ### `tests/test_auto_trim_checkbox.py`
 - `class TestAutoTrimLogic` (linha 22, 6 métodos)
@@ -548,6 +596,9 @@ ui/user_dialog.py                                    # JobManager 2000 (Python E
 ### `tests/test_comparar_nesting.py`
 - funções: `square`, `test_rejects_wrong_shape_and_ambiguous_matches`, `test_check_detects_gap_violation_and_margin_excess`, `test_trim_does_not_mutate_layout_and_reports_area_per_layer`, `test_missing_session_does_not_create_sqlite`, `test_complete_sample_does_not_change_input_or_environment`, `test_load_session_preserves_specific_layers_and_parameters`, `test_fill_preview_works_on_copy`
 
+### `tests/test_connection_settings.py`
+- funções: `settings`, `test_missing_file_defaults_to_local_beside_application`, `test_roundtrip_preserves_password_and_other_sections`, `test_environment_precedence_and_legacy_relative_sqlite`, `test_config_reader_accepts_literal_percent_password_and_relative_path`, `test_invalid_settings_and_failed_write_leave_existing_file_untouched`, `test_malformed_file_is_not_overwritten`, `test_sqlite_probe_reads_real_database_without_modification`, `test_sqlite_probe_does_not_create_missing_file_or_accept_wrong_format`, `test_mysql_probe_uses_entered_settings_and_only_selects`, `test_mysql_errors_are_actionable_and_do_not_expose_password`, `test_password_survives_save_and_startup_reader`
+
 ### `tests/test_converter.py`
 - `class TestLayoutConverter` (linha 27, 10 métodos): Testes de conversão entre ATOM FlashCut (.lay) e Comelz CNC (.onx).
 
@@ -561,6 +612,9 @@ ui/user_dialog.py                                    # JobManager 2000 (Python E
 ### `tests/test_database_cleanup.py`
 - `class TestDatabaseCleanup` (linha 18, 6 métodos)
 
+### `tests/test_database_connection_dialog.py`
+- funções: `dialog`, `wait_for_test`, `use_mysql`, `test_mode_selection_and_password_visibility`, `test_validation_focuses_missing_field_and_shows_invalid_port`, `test_local_save_tests_read_only_then_saves_for_next_start`, `test_failed_mysql_test_never_saves_or_changes_file`, `test_success_is_invalidated_if_form_changes_before_save`, `test_verified_settings_save_without_repeating_test`, `test_close_while_testing_does_not_write_or_call_tk_from_worker`, `test_external_configuration_does_not_claim_to_save_ineffective_changes`
+
 ### `tests/test_db_layer.py`
 - `class TestDBLayer` (linha 30, 15 métodos)
 
@@ -571,7 +625,7 @@ ui/user_dialog.py                                    # JobManager 2000 (Python E
 
 ### `tests/test_desktop_shortcut.py`
 - `class TestDesktopShortcut` (linha 20, 6 métodos)
-- `class TestSincronizacaoAutomatica` (linha 103, 4 métodos): O app sincroniza o atalho existente para a versão atual ao iniciar (Linux).
+- `class TestSincronizacaoAutomatica` (linha 101, 4 métodos): O app sincroniza o atalho existente para a versão atual ao iniciar (Linux).
 
 ### `tests/test_dual_exporter.py`
 - `class TestCZLIB` (linha 22, 4 métodos): Validação do container de compressão CZLIB da Comelz.
@@ -650,6 +704,9 @@ ui/user_dialog.py                                    # JobManager 2000 (Python E
 - `class TestSalvarRefile` (linha 39, 6 métodos)
 - funções: `_pecas`
 
+### `tests/test_library_presentations.py`
+- funções: `visible_text`, `test_switch_preserves_filters_selection_pairs_and_destination`, `test_click_selects_correct_shape_and_adds_to_session`, `test_compact_cards_show_more_columns_than_large_cards`, `test_details_show_real_measurements_and_sort_numerically`, `test_details_horizontal_scroll_and_header_stay_aligned`, `test_empty_results_and_invalid_shapes_are_safe_in_every_mode`, `test_large_results_render_only_visible_items`, `test_keyboard_moves_one_row_in_list_and_details`, `test_mode_survives_refresh_and_invalid_mode_does_not_change_it`, `test_metrics_do_not_mutate_geometry_and_invalid_contour_has_no_measurements`, `test_visualization_selector_opens_the_requested_presentation`
+
 ### `tests/test_macro_engine_ia_teste.py`
 - `class TestMacroEngineIATeste` (linha 50, 15 métodos)
 - funções: `make_realistic_shoe_sole_contour`
@@ -660,6 +717,9 @@ ui/user_dialog.py                                    # JobManager 2000 (Python E
 ### `tests/test_material_import.py`
 - `class TestMaterialImporter` (linha 29, 11 métodos)
 - `class TestImportMaterialsDialogUI` (linha 212, 4 métodos)
+
+### `tests/test_modern_icons.py`
+- funções: `root`, `test_all_distributed_icons_are_present`, `test_button_updates_icon_without_changing_callback_or_state`, `test_explicit_image_and_plain_text_are_preserved`, `test_icon_only_and_fixed_width_labels_fit`, `test_menu_insert_and_updates_preserve_behavior`, `test_notebook_and_checkbutton_keep_selection`, `test_cache_survives_gc_and_is_scoped_to_tcl_interpreter`, `test_hidpi_uses_larger_source_without_changing_previous_images`, `test_text_symbols_inside_sentences_are_not_removed`
 
 ### `tests/test_multisheet_nesting.py`
 - `class DummyEvent` (linha 44, 1 métodos)
@@ -713,7 +773,7 @@ ui/user_dialog.py                                    # JobManager 2000 (Python E
 - funções: `test_weighted_yield_and_session_date_filters`, `test_missing_invalid_and_empty_data_are_not_presented_as_measured`, `test_fetch_data_reads_persisted_rows_without_inventing_layouts`, `test_dashboard_window_shows_unavailable_and_filters`, `test_legacy_yield_pct_is_used_when_primary_is_empty`
 
 ### `tests/test_production_sheet.py`
-- funções: `piece`, `test_degrau_e_sobras_4c_2c_nao_usam_demanda_como_producao`, `test_impar_preserva_peca_sem_par_e_nao_soma_pares_de_moldes`, `test_fator_6x1_e_formato_na_instancia`, `fixture`, `test_paginacao_sem_cortar_linhas_e_identificacao_em_todas_as_folhas`, `test_paisagem_e_nome_longo_nao_estouram_margem`, `test_moldes_com_mesmo_nome_e_tamanhos_distintos_preservam_demanda`, `test_export_pdf_preserva_continuacoes_e_restaura_placa`, `test_spool_usa_argumentos_sem_shell_e_inclui_continuacoes`, `test_preparacao_em_metros_preserva_precisao_sem_milimetros`, `test_modelos_ao_lado_do_mapa_ampliado_em_todas_as_continuacoes`, `test_resumo_lateral_destaca_pares_efetivos_da_ponta_e_fator`, `test_resumo_duas_linhas_com_total_efetivo_incluindo_ponta`, `test_quadro_compacto_agrupa_tamanhos_sem_alterar_fracoes` (+1)
+- funções: `piece`, `test_degrau_e_sobras_4c_2c_nao_usam_demanda_como_producao`, `test_impar_preserva_peca_sem_par_e_nao_soma_pares_de_moldes`, `test_fator_6x1_e_formato_na_instancia`, `fixture`, `test_paginacao_sem_cortar_linhas_e_identificacao_em_todas_as_folhas`, `test_paisagem_e_nome_longo_nao_estouram_margem`, `test_moldes_com_mesmo_nome_e_tamanhos_distintos_preservam_demanda`, `test_export_pdf_preserva_continuacoes_e_restaura_placa`, `test_spool_usa_argumentos_sem_shell_e_inclui_continuacoes`, `test_preparacao_em_metros_preserva_precisao_sem_milimetros`, `test_totais_lineares_somam_placas_da_sessao_com_camadas_individuais`, `test_metragem_sem_refile_e_medida_invalida`, `test_modelos_ao_lado_do_mapa_ampliado_em_todas_as_continuacoes`, `test_resumo_lateral_destaca_pares_efetivos_da_ponta_e_fator` (+3)
 
 ### `tests/test_project_packager.py`
 - `class FakeDB` (linha 39, 4 métodos): Banco mínimo, com a mesma interface usada pelo packager.
@@ -779,6 +839,12 @@ ui/user_dialog.py                                    # JobManager 2000 (Python E
 - `class TestShapeFormatDatabase` (linha 65, 5 métodos)
 - `class TestShapeEditorViewFormatUI` (linha 160, 10 métodos)
 
+### `tests/test_shape_library.py`
+- funções: `library_db`, `test_global_search_includes_unassigned_shapes_and_ignores_accents`, `test_folder_hierarchy_root_size_and_article_filters`, `test_pairs_reject_invalid_quantities`, `test_contour_validation_handles_corrupt_empty_and_collinear_shapes`, `test_add_keeps_existing_pairs_sequence_geometry_and_layouts`, `test_repeat_add_is_idempotent_and_preserves_first_quantity`, `test_invalid_selection_missing_shape_or_deleted_session_never_partially_writes`, `test_corrupt_existing_session_is_not_overwritten`, `test_reads_current_geometry_instead_of_old_preview`, `test_concurrent_additions_are_merged_without_losing_either_selection`, `test_large_selection_reads_sources_in_batches`, `test_mysql_branch_locks_destination_before_reading_and_updating`
+
+### `tests/test_shape_library_view.py`
+- funções: `view`, `wait_for_addition`, `test_library_loads_global_catalog_and_defaults_to_active_session`, `test_filters_keep_selection_and_edited_pairs`, `test_select_all_uses_filtered_results_only_and_preserves_prior_quantities`, `test_invalid_quantity_does_not_write_and_selection_remains`, `test_add_persists_pairs_does_not_duplicate_and_updates_callback`, `test_destination_choice_is_preserved_and_selection_can_be_reused`, `test_already_present_shapes_are_identified_and_not_selected`, `test_corrupt_preview_and_empty_results_are_handled`, `test_edit_opens_focused_shape_and_disables_for_hidden_focus`, `test_small_window_keeps_filters_and_add_button_accessible`, `test_large_catalog_only_draws_visible_cards_and_paginates_selection`, `test_deleted_destination_and_database_errors_keep_selection`, `test_empty_database_and_no_session_have_clear_disabled_state` (+3)
+
 ### `tests/test_shape_session_backup.py`
 - `class TestShapeSessionBackup` (linha 33, 12 métodos)
 
@@ -811,6 +877,9 @@ ui/user_dialog.py                                    # JobManager 2000 (Python E
 
 ### `tests/test_strategy_removal.py`
 - `class TestStrategyRemoval` (linha 19, 9 métodos)
+
+### `tests/test_symbolic_notches.py`
+- funções: `test_notch_is_inward_on_each_edge_and_winding`, `test_duplicate_closing_point_and_double_notch`, `test_size_rules_use_last_digit_and_reject_ambiguous_sizes`, `test_invalid_placement_is_rejected_without_mutating`, `test_thin_piece_rejects_cut_through_opposite_edge`, `test_die_roundtrip_preserves_notch`, `editor`, `test_editor_lock_click_dirty_undo_and_escape`, `test_failed_editor_click_creates_no_undo`, `test_database_and_package_keep_manual_symbols_over_old_library`, `test_dialog_accept_and_cancel`
 
 ### `tests/test_tools_menu_items.py`
 - `class TestToolsMenuItems` (linha 10, 4 métodos)
@@ -860,12 +929,6 @@ ui/user_dialog.py                                    # JobManager 2000 (Python E
 ### `tools/capture_layout_screenshots.py`
 - funções: `build_test_pieces`, `render_scenario`, `run_scenarios`, `main`
 
-### `tools/check_release_cadence.py`
-- funções: `run_git`, `check_cadence`
-
-### `tools/clean_database.py`
-- funções: `clean_db`, `main`
-
 ### `tools/comparar_nesting.py`
 - `class FallbackCapture` (linha 80, 2 métodos)
 - funções: `load_benchmark_shapes`, `analyze_trim`, `analyze_demand`, `validate_layouts`, `compare_case`, `load_sqlite_session`, `main`
@@ -880,7 +943,7 @@ ui/user_dialog.py                                    # JobManager 2000 (Python E
 - funções: `build_parser`, `_print_summary`, `main`
 
 ### `tools/generate_modern_icons.py`
-- funções: `create_supersampled`, `finish_icon`, `make_cut_icon`, `make_copy_icon`, `make_paste_icon`, `make_details_icon`, `make_layout_icon`, `make_shed_icon`, `make_mode_prod_icon`, `make_mode_moldes_icon`, `make_mode_mat_icon`, `make_tree_prod_node_icon`, `make_tree_folder_icon`, `make_tree_order_icon`, `make_tree_session_icon` (+3)
+- funções: `generate_all_icons`
 
 ### `tools/migrate_sqlite_to_mysql.py`
 - funções: `make_backup`, `migrate`, `main`
@@ -893,10 +956,6 @@ ui/user_dialog.py                                    # JobManager 2000 (Python E
 
 ### `tools/scrub_all_sessions_shapes.py`
 - funções: `_fallback_piece_matches_shape`, `match_fn`, `scrub_sessions`, `main`
-
-### `tools/semver.py`
-- `class SemVer` (linha 28, 8 métodos)
-- funções: `get_repo_root`, `get_current_version`, `update_config_py`, `update_release_workflow`, `set_version`, `analyze_commits_for_bump`, `main`
 
 ### `tools/verify_fresh_learning.py`
 - funções: `get_ai_settings_from_db`, `get_all_settings_from_db`, `remove_ai_settings`, `restore_settings_from_snapshot`, `run_verification`, `main`
@@ -915,108 +974,138 @@ ui/user_dialog.py                                    # JobManager 2000 (Python E
 - funções: `main`
 
 ### `ui/add_shapes_dialog.py`
-- `class AddShapesDialog` (linha 15, 15 métodos)
+- `class AddShapesDialog` (linha 16, 15 métodos)
 
 ### `ui/alter_sheet_dialog.py`
-- `class AlterSheetDialog` (linha 131, 5 métodos): Diálogo modal "Alterar chapa" conforme especificações autênticas.
+- `class AlterSheetDialog` (linha 132, 5 métodos): Diálogo modal "Alterar chapa" conforme especificações autênticas.
 - funções: `calc_pieces_minimum`, `count_pieces_outside`
 
 ### `ui/batch_nest_dialog.py`
-- `class BatchAutoNestDialog` (linha 14, 4 métodos): Diálogo para revisar as sessões selecionadas em massa, ajustar as configurações
-- `class BatchProgressDialog` (linha 375, 7 métodos): Janela modal de progresso em tempo real durante a execução do lote de cálculo.
+- `class BatchAutoNestDialog` (linha 15, 4 métodos): Diálogo para revisar as sessões selecionadas em massa, ajustar as configurações
+- `class BatchProgressDialog` (linha 376, 7 métodos): Janela modal de progresso em tempo real durante a execução do lote de cálculo.
 
 ### `ui/cad_canvas.py`
 - `class CADCanvas` (linha 12, 24 métodos)
 
+### `ui/database_connection_dialog.py`
+- `class DatabaseConnectionDialog` (linha 19, 17 métodos)
+- funções: `_probe_worker`
+
 ### `ui/debug_panel.py`
-- `class DebugPanel` (linha 24, 9 métodos): Camada 4: Debug / Diagnóstico.
+- `class DebugPanel` (linha 25, 9 métodos): Camada 4: Debug / Diagnóstico.
 
 ### `ui/desktop_shortcut.py`
 - funções: `_desktop_dirs`, `_atalhos_existentes`, `_conteudo_desktop`, `_instalar_icone`, `sincronizar_atalho`
 
 ### `ui/dieproc_dialog.py`
-- `class DieProcDialog` (linha 12, 19 métodos)
+- `class DieProcDialog` (linha 13, 19 métodos)
 
 ### `ui/edit_shape_in_session_dialog.py`
-- `class EditShapeInSessionDialog` (linha 11, 6 métodos)
+- `class EditShapeInSessionDialog` (linha 12, 6 métodos)
 
 ### `ui/fill_user_dialog.py`
-- `class FillUserConstraints` (linha 26, 0 métodos): Parâmetros validados do diálogo 'Set User constraints'.
-- `class FillUserDialog` (linha 112, 5 métodos): Diálogo Modal 'Set User constraints' (Dialog 159 original, Win32 ID 50003).
+- `class FillUserConstraints` (linha 27, 0 métodos): Parâmetros validados do diálogo 'Set User constraints'.
+- `class FillUserDialog` (linha 113, 5 métodos): Diálogo Modal 'Set User constraints' (Dialog 159 original, Win32 ID 50003).
 - funções: `validate_fill_user_params`
 
+### `ui/icon_art.py`
+- funções: `render_icon`
+
+### `ui/icon_widgets.py`
+- `class _IconText` (linha 11, 2 métodos)
+- `class IconButton` (linha 47, 1 métodos)
+- `class IconLabel` (linha 71, 1 métodos)
+- `class IconCheckbutton` (linha 77, 1 métodos)
+- `class IconRadiobutton` (linha 83, 1 métodos)
+- `class IconTtkButton` (linha 89, 1 métodos)
+- `class IconMenu` (linha 95, 4 métodos)
+- `class IconNotebook` (linha 122, 4 métodos)
+
+### `ui/icons.py`
+- funções: `icon_size`, `get_icon`, `split_icon_text`
+
 ### `ui/import_materials_dialog.py`
-- `class ImportMaterialsDialog` (linha 18, 7 métodos): Diálogo autêntico Windows XP para importação de lista de materiais.
+- `class ImportMaterialsDialog` (linha 19, 7 métodos): Diálogo autêntico Windows XP para importação de lista de materiais.
 
 ### `ui/layout_converter_dialog.py`
-- `class LayoutConverterDialog` (linha 25, 18 métodos): Janela modal para conversão bidirecional de layouts (.lay <-> .onx).
+- `class LayoutConverterDialog` (linha 26, 18 métodos): Janela modal para conversão bidirecional de layouts (.lay <-> .onx).
 
 ### `ui/layout_editor_view.py`
-- `class LayoutSubWindow` (linha 269, 8 métodos): Subjanela MDI para visualização de uma placa (layout) individual da sessão
-- `class LayoutEditorView` (linha 548, 177 métodos)
+- `class LayoutSubWindow` (linha 271, 8 métodos): Subjanela MDI para visualização de uma placa (layout) individual da sessão
+- `class LayoutEditorView` (linha 550, 177 métodos)
 - funções: `_contour_area_mm2`, `_shade_color`, `_contour_key`, `rotate_piece_in_place`
 
 ### `ui/layout_print_dialog.py`
-- `class LayoutPrintDialog` (linha 304, 32 métodos): Janela modal de Visualização de Impressão (Print Preview) do Layout Editor.
+- `class LayoutPrintDialog` (linha 305, 32 métodos): Janela modal de Visualização de Impressão (Print Preview) do Layout Editor.
 - funções: `get_company_logo_path`, `open_company_logo_dialog`, `format_size`, `extract_molde_base_name`, `format_shape_id_tag`, `_clamp_tip_zone`, `_desenhar_retangulo_tracejado`
 
+### `ui/library_presentations.py`
+- funções: `shape_metrics`, `sort_value`
+
 ### `ui/macro_panel.py`
-- `class MacroPanel` (linha 23, 12 métodos): Camada 3: Macro / Aprendizado.
+- `class MacroPanel` (linha 24, 12 métodos): Camada 3: Macro / Aprendizado.
 
 ### `ui/main_window.py`
-- `class MainWindow` (linha 68, 163 métodos)
+- `class MainWindow` (linha 70, 167 métodos)
 - funções: `get_assets_dir`
 
 ### `ui/material_codes_view.py`
-- `class MaterialCodesView` (linha 13, 21 métodos)
+- `class MaterialCodesView` (linha 15, 21 métodos)
 
 ### `ui/nesting_mode_widget.py`
 - `class NestingModeWidget` (linha 70, 6 métodos): Widget de seleção de modo de encaixe industrial (Camada 1 de UX).
 
 ### `ui/options_dialog.py`
-- `class OptionsDialog` (linha 13, 17 métodos)
+- `class OptionsDialog` (linha 14, 17 métodos)
 
 ### `ui/order_view.py`
-- `class OrderView` (linha 10, 8 métodos)
+- `class OrderView` (linha 11, 8 métodos)
 
 ### `ui/params_dialog.py`
-- `class NestingParamsDialog` (linha 10, 2 métodos)
+- `class NestingParamsDialog` (linha 11, 2 métodos)
 
 ### `ui/production_dashboard.py`
-- `class ProductionDashboard` (linha 9, 4 métodos)
+- `class ProductionDashboard` (linha 10, 4 métodos)
 
 ### `ui/production_sheet.py`
-- funções: `_material_m`, `production_rows`, `render_sheet`
+- funções: `plate_length_mm`, `production_rows`, `render_sheet`
 
 ### `ui/session_view.py`
-- `class SobrasConfigDialog` (linha 102, 5 métodos): Diálogo para configuração do modo de Ponta de 2 Camadas (Enfesto em Degrau)
-- `class SessionView` (linha 270, 114 métodos)
+- `class SobrasConfigDialog` (linha 103, 5 métodos): Diálogo para configuração do modo de Ponta de 2 Camadas (Enfesto em Degrau)
+- `class SessionView` (linha 271, 114 métodos)
 
 ### `ui/shape_backup_restore_dialog.py`
-- `class ShapeBackupRestoreDialog` (linha 54, 35 métodos): Diálogo modal completo para Backup, Restauração e Programação de Datas/Horas do Catálogo de Moldes.
+- `class ShapeBackupRestoreDialog` (linha 55, 35 métodos): Diálogo modal completo para Backup, Restauração e Programação de Datas/Horas do Catálogo de Moldes.
 - funções: `open_folder_in_file_manager`
 
 ### `ui/shape_catalog_view.py`
-- `class ShapeCatalogView` (linha 38, 44 métodos): Visão MDI em Matriz Grid (Peças × Tamanhos) para exibição e gerenciamento
+- `class ShapeCatalogView` (linha 39, 44 métodos): Visão MDI em Matriz Grid (Peças × Tamanhos) para exibição e gerenciamento
 - funções: `extract_piece_base_name`
 
 ### `ui/shape_editor_view.py`
-- `class ShapeEditorView` (linha 21, 73 métodos)
+- `class ShapeEditorView` (linha 24, 75 métodos)
+
+### `ui/shape_library_view.py`
+- `class ShapeLibraryView` (linha 23, 63 métodos)
+- funções: `_add_worker`
 
 ### `ui/sort_utils.py`
 - funções: `natural_sort_key`, `size_sort_key`, `shape_area_sort_key`, `clean_session_display_name`, `resto_sort_key`
+
+### `ui/symbolic_dialog.py`
+- `class SymbolicDialog` (linha 7, 3 métodos)
 
 ### `ui/tooltip.py`
 - `class ToolTip` (linha 18, 8 métodos): Tooltip simples: agenda no <Enter>, mostra perto do cursor e esconde no <Leave>.
 
 ### `ui/trim_layout_dialog.py`
-- `class TrimLayoutDialog` (linha 16, 15 métodos)
+- `class TrimLayoutDialog` (linha 17, 15 métodos)
 
 ### `ui/units.py`
 - funções: `format_m`, `format_dim_mm`, `format_dim_m`, `parse_m`, `parse_m_to_mm`
 
 ### `ui/user_dialog.py`
-- `class UserManagementDialog` (linha 14, 10 métodos): Diálogo modal para cadastrar, remover e alternar o usuário / operador ativo.
+- `class UserManagementDialog` (linha 15, 10 métodos): Diálogo modal para cadastrar, remover e alternar o usuário / operador ativo.
 - funções: `open_user_management_dialog`
 <!-- AUTO:symbols:end -->
 
@@ -1853,258 +1942,267 @@ A ordem de corte do `.lay` para a mesa **não pode** ser aleatória:
 
 | Atalho | Estado no código | Onde |
 |---|---|---|
-| F1 | encontrado | `ui/layout_editor_view.py:1083`, `ui/layout_editor_view.py:1084` |
-| F2 | encontrado | `ui/layout_editor_view.py:1087`, `ui/layout_editor_view.py:1088`, `ui/session_view.py:905` |
-| F3 | encontrado | `ui/layout_editor_view.py:1091`, `ui/layout_editor_view.py:1092` |
-| F4 | encontrado | `ui/layout_editor_view.py:1099`, `ui/layout_editor_view.py:1100` |
-| Ctrl+Z | encontrado | `ui/layout_editor_view.py:1015`, `ui/layout_editor_view.py:1016`, `ui/layout_editor_view.py:1017` |
-| Ctrl+S | encontrado | `ui/layout_editor_view.py:793`, `ui/layout_editor_view.py:794`, `ui/layout_editor_view.py:1027` |
-| Shift+F3 | bloqueado (correto) | `ui/layout_editor_view.py:1096`, `ui/layout_editor_view.py:1097` |
-| Ctrl+Y | bloqueado (correto) | `ui/layout_editor_view.py:1021`, `ui/layout_editor_view.py:1022`, `ui/layout_editor_view.py:1023` |
+| F1 | encontrado | `ui/layout_editor_view.py:1074`, `ui/layout_editor_view.py:1075` |
+| F2 | encontrado | `ui/layout_editor_view.py:1078`, `ui/layout_editor_view.py:1079`, `ui/session_view.py:907` |
+| F3 | encontrado | `ui/layout_editor_view.py:1082`, `ui/layout_editor_view.py:1083` |
+| F4 | encontrado | `ui/layout_editor_view.py:1090`, `ui/layout_editor_view.py:1091` |
+| Ctrl+Z | encontrado | `ui/layout_editor_view.py:1006`, `ui/layout_editor_view.py:1007`, `ui/layout_editor_view.py:1008` |
+| Ctrl+S | encontrado | `ui/layout_editor_view.py:784`, `ui/layout_editor_view.py:785`, `ui/layout_editor_view.py:1018` |
+| Shift+F3 | bloqueado (correto) | `ui/layout_editor_view.py:1087`, `ui/layout_editor_view.py:1088` |
+| Ctrl+Y | bloqueado (correto) | `ui/layout_editor_view.py:1012`, `ui/layout_editor_view.py:1013`, `ui/layout_editor_view.py:1014` |
 
 **Todos os atalhos detectados no código:**
 
 | Atalho | Local | Linha |
 |---|---|---|
-| Alt+Down | `ui/session_view.py:3922` | `entry.bind("<Alt-Down>", lambda e: adjust_number(-1))` |
-| Alt+Left | `ui/layout_print_dialog.py:994` | `self.bind("<Alt-Left>", self.prev_page)` |
-| Alt+Right | `ui/layout_print_dialog.py:993` | `self.bind("<Alt-Right>", self.next_page)` |
-| Alt+Up | `ui/session_view.py:3921` | `entry.bind("<Alt-Up>", lambda e: adjust_number(+1))` |
+| Alt+Down | `ui/session_view.py:3924` | `entry.bind("<Alt-Down>", lambda e: adjust_number(-1))` |
+| Alt+Left | `ui/layout_print_dialog.py:995` | `self.bind("<Alt-Left>", self.prev_page)` |
+| Alt+Right | `ui/layout_print_dialog.py:994` | `self.bind("<Alt-Right>", self.next_page)` |
+| Alt+Up | `ui/session_view.py:3923` | `entry.bind("<Alt-Up>", lambda e: adjust_number(+1))` |
 | Backspace | `ui/cad_canvas.py:72` | `self.master.bind("<BackSpace>", lambda e: self.delete_selected())` |
-| Backspace | `ui/dieproc_dialog.py:87` | `self.preset_listbox.bind("<BackSpace>", lambda e: self.on_delete_clicked())` |
-| Backspace | `ui/main_window.py:707` | `self.bind_all("<BackSpace>", self.on_global_delete_key, add="+")` |
-| Backspace | `ui/session_view.py:902` | `self.tree_shapes.bind("<BackSpace>", lambda e: self._on_tree_shapes_delete())` |
-| Backspace | `ui/session_view.py:1062` | `w.bind("<BackSpace>", self.remove_session_material)` |
-| Backspace | `ui/session_view.py:1063` | `w.bind("<Key-BackSpace>", self.remove_session_material)` |
-| Backspace | `ui/shape_editor_view.py:606` | `self.bind("<BackSpace>", lambda e: self.delete_selected())` |
-| Backspace | `ui/shape_editor_view.py:608` | `self.canvas.bind("<BackSpace>", lambda e: self.delete_selected())` |
-| Ctrl+A | `ui/layout_editor_view.py:1104` | `w.bind("<Control-a>", self.select_all)` |
-| Ctrl+A | `ui/layout_editor_view.py:1105` | `w.bind("<Control-A>", self.select_all)` |
-| Ctrl+A | `ui/layout_editor_view.py:1106` | `w.bind("<Control-Key-a>", self.select_all)` |
-| Ctrl+A | `ui/layout_editor_view.py:1107` | `w.bind("<Control-Key-A>", self.select_all)` |
-| Ctrl+A | `ui/layout_editor_view.py:1112` | `self.bind_all("<Control-a>", self.select_all)` |
-| Ctrl+A | `ui/layout_editor_view.py:1113` | `self.bind_all("<Control-A>", self.select_all)` |
-| Ctrl+A | `ui/main_window.py:313` | `edit_menu.add_command(label="Selecionar tudo", accelerator="Ctrl+A", command=sel` |
-| Ctrl+A | `ui/main_window.py:708` | `self.bind_all("<Control-a>", self.on_select_all, add="+")` |
-| Ctrl+A | `ui/main_window.py:709` | `self.bind_all("<Control-A>", self.on_select_all, add="+")` |
-| Ctrl+A | `ui/main_window.py:710` | `self.bind_all("<Control-Key-a>", self.on_select_all, add="+")` |
-| Ctrl+A | `ui/main_window.py:711` | `self.bind_all("<Control-Key-A>", self.on_select_all, add="+")` |
-| Ctrl+C | `ui/main_window.py:309` | `edit_menu.add_command(label="Copiar", accelerator="Ctrl+C")` |
-| Ctrl+Down | `ui/layout_editor_view.py:1124` | `self.bind_all("<Control-Down>", lambda e: self.nudge_selected(0, -0.5))` |
-| Ctrl+Down | `ui/session_view.py:3920` | `entry.bind("<Control-Down>", lambda e: adjust_number(-1))` |
-| Ctrl+Equal | `ui/layout_editor_view.py:1005` | `w.bind("<Control-equal>", lambda e: (self.zoom_in(), "break")[1])` |
-| Ctrl+Equal | `ui/shape_catalog_view.py:273` | `self.bind("<Control-equal>", lambda e: self.zoom_step(1.2))` |
-| Ctrl+Iso_left_tab | `ui/shape_editor_view.py:612` | `self.bind("<Control-ISO_Left_Tab>", self.prev_shape)` |
-| Ctrl+Iso_left_tab | `ui/shape_editor_view.py:617` | `self.canvas.bind("<Control-ISO_Left_Tab>", self.prev_shape)` |
-| Ctrl+Kp_0 | `ui/shape_catalog_view.py:279` | `self.bind("<Control-KP_0>", lambda e: self.reset_zoom())` |
-| Ctrl+Kp_add | `ui/shape_catalog_view.py:275` | `self.bind("<Control-KP_Add>", lambda e: self.zoom_step(1.2))` |
-| Ctrl+Kp_subtract | `ui/shape_catalog_view.py:277` | `self.bind("<Control-KP_Subtract>", lambda e: self.zoom_step(1.0 / 1.2))` |
-| Ctrl+L | `ui/layout_editor_view.py:1072` | `w.bind("<Control-l>", self._on_ctrl_l)` |
-| Ctrl+L | `ui/layout_editor_view.py:1073` | `w.bind("<Control-L>", self._on_ctrl_l)` |
-| Ctrl+L | `ui/layout_editor_view.py:1074` | `w.bind("<Control-Key-l>", self._on_ctrl_l)` |
-| Ctrl+L | `ui/layout_editor_view.py:1075` | `w.bind("<Control-Key-L>", self._on_ctrl_l)` |
-| Ctrl+Left | `ui/layout_editor_view.py:1121` | `self.bind_all("<Control-Left>", lambda e: self.nudge_selected(-0.5, 0))` |
-| Ctrl+M | `ui/layout_editor_view.py:1065` | `w.bind("<Control-m>", _on_ctrl_m)` |
-| Ctrl+M | `ui/layout_editor_view.py:1066` | `w.bind("<Control-M>", _on_ctrl_m)` |
-| Ctrl+M | `ui/layout_editor_view.py:1067` | `w.bind("<Control-Key-m>", _on_ctrl_m)` |
-| Ctrl+M | `ui/layout_editor_view.py:1068` | `w.bind("<Control-Key-M>", _on_ctrl_m)` |
-| Ctrl+Minus | `ui/layout_editor_view.py:1006` | `w.bind("<Control-minus>", lambda e: (self.zoom_out(), "break")[1])` |
-| Ctrl+Minus | `ui/shape_catalog_view.py:276` | `self.bind("<Control-minus>", lambda e: self.zoom_step(1.0 / 1.2))` |
-| Ctrl+N | `ui/main_window.py:100` | `self.bind("<Control-n>", lambda e: self.on_new_session())` |
-| Ctrl+N | `ui/main_window.py:101` | `self.bind("<Control-N>", lambda e: self.on_new_session())` |
-| Ctrl+N | `ui/shape_editor_view.py:579` | `self.bind("<Control-n>", lambda e: self.load_empty_shape())` |
-| Ctrl+N | `ui/shape_editor_view.py:580` | `self.bind("<Control-N>", lambda e: self.load_empty_shape())` |
-| Ctrl+N | `ui/shape_editor_view.py:581` | `self.bind("<Control-Key-n>", lambda e: self.load_empty_shape())` |
-| Ctrl+N | `ui/shape_editor_view.py:582` | `self.bind("<Control-Key-N>", lambda e: self.load_empty_shape())` |
-| Ctrl+N | `ui/shape_editor_view.py:583` | `self.canvas.bind("<Control-n>", lambda e: self.load_empty_shape())` |
-| Ctrl+N | `ui/shape_editor_view.py:584` | `self.canvas.bind("<Control-N>", lambda e: self.load_empty_shape())` |
-| Ctrl+N | `ui/shape_editor_view.py:585` | `self.canvas.bind("<Control-Key-n>", lambda e: self.load_empty_shape())` |
-| Ctrl+N | `ui/shape_editor_view.py:586` | `self.canvas.bind("<Control-Key-N>", lambda e: self.load_empty_shape())` |
-| Ctrl+Next | `ui/shape_editor_view.py:615` | `self.bind("<Control-Next>", self.next_shape)` |
-| Ctrl+Next | `ui/shape_editor_view.py:620` | `self.canvas.bind("<Control-Next>", self.next_shape)` |
-| Ctrl+O | `ui/layout_editor_view.py:1032` | `self.canvas.bind("<Control-o>", self.open_layout_dialog)` |
-| Ctrl+O | `ui/layout_editor_view.py:1033` | `self.canvas.bind("<Control-O>", self.open_layout_dialog)` |
-| Ctrl+O | `ui/layout_editor_view.py:1034` | `self.bind("<Control-o>", self.open_layout_dialog)` |
-| Ctrl+O | `ui/layout_editor_view.py:1035` | `self.bind("<Control-O>", self.open_layout_dialog)` |
-| Ctrl+P | `ui/layout_editor_view.py:791` | `self.bind("<Control-p>", lambda e: self.print_layout())` |
-| Ctrl+P | `ui/layout_editor_view.py:792` | `self.bind("<Control-P>", lambda e: self.print_layout())` |
-| Ctrl+P | `ui/layout_editor_view.py:1039` | `w.bind("<Control-p>", lambda e: (self.print_layout(), "break")[1])` |
-| Ctrl+P | `ui/layout_editor_view.py:1040` | `w.bind("<Control-P>", lambda e: (self.print_layout(), "break")[1])` |
-| Ctrl+P | `ui/layout_print_dialog.py:987` | `self.bind("<Control-p>", lambda e: self.do_print())` |
-| Ctrl+P | `ui/layout_print_dialog.py:988` | `self.bind("<Control-P>", lambda e: self.do_print())` |
-| Ctrl+P | `ui/main_window.py:96` | `self.bind("<Control-p>", self.handle_ctrl_p)` |
-| Ctrl+P | `ui/main_window.py:97` | `self.bind("<Control-P>", self.handle_ctrl_p)` |
-| Ctrl+P | `ui/session_view.py:1154` | `self.tree_lays.bind("<Control-p>", lambda e: (self.print_current_layout(), "brea` |
-| Ctrl+P | `ui/session_view.py:1155` | `self.tree_lays.bind("<Control-P>", lambda e: (self.print_current_layout(), "brea` |
-| Ctrl+Plus | `ui/layout_editor_view.py:1004` | `w.bind("<Control-plus>", lambda e: (self.zoom_in(), "break")[1])` |
-| Ctrl+Plus | `ui/shape_catalog_view.py:274` | `self.bind("<Control-plus>", lambda e: self.zoom_step(1.2))` |
-| Ctrl+Prior | `ui/shape_editor_view.py:614` | `self.bind("<Control-Prior>", self.prev_shape)` |
-| Ctrl+Prior | `ui/shape_editor_view.py:619` | `self.canvas.bind("<Control-Prior>", self.prev_shape)` |
-| Ctrl+Q | `ui/layout_editor_view.py:1002` | `w.bind("<Control-q>", lambda e: (self.zoom_in(), "break")[1])` |
-| Ctrl+Q | `ui/layout_editor_view.py:1003` | `w.bind("<Control-Q>", lambda e: (self.zoom_in(), "break")[1])` |
-| Ctrl+Right | `ui/layout_editor_view.py:1122` | `self.bind_all("<Control-Right>", lambda e: self.nudge_selected(0.5, 0))` |
-| Ctrl+S | `ui/layout_editor_view.py:793` | `self.bind("<Control-s>", self.save_layout)` |
-| Ctrl+S | `ui/layout_editor_view.py:794` | `self.bind("<Control-S>", self.save_layout)` |
-| Ctrl+S | `ui/layout_editor_view.py:1027` | `self.canvas.bind("<Control-s>", self.save_layout)` |
-| Ctrl+S | `ui/layout_editor_view.py:1028` | `self.canvas.bind("<Control-S>", self.save_layout)` |
-| Ctrl+S | `ui/layout_editor_view.py:1029` | `self.bind("<Control-s>", self.save_layout)` |
-| Ctrl+S | `ui/layout_editor_view.py:1030` | `self.bind("<Control-S>", self.save_layout)` |
-| Ctrl+S | `ui/main_window.py:94` | `self.bind("<Control-s>", self.handle_ctrl_s)` |
-| Ctrl+S | `ui/main_window.py:95` | `self.bind("<Control-S>", self.handle_ctrl_s)` |
-| Ctrl+Shift+L | `ui/layout_editor_view.py:1076` | `w.bind("<Control-Shift-l>", self._on_ctrl_shift_l)` |
-| Ctrl+Shift+L | `ui/layout_editor_view.py:1077` | `w.bind("<Control-Shift-L>", self._on_ctrl_shift_l)` |
-| Ctrl+Shift+L | `ui/layout_editor_view.py:1078` | `w.bind("<Control-Shift-Key-l>", self._on_ctrl_shift_l)` |
-| Ctrl+Shift+L | `ui/layout_editor_view.py:1079` | `w.bind("<Control-Shift-Key-L>", self._on_ctrl_shift_l)` |
-| Ctrl+Shift+Tab | `ui/shape_editor_view.py:613` | `self.bind("<Control-Shift-Tab>", self.prev_shape)` |
-| Ctrl+Shift+Tab | `ui/shape_editor_view.py:618` | `self.canvas.bind("<Control-Shift-Tab>", self.prev_shape)` |
-| Ctrl+T | `ui/layout_editor_view.py:1051` | `w.bind("<Control-t>", _on_ctrl_t)` |
-| Ctrl+T | `ui/layout_editor_view.py:1052` | `w.bind("<Control-T>", _on_ctrl_t)` |
-| Ctrl+T | `ui/layout_editor_view.py:1053` | `w.bind("<Control-Key-t>", _on_ctrl_t)` |
-| Ctrl+T | `ui/layout_editor_view.py:1054` | `w.bind("<Control-Key-T>", _on_ctrl_t)` |
-| Ctrl+T | `ui/main_window.py:98` | `self.bind("<Control-t>", self.handle_ctrl_t)` |
-| Ctrl+T | `ui/main_window.py:99` | `self.bind("<Control-T>", self.handle_ctrl_t)` |
-| Ctrl+Tab | `ui/shape_editor_view.py:611` | `self.bind("<Control-Tab>", self.next_shape)` |
-| Ctrl+Tab | `ui/shape_editor_view.py:616` | `self.canvas.bind("<Control-Tab>", self.next_shape)` |
-| Ctrl+Up | `ui/layout_editor_view.py:1123` | `self.bind_all("<Control-Up>", lambda e: self.nudge_selected(0, 0.5))` |
-| Ctrl+Up | `ui/session_view.py:3919` | `entry.bind("<Control-Up>", lambda e: adjust_number(+1))` |
-| Ctrl+V | `ui/main_window.py:310` | `edit_menu.add_command(label="Colar", accelerator="Ctrl+V")` |
-| Ctrl+X | `ui/main_window.py:308` | `edit_menu.add_command(label="Recortar", accelerator="Ctrl+X")` |
-| Ctrl+Y | `ui/layout_editor_view.py:1021` | `self.canvas.bind("<Control-y>", lambda e: "break")` |
-| Ctrl+Y | `ui/layout_editor_view.py:1022` | `self.canvas.bind("<Control-Y>", lambda e: "break")` |
-| Ctrl+Y | `ui/layout_editor_view.py:1023` | `self.bind("<Control-y>", lambda e: "break")` |
-| Ctrl+Y | `ui/layout_editor_view.py:1024` | `self.bind("<Control-Y>", lambda e: "break")` |
-| Ctrl+Z | `ui/layout_editor_view.py:1015` | `self.canvas.bind("<Control-z>", self.undo_action)` |
-| Ctrl+Z | `ui/layout_editor_view.py:1016` | `self.canvas.bind("<Control-Z>", self.undo_action)` |
-| Ctrl+Z | `ui/layout_editor_view.py:1017` | `self.bind("<Control-z>", self.undo_action)` |
-| Ctrl+Z | `ui/layout_editor_view.py:1018` | `self.bind("<Control-Z>", self.undo_action)` |
-| Ctrl+Z | `ui/main_window.py:306` | `edit_menu.add_command(label="Desfazer / Reverter", accelerator="Ctrl+Z", command` |
-| Ctrl+Z | `ui/main_window.py:712` | `self.bind_all("<Control-z>", self.on_global_undo, add="+")` |
-| Ctrl+Z | `ui/main_window.py:713` | `self.bind_all("<Control-Z>", self.on_global_undo, add="+")` |
-| Ctrl+Z | `ui/main_window.py:714` | `self.bind_all("<Control-Key-z>", self.on_global_undo, add="+")` |
-| Ctrl+Z | `ui/main_window.py:715` | `self.bind_all("<Control-Key-Z>", self.on_global_undo, add="+")` |
-| Ctrl+Z | `ui/shape_catalog_view.py:269` | `self.bind("<Control-z>", lambda e: self.action_undo())` |
-| Ctrl+Z | `ui/shape_catalog_view.py:270` | `self.bind("<Control-Z>", lambda e: self.action_undo())` |
-| Ctrl+Z | `ui/shape_editor_view.py:589` | `self.bind("<Control-z>", self.undo_or_revert)` |
-| Ctrl+Z | `ui/shape_editor_view.py:590` | `self.bind("<Control-Z>", self.undo_or_revert)` |
-| Ctrl+Z | `ui/shape_editor_view.py:591` | `self.bind("<Control-Key-z>", self.undo_or_revert)` |
-| Ctrl+Z | `ui/shape_editor_view.py:592` | `self.bind("<Control-Key-Z>", self.undo_or_revert)` |
-| Ctrl+Z | `ui/shape_editor_view.py:593` | `self.canvas.bind("<Control-z>", self.undo_or_revert)` |
-| Ctrl+Z | `ui/shape_editor_view.py:594` | `self.canvas.bind("<Control-Z>", self.undo_or_revert)` |
-| Ctrl+Z | `ui/shape_editor_view.py:595` | `self.canvas.bind("<Control-Key-z>", self.undo_or_revert)` |
-| Ctrl+Z | `ui/shape_editor_view.py:596` | `self.canvas.bind("<Control-Key-Z>", self.undo_or_revert)` |
+| Backspace | `ui/dieproc_dialog.py:88` | `self.preset_listbox.bind("<BackSpace>", lambda e: self.on_delete_clicked())` |
+| Backspace | `ui/main_window.py:702` | `self.bind_all("<BackSpace>", self.on_global_delete_key, add="+")` |
+| Backspace | `ui/session_view.py:904` | `self.tree_shapes.bind("<BackSpace>", lambda e: self._on_tree_shapes_delete())` |
+| Backspace | `ui/session_view.py:1064` | `w.bind("<BackSpace>", self.remove_session_material)` |
+| Backspace | `ui/session_view.py:1065` | `w.bind("<Key-BackSpace>", self.remove_session_material)` |
+| Backspace | `ui/shape_editor_view.py:617` | `self.bind("<BackSpace>", lambda e: self.delete_selected())` |
+| Backspace | `ui/shape_editor_view.py:619` | `self.canvas.bind("<BackSpace>", lambda e: self.delete_selected())` |
+| Ctrl+A | `ui/layout_editor_view.py:1095` | `w.bind("<Control-a>", self.select_all)` |
+| Ctrl+A | `ui/layout_editor_view.py:1096` | `w.bind("<Control-A>", self.select_all)` |
+| Ctrl+A | `ui/layout_editor_view.py:1097` | `w.bind("<Control-Key-a>", self.select_all)` |
+| Ctrl+A | `ui/layout_editor_view.py:1098` | `w.bind("<Control-Key-A>", self.select_all)` |
+| Ctrl+A | `ui/layout_editor_view.py:1103` | `self.bind_all("<Control-a>", self.select_all)` |
+| Ctrl+A | `ui/layout_editor_view.py:1104` | `self.bind_all("<Control-A>", self.select_all)` |
+| Ctrl+A | `ui/main_window.py:306` | `edit_menu.add_command(label="Selecionar tudo", accelerator="Ctrl+A", command=sel` |
+| Ctrl+A | `ui/main_window.py:703` | `self.bind_all("<Control-a>", self.on_select_all, add="+")` |
+| Ctrl+A | `ui/main_window.py:704` | `self.bind_all("<Control-A>", self.on_select_all, add="+")` |
+| Ctrl+A | `ui/main_window.py:705` | `self.bind_all("<Control-Key-a>", self.on_select_all, add="+")` |
+| Ctrl+A | `ui/main_window.py:706` | `self.bind_all("<Control-Key-A>", self.on_select_all, add="+")` |
+| Ctrl+A | `ui/shape_library_view.py:217` | `self.cards_canvas.bind('<Control-a>', self._select_all_key)` |
+| Ctrl+C | `ui/main_window.py:302` | `edit_menu.add_command(label="Copiar", accelerator="Ctrl+C")` |
+| Ctrl+Down | `ui/layout_editor_view.py:1115` | `self.bind_all("<Control-Down>", lambda e: self.nudge_selected(0, -0.5))` |
+| Ctrl+Down | `ui/session_view.py:3922` | `entry.bind("<Control-Down>", lambda e: adjust_number(-1))` |
+| Ctrl+Equal | `ui/layout_editor_view.py:996` | `w.bind("<Control-equal>", lambda e: (self.zoom_in(), "break")[1])` |
+| Ctrl+Equal | `ui/shape_catalog_view.py:274` | `self.bind("<Control-equal>", lambda e: self.zoom_step(1.2))` |
+| Ctrl+F | `ui/shape_library_view.py:218` | `self.cards_canvas.bind('<Control-f>', lambda event: self.search_entry.focus_set(` |
+| Ctrl+Iso_left_tab | `ui/shape_editor_view.py:623` | `self.bind("<Control-ISO_Left_Tab>", self.prev_shape)` |
+| Ctrl+Iso_left_tab | `ui/shape_editor_view.py:628` | `self.canvas.bind("<Control-ISO_Left_Tab>", self.prev_shape)` |
+| Ctrl+Kp_0 | `ui/shape_catalog_view.py:280` | `self.bind("<Control-KP_0>", lambda e: self.reset_zoom())` |
+| Ctrl+Kp_add | `ui/shape_catalog_view.py:276` | `self.bind("<Control-KP_Add>", lambda e: self.zoom_step(1.2))` |
+| Ctrl+Kp_subtract | `ui/shape_catalog_view.py:278` | `self.bind("<Control-KP_Subtract>", lambda e: self.zoom_step(1.0 / 1.2))` |
+| Ctrl+L | `ui/layout_editor_view.py:1063` | `w.bind("<Control-l>", self._on_ctrl_l)` |
+| Ctrl+L | `ui/layout_editor_view.py:1064` | `w.bind("<Control-L>", self._on_ctrl_l)` |
+| Ctrl+L | `ui/layout_editor_view.py:1065` | `w.bind("<Control-Key-l>", self._on_ctrl_l)` |
+| Ctrl+L | `ui/layout_editor_view.py:1066` | `w.bind("<Control-Key-L>", self._on_ctrl_l)` |
+| Ctrl+Left | `ui/layout_editor_view.py:1112` | `self.bind_all("<Control-Left>", lambda e: self.nudge_selected(-0.5, 0))` |
+| Ctrl+M | `ui/layout_editor_view.py:1056` | `w.bind("<Control-m>", _on_ctrl_m)` |
+| Ctrl+M | `ui/layout_editor_view.py:1057` | `w.bind("<Control-M>", _on_ctrl_m)` |
+| Ctrl+M | `ui/layout_editor_view.py:1058` | `w.bind("<Control-Key-m>", _on_ctrl_m)` |
+| Ctrl+M | `ui/layout_editor_view.py:1059` | `w.bind("<Control-Key-M>", _on_ctrl_m)` |
+| Ctrl+Minus | `ui/layout_editor_view.py:997` | `w.bind("<Control-minus>", lambda e: (self.zoom_out(), "break")[1])` |
+| Ctrl+Minus | `ui/shape_catalog_view.py:277` | `self.bind("<Control-minus>", lambda e: self.zoom_step(1.0 / 1.2))` |
+| Ctrl+N | `ui/main_window.py:102` | `self.bind("<Control-n>", lambda e: self.on_new_session())` |
+| Ctrl+N | `ui/main_window.py:103` | `self.bind("<Control-N>", lambda e: self.on_new_session())` |
+| Ctrl+N | `ui/shape_editor_view.py:590` | `self.bind("<Control-n>", lambda e: self.load_empty_shape())` |
+| Ctrl+N | `ui/shape_editor_view.py:591` | `self.bind("<Control-N>", lambda e: self.load_empty_shape())` |
+| Ctrl+N | `ui/shape_editor_view.py:592` | `self.bind("<Control-Key-n>", lambda e: self.load_empty_shape())` |
+| Ctrl+N | `ui/shape_editor_view.py:593` | `self.bind("<Control-Key-N>", lambda e: self.load_empty_shape())` |
+| Ctrl+N | `ui/shape_editor_view.py:594` | `self.canvas.bind("<Control-n>", lambda e: self.load_empty_shape())` |
+| Ctrl+N | `ui/shape_editor_view.py:595` | `self.canvas.bind("<Control-N>", lambda e: self.load_empty_shape())` |
+| Ctrl+N | `ui/shape_editor_view.py:596` | `self.canvas.bind("<Control-Key-n>", lambda e: self.load_empty_shape())` |
+| Ctrl+N | `ui/shape_editor_view.py:597` | `self.canvas.bind("<Control-Key-N>", lambda e: self.load_empty_shape())` |
+| Ctrl+Next | `ui/shape_editor_view.py:626` | `self.bind("<Control-Next>", self.next_shape)` |
+| Ctrl+Next | `ui/shape_editor_view.py:631` | `self.canvas.bind("<Control-Next>", self.next_shape)` |
+| Ctrl+O | `ui/layout_editor_view.py:1023` | `self.canvas.bind("<Control-o>", self.open_layout_dialog)` |
+| Ctrl+O | `ui/layout_editor_view.py:1024` | `self.canvas.bind("<Control-O>", self.open_layout_dialog)` |
+| Ctrl+O | `ui/layout_editor_view.py:1025` | `self.bind("<Control-o>", self.open_layout_dialog)` |
+| Ctrl+O | `ui/layout_editor_view.py:1026` | `self.bind("<Control-O>", self.open_layout_dialog)` |
+| Ctrl+P | `ui/layout_editor_view.py:782` | `self.bind("<Control-p>", lambda e: self.print_layout())` |
+| Ctrl+P | `ui/layout_editor_view.py:783` | `self.bind("<Control-P>", lambda e: self.print_layout())` |
+| Ctrl+P | `ui/layout_editor_view.py:1030` | `w.bind("<Control-p>", lambda e: (self.print_layout(), "break")[1])` |
+| Ctrl+P | `ui/layout_editor_view.py:1031` | `w.bind("<Control-P>", lambda e: (self.print_layout(), "break")[1])` |
+| Ctrl+P | `ui/layout_print_dialog.py:988` | `self.bind("<Control-p>", lambda e: self.do_print())` |
+| Ctrl+P | `ui/layout_print_dialog.py:989` | `self.bind("<Control-P>", lambda e: self.do_print())` |
+| Ctrl+P | `ui/main_window.py:98` | `self.bind("<Control-p>", self.handle_ctrl_p)` |
+| Ctrl+P | `ui/main_window.py:99` | `self.bind("<Control-P>", self.handle_ctrl_p)` |
+| Ctrl+P | `ui/session_view.py:1156` | `self.tree_lays.bind("<Control-p>", lambda e: (self.print_current_layout(), "brea` |
+| Ctrl+P | `ui/session_view.py:1157` | `self.tree_lays.bind("<Control-P>", lambda e: (self.print_current_layout(), "brea` |
+| Ctrl+Plus | `ui/layout_editor_view.py:995` | `w.bind("<Control-plus>", lambda e: (self.zoom_in(), "break")[1])` |
+| Ctrl+Plus | `ui/shape_catalog_view.py:275` | `self.bind("<Control-plus>", lambda e: self.zoom_step(1.2))` |
+| Ctrl+Prior | `ui/shape_editor_view.py:625` | `self.bind("<Control-Prior>", self.prev_shape)` |
+| Ctrl+Prior | `ui/shape_editor_view.py:630` | `self.canvas.bind("<Control-Prior>", self.prev_shape)` |
+| Ctrl+Q | `ui/layout_editor_view.py:993` | `w.bind("<Control-q>", lambda e: (self.zoom_in(), "break")[1])` |
+| Ctrl+Q | `ui/layout_editor_view.py:994` | `w.bind("<Control-Q>", lambda e: (self.zoom_in(), "break")[1])` |
+| Ctrl+Right | `ui/layout_editor_view.py:1113` | `self.bind_all("<Control-Right>", lambda e: self.nudge_selected(0.5, 0))` |
+| Ctrl+S | `ui/layout_editor_view.py:784` | `self.bind("<Control-s>", self.save_layout)` |
+| Ctrl+S | `ui/layout_editor_view.py:785` | `self.bind("<Control-S>", self.save_layout)` |
+| Ctrl+S | `ui/layout_editor_view.py:1018` | `self.canvas.bind("<Control-s>", self.save_layout)` |
+| Ctrl+S | `ui/layout_editor_view.py:1019` | `self.canvas.bind("<Control-S>", self.save_layout)` |
+| Ctrl+S | `ui/layout_editor_view.py:1020` | `self.bind("<Control-s>", self.save_layout)` |
+| Ctrl+S | `ui/layout_editor_view.py:1021` | `self.bind("<Control-S>", self.save_layout)` |
+| Ctrl+S | `ui/main_window.py:96` | `self.bind("<Control-s>", self.handle_ctrl_s)` |
+| Ctrl+S | `ui/main_window.py:97` | `self.bind("<Control-S>", self.handle_ctrl_s)` |
+| Ctrl+Shift+L | `ui/layout_editor_view.py:1067` | `w.bind("<Control-Shift-l>", self._on_ctrl_shift_l)` |
+| Ctrl+Shift+L | `ui/layout_editor_view.py:1068` | `w.bind("<Control-Shift-L>", self._on_ctrl_shift_l)` |
+| Ctrl+Shift+L | `ui/layout_editor_view.py:1069` | `w.bind("<Control-Shift-Key-l>", self._on_ctrl_shift_l)` |
+| Ctrl+Shift+L | `ui/layout_editor_view.py:1070` | `w.bind("<Control-Shift-Key-L>", self._on_ctrl_shift_l)` |
+| Ctrl+Shift+Tab | `ui/shape_editor_view.py:624` | `self.bind("<Control-Shift-Tab>", self.prev_shape)` |
+| Ctrl+Shift+Tab | `ui/shape_editor_view.py:629` | `self.canvas.bind("<Control-Shift-Tab>", self.prev_shape)` |
+| Ctrl+T | `ui/layout_editor_view.py:1042` | `w.bind("<Control-t>", _on_ctrl_t)` |
+| Ctrl+T | `ui/layout_editor_view.py:1043` | `w.bind("<Control-T>", _on_ctrl_t)` |
+| Ctrl+T | `ui/layout_editor_view.py:1044` | `w.bind("<Control-Key-t>", _on_ctrl_t)` |
+| Ctrl+T | `ui/layout_editor_view.py:1045` | `w.bind("<Control-Key-T>", _on_ctrl_t)` |
+| Ctrl+T | `ui/main_window.py:100` | `self.bind("<Control-t>", self.handle_ctrl_t)` |
+| Ctrl+T | `ui/main_window.py:101` | `self.bind("<Control-T>", self.handle_ctrl_t)` |
+| Ctrl+Tab | `ui/shape_editor_view.py:622` | `self.bind("<Control-Tab>", self.next_shape)` |
+| Ctrl+Tab | `ui/shape_editor_view.py:627` | `self.canvas.bind("<Control-Tab>", self.next_shape)` |
+| Ctrl+Up | `ui/layout_editor_view.py:1114` | `self.bind_all("<Control-Up>", lambda e: self.nudge_selected(0, 0.5))` |
+| Ctrl+Up | `ui/session_view.py:3921` | `entry.bind("<Control-Up>", lambda e: adjust_number(+1))` |
+| Ctrl+V | `ui/main_window.py:303` | `edit_menu.add_command(label="Colar", accelerator="Ctrl+V")` |
+| Ctrl+X | `ui/main_window.py:301` | `edit_menu.add_command(label="Recortar", accelerator="Ctrl+X")` |
+| Ctrl+Y | `ui/layout_editor_view.py:1012` | `self.canvas.bind("<Control-y>", lambda e: "break")` |
+| Ctrl+Y | `ui/layout_editor_view.py:1013` | `self.canvas.bind("<Control-Y>", lambda e: "break")` |
+| Ctrl+Y | `ui/layout_editor_view.py:1014` | `self.bind("<Control-y>", lambda e: "break")` |
+| Ctrl+Y | `ui/layout_editor_view.py:1015` | `self.bind("<Control-Y>", lambda e: "break")` |
+| Ctrl+Z | `ui/layout_editor_view.py:1006` | `self.canvas.bind("<Control-z>", self.undo_action)` |
+| Ctrl+Z | `ui/layout_editor_view.py:1007` | `self.canvas.bind("<Control-Z>", self.undo_action)` |
+| Ctrl+Z | `ui/layout_editor_view.py:1008` | `self.bind("<Control-z>", self.undo_action)` |
+| Ctrl+Z | `ui/layout_editor_view.py:1009` | `self.bind("<Control-Z>", self.undo_action)` |
+| Ctrl+Z | `ui/main_window.py:299` | `edit_menu.add_command(label="Desfazer / Reverter", accelerator="Ctrl+Z", command` |
+| Ctrl+Z | `ui/main_window.py:707` | `self.bind_all("<Control-z>", self.on_global_undo, add="+")` |
+| Ctrl+Z | `ui/main_window.py:708` | `self.bind_all("<Control-Z>", self.on_global_undo, add="+")` |
+| Ctrl+Z | `ui/main_window.py:709` | `self.bind_all("<Control-Key-z>", self.on_global_undo, add="+")` |
+| Ctrl+Z | `ui/main_window.py:710` | `self.bind_all("<Control-Key-Z>", self.on_global_undo, add="+")` |
+| Ctrl+Z | `ui/shape_catalog_view.py:270` | `self.bind("<Control-z>", lambda e: self.action_undo())` |
+| Ctrl+Z | `ui/shape_catalog_view.py:271` | `self.bind("<Control-Z>", lambda e: self.action_undo())` |
+| Ctrl+Z | `ui/shape_editor_view.py:600` | `self.bind("<Control-z>", self.undo_or_revert)` |
+| Ctrl+Z | `ui/shape_editor_view.py:601` | `self.bind("<Control-Z>", self.undo_or_revert)` |
+| Ctrl+Z | `ui/shape_editor_view.py:602` | `self.bind("<Control-Key-z>", self.undo_or_revert)` |
+| Ctrl+Z | `ui/shape_editor_view.py:603` | `self.bind("<Control-Key-Z>", self.undo_or_revert)` |
+| Ctrl+Z | `ui/shape_editor_view.py:604` | `self.canvas.bind("<Control-z>", self.undo_or_revert)` |
+| Ctrl+Z | `ui/shape_editor_view.py:605` | `self.canvas.bind("<Control-Z>", self.undo_or_revert)` |
+| Ctrl+Z | `ui/shape_editor_view.py:606` | `self.canvas.bind("<Control-Key-z>", self.undo_or_revert)` |
+| Ctrl+Z | `ui/shape_editor_view.py:607` | `self.canvas.bind("<Control-Key-Z>", self.undo_or_revert)` |
 | Delete | `ui/cad_canvas.py:71` | `self.master.bind("<Delete>", lambda e: self.delete_selected())` |
-| Delete | `ui/dieproc_dialog.py:86` | `self.preset_listbox.bind("<Delete>", lambda e: self.on_delete_clicked())` |
-| Delete | `ui/layout_editor_view.py:1111` | `self.bind_all("<Delete>", lambda e: self.delete_selected())` |
-| Delete | `ui/main_window.py:311` | `edit_menu.add_command(label="Excluir", accelerator="Del", command=self.on_global` |
-| Delete | `ui/main_window.py:706` | `self.bind_all("<Delete>", self.on_global_delete_key, add="+")` |
-| Delete | `ui/main_window.py:3715` | `accelerator="Del",` |
-| Delete | `ui/main_window.py:3734` | `accelerator="Del",` |
-| Delete | `ui/main_window.py:4011` | `accelerator="Del",` |
-| Delete | `ui/main_window.py:4030` | `accelerator="Del",` |
-| Delete | `ui/session_view.py:901` | `self.tree_shapes.bind("<Delete>", lambda e: self._on_tree_shapes_delete())` |
-| Delete | `ui/session_view.py:1060` | `w.bind("<Delete>", self.remove_session_material)` |
-| Delete | `ui/session_view.py:1061` | `w.bind("<Key-Delete>", self.remove_session_material)` |
-| Delete | `ui/shape_editor_view.py:605` | `self.bind("<Delete>", lambda e: self.delete_selected())` |
-| Delete | `ui/shape_editor_view.py:607` | `self.canvas.bind("<Delete>", lambda e: self.delete_selected())` |
-| Down | `ui/layout_editor_view.py:1119` | `self.bind_all("<Down>", lambda e: self.bump_selection_vector(0, -1))` |
-| Down | `ui/session_view.py:3904` | `entry.bind("<Down>", move_down)` |
-| Down | `ui/shape_catalog_view.py:263` | `self.bind("<Down>", lambda e: self.navigate_selection(0, 1))` |
-| Escape | `ui/alter_sheet_dialog.py:199` | `self.bind("<Escape>", lambda e: self.on_cancel())` |
+| Delete | `ui/dieproc_dialog.py:87` | `self.preset_listbox.bind("<Delete>", lambda e: self.on_delete_clicked())` |
+| Delete | `ui/layout_editor_view.py:1102` | `self.bind_all("<Delete>", lambda e: self.delete_selected())` |
+| Delete | `ui/main_window.py:304` | `edit_menu.add_command(label="Excluir", accelerator="Del", command=self.on_global` |
+| Delete | `ui/main_window.py:701` | `self.bind_all("<Delete>", self.on_global_delete_key, add="+")` |
+| Delete | `ui/main_window.py:3718` | `accelerator="Del",` |
+| Delete | `ui/main_window.py:3737` | `accelerator="Del",` |
+| Delete | `ui/main_window.py:4014` | `accelerator="Del",` |
+| Delete | `ui/main_window.py:4033` | `accelerator="Del",` |
+| Delete | `ui/session_view.py:903` | `self.tree_shapes.bind("<Delete>", lambda e: self._on_tree_shapes_delete())` |
+| Delete | `ui/session_view.py:1062` | `w.bind("<Delete>", self.remove_session_material)` |
+| Delete | `ui/session_view.py:1063` | `w.bind("<Key-Delete>", self.remove_session_material)` |
+| Delete | `ui/shape_editor_view.py:616` | `self.bind("<Delete>", lambda e: self.delete_selected())` |
+| Delete | `ui/shape_editor_view.py:618` | `self.canvas.bind("<Delete>", lambda e: self.delete_selected())` |
+| Down | `ui/layout_editor_view.py:1110` | `self.bind_all("<Down>", lambda e: self.bump_selection_vector(0, -1))` |
+| Down | `ui/session_view.py:3906` | `entry.bind("<Down>", move_down)` |
+| Down | `ui/shape_catalog_view.py:264` | `self.bind("<Down>", lambda e: self.navigate_selection(0, 1))` |
+| Escape | `ui/alter_sheet_dialog.py:200` | `self.bind("<Escape>", lambda e: self.on_cancel())` |
 | Escape | `ui/cad_canvas.py:67` | `self.bind("<Escape>", self.cancel_drag)` |
 | Escape | `ui/cad_canvas.py:68` | `self.master.bind("<Escape>", self.cancel_drag)` |
-| Escape | `ui/dieproc_dialog.py:40` | `self.bind("<Escape>", lambda e: self.destroy())` |
-| Escape | `ui/edit_shape_in_session_dialog.py:147` | `self.bind("<Escape>", lambda e: self.destroy())` |
-| Escape | `ui/fill_user_dialog.py:156` | `self.bind("<Escape>", lambda e: self.on_cancel())` |
-| Escape | `ui/import_materials_dialog.py:49` | `self.bind("<Escape>", lambda e: self.destroy())` |
-| Escape | `ui/layout_converter_dialog.py:70` | `self.bind("<Escape>", lambda e: self.destroy())` |
-| Escape | `ui/layout_editor_view.py:993` | `self.canvas.bind("<Escape>", self.on_canvas_escape)` |
-| Escape | `ui/layout_editor_view.py:1103` | `w.bind("<Escape>", self.cancel_drag)` |
-| Escape | `ui/layout_print_dialog.py:990` | `self.bind("<Escape>", self.on_escape)` |
-| Escape | `ui/main_window.py:93` | `self.bind("<Escape>", self.exit_fullscreen)` |
-| Escape | `ui/main_window.py:705` | `self.bind_all("<Escape>", self.dismiss_popup_menus, add="+")` |
-| Escape | `ui/main_window.py:4338` | `dialog.bind("<Escape>", lambda e: dialog.destroy())` |
-| Escape | `ui/material_codes_view.py:510` | `dlg.bind("<Escape>", lambda e: dlg.destroy())` |
-| Escape | `ui/options_dialog.py:40` | `self.bind("<Escape>", lambda e: self.on_cancel())` |
-| Escape | `ui/session_view.py:3358` | `entry.bind("<Escape>", cancel)` |
-| Escape | `ui/session_view.py:3476` | `dialog.bind("<Escape>", lambda e: dialog.destroy())` |
-| Escape | `ui/session_view.py:3914` | `entry.bind("<Escape>", cancel_edit)` |
-| Escape | `ui/shape_backup_restore_dialog.py:143` | `self.bind("<Escape>", lambda e: self._on_close())` |
-| Escape | `ui/shape_catalog_view.py:268` | `self.bind("<Escape>", lambda e: self.on_close_click())` |
-| Escape | `ui/shape_editor_view.py:601` | `self.bind("<Escape>", self.on_escape_key)` |
-| Escape | `ui/shape_editor_view.py:602` | `self.canvas.bind("<Escape>", self.on_escape_key)` |
-| Escape | `ui/trim_layout_dialog.py:77` | `self.bind("<Escape>", lambda e: self.destroy())` |
-| Escape | `ui/user_dialog.py:59` | `self.bind("<Escape>", lambda e: self.destroy())` |
-| F1 | `ui/layout_editor_view.py:1083` | `w.bind("<F1>", self.on_f1_press)` |
-| F1 | `ui/layout_editor_view.py:1084` | `w.bind("<Key-F1>", self.on_f1_press)` |
-| F11 | `ui/layout_print_dialog.py:989` | `self.bind("<F11>", self.toggle_fullscreen)` |
-| F11 | `ui/main_window.py:92` | `self.bind("<F11>", self.toggle_fullscreen)` |
-| F11 | `ui/shape_editor_view.py:599` | `self.bind("<F11>", self.on_f11_fullscreen)` |
-| F11 | `ui/shape_editor_view.py:600` | `self.canvas.bind("<F11>", self.on_f11_fullscreen)` |
-| F2 | `ui/layout_editor_view.py:1087` | `w.bind("<F2>", self.on_f2_press)` |
-| F2 | `ui/layout_editor_view.py:1088` | `w.bind("<Key-F2>", self.on_f2_press)` |
-| F2 | `ui/session_view.py:905` | `self.tree_shapes.bind("<F2>", self.on_tree_shape_f2)` |
-| F2 | `ui/session_view.py:1056` | `self.tree_mat.bind("<F2>", self.on_mat_f2_key)` |
-| F3 | `ui/layout_editor_view.py:1091` | `w.bind("<F3>", self.on_f3_press)` |
-| F3 | `ui/layout_editor_view.py:1092` | `w.bind("<Key-F3>", self.on_f3_press)` |
-| F4 | `ui/layout_editor_view.py:1099` | `w.bind("<F4>", self.on_f4_press)` |
-| F4 | `ui/layout_editor_view.py:1100` | `w.bind("<Key-F4>", self.on_f4_press)` |
-| F5 | `ui/main_window.py:142` | `self.bind_all("<F5>", lambda e: self.on_refresh_f5())` |
-| F5 | `ui/main_window.py:329` | `tools_menu.add_command(label="Atualizar", accelerator="F5", command=self.on_refr` |
-| F8 | `ui/main_window.py:297` | `file_menu.add_command(label="📟 Abrir por Código de Barras / ID...", accelerator=` |
-| F8 | `ui/main_window.py:721` | `self.bind_all("<F8>", lambda e: self.on_open_by_barcode_dialog())` |
-| Iso_left_tab | `ui/session_view.py:3913` | `entry.bind("<ISO_Left_Tab>", move_prev_col)` |
-| Kp_down | `ui/session_view.py:3905` | `entry.bind("<KP_Down>", move_down)` |
-| Kp_enter | `ui/fill_user_dialog.py:155` | `self.bind("<KP_Enter>", lambda e: self.on_ok())` |
-| Kp_enter | `ui/main_window.py:576` | `self.tree_main.bind("<KP_Enter>", self.on_tree_key_return)` |
-| Kp_enter | `ui/session_view.py:904` | `self.tree_shapes.bind("<KP_Enter>", self.on_tree_shape_enter)` |
-| Kp_enter | `ui/session_view.py:3909` | `entry.bind("<KP_Enter>", move_down)` |
-| Kp_enter | `ui/shape_catalog_view.py:267` | `self.bind("<KP_Enter>", lambda e: self.open_selected_shape())` |
-| Kp_up | `ui/session_view.py:3907` | `entry.bind("<KP_Up>", move_up)` |
-| Left | `ui/layout_editor_view.py:1116` | `self.bind_all("<Left>", lambda e: self.bump_selection_vector(-1, 0))` |
-| Left | `ui/shape_catalog_view.py:264` | `self.bind("<Left>", lambda e: self.navigate_selection(-1, 0))` |
-| Next | `ui/layout_print_dialog.py:991` | `self.bind("<Next>", self.next_page)` |
-| Prior | `ui/layout_print_dialog.py:992` | `self.bind("<Prior>", self.prev_page)` |
+| Escape | `ui/database_connection_dialog.py:65` | `self.bind('<Escape>', lambda event: self.destroy())` |
+| Escape | `ui/dieproc_dialog.py:41` | `self.bind("<Escape>", lambda e: self.destroy())` |
+| Escape | `ui/edit_shape_in_session_dialog.py:148` | `self.bind("<Escape>", lambda e: self.destroy())` |
+| Escape | `ui/fill_user_dialog.py:157` | `self.bind("<Escape>", lambda e: self.on_cancel())` |
+| Escape | `ui/import_materials_dialog.py:50` | `self.bind("<Escape>", lambda e: self.destroy())` |
+| Escape | `ui/layout_converter_dialog.py:71` | `self.bind("<Escape>", lambda e: self.destroy())` |
+| Escape | `ui/layout_editor_view.py:984` | `self.canvas.bind("<Escape>", self.on_canvas_escape)` |
+| Escape | `ui/layout_editor_view.py:1094` | `w.bind("<Escape>", self.cancel_drag)` |
+| Escape | `ui/layout_print_dialog.py:991` | `self.bind("<Escape>", self.on_escape)` |
+| Escape | `ui/main_window.py:95` | `self.bind("<Escape>", self.exit_fullscreen)` |
+| Escape | `ui/main_window.py:700` | `self.bind_all("<Escape>", self.dismiss_popup_menus, add="+")` |
+| Escape | `ui/main_window.py:4341` | `dialog.bind("<Escape>", lambda e: dialog.destroy())` |
+| Escape | `ui/material_codes_view.py:509` | `dlg.bind("<Escape>", lambda e: dlg.destroy())` |
+| Escape | `ui/options_dialog.py:41` | `self.bind("<Escape>", lambda e: self.on_cancel())` |
+| Escape | `ui/session_view.py:3360` | `entry.bind("<Escape>", cancel)` |
+| Escape | `ui/session_view.py:3478` | `dialog.bind("<Escape>", lambda e: dialog.destroy())` |
+| Escape | `ui/session_view.py:3916` | `entry.bind("<Escape>", cancel_edit)` |
+| Escape | `ui/shape_backup_restore_dialog.py:144` | `self.bind("<Escape>", lambda e: self._on_close())` |
+| Escape | `ui/shape_catalog_view.py:269` | `self.bind("<Escape>", lambda e: self.on_close_click())` |
+| Escape | `ui/shape_editor_view.py:612` | `self.bind("<Escape>", self.on_escape_key)` |
+| Escape | `ui/shape_editor_view.py:613` | `self.canvas.bind("<Escape>", self.on_escape_key)` |
+| Escape | `ui/symbolic_dialog.py:31` | `self.bind("<Escape>", lambda e: self.destroy())` |
+| Escape | `ui/trim_layout_dialog.py:78` | `self.bind("<Escape>", lambda e: self.destroy())` |
+| Escape | `ui/user_dialog.py:60` | `self.bind("<Escape>", lambda e: self.destroy())` |
+| F1 | `ui/layout_editor_view.py:1074` | `w.bind("<F1>", self.on_f1_press)` |
+| F1 | `ui/layout_editor_view.py:1075` | `w.bind("<Key-F1>", self.on_f1_press)` |
+| F11 | `ui/layout_print_dialog.py:990` | `self.bind("<F11>", self.toggle_fullscreen)` |
+| F11 | `ui/main_window.py:94` | `self.bind("<F11>", self.toggle_fullscreen)` |
+| F11 | `ui/shape_editor_view.py:610` | `self.bind("<F11>", self.on_f11_fullscreen)` |
+| F11 | `ui/shape_editor_view.py:611` | `self.canvas.bind("<F11>", self.on_f11_fullscreen)` |
+| F2 | `ui/layout_editor_view.py:1078` | `w.bind("<F2>", self.on_f2_press)` |
+| F2 | `ui/layout_editor_view.py:1079` | `w.bind("<Key-F2>", self.on_f2_press)` |
+| F2 | `ui/session_view.py:907` | `self.tree_shapes.bind("<F2>", self.on_tree_shape_f2)` |
+| F2 | `ui/session_view.py:1058` | `self.tree_mat.bind("<F2>", self.on_mat_f2_key)` |
+| F3 | `ui/layout_editor_view.py:1082` | `w.bind("<F3>", self.on_f3_press)` |
+| F3 | `ui/layout_editor_view.py:1083` | `w.bind("<Key-F3>", self.on_f3_press)` |
+| F4 | `ui/layout_editor_view.py:1090` | `w.bind("<F4>", self.on_f4_press)` |
+| F4 | `ui/layout_editor_view.py:1091` | `w.bind("<Key-F4>", self.on_f4_press)` |
+| F5 | `ui/main_window.py:144` | `self.bind_all("<F5>", lambda e: self.on_refresh_f5())` |
+| F5 | `ui/main_window.py:322` | `tools_menu.add_command(label="Atualizar", accelerator="F5", command=self.on_refr` |
+| F8 | `ui/main_window.py:290` | `file_menu.add_command(label="📟 Abrir por Código de Barras / ID...", accelerator=` |
+| F8 | `ui/main_window.py:716` | `self.bind_all("<F8>", lambda e: self.on_open_by_barcode_dialog())` |
+| Iso_left_tab | `ui/session_view.py:3915` | `entry.bind("<ISO_Left_Tab>", move_prev_col)` |
+| Kp_down | `ui/session_view.py:3907` | `entry.bind("<KP_Down>", move_down)` |
+| Kp_enter | `ui/fill_user_dialog.py:156` | `self.bind("<KP_Enter>", lambda e: self.on_ok())` |
+| Kp_enter | `ui/main_window.py:570` | `self.tree_main.bind("<KP_Enter>", self.on_tree_key_return)` |
+| Kp_enter | `ui/session_view.py:906` | `self.tree_shapes.bind("<KP_Enter>", self.on_tree_shape_enter)` |
+| Kp_enter | `ui/session_view.py:3911` | `entry.bind("<KP_Enter>", move_down)` |
+| Kp_enter | `ui/shape_catalog_view.py:268` | `self.bind("<KP_Enter>", lambda e: self.open_selected_shape())` |
+| Kp_up | `ui/session_view.py:3909` | `entry.bind("<KP_Up>", move_up)` |
+| Left | `ui/layout_editor_view.py:1107` | `self.bind_all("<Left>", lambda e: self.bump_selection_vector(-1, 0))` |
+| Left | `ui/shape_catalog_view.py:265` | `self.bind("<Left>", lambda e: self.navigate_selection(-1, 0))` |
+| Next | `ui/layout_print_dialog.py:992` | `self.bind("<Next>", self.next_page)` |
+| Prior | `ui/layout_print_dialog.py:993` | `self.bind("<Prior>", self.prev_page)` |
 | R | `ui/cad_canvas.py:69` | `self.master.bind("<r>", lambda e: self.rotate_selected(45))` |
 | R | `ui/cad_canvas.py:70` | `self.master.bind("<R>", lambda e: self.rotate_selected(45))` |
-| R | `ui/layout_editor_view.py:1109` | `self.bind_all("<Key-r>", lambda e: self.rotate_selected(45))` |
-| R | `ui/layout_editor_view.py:1110` | `self.bind_all("<Key-R>", lambda e: self.rotate_selected(45))` |
-| Return | `ui/alter_sheet_dialog.py:198` | `self.bind("<Return>", lambda e: self.on_confirm())` |
-| Return | `ui/edit_shape_in_session_dialog.py:146` | `self.bind("<Return>", lambda e: self.on_save())` |
-| Return | `ui/fill_user_dialog.py:154` | `self.bind("<Return>", lambda e: self.on_ok())` |
-| Return | `ui/import_materials_dialog.py:84` | `self.ent_filepath.bind("<Return>", lambda e: self.load_file_from_path(self.ent_f` |
-| Return | `ui/main_window.py:575` | `self.tree_main.bind("<Return>", self.on_tree_key_return)` |
-| Return | `ui/main_window.py:622` | `self.grid_lower.bind("<Return>", self.on_grid_double_click)` |
-| Return | `ui/main_window.py:4337` | `dialog.bind("<Return>", lambda e: save())` |
-| Return | `ui/material_codes_view.py:212` | `self.tree.bind("<Return>", lambda e: self.open_edit_selected_dialog())` |
-| Return | `ui/material_codes_view.py:509` | `dlg.bind("<Return>", lambda e: save_action())` |
-| Return | `ui/session_view.py:619` | `self.entry_gap.bind("<Return>", self._on_gap_entry_change)` |
-| Return | `ui/session_view.py:824` | `self.entry_sname.bind("<Return>", self._on_entry_sname_commit)` |
-| Return | `ui/session_view.py:903` | `self.tree_shapes.bind("<Return>", self.on_tree_shape_enter)` |
-| Return | `ui/session_view.py:1055` | `self.tree_mat.bind("<Return>", self.on_mat_enter_key)` |
-| Return | `ui/session_view.py:1159` | `self.tree_lays.bind("<Return>", self.on_layout_row_double_click)` |
-| Return | `ui/session_view.py:3356` | `entry.bind("<Return>", lambda e: commit())` |
-| Return | `ui/session_view.py:3475` | `dialog.bind("<Return>", lambda e: save())` |
-| Return | `ui/session_view.py:3908` | `entry.bind("<Return>", move_down)` |
-| Return | `ui/shape_catalog_view.py:266` | `self.bind("<Return>", lambda e: self.open_selected_shape())` |
-| Return | `ui/shape_editor_view.py:682` | `self.entry_name.bind("<Return>", lambda e: self.on_name_change())` |
-| Return | `ui/shape_editor_view.py:728` | `self.entry_vx.bind("<Return>", self.on_vertex_entry_change)` |
-| Return | `ui/shape_editor_view.py:733` | `self.entry_vy.bind("<Return>", self.on_vertex_entry_change)` |
-| Return | `ui/trim_layout_dialog.py:76` | `self.bind("<Return>", lambda e: self.on_confirm())` |
-| Return | `ui/user_dialog.py:92` | `self.entry_name.bind("<Return>", lambda e: self.on_add_user())` |
-| Right | `ui/layout_editor_view.py:1117` | `self.bind_all("<Right>", lambda e: self.bump_selection_vector(1, 0))` |
-| Right | `ui/shape_catalog_view.py:265` | `self.bind("<Right>", lambda e: self.navigate_selection(1, 0))` |
-| Shift+F3 | `ui/layout_editor_view.py:1096` | `w.bind("<Shift-F3>", lambda e: "break")` |
-| Shift+F3 | `ui/layout_editor_view.py:1097` | `w.bind("<Shift-Key-F3>", lambda e: "break")` |
-| Shift+Return | `ui/session_view.py:3910` | `entry.bind("<Shift-Return>", move_up)` |
-| Shift+Tab | `ui/session_view.py:3360` | `entry.bind("<Shift-Tab>", on_shift_tab)` |
-| Shift+Tab | `ui/session_view.py:3912` | `entry.bind("<Shift-Tab>", move_prev_col)` |
-| Space | `ui/add_shapes_dialog.py:156` | `self.tree.bind("<space>", self.on_tree_space)` |
-| Space | `ui/main_window.py:572` | `self.tree_main.bind("<space>", self.on_tree_space_toggle)` |
-| Tab | `ui/session_view.py:3359` | `entry.bind("<Tab>", on_tab)` |
-| Tab | `ui/session_view.py:3911` | `entry.bind("<Tab>", move_next_col)` |
-| Up | `ui/layout_editor_view.py:1118` | `self.bind_all("<Up>", lambda e: self.bump_selection_vector(0, 1))` |
-| Up | `ui/session_view.py:3906` | `entry.bind("<Up>", move_up)` |
-| Up | `ui/shape_catalog_view.py:262` | `self.bind("<Up>", lambda e: self.navigate_selection(0, -1))` |
+| R | `ui/layout_editor_view.py:1100` | `self.bind_all("<Key-r>", lambda e: self.rotate_selected(45))` |
+| R | `ui/layout_editor_view.py:1101` | `self.bind_all("<Key-R>", lambda e: self.rotate_selected(45))` |
+| Return | `ui/alter_sheet_dialog.py:199` | `self.bind("<Return>", lambda e: self.on_confirm())` |
+| Return | `ui/database_connection_dialog.py:66` | `self.bind('<Return>', lambda event: self.test_connection())` |
+| Return | `ui/edit_shape_in_session_dialog.py:147` | `self.bind("<Return>", lambda e: self.on_save())` |
+| Return | `ui/fill_user_dialog.py:155` | `self.bind("<Return>", lambda e: self.on_ok())` |
+| Return | `ui/import_materials_dialog.py:85` | `self.ent_filepath.bind("<Return>", lambda e: self.load_file_from_path(self.ent_f` |
+| Return | `ui/main_window.py:569` | `self.tree_main.bind("<Return>", self.on_tree_key_return)` |
+| Return | `ui/main_window.py:616` | `self.grid_lower.bind("<Return>", self.on_grid_double_click)` |
+| Return | `ui/main_window.py:4340` | `dialog.bind("<Return>", lambda e: save())` |
+| Return | `ui/material_codes_view.py:211` | `self.tree.bind("<Return>", lambda e: self.open_edit_selected_dialog())` |
+| Return | `ui/material_codes_view.py:508` | `dlg.bind("<Return>", lambda e: save_action())` |
+| Return | `ui/session_view.py:621` | `self.entry_gap.bind("<Return>", self._on_gap_entry_change)` |
+| Return | `ui/session_view.py:826` | `self.entry_sname.bind("<Return>", self._on_entry_sname_commit)` |
+| Return | `ui/session_view.py:905` | `self.tree_shapes.bind("<Return>", self.on_tree_shape_enter)` |
+| Return | `ui/session_view.py:1057` | `self.tree_mat.bind("<Return>", self.on_mat_enter_key)` |
+| Return | `ui/session_view.py:1161` | `self.tree_lays.bind("<Return>", self.on_layout_row_double_click)` |
+| Return | `ui/session_view.py:3358` | `entry.bind("<Return>", lambda e: commit())` |
+| Return | `ui/session_view.py:3477` | `dialog.bind("<Return>", lambda e: save())` |
+| Return | `ui/session_view.py:3910` | `entry.bind("<Return>", move_down)` |
+| Return | `ui/shape_catalog_view.py:267` | `self.bind("<Return>", lambda e: self.open_selected_shape())` |
+| Return | `ui/shape_editor_view.py:693` | `self.entry_name.bind("<Return>", lambda e: self.on_name_change())` |
+| Return | `ui/shape_editor_view.py:739` | `self.entry_vx.bind("<Return>", self.on_vertex_entry_change)` |
+| Return | `ui/shape_editor_view.py:744` | `self.entry_vy.bind("<Return>", self.on_vertex_entry_change)` |
+| Return | `ui/shape_library_view.py:216` | `self.cards_canvas.bind('<Return>', lambda event: self.edit_focused())` |
+| Return | `ui/symbolic_dialog.py:32` | `self.bind("<Return>", lambda e: self._accept())` |
+| Return | `ui/trim_layout_dialog.py:77` | `self.bind("<Return>", lambda e: self.on_confirm())` |
+| Return | `ui/user_dialog.py:93` | `self.entry_name.bind("<Return>", lambda e: self.on_add_user())` |
+| Right | `ui/layout_editor_view.py:1108` | `self.bind_all("<Right>", lambda e: self.bump_selection_vector(1, 0))` |
+| Right | `ui/shape_catalog_view.py:266` | `self.bind("<Right>", lambda e: self.navigate_selection(1, 0))` |
+| Shift+F3 | `ui/layout_editor_view.py:1087` | `w.bind("<Shift-F3>", lambda e: "break")` |
+| Shift+F3 | `ui/layout_editor_view.py:1088` | `w.bind("<Shift-Key-F3>", lambda e: "break")` |
+| Shift+Return | `ui/session_view.py:3912` | `entry.bind("<Shift-Return>", move_up)` |
+| Shift+Tab | `ui/session_view.py:3362` | `entry.bind("<Shift-Tab>", on_shift_tab)` |
+| Shift+Tab | `ui/session_view.py:3914` | `entry.bind("<Shift-Tab>", move_prev_col)` |
+| Space | `ui/add_shapes_dialog.py:157` | `self.tree.bind("<space>", self.on_tree_space)` |
+| Space | `ui/main_window.py:566` | `self.tree_main.bind("<space>", self.on_tree_space_toggle)` |
+| Space | `ui/shape_library_view.py:215` | `self.cards_canvas.bind('<space>', lambda event: self.toggle_shape(self.focused_i` |
+| Tab | `ui/session_view.py:3361` | `entry.bind("<Tab>", on_tab)` |
+| Tab | `ui/session_view.py:3913` | `entry.bind("<Tab>", move_next_col)` |
+| Up | `ui/layout_editor_view.py:1109` | `self.bind_all("<Up>", lambda e: self.bump_selection_vector(0, 1))` |
+| Up | `ui/session_view.py:3908` | `entry.bind("<Up>", move_up)` |
+| Up | `ui/shape_catalog_view.py:263` | `self.bind("<Up>", lambda e: self.navigate_selection(0, -1))` |
+| {key} | `ui/shape_library_view.py:220` | `self.cards_canvas.bind(f'<{key}>', lambda event, x=dx, y=dy: self._navigate(x, y` |
 
 **Conflitos reais detectados:**
 
@@ -3314,7 +3412,7 @@ tar -xzf CorteAC-Linux-x64.tar.gz
 cd CorteAC && chmod +x instalar_atalho.sh && ./instalar_atalho.sh
 ```
 
-O atalho "CorteAC" passa a aparecer no menu e na área de trabalho com o ícone do pacote;
+O atalho "OpenCorte" passa a aparecer no menu e na área de trabalho com o ícone do pacote;
 se o ambiente tiver cache, sair/entrar na sessão resolve.
 
 ---
@@ -3357,7 +3455,7 @@ Suíte: **507 testes + 1 skip**.
 
 ## 8.33. Sincronização Automática do Atalho na Abertura (v1.6.12) `[CONFIRMADO]`
 
-Sintoma: mesmo após a v1.6.11, o ícone do Mint continuava com o nome/ícone antigo ("CorteAC").
+Sintoma: mesmo após a v1.6.11, o ícone do Mint continuava com o nome/ícone antigo ("OpenCorte").
 
 ### 1. Causa
 
@@ -3370,7 +3468,7 @@ Sintoma: mesmo após a v1.6.11, o ícone do Mint continuava com o nome/ícone an
 
 - Novo `ui/desktop_shortcut.py::sincronizar_atalho()` chamado **no início do `main()`** (antes de
   `--version`/`--check-db`):
-  - procura **qualquer** atalho do CorteAC no menu (`~/.local/share/applications`) e nas pastas de
+  - procura **qualquer** atalho do OpenCorte no menu (`~/.local/share/applications`) e nas pastas de
     área de trabalho (`Desktop`, `Área de Trabalho`, `Area de Trabalho`);
   - se existir algum (inclusive o antigo `CorteAC.desktop` criado à mão), remove e recria
     `corteac-<versão>.desktop` com `Name=CorteAC-<versão>`, `Exec=` aspeado, `Icon=` do pacote,
@@ -3982,7 +4080,7 @@ Na arquitetura anterior, `preencher_buracos_em_placas()` rodava exclusivamente *
 
 ### 1. Objetivo e problema
 
-O operador calcula uma sessão com várias placas e precisa levar o resultado para a máquina ATOM por uma pasta de rede ou pendrive. Antes, o CorteAC só exportava o layout ativo (`.lay` único) e não copiava os moldes usados; o `.lay` gerado também apontava `dLib` para a raiz da biblioteca, não para a pasta de entrega.
+O operador calcula uma sessão com várias placas e precisa levar o resultado para a máquina ATOM por uma pasta de rede ou pendrive. Antes, o OpenCorte só exportava o layout ativo (`.lay` único) e não copiava os moldes usados; o `.lay` gerado também apontava `dLib` para a raiz da biblioteca, não para a pasta de entrega.
 
 A v1.6.29 adiciona o fluxo **sessão → pasta pronta para a máquina**, com todas as placas e somente os `.die` referenciados.
 
@@ -4311,7 +4409,7 @@ Operadores e modelistas trabalham frequentemente com múltiplos ecossistemas de 
   - `convert_file` e `convert_batch`: Conversão individual e em lote com retorno estruturado `ConversionResult`.
   - Suporte a execução CLI: `python -m cad.layout_converter <arquivo>`.
 - **Interface Gráfica (`ui/layout_converter_dialog.py`)**:
-  - Diálogo modal autêntico no tema CorteAC / Windows XP.
+  - Diálogo modal autêntico no tema OpenCorte / Windows XP.
   - Seleção de múltiplos arquivos e pastas, tabela com status em tempo real, escolha de diretório de destino, barra de progresso suave, log detalhado e botão para abrir a pasta de destino.
 - **Menu Ferramentas (`ui/main_window.py`)**:
   - Inclusão do comando `🔄 Conversor de Arquivos (.lay ⇄ .onx)...` no menu Ferramentas e método `open_converter_dialog`.
@@ -4504,7 +4602,7 @@ O operador solicitou: *"adicionar no bkp uma opcao de programar as datas e horas
 
 ## 8.65. Backup, Restauração e Agendamento Estendidos para Sessões de Corte e Layouts (v1.6.47) `[CONFIRMADO]`
 
-- **Contexto**: A ferramenta de backup do CorteAC operava exclusivamente sobre o catálogo de moldes cadastrados (`shapes.json`, pastas e arquivos `.die`). O operador solicitou a inclusão das sessões de corte e seus respectivos layouts (`lay0000`, `lay0001`, ...) no sistema de backups, permitindo exportar e restaurar a produção completa ou de forma seletiva com total retrocompatibilidade.
+- **Contexto**: A ferramenta de backup do OpenCorte operava exclusivamente sobre o catálogo de moldes cadastrados (`shapes.json`, pastas e arquivos `.die`). O operador solicitou a inclusão das sessões de corte e seus respectivos layouts (`lay0000`, `lay0001`, ...) no sistema de backups, permitindo exportar e restaurar a produção completa ou de forma seletiva com total retrocompatibilidade.
 - **Implementação e Alterações**:
   - **`cad/shape_backup.py`**:
     - **Suporte a Escopos de Backup**: Introduzido parâmetro `backup_scope` com opções `"all"` (Moldes + Sessões + Layouts + Materiais), `"shapes_only"` e `"sessions_only"`, além de filtro opcional por pasta de produção `session_filter_job`.
@@ -4932,7 +5030,7 @@ Com dados confiáveis e validações definidas, avaliar comparação do aproveit
 | Sáb, 24/10/2026 | 10:45 | Antigravity | Implementação da regra calçadista de Camadas de Corte (Layers) para cálculo de nesting e contadores no layout: fórmula de produção $N_{lay} = \lceil (P \times 2) / L \rceil$ diferenciando pares solicitados de peças físicas na mesa CAD (4 camadas com 20 pares $\rightarrow$ 10 peças na mesa e exibição `10/20 0/20`; 2 camadas com 20 pares $\rightarrow$ 20 peças na mesa e exibição `20/20 0/20`); configuração de camadas puxada do material cadastrado, com edição direta na aba Materiais da sessão e diálogo interativo nos menus do Layout Editor (`Nesting -> Camadas de Corte (Layers)...` e `Tools -> Alterar Camadas de Corte (Layers)...`); novos testes unitários dedicados em `tests/test_layers_pairs_nesting.py`. | `cad/nesting_engine.py`, `cad/macro_engine.py`, `ui/main_window.py`, `ui/session_view.py`, `ui/layout_editor_view.py`, `tests/test_layers_pairs_nesting.py`, `PROJETO_ATOM_JOBMANAGER.md` |
 | Sáb, 24/10/2026 | 11:15 | Antigravity | Correção estrutural do Molde 36a (19/20 vs 18 peças) e contadores da barra lateral no Layout Editor: eliminação da colisão entre o ID sequencial da peça (141) e o ID do molde 36a (141) que gerava contagem fantasma; implementação de trava estrita de compatibilidade de tamanho (`if p_sz and t_sz and p_sz != t_sz: continue`) em `draw_sidebar` e `_poll_nest_worker`; inclusão e posicionamento das 2 peças faltantes do tamanho 36a a 90° na faixa livre superior da chapa ($Y=2910\text{ mm}$, $H=83\text{ mm}$ em vão de $129.3\text{ mm}$ com 0 colisão), totalizando exatamente 300 peças na Sessão 3 (20 peças para todos os 15 tamanhos do 22a ao 36a) e exibição uniforme de `20/20 0/20`; sincronização com MySQL e SQLite de reserva; recompilação do executável Linux standalone (`teste_dola_linux`) e atualização do pendrive Windows 11. | `ui/main_window.py`, `ui/layout_editor_view.py`, `database.py`, `jobmanager.db`, `teste_dola_linux`, `teste_dola_win11_pendrive/app/`, `PROJETO_ATOM_JOBMANAGER.md` |
 | Sáb, 24/10/2026 | 12:45 | Antigravity | Remoção definitiva do item artificial 'grade_ch_0' (0/0 0/0) da barra lateral do Layout Editor: eliminação da injeção forçada do elemento dummy em `update_sidebar_targets` e das rotinas de desenho especial em `draw_sidebar`; renderização estrita e exclusiva dos moldes reais pertencentes à sessão ativa; atualização do teste unitário em `tests/test_layout_editor_shortcuts.py` (55/55 testes passando na suíte); recompilação do executável Linux (`teste_dola_linux`) e sincronização dos pacotes. | `ui/layout_editor_view.py`, `tests/test_layout_editor_shortcuts.py`, `teste_dola_linux`, `teste_dola_win11_pendrive/app/`, `PROJETO_ATOM_JOBMANAGER.md` |
-| Sáb, 24/10/2026 | 14:15 | Antigravity | Inventário completo de engenharia reversa do editor de layout original (ATOM Layout.exe / LayoutNT, v3.2.7.0) e FreeNest.exe (v1.0.8.1): extração de 8 menus Win32, 4 toolbars, 3 tabelas de aceleradores, 23 caixas de diálogo, cursores, help oficial e engenharia reversa da rotação livre 360° com mouse, setas de bump magnético e comparação sistemática com o LayoutEditorView do CorteAC (`docs/LAYOUT_EDITOR_RE.md`, `tools/re_dump/`, `docs/ref/layout_re/`). | `docs/LAYOUT_EDITOR_RE.md`, `tools/re_dump/`, `docs/ref/layout_re/`, `PROJETO_ATOM_JOBMANAGER.md` |
+| Sáb, 24/10/2026 | 14:15 | Antigravity | Inventário completo de engenharia reversa do editor de layout original (ATOM Layout.exe / LayoutNT, v3.2.7.0) e FreeNest.exe (v1.0.8.1): extração de 8 menus Win32, 4 toolbars, 3 tabelas de aceleradores, 23 caixas de diálogo, cursores, help oficial e engenharia reversa da rotação livre 360° com mouse, setas de bump magnético e comparação sistemática com o LayoutEditorView do OpenCorte (`docs/LAYOUT_EDITOR_RE.md`, `tools/re_dump/`, `docs/ref/layout_re/`). | `docs/LAYOUT_EDITOR_RE.md`, `tools/re_dump/`, `docs/ref/layout_re/`, `PROJETO_ATOM_JOBMANAGER.md` |
 | Dom, 25/10/2026 | 09:55 | Antigravity | Implementação do Menu de Contexto 102 com submenu Fill no LayoutEditorView: gatilho de clique rápido (< 2.65 px) com preservação de arrasto de rotação livre (> 2.65 px); seleção automática de peça não selecionada sob o cursor; menu Win32 completo com ordem estrita (Position..., Delete, Delete cut pieces, Mirror, Revert cut status, Substitute..., Duplicate, Fill, Info..., View..., Set Rotation Center, Check Overlay, Advanced Substitute...) e submenus Duplicate e Fill; motor geométrico `cad/fill_engine.py` com preenchimento contorno a contorno por busca binária (`Row` ID 52103, `Row Alternate` 0°/180° ID 52104 e `Column` ID 50007), respeito às margens da chapa, zero colisões SAT, 1 único snapshot atômico no `undo_stack` (Ctrl+Z) e marcação de modificado (*); 7 novos testes unitários dedicados em `tests/test_layout_editor_fill.py` (100% aprovados, 63/63 testes no subsistema de layout) e atualização do comparativo em `LAYOUT_EDITOR_RE.md`. | `cad/fill_engine.py`, `ui/layout_editor_view.py`, `tests/test_layout_editor_fill.py`, `docs/LAYOUT_EDITOR_RE.md`, `docs/PROJETO_ATOM_JOBMANAGER.md` |
 
 | Dom, 25/10/2026 | 13:15 | Antigravity | Conclusão do Menu 102 e Preenchimento Regular completo (Fill Sheet ID 52105, Sheet Alternate ID 52106, User Dialog 159 ID 50003), ajuste de tolerância a jitter de clique físico (6.0 px) e recompilação dos executáveis Linux: adição de `fill_sheet_pieces`, `fill_sheet_alternate_pieces` e `fill_user_pieces` em `cad/fill_engine.py`; modal Tkinter autêntico `FillUserDialog` (`ui/fill_user_dialog.py`) reproduzindo o Diálogo 159 ('Set User constraints') com retenção em RAM; preservação estrita da seleção do operador com clique direito; ajuste da tolerância de clique rápido para 6.0 px prevenindo que micro-movimentos do mouse físico suprimam o menu; 25 testes em `tests/test_layout_editor_fill.py` e 177 testes passando em toda a suíte (100%); recompilação do executável Linux standalone (`corteac_linux`, `teste_dola_linux`, `dist/CorteAC`). | `cad/fill_engine.py`, `ui/fill_user_dialog.py`, `ui/layout_editor_view.py`, `tests/test_layout_editor_fill.py`, `corteac_linux`, `teste_dola_linux`, `dist/CorteAC`, `PROJETO_ATOM_JOBMANAGER.md` |
@@ -4942,7 +5040,7 @@ Com dados confiáveis e validações definidas, avaliar comparação do aproveit
 | Ter, 27/10/2026 | 10:20 | Antigravity | Correção da renderização no mini-preview e desbloqueio da abertura no Layout Editor para sessões multi-placa na SessionView: (1) Vinculação dos eventos `<<TreeviewSelect>>`, `<ButtonRelease-1>` e `<Return>` em `tree_lays` com atualização dinâmica do indicador de seleção `▶` na tabela; (2) Redesenho imediato do mini-preview CAD (`draw_mini_layout_preview`) para a placa selecionada na tabela, exibindo contornos reais, rotações e cores de cada peça, e cabeçalho identificador `Placa X - layXXXX (H x W cm)`; (3) Implementação de `_resolve_piece_contour` na `SessionView` e `LayoutEditorView` resolvendo contornos geométricos a partir de shape embutido, lista de moldes da sessão, catálogo ou banco de dados prevenindo peças invisíveis; (4) Desbloqueio e habilitação dos botões '✏️ Editor...', '🖨️ Imprimir...' e novo botão '🔍 Abrir Placa Selecionada no Editor' na Aba Layout; (5) Correção da salvaguarda em `MainWindow.show_layout_editor` para reconhecer `layouts` múltiplos sem bloquear com aviso quando `placed_pieces` estiver vazio no nível raiz; (6) 4 novos testes unitários adicionados em `tests/test_multisheet_nesting.py` (21/21 passando) e 231 testes passando na suíte geral com 100% de sucesso. | `ui/session_view.py`, `ui/main_window.py`, `ui/layout_editor_view.py`, `tests/test_multisheet_nesting.py`, `docs/PROJETO_ATOM_JOBMANAGER.md` |
 | Ter, 27/10/2026 | 12:45 | Antigravity | Legenda de moldes na impressão A4 com Shape ID e quantidade de pares 'n/m' em fonte reduzida (`LayoutPrintDialog`, Ctrl+P): (1) Formatação de pares por tamanho no formato 'tamanho: n/m' onde n = pares nesta placa impressa e m = total de pares pedidos na sessão (em placa única n = m como '28: 40/40'; em multi-placa soma de n nas placas = m; n > m destacado em vermelho `#dc2626`; eliminação completa de '/0'); (2) Contagem rigorosa em pares (`peças / 2` com 1 camada, peças com 2 camadas, `peças * 2` com 4 camadas) e formatação limpa de tamanhos (inteiros sem '.00', meios com '.5'); (3) Exibição do Shape ID ao lado do nome do molde em fonte menor e cinza escuro (`129_187_Tras  #1735`), omitido sem '#' quando ausente; (4) Quebra automática de linha entre tamanhos na vírgula sem quebrar tokens n/m e sem estourar margens A4, com ajuste dinâmico da área do gráfico CAD para nunca invadir a legenda; (5) Rodapé explicativo 'n/m = pares nesta placa / pedido total' em fonte reduzida; (6) Exportação idêntica via Pillow em alta resolução (`render_pillow_page`); (7) Propagação transparente dos dados de sessão e layouts em `SessionView` e `LayoutEditorView`; 11 novos testes unitários dedicados em `tests/test_layout_print_legend.py` (248 testes passando em toda a suíte do projeto com 100% de sucesso). | `ui/layout_print_dialog.py`, `ui/layout_editor_view.py`, `ui/session_view.py`, `tests/test_layout_print_legend.py`, `docs/PROJETO_ATOM_JOBMANAGER.md` |
 | Ter, 27/10/2026 | 13:25 | Antigravity | Remoção definitiva da expressão 'placa' (tanto '0 placa' quanto '16 placa') na grade de moldes da barra lateral do Layout Editor (`LayoutEditorView`): em sessões com múltiplas placas, a linha de contadores sob a miniatura de cada molde exibe estritamente a relação limpa `{tot}/{req}` (ex: `16/16`), eliminando completamente o prefixo `{N} placa |`, restaurando o padrão visual do `Layout.exe` e mantendo a barra lateral limpa; testes unitários dedicados em `tests/test_multisheet_nesting.py` atualizados e aprovados (27/27); recompilação concluída do executável Linux standalone (`corteac_linux`, `teste_dola_linux`, `dist/CorteAC`). | `ui/layout_editor_view.py`, `tests/test_multisheet_nesting.py`, `docs/PROJETO_ATOM_JOBMANAGER.md` |
-| Qua, 28/10/2026 | 12:15 | Antigravity | Otimização Estrutural de Gargalos de CPU do CorteAC (Fases 0 a 4 — Lançamento v1.2.0): (1) Novo Motor de Nesting Analítico No-Fit Polygon (`NfpBackend` em `cad/nesting_backend.py` e `cad/nfp.py`) promovido a padrão, 4,11× mais rápido (19,5 ms vs 80,3 ms por chapa) com somas de Minkowski e decomposição convexa em Python puro, eliminando a busca binária de colisão, zero colisões em 500 peças reais, fallback automático e rollback instantâneo via `CORTEAC_BACKEND=python`; (2) Otimização CAM CNC de Trajetória (Strip-TSP com 2-Opt + Or-opt intercalado em `cad/exporter.py`) reduzindo em até 11,62% o percurso em vazio do cabeçote (G00) e execução 12× a 46× mais veloz (95 ms para N=200); (3) Renderização acelerada no `LayoutEditorView` para 7,60 ms em 300 peças via 1D Sweep & Prune e tabelas estáticas de tags (`_PIECE_TAGS`), arraste fluido a 0,22 ms/evento (~4.500 ev/s) com cache geométrico de contorno (99,83% hit rate) e 100% de fidelidade visual Win32 MDI (0 px de divergência em 6 cenários de regressão visual); (4) Relatório técnico de produção e procedimentos em `docs/FASE4_RELATORIO_PRODUCAO.md`; 277 testes unitários verdes (+29 novos testes, 100% de sucesso). | `cad/nesting_backend.py`, `cad/nfp.py`, `cad/exporter.py`, `ui/layout_editor_view.py`, `tests/test_nesting_backend.py`, `tests/test_nfp.py`, `tests/test_exporter_tsp.py`, `tests/test_layout_editor_visual_regression.py`, `docs/FASE4_RELATORIO_PRODUCAO.md`, `docs/PROJETO_ATOM_JOBMANAGER.md` |
+| Qua, 28/10/2026 | 12:15 | Antigravity | Otimização Estrutural de Gargalos de CPU do OpenCorte (Fases 0 a 4 — Lançamento v1.2.0): (1) Novo Motor de Nesting Analítico No-Fit Polygon (`NfpBackend` em `cad/nesting_backend.py` e `cad/nfp.py`) promovido a padrão, 4,11× mais rápido (19,5 ms vs 80,3 ms por chapa) com somas de Minkowski e decomposição convexa em Python puro, eliminando a busca binária de colisão, zero colisões em 500 peças reais, fallback automático e rollback instantâneo via `CORTEAC_BACKEND=python`; (2) Otimização CAM CNC de Trajetória (Strip-TSP com 2-Opt + Or-opt intercalado em `cad/exporter.py`) reduzindo em até 11,62% o percurso em vazio do cabeçote (G00) e execução 12× a 46× mais veloz (95 ms para N=200); (3) Renderização acelerada no `LayoutEditorView` para 7,60 ms em 300 peças via 1D Sweep & Prune e tabelas estáticas de tags (`_PIECE_TAGS`), arraste fluido a 0,22 ms/evento (~4.500 ev/s) com cache geométrico de contorno (99,83% hit rate) e 100% de fidelidade visual Win32 MDI (0 px de divergência em 6 cenários de regressão visual); (4) Relatório técnico de produção e procedimentos em `docs/FASE4_RELATORIO_PRODUCAO.md`; 277 testes unitários verdes (+29 novos testes, 100% de sucesso). | `cad/nesting_backend.py`, `cad/nfp.py`, `cad/exporter.py`, `ui/layout_editor_view.py`, `tests/test_nesting_backend.py`, `tests/test_nfp.py`, `tests/test_exporter_tsp.py`, `tests/test_layout_editor_visual_regression.py`, `docs/FASE4_RELATORIO_PRODUCAO.md`, `docs/PROJETO_ATOM_JOBMANAGER.md` |
 | Sex, 30/10/2026 | 11:15 | Antigravity | Catálogo de Moldes por Artigo, Modos de Encaixe em 3 Camadas, Trava de Segurança no Shape Editor, Otimizações RDP e Cache Analítico NFP (Lançamento v1.3.0): (1) Novo Catálogo de Moldes (`ShapeCatalogView` em `ui/shape_catalog_view.py`) com grade matricial por moldes e tamanhos (22a ao 45), busca ultra-rápida (< 3 ms) via índice composto no banco (`004_add_shapes_index.sql`), visualização de contornos e atalhos rápidos; (2) Arquitetura de Modos de Encaixe em 3 Camadas (`NestingModeWidget` em `ui/nesting_mode_widget.py`, `ui/session_view.py`, migração `003_add_session_nesting_mode.sql`): Camada 1 com modos visuais (Automático, Rápido, Econômico, Fitas, Retalhos, Personalizado), Camada 2 com parâmetros avançados e Camada 3 com painel de depuração (`DebugPanel`) e macros (`MacroPanel`); (3) Trava de Segurança e Proteção de Geometria no Shape Editor (`ShapeEditorView`: `🔒 Editar Geometria` / `🔓 Geometria Destravada`) com alerta de confirmação contra alterações acidentais de matrizes de corte, modo ferramenta de rotação (`rotate`), alternador de linhas de costura (`stitching`) e suporte a tela cheia/maximização com tecla `Escape`; (4) Otimizações algorítmicas no motor de nesting (`cad/macro_engine.py`): algoritmo Ramer-Douglas-Peucker (RDP) para simplificação inteligente de contornos complexos (> 50 vértices), cache analítico horizontal NFP (`_DX_SEP_CACHE`, `_POLY0_CACHE`, `clear_macro_caches`) e modo determinístico no cérebro de IA bandit (`NestingAIBrain: deterministic=True`); (5) Limpeza completa de artefatos temporários e backups locais (~800 MB); (6) Suíte expandida para 336 testes automatizados (335 aprovados, 1 skip) com 100% de estabilidade. | `ui/shape_catalog_view.py`, `ui/nesting_mode_widget.py`, `ui/macro_panel.py`, `ui/debug_panel.py`, `ui/shape_editor_view.py`, `ui/session_view.py`, `ui/main_window.py`, `cad/macro_engine.py`, `cad/ai_learner.py`, `database.py`, `db/schema_mysql.sql`, `db/migrations/003_add_session_nesting_mode.sql`, `db/migrations/004_add_shapes_index.sql`, `tests/test_shape_catalog_view.py`, `tests/test_shape_editor_fullscreen.py`, `tests/test_shape_editor_security.py`, `tests/test_nesting_mode_architecture.py`, `tests/test_macro_engine_ia_teste_optimized.py`, `config.py`, `.github/workflows/release.yml`, `docs/PROJETO_ATOM_JOBMANAGER.md` |
 | Sex, 30/10/2026 | 12:20 | Antigravity | Feedback Visual de Nesting com Barra de Progresso Indeterminada e Bloqueio de Botões (Fase 6.5): (1) Adição de barra de progresso indeterminada (`ttk.Progressbar`, modo `indeterminate`) e rótulo de status dinâmico na parte inferior de `SessionView` (`ui/session_view.py`), com inicialização oculta sem consumo de espaço; (2) Métodos `show_progress()` e `hide_progress()` em `SessionView` controlando ciclo de vida, animação contínua, status transitório (`Calculando...`) e desabilitação atômica de botões (`[Gerar]`, `[Em espera]`, `[Refazer]`) prevenindo cliques duplos e concorrência; (3) Integração assíncrona na thread `_worker` e `_poll_nest_worker` em `MainWindow` (`ui/main_window.py`) com medição de tempo CAM via `time.perf_counter()`, exibição de tempo na status bar (ex: `concluído em 87 ms`) e tratamento resiliente de erros/retornos antecipados; (4) Nova suíte com 5 testes unitários dedicados em `tests/test_session_view_progress.py` (340/341 testes passando em todo o projeto, 100% de sucesso). | `ui/session_view.py`, `ui/main_window.py`, `tests/test_session_view_progress.py`, `docs/PROJETO_ATOM_JOBMANAGER.md` |
 | Sex, 30/10/2026 | 12:47 | Antigravity | Exclusão Múltipla de Moldes na SessionView via Tecla Delete e Menu de Contexto: (1) Suporte a exclusão em lote na grade de moldes da sessão (`tree_shapes` em `ui/session_view.py`), coletando todos os itens selecionados e removendo a restrição legada a um único índice (`sel[0]`); (2) Diálogo de confirmação dinâmico com mensagem personalizada no singular para 1 molde e plural com contagem para múltiplos moldes ($N > 1$); (3) Preservação de seleção múltipla (feita via Shift ou Ctrl) ao clicar com botão direito do mouse para abrir o menu de contexto, adaptando o rótulo do comando para `🗑️ Remover N Moldes da Sessão`; (4) Reatribuição automática de sequência contínua 1..N sem buracos, sincronização atômica com banco de dados/memória e limpeza do pré-visualizador CAD; (5) Retorno de `"break"` nos eventos `<Delete>` e `<BackSpace>` impedindo propagação e priorização de foco da `SessionView` em `MainWindow.on_global_delete_key`; (6) Nova suíte com 5 testes unitários dedicados em `tests/test_session_shapes_multidelete.py` (345 testes aprovados em todo o projeto, 100% de sucesso). | `ui/session_view.py`, `ui/main_window.py`, `tests/test_session_shapes_multidelete.py`, `docs/PROJETO_ATOM_JOBMANAGER.md` |
@@ -4975,6 +5073,7 @@ Com dados confiáveis e validações definidas, avaliar comparação do aproveit
 <!-- AUTO:gitlog:start -->
 | Commit | Data | Autor | Mensagem |
 |---|---|---|---|
+| `2e6caf9` | 2026-11-11 | Doletabgi | docs: registra publicacao e validacao da v1.8.6 [skip ci] |
 | `e0b9a26` | 2026-11-11 | Doletabgi | fix(ci): estabiliza build Linux e prepara v1.8.6 |
 | `10389ab` | 2026-11-11 | Doletabgi | fix(print): ficha de producao e manutencao gradual v1.8.5 |
 | `856b186` | 2026-11-09 | Doletabgi | fix(release): publica apenas instalador com versao |
@@ -4989,12 +5088,11 @@ Com dados confiáveis e validações definidas, avaliar comparação do aproveit
 | `07ccbc2` | 2026-11-07 | Doletabgi | feat(shapes): programacao de datas e horas de backup automatico de moldes (v1.6.44) |
 | `097f102` | 2026-11-07 | Doletabgi | feat(shapes): ferramenta de backup e restauracao de moldes no menu ferramentas (v1.6.43) |
 | `032f7a4` | 2026-11-07 | Doletabgi | feat(layout): identificar placas dos moldes na barra lateral (v1.6.42) |
-| `5193122` | 2026-11-07 | Doletabgi | feat(toolbar): retirar botao exportar g-code da toolbar e adicionar no menu ferramentas (v1.6.41) |
 <!-- AUTO:gitlog:end -->
 
 ---
 
-| Sáb, 24/10/2026 | 15:05 | DeepSeek | Otimização da velocidade de arraste de peças no Layout Editor (CorteAC) com coalescência de eventos `<B1-Motion>` a ~125 Hz, descarte do frame pendente e consolidação no release, fim das reconfigurações de cursor/label por pixel (status a ~30 Hz), transformação única por frame, realce de colisão sem `itemconfig` redundante, pan/divisor com redraw agendado e colisão do `redraw()` em grade espacial acima de 60 peças; novo benchmark `tools/bench_layout_drag.py` (120 peças: ~3,1 ms → ~0,9 ms por evento, ~319 → ~1.070 eventos/s; release 300 peças: ~20,9 ms → ~15,6 ms); 134 testes passando (1 skip) | `ui/layout_editor_view.py`, `tests/test_layout_editor_shortcuts.py`, `tools/bench_layout_drag.py`, `PROJETO_ATOM_JOBMANAGER.md`, `corteac_linux`, `dist/CorteAC` |
+| Sáb, 24/10/2026 | 15:05 | DeepSeek | Otimização da velocidade de arraste de peças no Layout Editor (OpenCorte) com coalescência de eventos `<B1-Motion>` a ~125 Hz, descarte do frame pendente e consolidação no release, fim das reconfigurações de cursor/label por pixel (status a ~30 Hz), transformação única por frame, realce de colisão sem `itemconfig` redundante, pan/divisor com redraw agendado e colisão do `redraw()` em grade espacial acima de 60 peças; novo benchmark `tools/bench_layout_drag.py` (120 peças: ~3,1 ms → ~0,9 ms por evento, ~319 → ~1.070 eventos/s; release 300 peças: ~20,9 ms → ~15,6 ms); 134 testes passando (1 skip) | `ui/layout_editor_view.py`, `tests/test_layout_editor_shortcuts.py`, `tools/bench_layout_drag.py`, `PROJETO_ATOM_JOBMANAGER.md`, `corteac_linux`, `dist/CorteAC` |
 | Sáb, 24/10/2026 | 15:48 | Antigravity | Implementação da Rotação Livre 360° Contínua via Arrasto do Botão Direito do Mouse (`R-Drag`) no `LayoutEditorView` fiel à engenharia reversa do `Layout.exe` (`OnRButtonDown 0x418550`, `OnMouseMove 0x4269c4`, `OnRButtonUp 0x421fd0`): detecção automática de peça sob o cursor, filtro de ruído / deadzone estática ($dx^2 + dy^2 \le 7$), cálculo angular cartesiano contínuo $atan2$ a partir da geometria base (zero drift frame a frame), rotação individual em torno do próprio centro e rotação coletiva em grupo como corpo rígido com `Ctrl` em torno do bounding box comum, guia visual gráfica no canvas (marcador de pivô, 2 raios e arco circular de ~42 px sob tag `rdrag_guide`), feedback na barra de status em tempo real com ângulo e $\Delta\theta$, cancelamento imediato via `Escape` sem registro no histórico, 1 único nível de Undo (`Ctrl+Z`), marcação de modificado (`*`), validação não-bloqueante na barra de status (colisão, chapa, fio de tração); 5 novos testes unitários adicionados em `tests/test_layout_editor_shortcuts.py` (46/46 passando); sincronização da documentação viva e recompilação dos executáveis standalone Linux (`dist/CorteAC`, `dist/teste_dola`, `corteac_linux`, `teste_dola_linux`). | `ui/layout_editor_view.py`, `tests/test_layout_editor_shortcuts.py`, `PROJETO_ATOM_JOBMANAGER.md`, `build_linux.sh`, `corteac_linux`, `teste_dola_linux`, `dist/CorteAC`, `dist/teste_dola` |
 | Sáb, 24/10/2026 | 16:20 | Antigravity | Implementação da Seleção Múltipla de Peças com Mouse Fiel ao Layout.exe Original (LayoutNT / Afcadv18E.dll) no LayoutEditorView: (1) Caixa de Seleção Elástica (Rubberband com tag 'rubberband_box') no vazio com Regra Estrita de Contenção 100% de bounding box (box_xmin <= piece_xmin <= piece_xmax <= box_xmax e box_ymin <= piece_ymin <= piece_ymax <= box_ymax, descartando toques/cruzamentos parciais) e suporte a acumulação com Shift; (2) Seleção individual rápida, clique em peça selecionada com preservação do grupo para arrasto imediato e isolamento na soltura sem arrasto (dx^2 + dy^2 <= 7), alternância por Shift+Clique (toggle) e limpeza imediata no clique simples ou duplo-clique no vazio; (3) Estilo visual SELECTED_OUTLINE_ONLY = True com peças selecionadas renderizadas sem preenchimento opaco (fill="") e contorno em destaque; (4) Arrasto coletivo em bloco de todas as peças de selected_indices por deslocamento milimétrico idêntico (Δx, Δy) em tempo real, cancelamento imediato via Escape sem sujar o histórico, 1 único snapshot atômico no undo_stack e marcação de modificado (*); (5) Ações em grupo para Delete, rotações F1-F4, espelhamento, setas direcionais e seleção total via Ctrl+A; 10 novos testes unitários adicionados em tests/test_layout_editor_shortcuts.py (56/56 passando); sincronização da documentação viva e recompilação do executável Linux standalone (dist/CorteAC, dist/teste_dola, teste_dola_linux, corteac_linux). | ui/layout_editor_view.py, tests/test_layout_editor_shortcuts.py, PROJETO_ATOM_JOBMANAGER.md, build_linux.sh, dist/CorteAC, dist/teste_dola, teste_dola_linux, corteac_linux |
 | Dom, 25/10/2026 | 12:15 | Antigravity | Implementação e Ajuste do Menu de Contexto 102 com submenu Fill (Row, Row Alternate, Column) no LayoutEditorView: (1) O menu e o Fill agem estritamente sobre a SELEÇÃO existente; (2) O botão direito NÃO altera a seleção (selected_index e selected_indices inalterados); (3) Peça-alvo do Fill é a peça selecionada (ou a primária selected_index em seleção múltipla, mantendo as demais inalteradas); (4) Sem peça selecionada, o clique direito abre o menu com Fill, Delete e Mirror desabilitados, recalculados dinamicamente a cada abertura; (5) Clique direito sobre outra peça não selecionada abre o menu agindo sobre a seleção atual sem transferir a seleção; (6) Após o Fill, a seleção original permanece intacta na peça-alvo (as novas cópias não são selecionadas); (7) Motor cad/fill_engine.py com validação pós-encosto contra obstáculos e peças côncavas; 15 testes unitários em tests/test_layout_editor_fill.py (15/15 passando), 56 em tests/test_layout_editor_shortcuts.py (56/56) e 167 testes globais passando. | cad/fill_engine.py, ui/layout_editor_view.py, tests/test_layout_editor_fill.py, tests/test_layout_editor_shortcuts.py, docs/LAYOUT_EDITOR_RE.md, docs/PROJETO_ATOM_JOBMANAGER.md |
@@ -5031,7 +5129,7 @@ Com dados confiáveis e validações definidas, avaliar comparação do aproveit
 | Ter, 03/11/2026 | 07:45 | DeepSeek | Impressão do layout não abria (Ctrl+P e ícone) (v1.6.15): `LayoutEditorView.print_layout()` lia o contorno como tupla (`cntr[i][0]`), mas o editor usa dict `{"x","y"}` — o `KeyError: 0` estourava dentro do callback do Tk, que engole a exceção, e o operador via "nada acontece". Novo helper `_contour_area_mm2()` tolerante aos dois formatos (e a contorno inválido, devolvendo 0); removidos os números falsos do fallback (`yield_pct=83.02`, 40 instâncias); a abertura do diálogo agora mostra `messagebox.showerror` em caso de falha. Novo `tests/test_print_layout_abre.py` (5 testes). Validação em harness Tk: diálogo abre, rendimento real 2,43%. 517 testes + 1 skip. | `ui/layout_editor_view.py`, `tests/test_print_layout_abre.py`, `docs/PROJETO_ATOM_JOBMANAGER.md`, `config.py`, `.github/workflows/release.yml` |
 | Ter, 03/11/2026 | 07:20 | DeepSeek | Recompactação da base após retirar as sobras (v1.6.14): o operador relatou que a vaga da peça ímpar virava um buraco na placa de 4 camadas. Novo `_recompact_plate()` chamado nas duas rotas da separação (ponta/faixa e Plano B) reencaixa as peças restantes com `auto_nest_pieces`/`target_pieces`, mantendo os dicionários originais e copiando só posição/rotação (substituir as peças quebrava `piece_matches_shape` quando dois moldes têm o mesmo contorno e revertia a separação); rollback local em divergência. Medição (6 moldes, 101 pares, 4 camadas, placa 1,38 × 2,98 m): buracos 4 → 0, altura 2.424 → 2.271 mm, 4c/2c 300/6 → 294/18, físicas 1.212 = 2P. `tests/test_sobras_dobra.py` ganhou `TestRecompactacaoBase` (3 testes). 512 testes + 1 skip. | `cad/layers_split.py`, `tests/test_sobras_dobra.py`, `docs/PROJETO_ATOM_JOBMANAGER.md`, `config.py`, `.github/workflows/release.yml` |
 | Seg, 02/11/2026 | 23:25 | DeepSeek | Criação manual do atalho via linha de comando (v1.6.13): o operador apagou os atalhos e a sincronização automática só atualizava atalhos existentes. Adicionado `--criar-atalho` (ou `--atalho`) no `main.py`, que força a criação de `corteac-<versão>.desktop` no menu e na Área de Trabalho, remove versões anteriores e imprime os caminhos; `ui/desktop_shortcut.py` ganhou `criar_se_ausente=True` e `_instalar_icone()` (copia o ícone para `~/.local/share/corteac/corteac.png`, pois o PyInstaller guarda os assets no binário). Validado na máquina do operador: `CorteAC-1.6.12` criado em `~/.local/share/applications` e `~/Área de trabalho`, com `Exec=` aspeado e `Icon=` estável. | `ui/desktop_shortcut.py`, `main.py`, `docs/PROJETO_ATOM_JOBMANAGER.md`, `config.py`, `.github/workflows/release.yml` |
-| Seg, 02/11/2026 | 23:05 | DeepSeek | Sincronização automática do atalho na abertura (v1.6.12): o atalho só era atualizado se o operador rodasse o instalador, e no Mint pt-BR a pasta é `~/Área de Trabalho` (não `~/Desktop`). Novo `ui/desktop_shortcut.py::sincronizar_atalho()` chamado no início do `main()`: procura qualquer atalho do CorteAC no menu e nas pastas Desktop/Área de Trabalho/Area de Trabalho, remove os antigos (inclusive `CorteAC.desktop` manual) e recria `corteac-<versão>.desktop` com nome versionado, `Exec=` aspeado, ícone do pacote, `X-CorteAC-Version` e `gio metadata::trusted`; se não houver atalho, não cria nada. Instalador ganhou o mesmo fallback pt-BR. Validação com pacote real e HOME isolado: `CorteAC.desktop` → `corteac-1.6.12.desktop` (Name=CorteAC-1.6.12). `tests/test_desktop_shortcut.py` com 5 testes. 509 testes + 1 skip. | `ui/desktop_shortcut.py`, `main.py`, `packaging/instalar_atalho.sh`, `tests/test_desktop_shortcut.py`, `docs/PROJETO_ATOM_JOBMANAGER.md`, `config.py`, `.github/workflows/release.yml` |
+| Seg, 02/11/2026 | 23:05 | DeepSeek | Sincronização automática do atalho na abertura (v1.6.12): o atalho só era atualizado se o operador rodasse o instalador, e no Mint pt-BR a pasta é `~/Área de Trabalho` (não `~/Desktop`). Novo `ui/desktop_shortcut.py::sincronizar_atalho()` chamado no início do `main()`: procura qualquer atalho do OpenCorte no menu e nas pastas Desktop/Área de Trabalho/Area de Trabalho, remove os antigos (inclusive `CorteAC.desktop` manual) e recria `corteac-<versão>.desktop` com nome versionado, `Exec=` aspeado, ícone do pacote, `X-CorteAC-Version` e `gio metadata::trusted`; se não houver atalho, não cria nada. Instalador ganhou o mesmo fallback pt-BR. Validação com pacote real e HOME isolado: `CorteAC.desktop` → `corteac-1.6.12.desktop` (Name=OpenCorte-1.6.12). `tests/test_desktop_shortcut.py` com 5 testes. 509 testes + 1 skip. | `ui/desktop_shortcut.py`, `main.py`, `packaging/instalar_atalho.sh`, `tests/test_desktop_shortcut.py`, `docs/PROJETO_ATOM_JOBMANAGER.md`, `config.py`, `.github/workflows/release.yml` |
 | Seg, 02/11/2026 | 22:40 | DeepSeek | Atalho da Área de Trabalho com a versão no nome (v1.6.11): novo template único `packaging/instalar_atalho.sh` (usado pelo `build_linux.sh` e pelo CI via `sed` do `config.APP_VERSION`) que cria `corteac-<versão>.desktop` com `Name=CorteAC-<versão>`, `Exec=` aspeado, `Icon=` do pacote e `X-CorteAC-Version`, removendo os atalhos antigos (`corteac.desktop`, `corteac-*.desktop`); a versão é obtida preferencialmente perguntando ao próprio binário (`--version`). No Windows, novo `packaging/criar_atalho_windows.ps1` + `versao.txt` no ZIP (CI e `build_exe_windows.bat`) criando `CorteAC-<versão>.lnk` e removendo os atalhos antigos. `README_LINUX.txt`/`README_WINDOWS.md` atualizados. Novo `tests/test_desktop_shortcut.py` (3 testes). 507 testes + 1 skip. | `packaging/instalar_atalho.sh`, `packaging/criar_atalho_windows.ps1`, `build_linux.sh`, `build_exe_windows.bat`, `.github/workflows/release.yml`, `README_LINUX.txt`, `README_WINDOWS.md`, `tests/test_desktop_shortcut.py`, `docs/PROJETO_ATOM_JOBMANAGER.md`, `config.py` |
 | Seg, 02/11/2026 | 22:20 | DeepSeek | Atalho da área de trabalho com caminhos contendo espaços (v1.6.10): o `Exec=` gerado pelo `instalar_atalho.sh` (e pelo pacote do CI) passou a ser aspeado (`Exec="$DIR/corteac_linux"`); sem as aspas, pastas como "clone do job" faziam o atalho não abrir. Validado executando o comando do próprio `Exec=` a partir do pacote extraído (retornou `CorteAC 1.6.10`), com `Icon=` apontando para o `corteac.png` do pacote e cópia do atalho para a Área de Trabalho. | `build_linux.sh`, `.github/workflows/release.yml`, `docs/PROJETO_ATOM_JOBMANAGER.md`, `config.py` |
 | Seg, 02/11/2026 | 22:00 | DeepSeek | Ícone do aplicativo e atalho da área de trabalho (v1.6.9): auditoria confirmou que o ícone da JANELA (iconphoto/iconbitmap) e o ícone EMBUTIDO no `CorteAC.exe` (PyInstaller `--icon assets/app_icon.ico`) já são atualizados em toda release, mas NÃO existia atalho de área de trabalho (nenhum `.desktop`). O pacote Linux passou a incluir `corteac.png` e `instalar_atalho.sh`, que gera `~/.local/share/applications/corteac.desktop` com caminho absoluto, `Icon=` do pacote, `Path=`, `StartupWMClass=corteac_linux`, cópia para a Área de Trabalho via `xdg-user-dir DESKTOP`, `gio metadata::trusted` e `update-desktop-database`; `README_LINUX.txt` e `README_WINDOWS.md` documentam o passo a passo (incluindo o cache de ícones do Windows/Explorer). | `build_linux.sh`, `.github/workflows/release.yml`, `README_LINUX.txt`, `README_WINDOWS.md`, `docs/PROJETO_ATOM_JOBMANAGER.md`, `config.py` |
@@ -5051,7 +5149,7 @@ Com dados confiáveis e validações definidas, avaliar comparação do aproveit
 | Sex, 06/11/2026 | 12:45 | Antigravity | Cadastro de usuário/operador, exibição na folha de impressão e reorganização do layout A4 (v1.6.35): (1) Gestão centralizada de operadores no banco (`database.py`, `db/schema_mysql.sql`) com persistência em SQLite e MySQL (tabela `users`); (2) Diálogo visual `UserManagementDialog` (`ui/user_dialog.py`) com CRUD, ativação instantânea, escolha de prefixo (`Usuário:`, `Operador:` ou nenhum) e prévia ao vivo do cabeçalho; (3) Acesso integrado no menu Ferramentas, na barra de status da janela principal (`👤 <Operador>`), na janela de opções e no diálogo de impressão; (4) Exibição do nome do operador logo abaixo do título `layXXXX.lay (Placa X de Y)` na folha A4 (Canvas e Pillow/PDF); (5) Reorganização do layout de impressão: remoção de `Refile:` e `Material Area:`, deslocamento da tabela de moldes/pares para um card com cantos arredondados no espaço em branco à direita da placa e aproveitamento total da altura para a mesa de corte; (6) 10 novos testes unitários (608 testes passando com 100% de sucesso). | `database.py`, `db/schema_mysql.sql`, `ui/user_dialog.py`, `ui/layout_print_dialog.py`, `ui/main_window.py`, `ui/options_dialog.py`, `tests/test_user_management.py`, `tests/test_layout_print_user.py`, `build_linux.sh`, `build_exe_windows.bat`, `.github/workflows/release.yml`, `config.py`, `docs/PROJETO_ATOM_JOBMANAGER.md` |
 | Sáb, 07/11/2026 | 11:30 | Antigravity | Multi-moldes com rotação simultânea no Shape Editor, adição de moldes externos por pasta no Layout Editor e limpeza de menus (v1.6.36): (1) Multi-moldes no Shape Editor (`ui/shape_editor_view.py`): barra de abas (`tabs_bar`) com fechar aba, modo de sobreposição (`👁️ Sobrepor`) para comparação de graduações e ferramenta de rotação sincronizada (`🔄 Girar`) que rotaciona todos os moldes abertos/selecionados em torno do baricentro unificado; (2) Adição de moldes de fora do layout no Layout Editor (`ui/layout_editor_view.py`, `ui/add_shapes_dialog.py`): botão (+) configurado para abrir o diálogo `AddShapesDialog` com seleção de pasta do catálogo/banco (`faca`, `807266`, etc.), botão `📂 Do Disco (.die)...` para importar moldes diretamente do computador, menu de contexto com botão direito no (+) e colocação imediata das peças na mesa de corte com retenção de contorno, furos, costuras e recortes internos; (3) Limpeza de menus legados: remoção de `📁 Criar Subpasta de Produção...` de Ferramentas (`ui/main_window.py`) e remoção da caixa Xfer/Remoto e de 3 idiomas de `ui/options_dialog.py`; (4) 20 novos testes automatizados (628 testes passando, 630 no total com 100% de sucesso). | `ui/shape_editor_view.py`, `ui/layout_editor_view.py`, `ui/add_shapes_dialog.py`, `ui/main_window.py`, `ui/options_dialog.py`, `tests/test_shape_editor_multishape.py`, `tests/test_layout_editor_add_shape.py`, `config.py`, `.github/workflows/release.yml`, `docs/PROJETO_ATOM_JOBMANAGER.md` |
 | Sáb, 07/11/2026 | 17:15 | Antigravity | Formato do Molde (1x1, 4x1, 6x1) e fator multiplicador no Shape Editor com persistência e migração no banco (v1.6.37): (1) Banco de dados (`database.py`, `db/schema_mysql.sql`, migração `db/migrations/008_add_shape_format.sql`): coluna `shape_format VARCHAR(8) NOT NULL DEFAULT '1x1'` na tabela `shapes` com auto-migração idempotente em SQLite e MySQL, fallback transparente `'1x1'` para moldes legados e suporte em `create_shape`, `update_shape`, `get_shape`, `get_shapes_by_article`, `get_article_shape_catalog` e `MainWindow.on_shape_saved`; (2) Função pura `shape_multiplier` em `cad/layers_rule.py` mapeando `1x1 -> 1`, `4x1 -> 2`, `6x1 -> 3` com tolerância a espaços, maiúsculas e caracteres de multiplicação unicode (`×`); (3) Interface no Shape Editor (`ui/shape_editor_view.py`): Combobox `Formato:` e label `× N` na barra de ferramentas, controle de ativação respeitando `geometry_locked` (desabilitado em modo seguro, `readonly` quando liberado), histórico de desfazer (Ctrl+Z), indicador de modificado `*` no título da janela e nas abas; (4) 13 novos testes automatizados em `tests/test_shape_format_multiplier.py` (641 testes passando com 100% de sucesso). | `ui/shape_editor_view.py`, `ui/main_window.py`, `cad/layers_rule.py`, `database.py`, `db/schema_mysql.sql`, `db/migrations/008_add_shape_format.sql`, `tests/test_shape_format_multiplier.py`, `config.py`, `docs/PROJETO_ATOM_JOBMANAGER.md` |
-| Sáb, 07/11/2026 | 19:50 | Antigravity | Conversor de Arquivos de Corte (.lay ⇄ .onx) integrado ao Menu Ferramentas com suporte a lotes e detecção automática (v1.6.38): (1) Motor CAD (`cad/layout_converter.py`): conversão bidirecional individual e em lote entre ATOM FlashCut (`.lay`, `$$LAYOUT.v3$$`) e Comelz CNC (`.onx`, Schema 1.1 comprimido no container `CZLIB\x02` bzip2), preservando peças, contornos, coordenadas X/Y, rotações angulares, dimensões e gaps; detecção automática por extensão e assinatura mágica binária; interface CLI `python -m cad.layout_converter`; (2) Interface visual (`ui/layout_converter_dialog.py`): diálogo modal no padrão CorteAC / Windows XP com seleção múltipla de arquivos (`*.lay;*.onx`), pasta completa, modo de conversão automático ou forçado, tabela Treeview com status em tempo real, escolha de diretório de destino, barra de progresso suave, log de execução detalhado e botão direto para abrir a pasta de destino; (3) Menu Ferramentas (`ui/main_window.py`): nova opção `🔄 Conversor de Arquivos (.lay ⇄ .onx)...` adicionada à barra de menus com acionamento modal; (4) Empacotamento e builds (`CorteAC.spec`, `build_linux.sh`, `build_exe_windows.bat`): inclusão de hidden imports para módulos do conversor (`cad.layout_converter`, `ui.layout_converter_dialog`, `cad.czlib`, `cad.onx_exporter`, `cad.dual_exporter`); (5) 8 novos testes automatizados em `tests/test_converter.py` com 100% de sucesso (649 testes passando). | `cad/layout_converter.py`, `ui/layout_converter_dialog.py`, `ui/main_window.py`, `CorteAC.spec`, `build_linux.sh`, `build_exe_windows.bat`, `tests/test_converter.py`, `config.py`, `.github/workflows/release.yml`, `docs/PROJETO_ATOM_JOBMANAGER.md` |
+| Sáb, 07/11/2026 | 19:50 | Antigravity | Conversor de Arquivos de Corte (.lay ⇄ .onx) integrado ao Menu Ferramentas com suporte a lotes e detecção automática (v1.6.38): (1) Motor CAD (`cad/layout_converter.py`): conversão bidirecional individual e em lote entre ATOM FlashCut (`.lay`, `$$LAYOUT.v3$$`) e Comelz CNC (`.onx`, Schema 1.1 comprimido no container `CZLIB\x02` bzip2), preservando peças, contornos, coordenadas X/Y, rotações angulares, dimensões e gaps; detecção automática por extensão e assinatura mágica binária; interface CLI `python -m cad.layout_converter`; (2) Interface visual (`ui/layout_converter_dialog.py`): diálogo modal no padrão OpenCorte / Windows XP com seleção múltipla de arquivos (`*.lay;*.onx`), pasta completa, modo de conversão automático ou forçado, tabela Treeview com status em tempo real, escolha de diretório de destino, barra de progresso suave, log de execução detalhado e botão direto para abrir a pasta de destino; (3) Menu Ferramentas (`ui/main_window.py`): nova opção `🔄 Conversor de Arquivos (.lay ⇄ .onx)...` adicionada à barra de menus com acionamento modal; (4) Empacotamento e builds (`CorteAC.spec`, `build_linux.sh`, `build_exe_windows.bat`): inclusão de hidden imports para módulos do conversor (`cad.layout_converter`, `ui.layout_converter_dialog`, `cad.czlib`, `cad.onx_exporter`, `cad.dual_exporter`); (5) 8 novos testes automatizados em `tests/test_converter.py` com 100% de sucesso (649 testes passando). | `cad/layout_converter.py`, `ui/layout_converter_dialog.py`, `ui/main_window.py`, `CorteAC.spec`, `build_linux.sh`, `build_exe_windows.bat`, `tests/test_converter.py`, `config.py`, `.github/workflows/release.yml`, `docs/PROJETO_ATOM_JOBMANAGER.md` |
 | Sáb, 07/11/2026 | 20:35 | Antigravity | Ajuste no Título da Folha de Impressão — Remoção da extensão .lay (v1.6.39): (1) Remoção da extensão `.lay` no título principal da folha de impressão através do novo helper `LayoutPrintDialog.get_display_layout_name()`, formatando como `lay0000 (Placa 1 de 2)`; (2) Sincronização idêntica tanto na pré-visualização em tela (Canvas Tkinter) quanto na impressão física e exportação para PDF/PNG (Pillow); (3) Atualização do card de pré-visualização em `ui/user_dialog.py`; (4) Preservação intacta de caminhos de rede e identificadores de arquivo originais; (5) Atualização dos testes unitários em `tests/test_layout_print_user.py` com 649 testes passando. | `ui/layout_print_dialog.py`, `ui/user_dialog.py`, `tests/test_layout_print_user.py`, `config.py`, `.github/workflows/release.yml`, `docs/PROJETO_ATOM_JOBMANAGER.md` |
 | Sáb, 07/11/2026 | 20:45 | Antigravity | Limpeza do Menu Ferramentas — Remoção de Criação de Produção e Pastas de Moldes (v1.6.40): (1) Removidos os comandos 'Criar Produção...', 'Criar Pasta de Moldes...' e 'Criar Subpasta de Moldes...' do menu suspenso Ferramentas (`ui/main_window.py`) atendendo à solicitação do usuário para despoluir e simplificar a interface; (2) Mantidas as opções no menu Arquivo e no menu de contexto de clique direito da árvore de produção (`tree_menu`); (3) Novo teste automatizado `tests/test_tools_menu_items.py` cobrindo a integridade dos itens do menu Ferramentas; 650 testes passando com 100% de sucesso. | `ui/main_window.py`, `tests/test_tools_menu_items.py`, `config.py`, `.github/workflows/release.yml`, `docs/PROJETO_ATOM_JOBMANAGER.md` |
 | Sáb, 07/11/2026 | 20:50 | Antigravity | Deslocamento de Exportar G-Code da Toolbar para o Menu Ferramentas (v1.6.41): (1) Removido o botão '💾 Exportar G-Code' da barra de ferramentas superior da MainWindow (`ui/main_window.py`), despoluindo a toolbar; (2) Adicionado o comando '💾 Exportar G-Code (ATOM)...' no menu suspenso Ferramentas junto às ferramentas de corte e nesting; (3) Atualizados os testes automatizados em `tests/test_create_session_left_click.py` e `tests/test_tools_menu_items.py`; 651 testes passando com 100% de sucesso. | `ui/main_window.py`, `tests/test_tools_menu_items.py`, `tests/test_create_session_left_click.py`, `config.py`, `.github/workflows/release.yml`, `docs/PROJETO_ATOM_JOBMANAGER.md` |
@@ -5074,216 +5172,67 @@ Com dados confiáveis e validações definidas, avaliar comparação do aproveit
 
 | Qua, 11/11/2026 | — | Codex | Release v1.8.6 publicada: builds Windows/Linux, Inno Setup e publicação aprovados no workflow 43037058227. Cinco assets baixados, hashes e conteúdo dos pacotes conferidos; versões/módulos e base limpa verificados nos executáveis de ambas as plataformas. Banco operacional preservado; validação física permanece pendente. | `docs/PROJETO_ATOM_JOBMANAGER.md` |
 
-## 11. Prompt para o Antigravity: instalar a sincronização automática `[CONCLUÍDA]`
+## 11. Ponto de entrada único para manutenção
 
+Desde 12/11/2026, a manutenção e a publicação estão centralizadas em
+`atualizar.py`. Os oito scripts antigos foram incorporados e removidos; suas
+menções nas seções históricas anteriores descrevem versões passadas.
 
-> **STATUS DA TAREFA: [CONCLUÍDA]**
-> A sincronização automática via `tools/sync_project_doc.py` e `.githooks/pre-commit` foi instalada com sucesso, validada em commits reais com pre-commit hook ativo e verificador `--check`.
-
-```
-# TAREFA: Instalar a sincronização automática do PROJETO_ATOM_JOBMANAGER.md
-
-Não altere código-fonte do sistema. Faça somente:
-
-1. Copiar tools/sync_project_doc.py e .githooks/pre-commit para a raiz do repositório (se ainda não existirem).
-2. Executar: git config core.hooksPath .githooks   (no Linux: chmod +x .githooks/pre-commit)
-3. Rodar: python tools/sync_project_doc.py   e conferir se os blocos AUTO foram preenchidos.
-4. Revisar o resultado e me reportar:
-   - atalhos esperados que aparecem como NÃO ENCONTRADO (verificar se são registrados de forma dinâmica);
-   - atalhos proibidos (Shift+F3, Ctrl+Y) que aparecerem como PRESENTE;
-   - teclas duplicadas em mais de um arquivo (possíveis conflitos).
-5. Se o script errar ou perder algo do projeto (ex.: schema vindo de ORM, atalhos montados por tabela), ajustar o script e documentar a mudança no Changelog (seção 10).
-6. Fazer um commit de teste e confirmar que o hook atualizou e incluiu o documento no commit.
-7. Opcional (CI): adicionar um passo que rode `python tools/sync_project_doc.py --check` e falhe o build se o documento estiver desatualizado.
-
-Entrega: confirmação de que o hook roda no commit, lista dos avisos do item 4 e o que foi ajustado no script.
+```bash
+python3 atualizar.py
 ```
 
----
+O comando coordena versão, documentação, testes selecionados e build em cópia
+isolada, pacotes, Área de Trabalho e publicação no GitHub. Consulte
+[fases/ATUALIZACAO_UNIFICADA.md](fases/ATUALIZACAO_UNIFICADA.md).
 
-## 12. Política de Versionamento e Publicação Automática de Releases no GitHub `[CONFIRMADO]`
+## 12. Versionamento e publicação
 
-> **Regra de Ouro:** Todas as versões executáveis para produção (Windows 10/11 e Linux 64-bit) são distribuídas oficialmente através das **Releases do GitHub** em [https://github.com/Doletabgi/Projeto-CorteAC/releases](https://github.com/Doletabgi/Projeto-CorteAC/releases). O usuário e operadores no chão de fábrica realizam o download diretamente desta página. Portanto, **toda nova funcionalidade, ajuste ou marco industrial DEVE SEMPRE disparar a publicação/atualização automática da Release no GitHub**, mantendo os artefatos compilados e notas de versão 100% atualizados.
+### 12.1. SemVer
 
----
+Cada execução completa nova incrementa `APP_VERSION` em patch. Use
+`--incremento minor` ou `--incremento major` quando necessário. A versão de
+reserva do instalador Windows também é atualizada. A biblioteca
+`cad/semver.py` continua sendo usada pelo projeto; o lançador de versionamento
+separado foi retirado.
 
-### 12.1. Sistema de Versionamento SemVer (`MAJOR.MINOR.PATCH`)
+### 12.2. Simulação e retomada
 
-O projeto adota estritamente o padrão **SemVer (Semantic Versioning 2.0.0)** no formato `MAJOR.MINOR.PATCH` (versão principal, secundária e correção), facilitando a integração contínua, previsibilidade industrial e controle de compatibilidade:
+`--simular` mostra as etapas sem alterações. `--retomar` continua a mesma
+versão depois de uma falha, sem gerar outra tag. Não há mais obrigação de
+executar scripts de cadência ou aguardar cinco commits antes de publicar.
+As mudanças devem estar prontas para publicação antes da execução real.
 
-$$\mathbf{v}\langle\text{MAJOR}\rangle.\langle\text{MINOR}\rangle.\langle\text{PATCH}\rangle$$
+### 12.3. GitHub Actions
 
-Exemplo: `1.2.3`
+Os runners Windows e Linux chamam `python atualizar.py --build`, a mesma
+receita usada localmente. O workflow é acionado por tag ou manualmente; o push
+da branch não duplica a release. A tag precisa corresponder a `APP_VERSION`.
+O instalador Windows continua sendo compilado com Inno Setup usando
+`packaging/corteac_setup.iss`.
 
-| Tipo | Exemplo | Quando utilizar |
-| :--- | :--- | :--- |
-| **MAJOR** | `1.0.0 → 2.0.0` | Mudanças grandes que podem exigir adaptações / incompatibilidades. |
-| **MINOR** | `1.0.0 → 1.1.0` | Novas funcionalidades sem quebrar a compatibilidade. |
-| **PATCH** | `1.0.0 → 1.0.1` | Correções de erros, bugs, manutenção e falhas de segurança. |
+O atualizador faz push atômico apenas da branch atual e da tag da versão,
+sem forçar referências nem espelhar automaticamente outras branches.
+Só conclui após o sucesso do workflow e a presença dos cinco arquivos:
+executável Windows, ZIP Windows, instalador Windows versionado, executável
+Linux e TAR.GZ Linux. As notas são geradas a partir dos commits da versão.
 
-> [!IMPORTANT]
-> **Fonte Única da Verdade (SSOT) e Sincronização Automática:**
-> A versão oficial do aplicativo é definida exclusivamente em:
-> 1. [`config.py`](file:///home/dola/Documentos/clone%20do%20job/jobmanager-win10-python/config.py): `APP_VERSION = "MAJOR.MINOR.PATCH"`.
->
-> **Pontos que sincronizam automaticamente a partir de `config.APP_VERSION`:**
-> - **Título da Janela Principal**: `MainWindow.title` exibe dinamicamente `f"{APP_NAME} v{APP_VERSION} - C:\\NSDATA\\"` (exemplo: `CorteAC v1.6.26 - C:\NSDATA\`). A cada inicialização, o título carrega o valor atualizado de `config.py` sem necessidade de edição de código.
-> - **Menu Ajuda ➔ Sobre CorteAC**: exibe `f"{APP_NAME} - {APP_VERSION}"` com descrição do sistema.
-> - **CLI / Linha de Comando**: `python main.py --version` exibe `CorteAC <APP_VERSION>`.
-> - **Atalhos da Área de Trabalho**:
->   - *Linux*: `ui/desktop_shortcut.py` e `packaging/instalar_atalho.sh` geram o atalho `corteac-<versão>.desktop` com `Name=CorteAC-<versão>` e limpam versões anteriores automaticamente ao iniciar ou empacotar.
->   - *Windows*: `packaging/criar_atalho_windows.ps1` lê `versao.txt` e cria `CorteAC-<versão>.lnk` na Área de Trabalho limpando versões antigas.
-> - **Metadados CAM ATOM**: `cad/project_packager.py` inclui `"app_version": APP_VERSION` nos metadados de pacotes de corte.
-> - **Compilação Local e CI/CD**: Tanto `build_linux.sh` quanto `.github/workflows/release.yml` extraem `APP_VERSION` programaticamente (`python3 -c "import config; print(config.APP_VERSION)"`).
->
-> **Procedimento para Atualização Automática de Versão:**
-> Para atualizar a versão do sistema mantendo todos os componentes 100% sincronizados:
-> 1. Execute o comando de bump SemVer:
->    ```bash
->    python3 tools/semver.py bump patch    # incrementa PATCH (ex: 1.6.26 -> 1.6.27)
->    # ou:
->    python3 tools/semver.py bump minor    # incrementa MINOR (ex: 1.6.26 -> 1.7.0)
->    python3 tools/semver.py set X.Y.Z     # define uma versão específica
->    ```
->    *O comando atualiza automaticamente `config.py:APP_VERSION` e `.github/workflows/release.yml`.*
-> 2. Crie a tag anotada correspondente:
->    ```bash
->    git tag -a v$(python3 tools/semver.py get) -m "Release v$(python3 tools/semver.py get)"
->    ```
-> 3. Ao rodar `build_linux.sh` ou ao subir o commit para o GitHub, o binário, o atalho e o título da janela refletem automaticamente a nova versão.
+### 12.4. Proteção dos dados e verificações
 
----
+A build usa uma cópia dos fontes e um SQLite criado especificamente nela.
+O banco e o `db.ini` do operador não são copiados para os pacotes nem incluídos
+no commit. A limpeza ocorre somente na cópia de distribuição; a atualização
+normal da aplicação preserva sessões e layouts existentes.
 
-### 12.2. Regra da Cadência de Lançamentos a Cada 5 Commits `[CONFIRMADO]`
+O comando completo executa a seleção de testes indicada em `CHECKS`, não a
+suíte inteira nem a homologação física em máquina. Os testes rodam na cópia
+isolada. Binários anteriores são preservados em `.release/backups/` e os
+atalhos são atualizados para apontar aos binários locais instalados.
 
-Para manter o chão de fábrica, operadores e testadores sempre abastecidos com executáveis atualizados (sem acumular grandes volumes de modificações sem homologação), o projeto estabelece a **Cadência Estrita de 5 Commits**:
+Para documentação ou compilação avulsa, use modos do mesmo arquivo:
 
-> **Regra dos 5 Commits:** A cada **5 commits** acumulados no repositório a partir da última tag de release (`git rev-list --count $(git describe --tags --abbrev=0)..HEAD >= 5`), **uma nova versão oficial deve ser fechada, versionada e publicada no GitHub**.
-
-#### Como funciona a contagem e monitoramento:
-1. O desenvolvedor / agente roda o verificador a qualquer momento:
-   ```bash
-   python3 tools/check_release_cadence.py
-   ```
-2. O script calcula a distância exata em commits desde a última tag anotada:
-   - **Menos de 5 commits**: exibe o progresso atual (ex: `2 de 5 commits acumulados`). O hook `.githooks/pre-commit` também lembra o desenvolvedor a cada commit.
-   - **5 commits acumulados**: emite o alerta de ciclo fechado, lista os 5 commits para compor o corpo do release e sugere o próximo número sequencial (ex: `v2026.3`).
-3. Ao atingir os 5 commits, o ciclo é fechado com o incremento de versão em `config.py`, atualização das notas em `.github/workflows/release.yml`, criação da tag e disparo do build no GitHub Actions.
-
----
-
-### 12.3. Automação CI/CD via GitHub Actions (`release.yml`)
-
-O fluxo `.github/workflows/release.yml` é executado em nuvem de forma automatizada e transparente:
-
-```mermaid
-flowchart LR
-    A["Push Tag v2026.X / Push master"] --> B["GitHub Actions CI/CD"]
-    subgraph Compilacao ["Compilação Paralela Limpa"]
-        B --> W["Runner Windows-latest<br>PyInstaller --onefile CorteAC.exe<br>Empacotamento ZIP"]
-        B --> L["Runner Ubuntu-latest<br>PyInstaller --onefile corteac_linux<br>Empacotamento TAR.GZ"]
-    end
-    W --> R["softprops/action-gh-release@v2"]
-    L --> R
-    R --> Pub["GitHub Releases:<br>v2026.X (Executáveis + Release Notes)"]
+```bash
+python3 atualizar.py --documentacao
+python3 atualizar.py --documentacao --check
+python3 atualizar.py --build
 ```
-
-#### Concorrência e idempotência:
-- O workflow usa `concurrency: corteac-release` (`cancel-in-progress: false`): como `master`, `main` e o push de tag disparam a mesma publicação, os runs são **serializados** em vez de criarem a release em paralelo.
-- A etapa de publicação usa `allowUpdates: true` e `overwrite_files: true`, então um run que encontra a release já criada **atualiza** os arquivos (antes falhava com a release existente, deixando a versão sem algum binário).
-
-#### Gatilhos de Disparo Automático:
-1. **Push de Tag (`tags: ['v*']`)**: Compila e cria ou atualiza a Release oficial correspondente à tag.
-2. **Push de Branch (`branches: [master, main]`)**: Mantém a Release padrão atualizada com os commits mais recentes.
-3. **Workflow Dispatch manual**: Permite acionamento manual informando a tag desejada pelo painel do GitHub Actions.
-
-#### Conteúdo Obrigatório do Release Body:
-Toda Release publicada deve conter:
-- Título padronizado: `CorteAC v2026.X (Windows & Linux)`.
-- Instruções de inicialização zero-configuração para Windows 10/11 (duplo clique em `CorteAC.exe`, sem necessidade de Python ou terminal).
-- Instruções de execução para Linux (`chmod +x ./corteac_linux`).
-- Seção estruturada de recursos: `### 🛠️ Recursos Incluídos Nesta Versão (v2026.X)`.
-- Explicação clara dos dados e persistência (`jobmanager.db` local e `db.ini` corporativo).
-
----
-
-### 12.4. Checklist Operacional Obrigatório para Publicação de Versão
-
-Antes de concluir qualquer tarefa ou conjunto de commits, o agente/desenvolvedor deve executar rigorosamente este procedimento:
-
-1. **Validação de Testes**:
-   ```bash
-   PYTHONPATH=. pytest tests/
-   ```
-   *Garantir 100% de testes passando sem regressões.*
-
-2. **Incrementar Versão no Código**:
-   - Editar [`config.py`](file:///home/dola/Documentos/clone%20do%20job/jobmanager-win10-python/config.py) e definir a nova versão em `APP_VERSION = "2026.X"`.
-
-3. **Atualizar Workflow de Release**:
-   - Editar [`.github/workflows/release.yml`](file:///home/dola/Documentos/clone%20do%20job/jobmanager-win10-python/.github/workflows/release.yml) atualizando o `default` da tag e o corpo da release com os novos recursos detalhados.
-
-4. **Sincronizar Documentação Viva**:
-   - Registrar as novas entradas no Changelog (seção 10) e atualizar pendências na seção 9 deste documento.
-   - Executar o sincronizador:
-     ```bash
-     python3 tools/sync_project_doc.py
-     ```
-
-5. **Commit e Push dos Ramos Principais**:
-   ```bash
-   git add config.py .github/workflows/release.yml docs/PROJETO_ATOM_JOBMANAGER.md
-   git commit -m "chore(release): lancamento da versao v2026.X (...)"
-   git push origin master && git push origin master:main
-   ```
-
-6. **Criação e Envio da Tag de Release**:
-   ```bash
-   git tag -a v2026.X -m "CorteAC v2026.X - Resumo dos recursos"
-   git push origin v2026.X --force
-   ```
-
-7. **Acompanhamento e Validação do Build**:
-   - Verificar os logs do GitHub Actions até que os jobs `build-windows`, `build-linux` e `publish-release` concluam com status `success`.
-   - Confirmar a disponibilidade dos 4 artefatos atualizados em `https://github.com/Doletabgi/Projeto-CorteAC/releases/tag/v2026.X`:
-     * `CorteAC.exe`
-     * `CorteAC-Windows-x64.zip`
-     * `corteac_linux`
-     * `CorteAC-Linux-x64.tar.gz`
-
----
-
-### 12.4. Regra de Higienização de Banco de Dados Pré e Pós-Atualização (Ambiente Vazio e Limpo) `[CONFIRMADO]`
-
-> **Regra de Ouro da Entrega Limpa:** Após cada compilação, atualização ou instalação de release, o CorteAC **deve sempre retornar com a mesa de corte vazia e sem resíduos de layouts deixados por suítes de testes**. O operador nunca deve ser surpreendido com layouts fictícios gerados em pipelines de homologação ou baterias de testes.
-
-O sistema opera sob uma arquitetura de proteção em **5 camadas independentes**:
-
-1. **Camada de Compilação Pré-Release (`tools/clean_database.py`):**
-   - Integrado diretamente nos scripts [`build_linux.sh`](file:///home/dola/Documentos/clone%20do%20job/jobmanager-win10-python/build_linux.sh), [`build_exe_windows.bat`](file:///home/dola/Documentos/clone%20do%20job/jobmanager-win10-python/build_exe_windows.bat) e no pipeline CI/CD [`.github/workflows/release.yml`](file:///home/dola/Documentos/clone%20do%20job/jobmanager-win10-python/.github/workflows/release.yml).
-   - Executa antes do PyInstaller empacotar os dados: remove todos os registros em `layouts` e `layout_pieces`, elimina sessões de teste (`name LIKE '%Teste%'`, `%Exclusao%`, etc.), reseta sessões legítimas para `status = 'Stand by'` e `placed_pieces_json = '[]'`, e executa `VACUUM`.
-   - O banco de dados embutido no executável standalone (`jobmanager.db`) é distribuído 100% limpo na origem.
-
-2. **Camada de Isolamento de Testes Automatizados (`tests/conftest.py`):**
-   - Utiliza os hooks globais do pytest:
-     * `pytest_sessionstart`: cria cópia de segurança `jobmanager.db.pytest_backup` antes de qualquer teste rodar.
-     * `pytest_sessionfinish`: restaura fielmente o `jobmanager.db` ao estado original e remove a cópia de segurança, além de purgar qualquer arquivo temporário `test_*.db`.
-   - Garante que rodar a suíte local de testes (`pytest`) nunca contamina o banco do operador ou de compilação.
-
-3. **Camada de Detecção de Atualização em Runtime (`MainWindow.check_post_update_cleanup`):**
-   - Ao iniciar a aplicação, verifica a versão gravada no banco: `installed_version != APP_VERSION`.
-   - Quando uma nova versão é executada pela primeira vez após uma atualização, o CorteAC executa automaticamente `self.db.clean_test_layouts()` e atualiza a chave `installed_version` para a versão atual.
-   - Em aberturas subsequentes da mesma versão, a limpeza é ignorada, mantendo 100% preservada a persistência da sessão do operador configurada na v1.6.27.
-
-4. **Camada de Linha de Comando (CLI Standalone):**
-   - O executável standalone e o script principal suportam o parâmetro `--clean-db` (ou `--reset-layouts`):
-     ```bash
-     ./corteac_linux --clean-db
-     # ou no Windows:
-     CorteAC.exe --clean-db
-     ```
-   - Executa a higienização do banco e reporta as métricas de exclusão no terminal.
-
-5. **Camada de Interface Gráfica Sob Demanda (Menu Ferramentas):**
-   - Menu `Ferramentas ➔ 🧹 Limpar Layouts de Teste...`:
-   - Solicita confirmação explícita ao operador e reseta todos os layouts e instâncias de teste, mantendo artigos, moldes e cadastro de materiais intactos.

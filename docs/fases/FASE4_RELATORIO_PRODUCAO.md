@@ -1,4 +1,4 @@
-# CORTEAC / JOBMANAGER 2000 (PYTHON EDITION)
+# OpenCorte / JOBMANAGER 2000 (PYTHON EDITION)
 # RELATÓRIO TÉCNICO DE PRODUÇÃO — FASE 4 (ENCERRAMENTO E HARDENING)
 
 **Data de Emissão:** 28/10/2026  
@@ -10,7 +10,7 @@
 
 ## 1. Resumo Executivo da Promoção do NfpBackend
 
-A partir da conclusão formal da Fase 4, o **`NfpBackend` foi promovido a backend padrão de nesting automático** do CorteAC (`CORTEAC_BACKEND="nfp"` como default em `cad/nesting_backend.py`).
+A partir da conclusão formal da Fase 4, o **`NfpBackend` foi promovido a backend padrão de nesting automático** do OpenCorte (`CORTEAC_BACKEND="nfp"` como default em `cad/nesting_backend.py`).
 
 Todas as 5 condições estritas impostas pela auditoria externa para essa promoção foram integralmente superadas:
 1. **Redraw do `LayoutEditorView` < 8,0 ms** para 300 peças: **7,71 ms** (alcançado via Sweep & Prune 1D e tabelas estáticas de tags).
@@ -57,7 +57,7 @@ Todas as 5 condições estritas impostas pela auditoria externa para essa promo�
 
 ## 3. Procedimento Operacional de Rollback Instantâneo
 
-O CorteAC foi arquitetado com desacoplamento rigoroso através da interface `NestingBackend`. Se qualquer anomalia for observada no chão de fábrica, o rollback para o algoritmo legado de busca binária (`PythonBackend`) é **imediato, sem necessidade de recompilação, alteração de código ou redeploy de executável**.
+O OpenCorte foi arquitetado com desacoplamento rigoroso através da interface `NestingBackend`. Se qualquer anomalia for observada no chão de fábrica, o rollback para o algoritmo legado de busca binária (`PythonBackend`) é **imediato, sem necessidade de recompilação, alteração de código ou redeploy de executável**.
 
 ### Procedimento no Linux:
 ```bash

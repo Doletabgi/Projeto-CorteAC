@@ -1,6 +1,6 @@
 # RELATÓRIO TÉCNICO DE PERFORMANCE — FASE 6.2.2
 
-**Projeto:** CorteAC / JobManager 2000 (Python Edition)  
+**Projeto:** OpenCorte / JobManager 2000 (Python Edition)\
 **Missão:** Reduzir tempo da suíte de testes de 194 s para < 110 s sem reintroduzir o `PytestUnraisableExceptionWarning`  
 **Fase:** 6.2.2 — Otimização do conftest.py  
 **Status Oficial:** ✅ **APROVADA COM SUCESSO** (Tempo médio ~80,6 s, 0 warnings, 320 passed)  

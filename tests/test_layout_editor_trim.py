@@ -146,7 +146,8 @@ class TestLayoutEditorTrim(unittest.TestCase):
     def test_toolbar_button_and_menu_entries(self):
         """Valida que o botão ✂ Refilar e atalhos de menu existem no LayoutEditor."""
         self.assertTrue(hasattr(self.view, "btn_trim"))
-        self.assertEqual(self.view.btn_trim.cget("text"), "✂ Refilar")
+        self.assertEqual(self.view.btn_trim.cget("text"), "Refilar")
+        self.assertTrue(self.view.btn_trim.cget("image"))
         self.assertTrue(callable(self.view.trim_layout_auto))
         self.assertTrue(callable(self.view.trim_layout_dialog))
 

@@ -1,6 +1,6 @@
 # RELATÓRIO TÉCNICO DE DIAGNÓSTICO: MOTOR IA-TESTE (FASE 5.0)
 
-**Projeto:** CorteAC / JobManager 2000 (Python Edition)  
+**Projeto:** OpenCorte / JobManager 2000 (Python Edition)\
 **Missão:** Investigação Empírica de Gargalo e Viabilidade do Motor `IA-teste`  
 **Fase:** Fase 5.0 — Diagnóstico Estrutural e Análise de Rendimento  
 **Status da Fase:** Concluída com Sucesso (Zero alteração em código de produção)  

@@ -119,9 +119,47 @@ def test_preparacao_em_metros_preserva_precisao_sem_milimetros():
     text = ' '.join(d.print_texts)
     assert 'Medidas de corte:' not in text
     assert 'Placa:' not in text
-    assert 'Referência antes do refile: 1,38 × 2,98 m' in text
+    assert 'Referência antes do refile:' not in text
+    assert 'Refilado' not in text
+    assert 'Sem refile' not in text
+    assert 'Total da placa em Metros: 11,92 m' in text
+    assert 'Total do layout: 11,92 m' in text
     assert 'Separar 4 folhas de 1,38 x 2,98 m.' in text
     assert ' mm' not in text
+
+
+def test_totais_lineares_somam_placas_da_sessao_com_camadas_individuais():
+    d = fixture()
+    d.layouts = [
+        dict(session_id=188, height_mm=2820, layers=4,
+             trim_cut_line=dict(enabled=True, orig_h=2980)),
+        dict(session_id=188, height_mm=1000, layers=2),
+        dict(session_id=999, height_mm=5000, layers=4),
+    ]
+    d.current_layout = d.layouts[0]
+    d.sheet_h_mm = 2820
+    d.trim_cut_line = d.current_layout['trim_cut_line']
+    d.layout_data['trim_cut_line'] = d.trim_cut_line
+    snapshot = deepcopy(d.layouts)
+    render_sheet(d, 100)
+    assert 'Total do layout: 13,92 m' in d.print_texts
+    assert 'Total da placa em Metros: 11,92 m' in d.print_texts
+    d.current_layout_index = 1
+    d.current_layout = d.layouts[1]
+    d.sheet_h_mm, d.layout_layers, d.trim_cut_line = 1000, 2, None
+    render_sheet(d, 100)
+    assert 'Total do layout: 13,92 m' in d.print_texts
+    assert 'Total da placa em Metros: 2,00 m' in d.print_texts
+    assert d.layouts == snapshot
+
+
+def test_metragem_sem_refile_e_medida_invalida():
+    from ui.production_sheet import plate_length_mm
+    assert plate_length_mm(dict(height_mm=2980, layers=4)) == 11920
+    assert plate_length_mm(dict(height_mm=2820, layers=4,
+                                trim_cut_line=dict(enabled=False, orig_h=2980))) == 11280
+    assert plate_length_mm(dict(height_mm=float('nan'), layers=4)) is None
+    assert plate_length_mm(dict(layers=4)) is None
 
 
 def test_modelos_ao_lado_do_mapa_ampliado_em_todas_as_continuacoes():

@@ -1340,6 +1340,13 @@ class DatabaseManager:
                 cursor.execute("DELETE FROM shapes WHERE name = ? AND folder = ? AND id != ?", (shp_name, shp_folder, shape_id))
             conn.commit()
 
+    def get_catalog_sessions(self):
+        """Destinos da biblioteca sem carregar geometrias ou layouts de todas as sessões."""
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute('SELECT id, name, code FROM sessions ORDER BY id ASC')
+            return [dict(row) for row in cursor.fetchall()]
+
     def get_sessions(self, order_id=None, limit: Optional[int] = None, offset: int = 0):
         with self.get_connection() as conn:
             cursor = conn.cursor()

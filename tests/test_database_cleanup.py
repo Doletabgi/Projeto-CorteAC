@@ -131,13 +131,13 @@ class TestDatabaseCleanup(unittest.TestCase):
             cur.execute("SELECT count(*) FROM layouts")
             self.assertEqual(cur.fetchone()[0], 1)
 
-    def test_tools_clean_database_script(self):
-        """Valida a execução do script tools/clean_database.py em banco isolado."""
+    def test_central_distribution_database_cleanup(self):
+        """Valida a limpeza central em banco isolado."""
         sess_id = self.db.create_session(name="Sessão Teste Script")
         self.db.save_session_layouts(sess_id, [{"layout_index": 0, "name": "lay_scr", "pieces": [], "yield_pct": 50.0}])
 
-        from tools.clean_database import clean_db
-        res = clean_db(self.db_path, verbose=False)
+        from atualizar import clean_db
+        res = clean_db(self.db_path, verbose=False, installed_version=APP_VERSION)
         self.assertTrue(res)
 
         with self.db.get_connection() as conn:

@@ -1,6 +1,6 @@
 # RELATÓRIO DE CONCLUSÃO — FASE 5.2: ARQUITETURA DE 4 CAMADAS
 
-**Projeto:** CorteAC / JobManager 2000 (Python Edition)  
+**Projeto:** OpenCorte / JobManager 2000 (Python Edition)\
 **Fase:** 5.2 — Arquitetura de 4 Camadas  
 **Revisor Externo:** DeepSeek  
 **Data:** 29/10/2026  

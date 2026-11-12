@@ -4,6 +4,7 @@ Diálogo para Configuração de Molde na Sessão (Pares a cortar e Sequência de
 """
 
 import tkinter as tk
+from ui.icon_widgets import IconButton, IconLabel
 from tkinter import ttk, colorchooser
 from config import THEME
 from cad.colors import get_color_for_size, get_contrast_text_color
@@ -41,7 +42,7 @@ class EditShapeInSessionDialog(tk.Toplevel):
         # Cabeçalho clássico
         hdr = tk.Frame(self, bg="#0a246a", pady=10, padx=14)
         hdr.pack(fill="x")
-        tk.Label(
+        IconLabel(
             hdr, text="⚙️ Propriedades do Molde na Sessão",
             font=("Segoe UI", 11, "bold"), fg="#ffffff", bg="#0a246a"
         ).pack(anchor="w")
@@ -107,14 +108,14 @@ class EditShapeInSessionDialog(tk.Toplevel):
         if not self.current_color or self.current_color in ("#000000", "black", "None"):
             self.current_color = get_color_for_size(shp_size)
 
-        self.btn_color_swatch = tk.Button(
+        self.btn_color_swatch = IconButton(
             c_row, text=f" {self.current_color} ", bg=self.current_color,
             fg=get_contrast_text_color(self.current_color), font=("Segoe UI", 9, "bold"),
             relief="groove", bd=2, width=12, command=self.on_pick_color
         )
         self.btn_color_swatch.pack(side="left", padx=4)
 
-        tk.Button(
+        IconButton(
             c_row, text="🎨 Alterar Cor...", font=("Segoe UI", 8),
             relief="raised", bd=1, command=self.on_pick_color
         ).pack(side="left", padx=4)
@@ -124,19 +125,19 @@ class EditShapeInSessionDialog(tk.Toplevel):
         btn_bar.pack(side="bottom", fill="x")
 
         if self.on_open_editor_cb:
-            tk.Button(
+            IconButton(
                 btn_bar, text="📐 Abrir no Shape Editor...",
                 font=("Segoe UI", 9), relief="raised", bd=2,
                 command=self.on_open_editor
             ).pack(side="left")
 
-        tk.Button(
+        IconButton(
             btn_bar, text="Cancelar",
             font=("Segoe UI", 9), relief="raised", bd=2, width=9,
             command=self.destroy
         ).pack(side="right", padx=(6, 0))
 
-        tk.Button(
+        IconButton(
             btn_bar, text="Salvar",
             font=("Segoe UI", 9, "bold"), relief="raised", bd=2, width=9,
             bg="#2563eb", fg="#ffffff",

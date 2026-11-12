@@ -1,6 +1,6 @@
 # RELATÓRIO TÉCNICO — FASE 5.0b: VERIFICAÇÃO DE "FRESH LEARNING"
 
-**Projeto:** CorteAC / JobManager 2000 (Python Edition)  
+**Projeto:** OpenCorte / JobManager 2000 (Python Edition)\
 **Missão:** Determinar se o ganho de yield do motor `IA-teste` depende de aprendizado acumulado ou é intrínseco do motor  
 **Fase:** 5.0b — Verificação de "Fresh Learning"  
 **Data:** 29/10/2026  

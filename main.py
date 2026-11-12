@@ -26,13 +26,20 @@ import multiprocessing
 from ui.main_window import MainWindow
 
 def main():
+    # Consultar a versão da build não deve apontar o atalho para uma pasta temporária.
+    if "--version" in sys.argv or "-v" in sys.argv:
+        from config import APP_NAME, APP_VERSION
+        print(f"{APP_NAME} {APP_VERSION}")
+        return
+
     # Mantém o atalho da Área de Trabalho/Menu com a versão atual (Linux).
     # Roda antes de qualquer saída (--version/--check-db) e só reescreve se já
     # existir atalho do CorteAC — não cria atalho sem o operador ter um.
     try:
         from config import APP_VERSION
         from ui.desktop_shortcut import sincronizar_atalho
-        info = sincronizar_atalho(APP_VERSION)
+        info = (sincronizar_atalho(APP_VERSION)
+                if getattr(sys, "frozen", False) and len(sys.argv) == 1 else {})
         if info.get("acao") == "atualizado":
             print(f"Atalho da Área de Trabalho atualizado para CorteAC-{APP_VERSION}")
     except Exception as exc:  # noqa: BLE001
@@ -51,11 +58,6 @@ def main():
             sys.exit(0)
         print(f"Nao foi possivel criar o atalho: {info.get('erro') or 'ambiente sem suporte'}")
         sys.exit(1)
-
-    if "--version" in sys.argv or "-v" in sys.argv:
-        from config import APP_NAME, APP_VERSION
-        print(f"{APP_NAME} {APP_VERSION}")
-        sys.exit(0)
 
     if "--check-db" in sys.argv:
         import db

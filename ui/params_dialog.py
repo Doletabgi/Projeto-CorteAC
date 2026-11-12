@@ -4,6 +4,7 @@ Nesting Parameters Dialog - Recriação fiel da tela dlgParamsFlashNest.gif
 """
 
 import tkinter as tk
+from ui.icon_widgets import IconButton, IconNotebook
 from tkinter import ttk
 from config import THEME
 
@@ -40,7 +41,7 @@ class NestingParamsDialog(tk.Toplevel):
         right_box = tk.Frame(main_box, bg=THEME["bg_surface"])
         right_box.pack(side="left", fill="both", expand=True)
 
-        notebook = ttk.Notebook(right_box)
+        notebook = IconNotebook(right_box)
         notebook.pack(fill="both", expand=True)
 
         tab_flash = tk.Frame(notebook, bg=THEME["bg_card"], padx=10, pady=10)
@@ -104,15 +105,15 @@ class NestingParamsDialog(tk.Toplevel):
         # 4. Botões inferiores clássicos com relevo 3D
         btn_bar = tk.Frame(right_box, bg=THEME["bg_surface"], pady=6)
         btn_bar.pack(fill="x")
-        tk.Button(btn_bar, text="Used by ...", bg=THEME["bg_surface"], fg=THEME["text_main"], relief="raised", bd=2, padx=8).pack(side="left", padx=2)
-        tk.Button(btn_bar, text="Update", bg=THEME["bg_surface"], fg=THEME["text_main"], relief="raised", bd=2, padx=8).pack(side="left", padx=2)
-        tk.Button(btn_bar, text="Remove", bg=THEME["bg_surface"], fg=THEME["text_main"], relief="raised", bd=2, padx=8).pack(side="left", padx=2)
-        tk.Button(btn_bar, text="Clear", bg=THEME["bg_surface"], fg=THEME["text_main"], relief="raised", bd=2, padx=8).pack(side="left", padx=2)
+        IconButton(btn_bar, text="Used by ...", bg=THEME["bg_surface"], fg=THEME["text_main"], relief="raised", bd=2, padx=8).pack(side="left", padx=2)
+        IconButton(btn_bar, text="Update", bg=THEME["bg_surface"], fg=THEME["text_main"], relief="raised", bd=2, padx=8).pack(side="left", padx=2)
+        IconButton(btn_bar, text="Remove", bg=THEME["bg_surface"], fg=THEME["text_main"], relief="raised", bd=2, padx=8).pack(side="left", padx=2)
+        IconButton(btn_bar, text="Clear", bg=THEME["bg_surface"], fg=THEME["text_main"], relief="raised", bd=2, padx=8).pack(side="left", padx=2)
 
         # Campo de texto como no print
         entry_val = tk.Entry(btn_bar, bg=THEME["bg_input"], fg=THEME["text_main"], relief="sunken", bd=2, width=8)
         entry_val.pack(side="left", padx=4)
 
-        tk.Button(btn_bar, text="OK", bg=THEME["bg_surface"], fg=THEME["text_main"], relief="raised", bd=2, padx=12, command=self.destroy).pack(side="right", padx=4)
+        IconButton(btn_bar, text="OK", bg=THEME["bg_surface"], fg=THEME["text_main"], relief="raised", bd=2, padx=12, command=self.destroy).pack(side="right", padx=4)
 
         notebook.select(tab_flash)

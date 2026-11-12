@@ -1,5 +1,6 @@
 """Painel gerencial: dados de planejamento, sem inferir execução de corte."""
 import tkinter as tk
+from ui.icon_widgets import IconNotebook, IconTtkButton
 from tkinter import messagebox, ttk
 from datetime import date
 from analytics.production_dashboard import fetch_data, summarize
@@ -36,10 +37,10 @@ class ProductionDashboard(tk.Toplevel):
         ttk.Label(filters, text='Material').pack(side='left')
         self.material_box = ttk.Combobox(filters, textvariable=self.material, state='readonly', width=25)
         self.material_box.pack(side='left', padx=6)
-        ttk.Button(filters, text='Atualizar', command=self.refresh).pack(side='left', padx=5)
+        IconTtkButton(filters, text='Atualizar', command=self.refresh).pack(side='left', padx=5)
         ttk.Label(root, textvariable=self.summary, justify='left', font=('Segoe UI', 10, 'bold')).pack(anchor='w', pady=10)
         ttk.Label(root, textvariable=self.notice, justify='left', wraplength=970).pack(anchor='w', pady=(0, 8))
-        notebook = ttk.Notebook(root)
+        notebook = IconNotebook(root)
         notebook.pack(fill='both', expand=True)
         self.material_tree = self._table(notebook, 'Por material', ('Material', 'Layouts válidos', 'Área por camada (m²)', 'Aproveitamento (%)', 'Área não ocupada (m²)'))
         self.day_tree = self._table(notebook, 'Evolução por dia', ('Data da sessão', 'Layouts válidos', 'Área por camada (m²)', 'Aproveitamento (%)', 'Área não ocupada (m²)'))

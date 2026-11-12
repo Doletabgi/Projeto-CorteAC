@@ -5,6 +5,7 @@ CAD Shape Editor com suporte a edição de contornos, furos, vértices e cálcul
 """
 
 import tkinter as tk
+from ui.icon_widgets import IconButton, IconCheckbutton, IconLabel, IconMenu
 from tkinter import ttk, messagebox, simpledialog, filedialog
 import math
 import copy
@@ -17,6 +18,8 @@ from cad.geometry import (
 from cad.die_parser import parse_die_file, save_die_file
 from cad.layers_rule import shape_multiplier
 from ui.tooltip import ToolTip
+from cad.symbolic_notches import insert_symbol
+from ui.symbolic_dialog import SymbolicDialog
 
 class ShapeEditorView(tk.Frame):
     def __init__(self, parent, shape_data=None, on_close=None, on_minimize=None, on_maximize=None, on_save=None, on_import_die=None, **kwargs):
@@ -48,6 +51,7 @@ class ShapeEditorView(tk.Frame):
 
         # Estado da edição CAD
         self.tool_mode = "select"  # "select", "add_point", "add_hole", "rotate"
+        self.symbolic_kind = "Pique pequeno (4,5 × 1 mm)"
         self.selected_vertex_idx = -1
         self.selected_hole_idx = -1
         self.drag_target = None  # ("vertex", idx) ou ("hole", idx)
@@ -377,7 +381,7 @@ class ShapeEditorView(tk.Frame):
             btn_lbl.bind("<Button-1>", lambda e, idx=i: self.switch_to_shape(idx))
             tab_btn_frame.bind("<Button-1>", lambda e, idx=i: self.switch_to_shape(idx))
 
-            btn_x = tk.Label(tab_btn_frame, text="✕", bg=tab_bg, fg="#666666", font=("Segoe UI", 7, "bold"), cursor="hand2")
+            btn_x = IconLabel(tab_btn_frame, text="✕", bg=tab_bg, fg="#666666", font=("Segoe UI", 7, "bold"), cursor="hand2")
             btn_x.pack(side="left", padx=(0, 4), pady=1)
             btn_x.bind("<Enter>", lambda e, w=btn_x: w.config(fg="#cc0000"))
             btn_x.bind("<Leave>", lambda e, w=btn_x: w.config(fg="#666666"))
@@ -403,11 +407,11 @@ class ShapeEditorView(tk.Frame):
 
         btn_box = tk.Frame(title_bar, bg=THEME["title_bar_bg"])
         btn_box.pack(side="right")
-        self.btn_min = tk.Button(btn_box, text="_", relief="raised", bd=1, bg=THEME["bg_surface"], fg=THEME["text_main"], font=("Segoe UI", 7, "bold"), width=2, height=1, padx=0, pady=0, command=self.on_minimize_click)
+        self.btn_min = IconButton(btn_box, text="_", relief="raised", bd=1, bg=THEME["bg_surface"], fg=THEME["text_main"], font=("Segoe UI", 7, "bold"), width=2, height=1, padx=0, pady=0, command=self.on_minimize_click)
         self.btn_min.pack(side="left", padx=1)
-        self.btn_max = tk.Button(btn_box, text="□", relief="raised", bd=1, bg=THEME["bg_surface"], fg=THEME["text_main"], font=("Segoe UI", 7, "bold"), width=2, height=1, padx=0, pady=0, command=self.on_maximize_click)
+        self.btn_max = IconButton(btn_box, text="□", relief="raised", bd=1, bg=THEME["bg_surface"], fg=THEME["text_main"], font=("Segoe UI", 7, "bold"), width=2, height=1, padx=0, pady=0, command=self.on_maximize_click)
         self.btn_max.pack(side="left", padx=1)
-        self.btn_close = tk.Button(btn_box, text="✕", relief="raised", bd=1, bg=THEME["bg_surface"], fg=THEME["text_main"], font=("Segoe UI", 7, "bold"), width=2, height=1, padx=0, pady=0, command=self.on_close_click)
+        self.btn_close = IconButton(btn_box, text="✕", relief="raised", bd=1, bg=THEME["bg_surface"], fg=THEME["text_main"], font=("Segoe UI", 7, "bold"), width=2, height=1, padx=0, pady=0, command=self.on_close_click)
         self.btn_close.pack(side="left", padx=1)
 
         # Arrastar janela pelo título em modo flutuante/lado a lado
@@ -419,36 +423,43 @@ class ShapeEditorView(tk.Frame):
         self.lbl_title.bind("<Double-1>", lambda e: self.on_maximize_click())
         self.bind("<Button-1>", lambda e: self.lift(), add="+")
 
-        # 2. Barra de Ferramentas CAD (Clássica ATOM ShedNt)
-        toolbar = tk.Frame(self, bg=THEME["bg_surface"], height=32, padx=4, pady=2, relief="raised", bd=1)
+        # Agrupa arquivo, geometria e visualização para manter todas as ações
+        # visíveis também nas janelas MDI mais estreitas.
+        toolbar_box = tk.Frame(self, bg=THEME["bg_surface"])
+        toolbar_box.pack(fill="x")
+        toolbar = tk.Frame(toolbar_box, bg=THEME["bg_surface"], padx=4, pady=2, relief="raised", bd=1)
         toolbar.pack(fill="x")
 
         # Ações de Arquivo
-        tk.Button(toolbar, text="📄 Novo", bg=THEME["bg_surface"], fg=THEME["text_main"], relief="raised", bd=1, font=("Segoe UI", 8), command=self.load_empty_shape).pack(side="left", padx=1)
-        tk.Button(toolbar, text="💾 Salvar", bg=THEME["bg_surface"], fg=THEME["text_main"], relief="raised", bd=2, font=("Segoe UI", 8, "bold"), command=self.save_changes).pack(side="left", padx=1)
-        self.btn_save_all = tk.Button(toolbar, text="💾 Salvar Todos", bg=THEME["bg_surface"], fg=THEME["text_main"], relief="raised", bd=1, font=("Segoe UI", 8), command=self.save_all_changes)
+        IconButton(toolbar, text="📄 Novo", bg=THEME["bg_surface"], fg=THEME["text_main"], relief="raised", bd=1, font=("Segoe UI", 8), command=self.load_empty_shape).pack(side="left", padx=1)
+        IconButton(toolbar, text="💾 Salvar", bg=THEME["bg_surface"], fg=THEME["text_main"], relief="raised", bd=2, font=("Segoe UI", 8, "bold"), command=self.save_changes).pack(side="left", padx=1)
+        self.btn_save_all = IconButton(toolbar, text="💾 Salvar Todos", bg=THEME["bg_surface"], fg=THEME["text_main"], relief="raised", bd=1, font=("Segoe UI", 8), command=self.save_all_changes)
         self.btn_save_all.pack(side="left", padx=1)
-        tk.Button(toolbar, text="🔄 Reverter (Ctrl+Z)", bg=THEME["bg_surface"], fg=THEME["text_main"], relief="raised", bd=1, font=("Segoe UI", 8), command=self.undo_or_revert).pack(side="left", padx=1)
-        tk.Button(toolbar, text="📂 Importar .die", bg=THEME["bg_surface"], fg=THEME["text_main"], relief="raised", bd=1, font=("Segoe UI", 8), command=self.import_die_file).pack(side="left", padx=1)
-        tk.Button(toolbar, text="📤 Exportar .die", bg=THEME["bg_surface"], fg=THEME["text_main"], relief="raised", bd=1, font=("Segoe UI", 8), command=self.export_die_file).pack(side="left", padx=1)
+        IconButton(toolbar, text="🔄 Reverter (Ctrl+Z)", bg=THEME["bg_surface"], fg=THEME["text_main"], relief="raised", bd=1, font=("Segoe UI", 8), command=self.undo_or_revert).pack(side="left", padx=1)
+        IconButton(toolbar, text="📂 Importar .die", bg=THEME["bg_surface"], fg=THEME["text_main"], relief="raised", bd=1, font=("Segoe UI", 8), command=self.import_die_file).pack(side="left", padx=1)
+        IconButton(toolbar, text="📤 Exportar .die", bg=THEME["bg_surface"], fg=THEME["text_main"], relief="raised", bd=1, font=("Segoe UI", 8), command=self.export_die_file).pack(side="left", padx=1)
 
-        # Separador vertical
-        tk.Frame(toolbar, width=2, bg="#a0a0a0", relief="sunken", bd=1).pack(side="left", fill="y", padx=3, pady=2)
+        toolbar = tk.Frame(toolbar_box, bg=THEME["bg_surface"], padx=4, pady=2, relief="groove", bd=1)
+        toolbar.pack(fill="x")
 
         # Modos de Ferramenta (Seleção, Ponto, Furo)
-        self.btn_tool_select = tk.Button(toolbar, text="↖ Selecionar", bg=THEME["bg_hover"], fg=THEME["text_main"], relief="sunken", bd=2, font=("Segoe UI", 8), command=lambda: self.set_tool_mode("select"))
+        self.btn_tool_select = IconButton(toolbar, text="↖ Selecionar", bg=THEME["bg_hover"], fg=THEME["text_main"], relief="sunken", bd=2, font=("Segoe UI", 8), command=lambda: self.set_tool_mode("select"))
         self.btn_tool_select.pack(side="left", padx=1)
 
-        self.btn_tool_point = tk.Button(toolbar, text="➕ Ponto", bg=THEME["bg_surface"], fg=THEME["text_main"], relief="raised", bd=1, font=("Segoe UI", 8), command=lambda: self.set_tool_mode("add_point"))
+        self.btn_tool_point = IconButton(toolbar, text="➕ Ponto", bg=THEME["bg_surface"], fg=THEME["text_main"], relief="raised", bd=1, font=("Segoe UI", 8), command=lambda: self.set_tool_mode("add_point"))
         self.btn_tool_point.pack(side="left", padx=1)
 
-        self.btn_tool_hole = tk.Button(toolbar, text="⭕ Furo", bg=THEME["bg_surface"], fg=THEME["text_main"], relief="raised", bd=1, font=("Segoe UI", 8), command=lambda: self.set_tool_mode("add_hole"))
+        self.btn_tool_hole = IconButton(toolbar, text="⭕ Furo", bg=THEME["bg_surface"], fg=THEME["text_main"], relief="raised", bd=1, font=("Segoe UI", 8), command=lambda: self.set_tool_mode("add_hole"))
         self.btn_tool_hole.pack(side="left", padx=1)
 
-        self.btn_tool_rotate = tk.Button(toolbar, text="🔄 Girar", bg=THEME["bg_surface"], fg=THEME["text_main"], relief="raised", bd=1, font=("Segoe UI", 8), command=lambda: self.set_tool_mode("rotate"))
+        self.btn_tool_symbolic = IconButton(toolbar, text="Simbólica", bg=THEME["bg_surface"], fg=THEME["text_main"], relief="raised", bd=1, font=("Segoe UI", 8), command=self.choose_symbolic)
+        self.btn_tool_symbolic.pack(side="left", padx=1)
+        ToolTip(self.btn_tool_symbolic, "Escolher piques de identificação e inserir na borda da peça")
+
+        self.btn_tool_rotate = IconButton(toolbar, text="🔄 Girar", bg=THEME["bg_surface"], fg=THEME["text_main"], relief="raised", bd=1, font=("Segoe UI", 8), command=lambda: self.set_tool_mode("rotate"))
         self.btn_tool_rotate.pack(side="left", padx=1)
 
-        self.btn_lock = tk.Button(toolbar, text="🔒 Editar Geometria", bg=THEME["bg_surface"], fg=THEME["text_main"], relief="raised", bd=2, font=("Segoe UI", 8, "bold"), command=self.toggle_geometry_lock)
+        self.btn_lock = IconButton(toolbar, text="🔒 Editar Geometria", bg=THEME["bg_surface"], fg=THEME["text_main"], relief="raised", bd=2, font=("Segoe UI", 8, "bold"), command=self.toggle_geometry_lock)
         self.btn_lock.pack(side="left", padx=2)
 
         # Formato do Molde (1x1, 4x1, 6x1) e Fator Multiplicador
@@ -477,10 +488,10 @@ class ShapeEditorView(tk.Frame):
         )
         self.lbl_format_factor.pack(side="left", padx=(1, 4))
 
-        tk.Button(toolbar, text="🗑️ Excluir", bg=THEME["bg_surface"], fg=THEME["text_main"], relief="raised", bd=1, font=("Segoe UI", 8), command=self.delete_selected).pack(side="left", padx=1)
+        IconButton(toolbar, text="🗑️ Excluir", bg=THEME["bg_surface"], fg=THEME["text_main"], relief="raised", bd=1, font=("Segoe UI", 8), command=self.delete_selected).pack(side="left", padx=1)
 
-        # Separador vertical
-        tk.Frame(toolbar, width=2, bg="#a0a0a0", relief="sunken", bd=1).pack(side="left", fill="y", padx=4, pady=2)
+        toolbar = tk.Frame(toolbar_box, bg=THEME["bg_surface"], padx=4, pady=2, relief="groove", bd=1)
+        toolbar.pack(fill="x")
 
         # Alternadores de Visualização (Checkboxes estilo WinXP)
         tk.Checkbutton(toolbar, text="Contorno", variable=self.show_contour, bg=THEME["bg_surface"], font=("Segoe UI", 8), command=self.redraw).pack(side="left", padx=1)
@@ -495,12 +506,12 @@ class ShapeEditorView(tk.Frame):
         tk.Frame(toolbar, width=2, bg="#a0a0a0", relief="sunken", bd=1).pack(side="left", fill="y", padx=3, pady=2)
 
         # Zoom e Enquadramento
-        tk.Button(toolbar, text="🔍 Total", bg=THEME["bg_surface"], fg=THEME["text_main"], relief="raised", bd=1, font=("Segoe UI", 8), command=self.reset_view).pack(side="left", padx=1)
-        tk.Button(toolbar, text="➕", width=2, bg=THEME["bg_surface"], fg=THEME["text_main"], relief="raised", bd=1, font=("Segoe UI", 8, "bold"), command=lambda: self.zoom_step(1.25)).pack(side="left", padx=1)
-        tk.Button(toolbar, text="➖", width=2, bg=THEME["bg_surface"], fg=THEME["text_main"], relief="raised", bd=1, font=("Segoe UI", 8, "bold"), command=lambda: self.zoom_step(0.8)).pack(side="left", padx=1)
+        IconButton(toolbar, text="🔍 Total", bg=THEME["bg_surface"], fg=THEME["text_main"], relief="raised", bd=1, font=("Segoe UI", 8), command=self.reset_view).pack(side="left", padx=1)
+        IconButton(toolbar, text="➕", width=2, bg=THEME["bg_surface"], fg=THEME["text_main"], relief="raised", bd=1, font=("Segoe UI", 8, "bold"), command=lambda: self.zoom_step(1.25)).pack(side="left", padx=1)
+        IconButton(toolbar, text="➖", width=2, bg=THEME["bg_surface"], fg=THEME["text_main"], relief="raised", bd=1, font=("Segoe UI", 8, "bold"), command=lambda: self.zoom_step(0.8)).pack(side="left", padx=1)
 
         # Botão para alternar painel de informações
-        tk.Checkbutton(toolbar, text="📋 Info", variable=self.show_info_panel, bg=THEME["bg_surface"], font=("Segoe UI", 8), command=self.toggle_info_panel).pack(side="right", padx=2)
+        IconCheckbutton(toolbar, text="📋 Info", variable=self.show_info_panel, bg=THEME["bg_surface"], font=("Segoe UI", 8), command=self.toggle_info_panel).pack(side="right", padx=2)
 
         # 2.5 Barra de Abas de Moldes Abertos (Tabs Bar)
         self.tab_bar_frame = tk.Frame(self, bg="#d4d0c8", relief="groove", bd=1)
@@ -515,7 +526,7 @@ class ShapeEditorView(tk.Frame):
         right_tab_ctrls.pack(side="right", padx=4, pady=1)
 
         # Checkbox "Sobrepor Todos (Grade)"
-        self.cb_overlay = tk.Checkbutton(
+        self.cb_overlay = IconCheckbutton(
             right_tab_ctrls, text="👁️ Sobrepor Todos (Grade)",
             variable=self.var_overlay_all,
             bg="#d4d0c8", fg="#000000", font=("Segoe UI", 8, "bold"),
@@ -524,7 +535,7 @@ class ShapeEditorView(tk.Frame):
         self.cb_overlay.pack(side="right", padx=(4, 2))
 
         # Checkbox "Girar Todos"
-        self.cb_rotate_all = tk.Checkbutton(
+        self.cb_rotate_all = IconCheckbutton(
             right_tab_ctrls, text="🔄 Girar Todos",
             variable=self.var_rotate_all,
             bg="#d4d0c8", fg="#000000", font=("Segoe UI", 8, "bold")
@@ -532,10 +543,10 @@ class ShapeEditorView(tk.Frame):
         self.cb_rotate_all.pack(side="right", padx=(4, 2))
 
         # Botões de navegação rápida
-        self.btn_next_tab = tk.Button(right_tab_ctrls, text="▶", font=("Segoe UI", 8, "bold"), width=2, height=1, relief="raised", bd=1, command=self.next_shape)
+        self.btn_next_tab = IconButton(right_tab_ctrls, text="▶", font=("Segoe UI", 8, "bold"), width=2, height=1, relief="raised", bd=1, command=self.next_shape)
         self.btn_next_tab.pack(side="right", padx=1)
 
-        self.btn_prev_tab = tk.Button(right_tab_ctrls, text="◀", font=("Segoe UI", 8, "bold"), width=2, height=1, relief="raised", bd=1, command=self.prev_shape)
+        self.btn_prev_tab = IconButton(right_tab_ctrls, text="◀", font=("Segoe UI", 8, "bold"), width=2, height=1, relief="raised", bd=1, command=self.prev_shape)
         self.btn_prev_tab.pack(side="right", padx=1)
 
         # Seletor rápido Combobox
@@ -620,7 +631,7 @@ class ShapeEditorView(tk.Frame):
         self.canvas.bind("<Control-Next>", self.next_shape)
 
         # Menu de Contexto CAD (Botão Direito)
-        self.ctx_menu = tk.Menu(self, tearoff=0, bg=THEME["bg_surface"], fg=THEME["text_main"])
+        self.ctx_menu = IconMenu(self, tearoff=0, bg=THEME["bg_surface"], fg=THEME["text_main"])
         self.ctx_menu.add_command(label="🔄 Voltar / Reverter\tCtrl+Z", command=self.undo_or_revert)
         self.ctx_menu.add_separator()
         self.ctx_menu.add_command(label="Definir como Ponto Inicial 0", command=self.set_as_start_point)
@@ -732,25 +743,25 @@ class ShapeEditorView(tk.Frame):
         self.entry_vy.pack(side="left")
         self.entry_vy.bind("<Return>", self.on_vertex_entry_change)
 
-        tk.Button(grp_vertex, text="Definir como Ponto 0", bg=THEME["bg_surface"], relief="raised", bd=1, font=("Segoe UI", 8), command=self.set_as_start_point).pack(fill="x", pady=1)
-        tk.Button(grp_vertex, text="Excluir Vértice", bg=THEME["bg_surface"], relief="raised", bd=1, font=("Segoe UI", 8), command=self.delete_selected).pack(fill="x", pady=1)
+        IconButton(grp_vertex, text="Definir como Ponto 0", bg=THEME["bg_surface"], relief="raised", bd=1, font=("Segoe UI", 8), command=self.set_as_start_point).pack(fill="x", pady=1)
+        IconButton(grp_vertex, text="Excluir Vértice", bg=THEME["bg_surface"], relief="raised", bd=1, font=("Segoe UI", 8), command=self.delete_selected).pack(fill="x", pady=1)
 
         # Grupo: Operações Geométricas
         grp_ops = tk.LabelFrame(self.panel_info, text="Geometria & Transformação", bg=THEME["bg_surface"], fg=THEME["text_main"], font=("Segoe UI", 8, "bold"), padx=5, pady=2)
         grp_ops.pack(fill="x", pady=2)
 
-        tk.Button(grp_ops, text="🔄 Inverter Sentido de Corte", bg=THEME["bg_surface"], relief="raised", bd=1, font=("Segoe UI", 8), command=self.reverse_contour).pack(fill="x", pady=1)
-        tk.Button(grp_ops, text="↔ Espelhar X", bg=THEME["bg_surface"], relief="raised", bd=1, font=("Segoe UI", 8), command=self.flip_horizontal).pack(fill="x", pady=1)
-        tk.Button(grp_ops, text="↕ Espelhar Y", bg=THEME["bg_surface"], relief="raised", bd=1, font=("Segoe UI", 8), command=self.flip_vertical).pack(fill="x", pady=1)
-        tk.Button(grp_ops, text="🎯 Centralizar na Origem", bg=THEME["bg_surface"], relief="raised", bd=1, font=("Segoe UI", 8), command=self.center_to_origin).pack(fill="x", pady=1)
+        IconButton(grp_ops, text="🔄 Inverter Sentido de Corte", bg=THEME["bg_surface"], relief="raised", bd=1, font=("Segoe UI", 8), command=self.reverse_contour).pack(fill="x", pady=1)
+        IconButton(grp_ops, text="↔ Espelhar X", bg=THEME["bg_surface"], relief="raised", bd=1, font=("Segoe UI", 8), command=self.flip_horizontal).pack(fill="x", pady=1)
+        IconButton(grp_ops, text="↕ Espelhar Y", bg=THEME["bg_surface"], relief="raised", bd=1, font=("Segoe UI", 8), command=self.flip_vertical).pack(fill="x", pady=1)
+        IconButton(grp_ops, text="🎯 Centralizar na Origem", bg=THEME["bg_surface"], relief="raised", bd=1, font=("Segoe UI", 8), command=self.center_to_origin).pack(fill="x", pady=1)
 
         r_io = tk.Frame(grp_ops, bg=THEME["bg_surface"])
         r_io.pack(fill="x", pady=1)
-        tk.Button(r_io, text="📂 Importar .die", bg=THEME["bg_surface"], relief="raised", bd=1, font=("Segoe UI", 8), command=self.import_die_file).pack(side="left", fill="x", expand=True, padx=(0, 1))
-        tk.Button(r_io, text="📤 Exportar .die", bg=THEME["bg_surface"], relief="raised", bd=1, font=("Segoe UI", 8), command=self.export_die_file).pack(side="right", fill="x", expand=True, padx=(1, 0))
+        IconButton(r_io, text="📂 Importar .die", bg=THEME["bg_surface"], relief="raised", bd=1, font=("Segoe UI", 8), command=self.import_die_file).pack(side="left", fill="x", expand=True, padx=(0, 1))
+        IconButton(r_io, text="📤 Exportar .die", bg=THEME["bg_surface"], relief="raised", bd=1, font=("Segoe UI", 8), command=self.export_die_file).pack(side="right", fill="x", expand=True, padx=(1, 0))
 
         # Botão de Ação Principal
-        tk.Button(
+        IconButton(
             self.panel_info,
             text="💾 Salvar Molde no Banco",
             bg="#006400", fg="#ffffff",
@@ -788,6 +799,8 @@ class ShapeEditorView(tk.Frame):
         self.btn_tool_select.config(relief="raised", bg=THEME["bg_surface"])
         self.btn_tool_point.config(relief="raised", bg=THEME["bg_surface"])
         self.btn_tool_hole.config(relief="raised", bg=THEME["bg_surface"])
+        if hasattr(self, "btn_tool_symbolic"):
+            self.btn_tool_symbolic.config(relief="raised", bg=THEME["bg_surface"])
         if hasattr(self, "btn_tool_rotate"):
             self.btn_tool_rotate.config(relief="raised", bg=THEME["bg_surface"])
 
@@ -812,6 +825,10 @@ class ShapeEditorView(tk.Frame):
                 self.lbl_sbar_status.config(text="Geometria bloqueada. Ative 'Editar Geometria' para modificar.")
             else:
                 self.lbl_sbar_status.config(text="Ferramenta: Clique para Inserir Furo de Broca")
+        elif mode == "symbolic":
+            self.btn_tool_symbolic.config(relief="sunken", bg=THEME["bg_hover"])
+            self.canvas.config(cursor="crosshair")
+            self.lbl_sbar_status.config(text=f"Simbólica: {self.symbolic_kind}. Clique na borda; Esc encerra; Ctrl+Z desfaz.")
         elif mode == "rotate":
             if hasattr(self, "btn_tool_rotate"):
                 self.btn_tool_rotate.config(relief="sunken", bg=THEME["bg_hover"])
@@ -950,6 +967,9 @@ class ShapeEditorView(tk.Frame):
             self.after(60, self.reset_view)
 
     def on_escape_key(self, event=None):
+        if self.tool_mode == "symbolic":
+            self.set_tool_mode("select")
+            return "break"
         top = self.winfo_toplevel()
         try:
             if top and hasattr(top, "attributes") and top.attributes("-fullscreen"):
@@ -962,6 +982,41 @@ class ShapeEditorView(tk.Frame):
     # =========================================================================
     # Transformações e Operações CAD
     # =========================================================================
+    def choose_symbolic(self):
+        if self.geometry_locked.get():
+            self.lbl_sbar_status.config(text="Geometria bloqueada. Ative 'Editar Geometria' para inserir simbólica.")
+            return
+        if len(self.shape.get("contour", [])) < 3:
+            self.lbl_sbar_status.config(text="Abra uma peça com contorno para inserir simbólica.")
+            return
+        dialog = SymbolicDialog(self, size=self.shape.get("size", ""), initial=self.symbolic_kind)
+        if dialog.result:
+            self.symbolic_kind = dialog.result
+            self.set_tool_mode("symbolic")
+            self.canvas.focus_set()
+
+    def add_symbolic_at(self, wx, wy):
+        if self.geometry_locked.get():
+            self.lbl_sbar_status.config(text="Geometria bloqueada. Ative 'Editar Geometria' para inserir simbólica.")
+            return False
+        try:
+            contour, added = insert_symbol(
+                self.shape.get("contour", []), wx, wy, self.symbolic_kind,
+                size=self.shape.get("size", ""), max_distance=12/max(self.zoom, 0.01),
+            )
+        except ValueError as exc:
+            self.lbl_sbar_status.config(text=str(exc))
+            return False
+        self.push_undo()
+        self.shape["contour"] = contour
+        self.selected_vertex_idx = -1
+        self.selected_hole_idx = -1
+        self.set_modified(True)
+        self.update_info_panel()
+        self.redraw()
+        self.lbl_sbar_status.config(text=f"Simbólica inserida: {len(added)//3} pique(s). Clique para adicionar outra ou Esc para encerrar.")
+        return True
+
     def save_changes(self):
         self.on_name_change()
         self._save_current_shape_state()
@@ -1514,6 +1569,10 @@ class ShapeEditorView(tk.Frame):
         wx, wy = self.screen_to_world(event.x, event.y)
         contour = self.shape.get("contour", [])
         holes = self.shape.get("holes", [])
+
+        if self.tool_mode == "symbolic":
+            self.add_symbolic_at(wx, wy)
+            return
 
         if self.tool_mode == "select":
             # Procura vértice próximo (raio de 8 pixels na tela)

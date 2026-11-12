@@ -54,6 +54,7 @@ class TestToolsMenuItems(unittest.TestCase):
         self.assertTrue(any("Exportar G-Code" in lbl for lbl in labels), f"'Exportar G-Code' deve estar presente no menu Ferramentas: {labels}")
         self.assertTrue(any("Backup e Restauração" in lbl for lbl in labels), f"'Backup e Restauração' deve estar presente no menu Ferramentas: {labels}")
         self.assertTrue(any("Programar Backup" in lbl for lbl in labels), f"'Programar Backup' deve estar presente no menu Ferramentas: {labels}")
+        self.assertTrue(any("Conexão com Banco de Dados" in lbl for lbl in labels))
 
     def test_export_gcode_removed_from_toolbar(self):
         """Garante que o botão Exportar G-Code não está mais presente na barra de ferramentas da MainWindow."""

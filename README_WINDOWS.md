@@ -1,6 +1,6 @@
 # Guia de Instalação e Testes no Windows 10 e Windows 11
 
-Este guia foi elaborado para que qualquer usuário consiga baixar, executar e testar o **CorteAC** rapidamente em computadores com **Windows 10** ou **Windows 11**.
+Este guia foi elaborado para que qualquer usuário consiga baixar, executar e testar o **OpenCorte** rapidamente em computadores com **Windows 10** ou **Windows 11**.
 
 ---
 
@@ -16,7 +16,7 @@ Você **não precisa instalar o Python nem configurar nada**. Basta baixar o pac
 4. Dê duplo clique no arquivo **`CorteAC.exe`**.
 
 > **Nota sobre o Banco de Dados:**
-> Ao abrir pela primeira vez, o CorteAC cria automaticamente seu banco de dados SQLite local (`jobmanager.db`) na mesma pasta do executável, garantindo que todas as ordens, modelos e chapas fiquem salvas permanentemente.
+> Ao abrir pela primeira vez, o OpenCorte cria automaticamente seu banco de dados SQLite local (`jobmanager.db`) na mesma pasta do executável, garantindo que todas as ordens, modelos e chapas fiquem salvas permanentemente.
 
 > **Aviso do Windows Defender / SmartScreen:**
 > Como o executável é recém-gerado com PyInstaller e não possui certificado digital comercial pago, o Windows SmartScreen pode exibir uma tela azul ("O Windows protegeu o seu computador").
@@ -33,7 +33,7 @@ Se você clonou o repositório ou baixou o código-fonte compactado (`Download Z
    - ⚠️ **MUITO IMPORTANTE:** Durante a instalação, marque a opção **"Add python.exe to PATH"** (Adicionar Python ao PATH).
 2. Na pasta do projeto, dê duplo clique no script:
    🚀 **`executar_windows.bat`** (ou `run.bat`)
-3. O script verificará o ambiente, instalará automaticamente as bibliotecas necessárias (`Pillow`, `pymysql`, `cryptography`) e abrirá o CorteAC na tela.
+3. O script verificará o ambiente, instalará automaticamente as bibliotecas necessárias (`Pillow`, `pymysql`, `cryptography`) e abrirá o OpenCorte na tela.
 
 ---
 
@@ -41,8 +41,8 @@ Se você clonou o repositório ou baixou o código-fonte compactado (`Download Z
 
 Caso deseje gerar um novo arquivo executável localmente:
 
-1. Com o Python instalado, dê duplo clique em:
-   🛠️ **`build_exe_windows.bat`**
+1. Com o Python e o PyInstaller instalados, execute no terminal da pasta do projeto:
+   **`python atualizar.py --build`**
 2. Aguarde o processo de compilação do PyInstaller.
 3. Ao finalizar, o executável estará pronto na pasta:
    📂 `dist\CorteAC.exe`
@@ -54,7 +54,7 @@ Caso deseje gerar um novo arquivo executável localmente:
 No **Layout Editor**, clique no botão **📤** da toolbar (ou use **Arquivo → 📤 Salvar Sessão para Máquina…**):
 
 1. Escolha a pasta de destino (rede ou pendrive).
-2. O CorteAC cria `<destino>\<código da sessão>\` com:
+2. O OpenCorte cria `<destino>\<código da sessão>\` com:
    - todas as placas da sessão (`lay0000.lay`, `lay0001.lay`, ...);
    - `Shapes\` contendo somente os `.die` usados;
    - `manifest.json` com a lista de placas, moldes e avisos.
@@ -68,12 +68,16 @@ No **Auto-Nest em Massa**, marque **“📤 Salvar cada sessão na pasta da máq
 
 ## Suporte a Banco de Dados MySQL (Opcional)
 
-Por padrão, o CorteAC funciona 100% offline com **SQLite** sem precisar configurar nenhum servidor.
+Por padrão, o OpenCorte funciona 100% offline com **SQLite** sem precisar configurar nenhum servidor.
 
-Se desejar conectar ao servidor de banco de dados corporativo **MySQL**:
-1. Renomeie o arquivo `db.example.ini` para `db.ini`.
-2. Abra o `db.ini` com o Bloco de Notas e preencha o IP do host, usuário, senha e porta do seu servidor MySQL.
-3. Ao abrir o CorteAC, ele alternará automaticamente para o backend MySQL com failover automático para SQLite em caso de perda de conexão.
+Para configurar pela tela:
+1. Abra **Ferramentas → Conexão com Banco de Dados**.
+2. Escolha **Somente neste computador** ou **Compartilhado na rede (MySQL)**.
+3. Para MySQL, preencha endereço do servidor, nome do banco, usuário e senha fornecidos pelo responsável pela rede. A porta padrão é 3306.
+4. Clique em **Testar conexão** e depois em **Salvar configuração**. Salvar também testa a conexão automaticamente.
+5. Feche e abra o OpenCorte para usar a configuração salva. Os dados existentes não serão transferidos entre os bancos.
+
+A configuração é gravada no arquivo `db.ini`, ao lado do executável. A edição manual continua disponível usando `db.example.ini` como modelo.
 
 ## Ícone do atalho na Área de Trabalho
 
@@ -90,5 +94,5 @@ O pacote Windows traz `criar_atalho_windows.ps1` e `versao.txt`. Clique com o bo
 `powershell -ExecutionPolicy Bypass -File .\criar_atalho_windows.ps1`).
 
 Ele cria o atalho **`CorteAC-<versão>.lnk`** (ex.: `CorteAC-1.6.11.lnk`) apontando para o
-`CorteAC.exe`, usando o ícone embutido no executável, e **remove os atalhos antigos** do CorteAC
+`CorteAC.exe`, usando o ícone embutido no executável, e **remove os atalhos antigos** do OpenCorte
 da Área de Trabalho. Assim o operador sempre sabe qual build está instalado.

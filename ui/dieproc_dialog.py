@@ -6,6 +6,7 @@ folga entre peças (Gaps) e intertravamento entre linhas (Row interlock) para co
 """
 
 import tkinter as tk
+from ui.icon_widgets import IconButton, IconMenu, IconNotebook
 from tkinter import ttk, messagebox
 from config import THEME
 
@@ -86,7 +87,7 @@ class DieProcDialog(tk.Toplevel):
         self.preset_listbox.bind("<Delete>", lambda e: self.on_delete_clicked())
         self.preset_listbox.bind("<BackSpace>", lambda e: self.on_delete_clicked())
 
-        self.preset_menu = tk.Menu(self, tearoff=0)
+        self.preset_menu = IconMenu(self, tearoff=0)
         self.preset_menu.add_command(label="Excluir Predefinição (Del)", command=self.on_delete_clicked)
         self.preset_listbox.bind("<Button-3>", self._on_listbox_right_click)
 
@@ -96,7 +97,7 @@ class DieProcDialog(tk.Toplevel):
         right_box = tk.Frame(content_frame, bg=THEME["bg_surface"])
         right_box.pack(side="left", fill="both", expand=True)
 
-        self.notebook = ttk.Notebook(right_box)
+        self.notebook = IconNotebook(right_box)
         self.notebook.pack(fill="both", expand=True)
 
         self.tab_dieproc = tk.Frame(self.notebook, bg=THEME["bg_surface"], padx=6, pady=6)
@@ -220,7 +221,7 @@ class DieProcDialog(tk.Toplevel):
         )
         self.lbl_ai_status.pack(side="left", fill="x", expand=True)
 
-        self.btn_restore_macro = tk.Button(
+        self.btn_restore_macro = IconButton(
             macro_top,
             text="Restaurar Macro Padrão IA-teste",
             bg=THEME["bg_surface"],
@@ -263,7 +264,7 @@ class DieProcDialog(tk.Toplevel):
         left_btns = tk.Frame(bot_bar, bg=THEME["bg_surface"])
         left_btns.pack(side="left")
 
-        self.btn_update = tk.Button(
+        self.btn_update = IconButton(
             left_btns,
             text="Update",
             bg=THEME["bg_surface"],
@@ -276,7 +277,7 @@ class DieProcDialog(tk.Toplevel):
         )
         self.btn_update.pack(side="left", padx=(0, 4))
 
-        self.btn_delete = tk.Button(
+        self.btn_delete = IconButton(
             left_btns,
             text="Excluir",
             bg=THEME["bg_surface"],
@@ -289,7 +290,7 @@ class DieProcDialog(tk.Toplevel):
         )
         self.btn_delete.pack(side="left", padx=4)
 
-        self.btn_show_usage = tk.Button(
+        self.btn_show_usage = IconButton(
             left_btns,
             text="Show usage",
             bg=THEME["bg_surface"],
@@ -302,7 +303,7 @@ class DieProcDialog(tk.Toplevel):
         )
         self.btn_show_usage.pack(side="left", padx=4)
 
-        self.btn_clear = tk.Button(
+        self.btn_clear = IconButton(
             left_btns,
             text="Clear",
             bg=THEME["bg_surface"],
@@ -315,7 +316,7 @@ class DieProcDialog(tk.Toplevel):
         )
         self.btn_clear.pack(side="left", padx=4)
 
-        self.btn_no_sel = tk.Button(
+        self.btn_no_sel = IconButton(
             left_btns,
             text="No Selection",
             bg=THEME["bg_surface"],
@@ -332,7 +333,7 @@ class DieProcDialog(tk.Toplevel):
         right_btns = tk.Frame(bot_bar, bg=THEME["bg_surface"])
         right_btns.pack(side="right")
 
-        self.btn_cancel = tk.Button(
+        self.btn_cancel = IconButton(
             right_btns,
             text="Cancel",
             bg=THEME["bg_surface"],
@@ -345,7 +346,7 @@ class DieProcDialog(tk.Toplevel):
         )
         self.btn_cancel.pack(side="left", padx=(0, 6))
 
-        self.btn_select = tk.Button(
+        self.btn_select = IconButton(
             right_btns,
             text="Select",
             bg=THEME["bg_surface"],

@@ -27,19 +27,17 @@ tools/*
 !tools/comparar_nesting.py
 !tools/scrub_all_sessions_shapes.py
 !tools/export_session.py
-!tools/clean_database.py
-!tools/sync_project_doc.py
 scratch/
 .githooks/
+.release/
 
 # Backups locais de produção e executáveis anteriores
 backups/
 
 # Artefatos locais de validação (podem conter dados de produção)
 output/
-!tools/semver.py
-!tools/check_release_cadence.py
 !tools/bench_nest.py
 !tools/capture_layout_screenshots.py
 !tests/fixtures/ia_teste_baseline.json
 !tools/bench_tsp.py
+!tools/generate_modern_icons.py

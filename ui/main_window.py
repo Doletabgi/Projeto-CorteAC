@@ -9,6 +9,8 @@ import time
 import threading
 import queue
 import tkinter as tk
+from ui.icons import get_icon
+from ui.icon_widgets import IconButton, IconLabel, IconMenu
 from tkinter import ttk, messagebox, filedialog, simpledialog
 import math
 import datetime
@@ -45,7 +47,7 @@ from ui.cad_canvas import CADCanvas
 from ui.order_view import OrderView
 from ui.session_view import SessionView
 from ui.shape_editor_view import ShapeEditorView
-from ui.shape_catalog_view import ShapeCatalogView
+from ui.shape_library_view import ShapeLibraryView
 from ui.layout_editor_view import LayoutEditorView
 from ui.material_codes_view import MaterialCodesView
 from ui.options_dialog import OptionsDialog
@@ -103,7 +105,7 @@ class MainWindow(tk.Tk):
         # Interceptação segura de fechamento de janela para persistência de sessão e estado
         self.protocol("WM_DELETE_WINDOW", self.on_app_close)
 
-        # Carrega Ícones Nativos Extraídos do Sistema Original
+        # Carrega a família de ícones compartilhada, no tamanho da tela
         self.load_icons()
 
         # Banco de Dados SQLite
@@ -181,27 +183,18 @@ class MainWindow(tk.Tk):
             "layout_icon": "layout/layout_icon.png",
             "btn_new": "layout/btn_new.png"
         }
-        for k, v in icon_files.items():
-            p = assets_dir / v
-            if not p.exists() and v.endswith(".png"):
-                # Fallback para .gif retrô caso o .png não exista
-                alt_p = assets_dir / (v[:-4] + ".gif")
-                if alt_p.exists():
-                    p = alt_p
-            if p.exists():
-                try:
-                    self.icons[k] = tk.PhotoImage(file=str(p))
-                except Exception:
-                    self.icons[k] = None
+        for key, filename in icon_files.items():
+            if key == "app_icon":
+                self.icons[key] = get_icon(self, "app", 32)
             else:
-                self.icons[k] = None
+                self.icons[key] = get_icon(self, Path(filename).stem)
 
         app_icon_photos = []
         for sz_file in ["app_icon_16.png", "app_icon_32.png", "app_icon_48.png", "app_icon_64.png", "app_icon.png"]:
             p = assets_dir / sz_file
             if p.exists():
                 try:
-                    img_photo = tk.PhotoImage(file=str(p))
+                    img_photo = tk.PhotoImage(master=self, file=str(p))
                     app_icon_photos.append(img_photo)
                     self.icons[sz_file] = img_photo
                 except Exception:
@@ -232,7 +225,7 @@ class MainWindow(tk.Tk):
             background=THEME["bg_input"],
             foreground=THEME["text_main"],
             fieldbackground=THEME["bg_input"],
-            rowheight=20,
+            rowheight=max(24, self.icons["node_base"].height() + 6),
             borderwidth=1,
             relief="sunken",
             font=("Segoe UI", 9)
@@ -275,10 +268,10 @@ class MainWindow(tk.Tk):
     # 1. Menu Bar (Arquivo, Editar, Exibir, Ferramentas, Janela, Ajuda)
     # =========================================================================
     def create_menu_bar(self):
-        menubar = tk.Menu(self, bg=THEME["bg_surface"], fg=THEME["text_main"], activebackground=THEME["select_bg"], activeforeground=THEME["select_fg"])
+        menubar = IconMenu(self, bg=THEME["bg_surface"], fg=THEME["text_main"], activebackground=THEME["select_bg"], activeforeground=THEME["select_fg"])
 
         # Arquivo
-        file_menu = tk.Menu(menubar, tearoff=0, bg=THEME["bg_surface"], fg=THEME["text_main"], activebackground=THEME["select_bg"], activeforeground=THEME["select_fg"])
+        file_menu = IconMenu(menubar, tearoff=0, bg=THEME["bg_surface"], fg=THEME["text_main"], activebackground=THEME["select_bg"], activeforeground=THEME["select_fg"])
         file_menu.add_command(label="Nova Sessão...", command=self.on_new_session)
         file_menu.add_command(label="Abrir Ordem...", command=self.show_order_window)
         file_menu.add_command(label="🧩 Abrir Layout Editor...", command=self.show_layout_editor)
@@ -302,7 +295,7 @@ class MainWindow(tk.Tk):
         menubar.add_cascade(label="Arquivo", menu=file_menu)
 
         # Editar
-        edit_menu = tk.Menu(menubar, tearoff=0, bg=THEME["bg_surface"], fg=THEME["text_main"], activebackground=THEME["select_bg"], activeforeground=THEME["select_fg"])
+        edit_menu = IconMenu(menubar, tearoff=0, bg=THEME["bg_surface"], fg=THEME["text_main"], activebackground=THEME["select_bg"], activeforeground=THEME["select_fg"])
         edit_menu.add_command(label="Desfazer / Reverter", accelerator="Ctrl+Z", command=self.on_global_undo)
         edit_menu.add_separator()
         edit_menu.add_command(label="Recortar", accelerator="Ctrl+X")
@@ -315,7 +308,7 @@ class MainWindow(tk.Tk):
         menubar.add_cascade(label="Editar", menu=edit_menu)
 
         # Exibir
-        view_menu = tk.Menu(menubar, tearoff=0, bg=THEME["bg_surface"], fg=THEME["text_main"], activebackground=THEME["select_bg"], activeforeground=THEME["select_fg"])
+        view_menu = IconMenu(menubar, tearoff=0, bg=THEME["bg_surface"], fg=THEME["text_main"], activebackground=THEME["select_bg"], activeforeground=THEME["select_fg"])
         view_menu.add_command(label="Produção", command=lambda: self.switch_tree_mode("jobs"))
         view_menu.add_command(label="Moldes", command=lambda: self.switch_tree_mode("shapes"))
         view_menu.add_command(label="Estoque de material", command=lambda: self.switch_tree_mode("materials"))
@@ -323,16 +316,17 @@ class MainWindow(tk.Tk):
         view_menu.add_command(label="Códigos materiais...", command=self.show_material_codes_window)
         menubar.add_cascade(label="Exibir", menu=view_menu)
 
-        self.tools_menu = tk.Menu(menubar, tearoff=0, bg=THEME["bg_surface"], fg=THEME["text_main"], activebackground=THEME["select_bg"], activeforeground=THEME["select_fg"])
+        self.tools_menu = IconMenu(menubar, tearoff=0, bg=THEME["bg_surface"], fg=THEME["text_main"], activebackground=THEME["select_bg"], activeforeground=THEME["select_fg"])
         tools_menu = self.tools_menu
         tools_menu.add_command(label="📊 Painel de Produção...", command=self.open_production_dashboard)
         tools_menu.add_command(label="Atualizar", accelerator="F5", command=self.on_refresh_f5)
         tools_menu.add_command(label="Opções", command=self.show_options_dialog)
+        tools_menu.add_command(label="Conexão com Banco de Dados...", icon="materials", command=self.show_database_connection_dialog)
         tools_menu.add_command(label="👤 Cadastrar Usuário...", command=self.show_user_dialog)
         tools_menu.add_separator()
         tools_menu.add_command(label="🧩 Layout Editor (Nesting)...", command=self.show_layout_editor)
         tools_menu.add_command(label="Shape Editor (Editor de Moldes)...", command=self.show_shape_editor)
-        tools_menu.add_command(label="📐 Catálogo de Moldes (Grid View)...", command=self.show_shape_catalog)
+        tools_menu.add_command(label="📐 Catálogo de Moldes...", command=self.show_shape_catalog)
         tools_menu.add_command(label="📋 Códigos materiais (Listagem)...", command=self.show_material_codes_window)
         tools_menu.add_command(label="📥 Importar lista de materiais...", command=self.open_import_materials_dialog)
         tools_menu.add_command(label="📂 Importar Shape (.die)...", command=self.on_import_die)
@@ -350,7 +344,7 @@ class MainWindow(tk.Tk):
         menubar.add_cascade(label="Ferramentas", menu=tools_menu)
 
         # Janela
-        win_menu = tk.Menu(menubar, tearoff=0, bg=THEME["bg_surface"], fg=THEME["text_main"], activebackground=THEME["select_bg"], activeforeground=THEME["select_fg"])
+        win_menu = IconMenu(menubar, tearoff=0, bg=THEME["bg_surface"], fg=THEME["text_main"], activebackground=THEME["select_bg"], activeforeground=THEME["select_fg"])
         win_menu.add_command(label="Layout Editor", command=self.show_layout_editor)
         win_menu.add_command(label="Shape Editor", command=self.show_shape_editor)
         win_menu.add_command(label="Catálogo de Moldes", command=self.show_shape_catalog)
@@ -368,7 +362,7 @@ class MainWindow(tk.Tk):
         menubar.add_cascade(label="Janela", menu=win_menu)
 
         # Ajuda
-        help_menu = tk.Menu(menubar, tearoff=0, bg=THEME["bg_surface"], fg=THEME["text_main"], activebackground=THEME["select_bg"], activeforeground=THEME["select_fg"])
+        help_menu = IconMenu(menubar, tearoff=0, bg=THEME["bg_surface"], fg=THEME["text_main"], activebackground=THEME["select_bg"], activeforeground=THEME["select_fg"])
         help_menu.add_command(label="Sobre CorteAC", command=lambda: messagebox.showinfo("Sobre", f"{APP_NAME} - {APP_VERSION}\nRecriação moderna em Python para Windows 10 / 11"))
         menubar.add_cascade(label="Ajuda", menu=help_menu)
 
@@ -407,7 +401,7 @@ class MainWindow(tk.Tk):
 
         # Botão Nova Sessão (Ctrl+N)
         btn_new_kw = {"image": self.icons["btn_new"]} if self.icons.get("btn_new") else {"text": "➕"}
-        self.btn_tb_new_session = tk.Button(
+        self.btn_tb_new_session = IconButton(
             tbar, **btn_new_kw, bg=THEME["bg_surface"], relief="raised", bd=1, width=22, height=22,
             command=self.on_new_session
         )
@@ -416,17 +410,17 @@ class MainWindow(tk.Tk):
 
         # Botões padrão: Recortar, Copiar, Colar com ícones autênticos
         btn_cut_kw = {"image": self.icons["cut"]} if self.icons.get("cut") else {"text": "✂️"}
-        self.btn_tb_cut = tk.Button(tbar, **btn_cut_kw, bg=THEME["bg_surface"], relief="raised", bd=1, width=22, height=22)
+        self.btn_tb_cut = IconButton(tbar, **btn_cut_kw, bg=THEME["bg_surface"], relief="raised", bd=1, width=22, height=22)
         self.btn_tb_cut.pack(side="left", padx=1)
         self.bind_tooltip(self.btn_tb_cut, "Recortar (Ctrl+X)", "Recorta a seleção e copia para a área de transferência")
 
         btn_copy_kw = {"image": self.icons["copy"]} if self.icons.get("copy") else {"text": "📄"}
-        self.btn_tb_copy = tk.Button(tbar, **btn_copy_kw, bg=THEME["bg_surface"], relief="raised", bd=1, width=22, height=22)
+        self.btn_tb_copy = IconButton(tbar, **btn_copy_kw, bg=THEME["bg_surface"], relief="raised", bd=1, width=22, height=22)
         self.btn_tb_copy.pack(side="left", padx=1)
         self.bind_tooltip(self.btn_tb_copy, "Copiar (Ctrl+C)", "Copia a seleção para a área de transferência")
 
         btn_paste_kw = {"image": self.icons["paste"]} if self.icons.get("paste") else {"text": "📋"}
-        self.btn_tb_paste = tk.Button(tbar, **btn_paste_kw, bg=THEME["bg_surface"], relief="raised", bd=1, width=22, height=22)
+        self.btn_tb_paste = IconButton(tbar, **btn_paste_kw, bg=THEME["bg_surface"], relief="raised", bd=1, width=22, height=22)
         self.btn_tb_paste.pack(side="left", padx=1)
         self.bind_tooltip(self.btn_tb_paste, "Colar (Ctrl+V)", "Cola o conteúdo da área de transferência")
 
@@ -434,28 +428,28 @@ class MainWindow(tk.Tk):
         tk.Frame(tbar, bg=THEME["border"], width=1, height=20, relief="sunken", bd=1).pack(side="left", padx=4)
 
         btn_details_kw = {"image": self.icons["details"]} if self.icons.get("details") else {"text": "📑"}
-        self.btn_tb_details = tk.Button(tbar, **btn_details_kw, bg=THEME["bg_surface"], relief="raised", bd=1, width=22, height=22, command=self.show_session_window)
+        self.btn_tb_details = IconButton(tbar, **btn_details_kw, bg=THEME["bg_surface"], relief="raised", bd=1, width=22, height=22, command=self.show_session_window)
         self.btn_tb_details.pack(side="left", padx=1)
         self.bind_tooltip(self.btn_tb_details, "Detalhes da Sessão", "Abre os detalhes e parâmetros da sessão selecionada")
 
         btn_lay_kw = {"image": self.icons["layout_icon"]} if self.icons.get("layout_icon") else {"text": "🧩"}
-        self.btn_tb_lay = tk.Button(tbar, **btn_lay_kw, bg=THEME["bg_surface"], relief="raised", bd=1, width=22, height=22, command=self.show_layout_editor)
+        self.btn_tb_lay = IconButton(tbar, **btn_lay_kw, bg=THEME["bg_surface"], relief="raised", bd=1, width=22, height=22, command=self.show_layout_editor)
         self.btn_tb_lay.pack(side="left", padx=1)
         self.bind_tooltip(self.btn_tb_lay, "Editor de Layout", "Abre o Editor de Layout (CAD/CAM)")
 
         btn_shed_kw = {"image": self.icons["shed"]} if self.icons.get("shed") else {"text": "📐"}
-        self.btn_tb_shed = tk.Button(tbar, **btn_shed_kw, bg=THEME["bg_surface"], relief="raised", bd=1, width=22, height=22, command=self.show_shape_editor)
+        self.btn_tb_shed = IconButton(tbar, **btn_shed_kw, bg=THEME["bg_surface"], relief="raised", bd=1, width=22, height=22, command=self.show_shape_editor)
         self.btn_tb_shed.pack(side="left", padx=1)
         self.bind_tooltip(self.btn_tb_shed, "Editor de Moldes (Shape Editor)", "Abre o Editor de Moldes vetorial")
 
-        self.btn_shape_catalog = tk.Button(
+        self.btn_shape_catalog = IconButton(
             tbar, text="▦ Catálogo", bg=THEME["bg_surface"], fg=THEME["text_main"],
             relief="raised", bd=1, padx=4, font=("Segoe UI", 8), command=self.show_shape_catalog
         )
         self.btn_shape_catalog.pack(side="left", padx=1)
-        self.bind_tooltip(self.btn_shape_catalog, "Catálogo de Moldes", "Abre a grade matricial do catálogo geral de moldes e tamanhos")
+        self.bind_tooltip(self.btn_shape_catalog, "Catálogo de Moldes", "Busca moldes por pasta e tamanho e adiciona a seleção à sessão")
 
-        self.btn_tb_import_die = tk.Button(
+        self.btn_tb_import_die = IconButton(
             tbar, text="📂 Importar .die", bg=THEME["bg_surface"], fg=THEME["text_main"],
             relief="raised", bd=1, padx=4, font=("Segoe UI", 8), command=self.on_import_die
         )
@@ -466,14 +460,14 @@ class MainWindow(tk.Tk):
         tk.Frame(tbar, bg=THEME["border"], width=1, height=20, relief="sunken", bd=1).pack(side="left", padx=6)
 
         # Ações diretas úteis
-        self.btn_tb_params = tk.Button(
+        self.btn_tb_params = IconButton(
             tbar, text="⚙️ Parâmetros", bg=THEME["bg_surface"], fg=THEME["text_main"],
             relief="raised", bd=2, padx=6, font=("Segoe UI", 8), command=self.open_params_dialog
         )
         self.btn_tb_params.pack(side="left", padx=2)
         self.bind_tooltip(self.btn_tb_params, "Parâmetros de Encaixe", "Configura opções e parâmetros de auto-nesting")
 
-        self.btn_tb_auto_nest = tk.Button(
+        self.btn_tb_auto_nest = IconButton(
             tbar, text="⚡ Auto-Nest", bg=THEME["bg_surface"], fg=THEME["text_main"],
             relief="raised", bd=2, padx=8, font=("Segoe UI", 8, "bold"), command=self.on_auto_nest
         )
@@ -500,7 +494,7 @@ class MainWindow(tk.Tk):
         mode_bar.pack(fill="x")
 
         btn_jobs_kw = {"image": self.icons["btn_prod"]} if self.icons.get("btn_prod") else {"text": "🖥️"}
-        self.btn_mode_jobs = tk.Button(
+        self.btn_mode_jobs = IconButton(
             mode_bar, **btn_jobs_kw, bg=THEME["bg_surface"],
             relief="sunken", bd=2, width=26, height=24, padx=0, pady=0,
             command=lambda: self.switch_tree_mode("jobs")
@@ -509,7 +503,7 @@ class MainWindow(tk.Tk):
         self.bind_tooltip(self.btn_mode_jobs, "Ambiente de Produção (Jobs)", "Exibe a árvore de pastas e sessões de produção")
 
         btn_shp_kw = {"image": self.icons["btn_moldes"]} if self.icons.get("btn_moldes") else {"text": "🟩"}
-        self.btn_mode_shapes = tk.Button(
+        self.btn_mode_shapes = IconButton(
             mode_bar, **btn_shp_kw, bg=THEME["bg_surface"],
             relief="raised", bd=2, width=26, height=24, padx=0, pady=0,
             command=lambda: self.switch_tree_mode("shapes")
@@ -518,7 +512,7 @@ class MainWindow(tk.Tk):
         self.bind_tooltip(self.btn_mode_shapes, "Banco de Moldes (Shapes)", "Exibe o banco de dados e arquivos de moldes da produção")
 
         btn_mat_kw = {"image": self.icons["btn_mat"]} if self.icons.get("btn_mat") else {"text": "📚"}
-        self.btn_mode_materials = tk.Button(
+        self.btn_mode_materials = IconButton(
             mode_bar, **btn_mat_kw, bg=THEME["bg_surface"],
             relief="raised", bd=2, width=26, height=24, padx=0, pady=0,
             command=lambda: self.switch_tree_mode("materials")
@@ -539,27 +533,27 @@ class MainWindow(tk.Tk):
         self.batch_bar = tk.Frame(tree_frame, bg=THEME["bg_surface"], relief="groove", bd=1, padx=2, pady=2)
         self.batch_bar.pack(fill="x", side="top")
 
-        self.lbl_batch_status = tk.Label(
+        self.lbl_batch_status = IconLabel(
             self.batch_bar, text="☐ 0 marcadas", font=("Segoe UI", 8),
             bg=THEME["bg_surface"], fg=THEME["text_muted"]
         )
         self.lbl_batch_status.pack(side="left", padx=4)
 
-        self.btn_batch_none = tk.Button(
+        self.btn_batch_none = IconButton(
             self.batch_bar, text="Desmarcar", font=("Segoe UI", 7),
             bg=THEME["bg_surface"], fg=THEME["text_main"], relief="raised", bd=1,
             padx=4, pady=0, command=self.deselect_all_batch_sessions
         )
         self.btn_batch_none.pack(side="right", padx=1)
 
-        self.btn_batch_all = tk.Button(
+        self.btn_batch_all = IconButton(
             self.batch_bar, text="Marcar Todas", font=("Segoe UI", 7),
             bg=THEME["bg_surface"], fg=THEME["text_main"], relief="raised", bd=1,
             padx=4, pady=0, command=self.select_all_batch_sessions
         )
         self.btn_batch_all.pack(side="right", padx=1)
 
-        self.btn_batch_print = tk.Button(
+        self.btn_batch_print = IconButton(
             self.batch_bar, text="🖨️ Imprimir Marcadas", font=("Segoe UI", 7),
             bg=THEME["bg_surface"], fg=THEME["text_main"], relief="raised", bd=1,
             padx=4, pady=0, command=self.on_batch_print_sessions
@@ -580,7 +574,7 @@ class MainWindow(tk.Tk):
         self.tree_main.bind("<ButtonRelease-1>", self.on_tree_drag_end, add="+")
 
         # Menu de contexto clássico (botão direito na árvore) idêntico ao print media_1791842155312.png
-        self.tree_menu = tk.Menu(self, tearoff=0, bg=THEME["bg_surface"], fg=THEME["text_main"], activebackground=THEME["select_bg"], activeforeground=THEME["select_fg"])
+        self.tree_menu = IconMenu(self, tearoff=0, bg=THEME["bg_surface"], fg=THEME["text_main"], activebackground=THEME["select_bg"], activeforeground=THEME["select_fg"])
         self.tree_menu.add_command(label="Abrir", state="disabled", command=self.on_tree_menu_open)
         self.tree_menu.add_separator()
         self.tree_menu.add_command(label="Criar sessão", command=self.on_new_session)
@@ -599,10 +593,10 @@ class MainWindow(tk.Tk):
         self.tree_menu.add_command(label="🧩 Abrir no Layout Editor...", command=self.show_layout_editor)
 
         # Menu de contexto específico para o Modo 2 (Moldes)
-        self.moldes_menu = tk.Menu(self, tearoff=0, bg=THEME["bg_surface"], fg=THEME["text_main"], activebackground=THEME["select_bg"], activeforeground=THEME["select_fg"])
+        self.moldes_menu = IconMenu(self, tearoff=0, bg=THEME["bg_surface"], fg=THEME["text_main"], activebackground=THEME["select_bg"], activeforeground=THEME["select_fg"])
 
         # Menu de contexto específico para o Modo 3 (Estoque de material): Listagem de materiais e Criar material
-        self.materials_menu = tk.Menu(
+        self.materials_menu = IconMenu(
             self, tearoff=0,
             bg=THEME["bg_surface"], fg=THEME["text_main"],
             activebackground=THEME["select_bg"], activeforeground=THEME["select_fg"],
@@ -654,14 +648,15 @@ class MainWindow(tk.Tk):
             on_save=self.on_shape_saved,
             on_import_die=self.on_import_die
         )
-        self.shape_catalog_view = ShapeCatalogView(
-            self.mdi_workspace,
-            article_id=1,
+        self.shape_catalog_view = ShapeLibraryView(
+            self,
             db=self.db,
             on_close=lambda *args: self.close_window(self.shape_catalog_view),
             on_minimize=lambda *args: self.minimize_window(self.shape_catalog_view),
             on_maximize=lambda *args: self.toggle_maximize_window(self.shape_catalog_view),
-            on_edit_shape=self.show_shape_editor
+            on_edit_shape=self.show_shape_editor,
+            on_session_updated=self.on_catalog_session_updated,
+            on_new_session=self.on_catalog_new_session
         )
         self.layout_editor_view = LayoutEditorView(
             self,
@@ -854,7 +849,8 @@ class MainWindow(tk.Tk):
             all_shapes_catalog=self.current_shapes,
             db=self.db,
             on_open_dieproc=self.open_dieproc_dialog,
-            on_export_machine=self.on_export_session_to_machine
+            on_export_machine=self.on_export_session_to_machine,
+            on_open_catalog=self.show_shape_catalog_for_session
         )
         view.set_materials_list(self.materials)
         session_shapes = sess_dict.get("shapes", [])
@@ -952,7 +948,7 @@ class MainWindow(tk.Tk):
         )
         lbl.pack(side="left", fill="x", expand=True, padx=4)
 
-        btn_restore = tk.Button(
+        btn_restore = IconButton(
             dock_item, text="🗖", relief="raised", bd=1,
             bg=THEME["bg_surface"], fg=THEME["text_main"],
             font=("Segoe UI", 7, "bold"), width=2, height=1, padx=0, pady=0,
@@ -961,7 +957,7 @@ class MainWindow(tk.Tk):
         )
         btn_restore.pack(side="right", padx=1)
 
-        btn_close = tk.Button(
+        btn_close = IconButton(
             dock_item, text="✕", relief="raised", bd=1,
             bg=THEME["bg_surface"], fg=THEME["text_main"],
             font=("Segoe UI", 7, "bold"), width=2, height=1, padx=0, pady=0,
@@ -1016,7 +1012,7 @@ class MainWindow(tk.Tk):
                 if w != window:
                     w.pack_forget()
                     w.place_forget()
-            if window in (self.layout_editor_view, self.shape_editor_view):
+            if window in (self.layout_editor_view, self.shape_editor_view, self.__dict__.get("shape_catalog_view")):
                 window.place(in_=self, x=0, y=0, relwidth=1.0, relheight=1.0)
                 window.lift()
             else:
@@ -1027,7 +1023,7 @@ class MainWindow(tk.Tk):
             if not window.winfo_ismapped():
                 ww = max(420, int(self.mdi_workspace.winfo_width() * 0.85))
                 wh = max(320, int(self.mdi_workspace.winfo_height() * 0.85))
-                if window in (self.layout_editor_view, self.shape_editor_view):
+                if window in (self.layout_editor_view, self.shape_editor_view, self.__dict__.get("shape_catalog_view")):
                     window.place(in_=self.mdi_workspace, x=25, y=15, width=ww, height=wh)
                 else:
                     window.place(x=25, y=15, width=ww, height=wh)
@@ -1168,7 +1164,7 @@ class MainWindow(tk.Tk):
             window.place_forget()
             ww = max(420, int(self.mdi_workspace.winfo_width() * 0.85))
             wh = max(320, int(self.mdi_workspace.winfo_height() * 0.85))
-            if window in (self.layout_editor_view, self.shape_editor_view):
+            if window in (self.layout_editor_view, self.shape_editor_view, self.__dict__.get("shape_catalog_view")):
                 window.place(in_=self.mdi_workspace, x=25, y=15, width=ww, height=wh)
             else:
                 window.place(x=25, y=15, width=ww, height=wh)
@@ -1186,7 +1182,7 @@ class MainWindow(tk.Tk):
             w.place_forget()
             if w != window:
                 w.pack_forget()
-        if window in (self.layout_editor_view, self.shape_editor_view):
+        if window in (self.layout_editor_view, self.shape_editor_view, self.__dict__.get("shape_catalog_view")):
             window.place(in_=self, x=0, y=0, relwidth=1.0, relheight=1.0)
             window.lift()
         else:
@@ -1270,7 +1266,7 @@ class MainWindow(tk.Tk):
         N = len(self.open_windows)
         for i, w in enumerate(self.open_windows):
             w.pack_forget()
-            if w in (self.layout_editor_view, self.shape_editor_view):
+            if w in (self.layout_editor_view, self.shape_editor_view, self.__dict__.get("shape_catalog_view")):
                 w.place(in_=self.mdi_workspace, x=2, rely=i / N, relwidth=0.99, relheight=1.0 / N - 0.01)
             else:
                 w.place(x=2, rely=i / N, relwidth=0.99, relheight=1.0 / N - 0.01)
@@ -1296,7 +1292,7 @@ class MainWindow(tk.Tk):
         N = len(self.open_windows)
         for i, w in enumerate(self.open_windows):
             w.pack_forget()
-            if w in (self.layout_editor_view, self.shape_editor_view):
+            if w in (self.layout_editor_view, self.shape_editor_view, self.__dict__.get("shape_catalog_view")):
                 w.place(in_=self.mdi_workspace, relx=i / N, y=2, relwidth=1.0 / N - 0.01, relheight=0.99)
             else:
                 w.place(relx=i / N, y=2, relwidth=1.0 / N - 0.01, relheight=0.99)
@@ -1324,7 +1320,7 @@ class MainWindow(tk.Tk):
         for i, w in enumerate(self.open_windows):
             w.pack_forget()
             offset = i * 26
-            if w in (self.layout_editor_view, self.shape_editor_view):
+            if w in (self.layout_editor_view, self.shape_editor_view, self.__dict__.get("shape_catalog_view")):
                 w.place(in_=self.mdi_workspace, x=10 + offset, y=10 + offset, width=ww, height=wh)
             else:
                 w.place(x=10 + offset, y=10 + offset, width=ww, height=wh)
@@ -1566,47 +1562,43 @@ class MainWindow(tk.Tk):
             self.lbl_status_msg.config(text="Shape Editor: Novo molde em branco aberto em tela cheia.")
 
     def show_shape_catalog(self, article_id=None):
-        target_article_id = 1
-        if isinstance(article_id, int):
-            target_article_id = article_id
-        elif article_id is None:
-            sel = self.tree_main.selection()
-            if sel:
-                val = self.tree_main.item(sel[0], "values")
-                if val and len(val) >= 2 and val[0] in ("article", "shape"):
-                    try:
-                        if val[0] == "article":
-                            target_article_id = int(val[1])
-                        elif val[0] == "shape":
-                            shp = self.db.get_shape(int(val[1]))
-                            if shp and shp.get("article_id"):
-                                target_article_id = int(shp["article_id"])
-                    except (ValueError, TypeError):
-                        pass
+        """Abre a biblioteca global; artigo explícito funciona como filtro opcional."""
+        catalog = self.shape_catalog_view
+        catalog.db = self.db
+        catalog.reload_data()
+        active_id = self.current_session.get("id") if self.current_session else None
+        catalog.set_session_context(catalog.sessions, active_id)
+        catalog.show_article(article_id if isinstance(article_id, int) else None)
+        if catalog in self.minimized_windows:
+            self.restore_window(catalog)
+        self.maximize_window(catalog)
+        self.lbl_status_msg.config(text="Catálogo de Moldes: escolha moldes e adicione à sessão de destino.")
 
-        art_name = f"Artigo #{target_article_id}"
-        try:
-            with self.db.get_connection() as conn:
-                c = conn.cursor()
-                c.execute("SELECT name FROM articles WHERE id = ?", (target_article_id,))
-                r = c.fetchone()
-                if r:
-                    art_name = r["name"] if hasattr(r, "__getitem__") and "name" in r else r[0]
-        except Exception:
-            pass
+    def on_catalog_session_updated(self, session_id, result):
+        """Sincroniza apenas a sessão que recebeu os moldes, após a gravação."""
+        for session in self.sessions:
+            if str(session.get("id")) == str(session_id):
+                session["shapes"] = copy.deepcopy(result.shapes)
+        if self.current_session and str(self.current_session.get("id")) == str(session_id):
+            self.current_session["shapes"] = copy.deepcopy(result.shapes)
+        for key, view in self.open_sessions.items():
+            if str(key) == str(session_id):
+                view.session_data["shapes"] = copy.deepcopy(result.shapes)
+                view.set_shapes_data(copy.deepcopy(result.shapes))
+        editor = getattr(self, "layout_editor_view", None)
+        if editor and str(getattr(editor, "session_id", None)) == str(session_id):
+            editor.set_session_shapes(copy.deepcopy(result.shapes))
+        self.lbl_status_msg.config(text=f"Sessão #{session_id}: {result.added} molde(s) adicionado(s) pelo catálogo.")
 
-        if hasattr(self, "shape_catalog_view") and self.shape_catalog_view:
-            self.shape_catalog_view.article_id = target_article_id
-            self.shape_catalog_view.article_name = art_name
-            self.shape_catalog_view.lbl_title.config(text=f"📐 Catálogo de Moldes - [{art_name}]")
-            self.shape_catalog_view.load_data(target_article_id)
+    def on_catalog_new_session(self):
+        self.on_new_session()
+        self.show_shape_catalog()
+        active_id = self.current_session.get("id") if self.current_session else None
+        self.shape_catalog_view.set_session_context(self.sessions, active_id, prefer_active=True)
 
-            if self.shape_catalog_view in self.minimized_windows:
-                self.restore_window(self.shape_catalog_view)
-            else:
-                self.activate_window(self.shape_catalog_view)
-
-        self.lbl_status_msg.config(text=f"Catálogo de Moldes: [{art_name}] aberto na área de trabalho.")
+    def show_shape_catalog_for_session(self, session_id):
+        self.show_shape_catalog()
+        self.shape_catalog_view.select_destination(session_id)
 
     def show_layout_editor(self, layout_name=None, force=False, session_data=None):
         # Sincroniza moldes e peças da sessão ativa caso existam
@@ -1787,6 +1779,11 @@ class MainWindow(tk.Tk):
         from ui.user_dialog import open_user_management_dialog
         open_user_management_dialog(self, db=self.db, on_update_callback=self._on_user_updated)
 
+    def show_database_connection_dialog(self):
+        """Configura a conexão que será usada na próxima abertura do aplicativo."""
+        from ui.database_connection_dialog import DatabaseConnectionDialog
+        DatabaseConnectionDialog(self, db=self.db)
+
     def open_converter_dialog(self, initial_files=None):
         """Abre a janela modal do Conversor de Arquivos (.lay ⇄ .onx) (Ferramentas -> Conversor)."""
         LayoutConverterDialog(self, db=self.db, initial_files=initial_files)
@@ -1899,6 +1896,10 @@ class MainWindow(tk.Tk):
         if hasattr(self, "material_codes_view"):
             self.material_codes_view.refresh_table()
 
+        if getattr(self, "shape_catalog_view", None):
+            self.shape_catalog_view.db = self.db
+            self.shape_catalog_view.reload_data()
+
         self.lbl_status_msg.config(text="Dados do sistema atualizados com sucesso (F5).")
 
     def on_shape_saved(self, updated_shape):
@@ -1943,6 +1944,8 @@ class MainWindow(tk.Tk):
         if self.current_mode == "shapes":
             self.switch_tree_mode("shapes")
 
+        if getattr(self, "shape_catalog_view", None):
+            self.shape_catalog_view.reload_data()
         self.lbl_status_msg.config(text=f"Molde '{updated_shape.get('name')}' salvo com sucesso no banco de dados.")
 
     def get_selected_folder(self):
@@ -2075,8 +2078,8 @@ class MainWindow(tk.Tk):
 
         btn_box = tk.Frame(dlg, bg=THEME["bg_surface"], pady=6)
         btn_box.pack(fill="x", padx=10)
-        tk.Button(btn_box, text="Avançar", width=10, bg=THEME["bg_surface"], fg=THEME["text_main"], relief="raised", bd=2, command=do_confirm).pack(side="right", padx=4)
-        tk.Button(btn_box, text="Cancelar", width=10, bg=THEME["bg_surface"], fg=THEME["text_main"], relief="raised", bd=2, command=dlg.destroy).pack(side="right", padx=4)
+        IconButton(btn_box, text="Avançar", width=10, bg=THEME["bg_surface"], fg=THEME["text_main"], relief="raised", bd=2, command=do_confirm).pack(side="right", padx=4)
+        IconButton(btn_box, text="Cancelar", width=10, bg=THEME["bg_surface"], fg=THEME["text_main"], relief="raised", bd=2, command=dlg.destroy).pack(side="right", padx=4)
 
         self.wait_window(dlg)
         return chosen[0]
@@ -2176,8 +2179,8 @@ class MainWindow(tk.Tk):
 
         btn_box = tk.Frame(dlg, bg=THEME["bg_surface"], pady=6)
         btn_box.pack(fill="x", padx=10)
-        tk.Button(btn_box, text="Mover", width=10, bg=THEME["bg_surface"], fg=THEME["text_main"], relief="raised", bd=2, command=do_move).pack(side="right", padx=4)
-        tk.Button(btn_box, text="Cancelar", width=10, bg=THEME["bg_surface"], fg=THEME["text_main"], relief="raised", bd=2, command=dlg.destroy).pack(side="right", padx=4)
+        IconButton(btn_box, text="Mover", width=10, bg=THEME["bg_surface"], fg=THEME["text_main"], relief="raised", bd=2, command=do_move).pack(side="right", padx=4)
+        IconButton(btn_box, text="Cancelar", width=10, bg=THEME["bg_surface"], fg=THEME["text_main"], relief="raised", bd=2, command=dlg.destroy).pack(side="right", padx=4)
 
     def move_shape_to_folder(self, shape_id, dest_folder):
         """Move o molde para uma pasta específica no banco e atualiza a interface."""
@@ -2268,7 +2271,7 @@ class MainWindow(tk.Tk):
         except Exception:
             pass
 
-        tk.Label(
+        IconLabel(
             dlg,
             text="📁 Selecione a pasta onde os moldes serão importados:",
             bg=THEME["bg_surface"],
@@ -2319,7 +2322,7 @@ class MainWindow(tk.Tk):
         btn_box = tk.Frame(dlg, bg=THEME["bg_surface"], pady=10)
         btn_box.pack(fill="x", padx=12)
 
-        tk.Button(
+        IconButton(
             btn_box,
             text="Confirmar",
             width=10,
@@ -2331,7 +2334,7 @@ class MainWindow(tk.Tk):
             command=on_confirm
         ).pack(side="right", padx=4)
 
-        tk.Button(
+        IconButton(
             btn_box,
             text="Cancelar",
             width=10,
@@ -4329,9 +4332,9 @@ class MainWindow(tk.Tk):
             self.lbl_status_msg.config(text=f"Material '{mat_name}' criado com sucesso no estoque.")
             dialog.destroy()
 
-        btn_ok = tk.Button(btn_box, text="Criar Material", width=14, relief="raised", bd=2, bg=THEME["bg_surface"], fg=THEME["text_main"], font=("Segoe UI", 9, "bold"), command=save)
+        btn_ok = IconButton(btn_box, text="Criar Material", width=14, relief="raised", bd=2, bg=THEME["bg_surface"], fg=THEME["text_main"], font=("Segoe UI", 9, "bold"), command=save)
         btn_ok.pack(side="right", padx=4)
-        btn_can = tk.Button(btn_box, text="Cancelar", width=10, relief="raised", bd=2, bg=THEME["bg_surface"], fg=THEME["text_main"], font=("Segoe UI", 9), command=dialog.destroy)
+        btn_can = IconButton(btn_box, text="Cancelar", width=10, relief="raised", bd=2, bg=THEME["bg_surface"], fg=THEME["text_main"], font=("Segoe UI", 9), command=dialog.destroy)
         btn_can.pack(side="right", padx=4)
 
         dialog.bind("<Return>", lambda e: save())
@@ -4937,8 +4940,8 @@ class MainWindow(tk.Tk):
         btn_box = tk.Frame(dlg, bg=THEME["bg_surface"], pady=6)
         btn_box.pack(fill="x", padx=10)
 
-        tk.Button(btn_box, text="Avançar", width=10, bg=THEME["bg_surface"], fg=THEME["text_main"], relief="raised", bd=2, command=do_confirm).pack(side="right", padx=4)
-        tk.Button(btn_box, text="Cancelar", width=10, bg=THEME["bg_surface"], fg=THEME["text_main"], relief="raised", bd=2, command=dlg.destroy).pack(side="right", padx=4)
+        IconButton(btn_box, text="Avançar", width=10, bg=THEME["bg_surface"], fg=THEME["text_main"], relief="raised", bd=2, command=do_confirm).pack(side="right", padx=4)
+        IconButton(btn_box, text="Cancelar", width=10, bg=THEME["bg_surface"], fg=THEME["text_main"], relief="raised", bd=2, command=dlg.destroy).pack(side="right", padx=4)
 
         lb.bind("<Double-1>", lambda e: do_confirm())
         self.wait_window(dlg)
@@ -4997,8 +5000,8 @@ class MainWindow(tk.Tk):
 
         btn_box = tk.Frame(dlg, bg=THEME["bg_surface"], pady=6)
         btn_box.pack(fill="x", padx=10)
-        tk.Button(btn_box, text="Mover", width=10, bg=THEME["bg_surface"], fg=THEME["text_main"], relief="raised", bd=2, command=do_move).pack(side="right", padx=4)
-        tk.Button(btn_box, text="Cancelar", width=10, bg=THEME["bg_surface"], fg=THEME["text_main"], relief="raised", bd=2, command=dlg.destroy).pack(side="right", padx=4)
+        IconButton(btn_box, text="Mover", width=10, bg=THEME["bg_surface"], fg=THEME["text_main"], relief="raised", bd=2, command=do_move).pack(side="right", padx=4)
+        IconButton(btn_box, text="Cancelar", width=10, bg=THEME["bg_surface"], fg=THEME["text_main"], relief="raised", bd=2, command=dlg.destroy).pack(side="right", padx=4)
 
         lb.bind("<Double-1>", lambda e: do_move())
         self.wait_window(dlg)

@@ -1,6 +1,6 @@
 # RELATÓRIO TÉCNICO DE CONCLUSÃO — FASE 6.4
 
-**Projeto:** CorteAC / JobManager 2000 (Python Edition)  
+**Projeto:** OpenCorte / JobManager 2000 (Python Edition)\
 **Missão:** Modo Seguro (Trava de Geometria) e Rotação Interativa no ShapeEditorView  
 **Fase:** 6.4 — Modo Seguro e Rotação Interativa  
 **Status Oficial:** ✅ **APROVADA COM SUCESSO**  
@@ -145,4 +145,4 @@ tests/test_strategy_removal.py ......                                    [100%]
 
 ## 6. Conclusão
 
-A Fase 6.4 entrega uma ferramenta ergonômica, de alta precisão geométrica e perfeitamente integrada aos padrões Win32 do CorteAC. Os binários foram recompilados e o sistema segue totalmente estável.
+A Fase 6.4 entrega uma ferramenta ergonômica, de alta precisão geométrica e perfeitamente integrada aos padrões Win32 do OpenCorte. Os binários foram recompilados e o sistema segue totalmente estável.

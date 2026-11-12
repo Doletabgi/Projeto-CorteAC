@@ -490,7 +490,7 @@ class TestLayoutEditorShortcuts(unittest.TestCase):
 
         # Clique na barra lateral/catálogo com Ctrl não altera zoom da mesa
         zoom_sidebar_test = self.view.zoom_factor
-        self.view.on_ctrl_canvas_click(MockCtrlClickEvent(300, 250))
+        self.view.on_ctrl_canvas_click(MockCtrlClickEvent(self.view.sidebar_div_x + 20, 250))
         self.assertAlmostEqual(self.view.zoom_factor, zoom_sidebar_test, places=4)
 
         from cad.geometry import point_in_polygon
@@ -671,11 +671,13 @@ class TestLayoutEditorShortcuts(unittest.TestCase):
 
         # 1. Verifica existência do botão de tela cheia
         self.assertTrue(hasattr(dlg, "btn_fullscreen"))
-        self.assertEqual(dlg.btn_fullscreen.cget("text"), "⛶ Tela Cheia")
+        self.assertEqual(dlg.btn_fullscreen.cget("text"), "Tela Cheia")
+        self.assertTrue(dlg.btn_fullscreen.cget("image"))
 
         # 2. Testa alternância de tela cheia (F11 / toggle_fullscreen)
         dlg.toggle_fullscreen()
-        self.assertEqual(dlg.btn_fullscreen.cget("text"), "🗗 Restaurar")
+        self.assertEqual(dlg.btn_fullscreen.cget("text"), "Restaurar")
+        self.assertTrue(dlg.btn_fullscreen.cget("image"))
         try:
             self.assertTrue(bool(dlg.attributes("-fullscreen")))
         except Exception:
@@ -684,7 +686,8 @@ class TestLayoutEditorShortcuts(unittest.TestCase):
         # 3. Testa on_escape em tela cheia: deve restaurar sem destruir a janela
         res = dlg.on_escape()
         self.assertEqual(res, "break")
-        self.assertEqual(dlg.btn_fullscreen.cget("text"), "⛶ Tela Cheia")
+        self.assertEqual(dlg.btn_fullscreen.cget("text"), "Tela Cheia")
+        self.assertTrue(dlg.btn_fullscreen.cget("image"))
         self.assertTrue(dlg.winfo_exists())
 
         # 4. Testa on_escape fora de tela cheia: destrói a janela
@@ -2029,13 +2032,15 @@ class TestLayoutEditorShortcuts(unittest.TestCase):
         """Testa o fluxo completo da simulação de corte CAM no LayoutEditorView."""
         # 1. Verifica presença do botão na barra de ferramentas
         self.assertTrue(hasattr(self.view, "btn_sim"))
-        self.assertEqual(self.view.btn_sim.cget("text"), "▶ Simular")
+        self.assertEqual(self.view.btn_sim.cget("text"), "Simular")
+        self.assertTrue(self.view.btn_sim.cget("image"))
         self.assertFalse(self.view.sim_running)
 
         # 2. Inicia simulação
         self.view.toggle_simulation()
         self.assertTrue(self.view.sim_running)
-        self.assertEqual(self.view.btn_sim.cget("text"), "⏹ Parar")
+        self.assertEqual(self.view.btn_sim.cget("text"), "Parar")
+        self.assertTrue(self.view.btn_sim.cget("image"))
 
         # Verifica se o cabeçote CNC foi desenhado no canvas
         head_items = self.view.canvas.find_withtag("sim_head")
@@ -2048,7 +2053,8 @@ class TestLayoutEditorShortcuts(unittest.TestCase):
         # 4. Para simulação via toggle
         self.view.toggle_simulation()
         self.assertFalse(self.view.sim_running)
-        self.assertEqual(self.view.btn_sim.cget("text"), "▶ Simular")
+        self.assertEqual(self.view.btn_sim.cget("text"), "Simular")
+        self.assertTrue(self.view.btn_sim.cget("image"))
         self.assertEqual(len(self.view.canvas.find_withtag("sim_head")), 0)
         self.assertEqual(len(self.view.canvas.find_withtag("sim_cut_trail")), 0)
 
@@ -2059,7 +2065,8 @@ class TestLayoutEditorShortcuts(unittest.TestCase):
         res = self.view.cancel_drag()
         self.assertEqual(res, "break")
         self.assertFalse(self.view.sim_running)
-        self.assertEqual(self.view.btn_sim.cget("text"), "▶ Simular")
+        self.assertEqual(self.view.btn_sim.cget("text"), "Simular")
+        self.assertTrue(self.view.btn_sim.cget("image"))
 
     def test_session_view_buttons_nest_renamed_to_gerar_and_cut_removed(self):
         """Valida que o botão Nest foi renomeado para Gerar e o botão Cut foi removido da SessionView."""

@@ -9,6 +9,7 @@ import json
 import math
 import re
 import tkinter as tk
+from ui.icon_widgets import IconButton
 from pathlib import Path
 from tkinter import filedialog, messagebox, ttk
 
@@ -121,7 +122,7 @@ class ShapeCatalogView(tk.Frame):
 
         btn_box = tk.Frame(self.title_bar, bg="#0a246a")
         btn_box.pack(side="right")
-        self.btn_min = tk.Button(
+        self.btn_min = IconButton(
             btn_box,
             text="_",
             relief="raised",
@@ -136,7 +137,7 @@ class ShapeCatalogView(tk.Frame):
             command=self.on_minimize_click,
         )
         self.btn_min.pack(side="left", padx=1)
-        self.btn_max = tk.Button(
+        self.btn_max = IconButton(
             btn_box,
             text="□",
             relief="raised",
@@ -151,7 +152,7 @@ class ShapeCatalogView(tk.Frame):
             command=self.on_maximize_click,
         )
         self.btn_max.pack(side="left", padx=1)
-        self.btn_close = tk.Button(
+        self.btn_close = IconButton(
             btn_box,
             text="✕",
             relief="raised",
@@ -180,11 +181,11 @@ class ShapeCatalogView(tk.Frame):
 
         # Controles de Zoom
         tk.Label(self.toolbar, text="Zoom:", bg="#d4d0c8", font=self.font_btn).pack(side="left", padx=(0, 2))
-        self.btn_zoom_in = tk.Button(self.toolbar, text="➕", width=2, relief="raised", bd=1, bg="#d4d0c8", font=("MS Sans Serif", 8, "bold"), command=lambda: self.zoom_step(1.2))
+        self.btn_zoom_in = IconButton(self.toolbar, text="➕", width=2, relief="raised", bd=1, bg="#d4d0c8", font=("MS Sans Serif", 8, "bold"), command=lambda: self.zoom_step(1.2))
         self.btn_zoom_in.pack(side="left", padx=1)
-        self.btn_zoom_out = tk.Button(self.toolbar, text="➖", width=2, relief="raised", bd=1, bg="#d4d0c8", font=("MS Sans Serif", 8, "bold"), command=lambda: self.zoom_step(1.0 / 1.2))
+        self.btn_zoom_out = IconButton(self.toolbar, text="➖", width=2, relief="raised", bd=1, bg="#d4d0c8", font=("MS Sans Serif", 8, "bold"), command=lambda: self.zoom_step(1.0 / 1.2))
         self.btn_zoom_out.pack(side="left", padx=1)
-        self.btn_zoom_reset = tk.Button(self.toolbar, text="🔍 100%", relief="raised", bd=1, bg="#d4d0c8", font=self.font_btn, command=self.reset_zoom)
+        self.btn_zoom_reset = IconButton(self.toolbar, text="🔍 100%", relief="raised", bd=1, bg="#d4d0c8", font=self.font_btn, command=self.reset_zoom)
         self.btn_zoom_reset.pack(side="left", padx=1)
         self.lbl_zoom = tk.Label(self.toolbar, text="100%", bg="#d4d0c8", font=self.font_btn, width=5)
         self.lbl_zoom.pack(side="left", padx=(0, 4))
@@ -207,7 +208,7 @@ class ShapeCatalogView(tk.Frame):
         self.combo_piece.bind("<<ComboboxSelected>>", self.on_piece_filter_changed)
 
         # Botão Reset Filtros
-        self.btn_reset_filters = tk.Button(self.toolbar, text="🔄 Mostrar tudo", relief="raised", bd=1, bg="#d4d0c8", font=self.font_btn, command=self.reset_filters)
+        self.btn_reset_filters = IconButton(self.toolbar, text="🔄 Mostrar tudo", relief="raised", bd=1, bg="#d4d0c8", font=self.font_btn, command=self.reset_filters)
         self.btn_reset_filters.pack(side="left", padx=4)
 
         # 2. Área Central: Canvas + Painel Lateral Direito
@@ -328,7 +329,7 @@ class ShapeCatalogView(tk.Frame):
 
         self.action_buttons = {}
         for text, cmd in buttons_def:
-            btn = tk.Button(
+            btn = IconButton(
                 grp_actions,
                 text=text,
                 relief="raised",

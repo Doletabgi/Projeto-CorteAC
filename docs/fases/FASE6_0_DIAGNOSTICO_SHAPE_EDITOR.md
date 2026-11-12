@@ -1,7 +1,7 @@
 # RELATÓRIO TÉCNICO DE DIAGNÓSTICO E DESIGN — FASE 6.0
 ## Shape Catalog View (Grid View Matrix) inspirado no Comelz Shape Editor
 
-**Projeto:** CorteAC / JobManager 2000 (Python Edition)  
+**Projeto:** OpenCorte / JobManager 2000 (Python Edition)\
 **Missão:** Investigar viabilidade arquitetural, mapear banco/CAD e desenhar o "Catálogo de Moldes" (Grid View)  
 **Fase:** 6.0 — Diagnóstico (Zero Código de Produção)  
 **Revisor Externo:** DeepSeek  
@@ -238,7 +238,7 @@ Foram especificadas e diagramadas 3 variações estéticas completas em `docs/FA
 ```
 
 ### Recomendação Técnica do Antigravity: Mockup C (Híbrido)
-A **Regra de Ouro #3** determina: "*Preservação visual Win32 MDI — as cores do Comelz não podem substituir a identidade Win32 do CorteAC*".
+A **Regra de Ouro #3** determina: "*Preservação visual Win32 MDI — as cores do Comelz não podem substituir a identidade Win32 do OpenCorte*".
 O **Mockup C** cumpre rigorosamente esse mandamento:
 - Toda a casca externa da aplicação (título, bordas MDI, barra de status, painel de 10 botões e menus) permanece estritamente Win32 MDI.
 - O fundo escuro técnico (`#1e293b`) é restrito exclusivamente ao interior do Canvas gráfico onde as peças vetoriais são desenhadas. Em telas de CAD/CAM, linhas brancas finas e magenta sobre fundo escuro oferecem ergonomia superior e zero ofuscamento durante jornadas operacionais de 8 horas na fábrica.
