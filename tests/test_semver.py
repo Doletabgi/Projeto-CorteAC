@@ -67,7 +67,7 @@ class TestSemVer(unittest.TestCase):
         self.assertGreaterEqual(v.major, 1)
 
     def test_main_window_title_includes_app_version(self):
-        r"""O título da janela principal deve conter o nome do app e a versão (ex.: CorteAC v1.6.26 - C:\NSDATA\)."""
+        """O título deve conter nome, versão e o destino real do banco em uso."""
         from ui.main_window import MainWindow
         try:
             win = MainWindow()
@@ -82,7 +82,10 @@ class TestSemVer(unittest.TestCase):
             title.startswith(expected_prefix),
             f"Título esperado começando com '{expected_prefix}', obtido: '{title}'"
         )
-        self.assertIn("C:\\NSDATA\\", title)
+        info = win.db.get_connection_info()
+        target = (f"MySQL: {info['host']}:{info['port']}/{info['database']}"
+                  if info['backend'] == 'mysql' else info['database'])
+        self.assertTrue(title.endswith(f" - {target}"))
 
 
 if __name__ == "__main__":

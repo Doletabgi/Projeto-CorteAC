@@ -1,7 +1,8 @@
 """Painel gerencial: dados de planejamento, sem inferir execução de corte."""
 import tkinter as tk
 from ui.icon_widgets import IconNotebook, IconTtkButton
-from tkinter import filedialog, messagebox, ttk
+from tkinter import filedialog, messagebox, simpledialog, ttk
+from calendar import monthrange
 from datetime import date
 import os
 from pathlib import Path
@@ -46,14 +47,17 @@ class ProductionDashboard(tk.Toplevel):
         IconTtkButton(filters, text='Atualizar', command=self.refresh).pack(side='left', padx=5)
         actions = ttk.Frame(root)
         actions.pack(fill='x', pady=4)
-        IconTtkButton(actions, text='Imprimir...', icon='print', command=self.do_print).pack(side='left')
+        IconTtkButton(actions, text='Pré-visualizar / Imprimir...', icon='print', command=self.do_print).pack(side='left')
         IconTtkButton(actions, text='Salvar PDF...', icon='save', command=self.save_as_pdf).pack(side='left', padx=6)
+        IconTtkButton(actions, text='Resumo do dia...', icon='print', command=lambda: self.show_compact_summary('day')).pack(side='left', padx=4)
+        IconTtkButton(actions, text='Resumo do mês...', icon='print', command=lambda: self.show_compact_summary('month')).pack(side='left', padx=4)
         ttk.Label(root, textvariable=self.summary, justify='left', font=('Segoe UI', 10, 'bold')).pack(anchor='w', pady=10)
         ttk.Label(root, textvariable=self.notice, justify='left', wraplength=970).pack(anchor='w', pady=(0, 8))
         notebook = IconNotebook(root)
         notebook.pack(fill='both', expand=True)
         self.material_tree = self._table(notebook, 'Por material', ('Material', 'Layouts válidos', 'Área por camada (m²)', 'Aproveitamento (%)', 'Área não ocupada (m²)'))
         self.day_tree = self._table(notebook, 'Evolução por dia', ('Data da sessão', 'Layouts válidos', 'Área por camada (m²)', 'Aproveitamento (%)', 'Área não ocupada (m²)'))
+        self.user_tree = self._table(notebook, 'Por usuário responsável', ('Usuário responsável', 'Layouts válidos', 'Área por camada (m²)', 'Aproveitamento (%)', 'Área não ocupada (m²)'))
         ttk.Label(root, text='Fonte: sessões e layouts persistidos. Área não ocupada é estimativa geométrica por camada; não é desperdício medido.', wraplength=970).pack(anchor='w', pady=(8, 0))
         ttk.Label(root, text='Produção efetiva, corte concluído, tempo de processamento e filtro por operador: indisponíveis até haver registros confiáveis.', wraplength=970).pack(anchor='w')
 
@@ -95,7 +99,7 @@ class ProductionDashboard(tk.Toplevel):
         self.summary.set(f"Ordens com sessões: {data['orders']}     Sessões: {data['sessions']}     Pares planejados: {pairs}\n"
                          f"Layouts salvos: {data['layouts']}     Aproveitamento ponderado: {rate}     Área por camada: {area}")
         self.notice.set(f"Layouts sem dimensões ou rendimento válidos: {data['invalid_layouts']} • Sessões com quantidades inválidas: {data['sessions_missing_pairs']} • Sessões sem data: {data['undated_sessions']}")
-        for tree, rows, material in ((self.material_tree, data['materials'], True), (self.day_tree, data['days'], False)):
+        for tree, rows, material in ((self.material_tree, data['materials'], True), (self.day_tree, data['days'], False), (self.user_tree, data['users'], False)):
             tree.delete(*tree.get_children())
             for key, row in rows:
                 name = f'{key[0]} — {key[1]}' if material else key or 'Sem data'
@@ -114,12 +118,12 @@ class ProductionDashboard(tk.Toplevel):
             'notice': self.notice.get(),
             'tables': [
                 (title, tuple(tree['columns']), [tuple(tree.item(item, 'values')) for item in tree.get_children()])
-                for title, tree in [('Por material', self.material_tree), ('Evolução por dia', self.day_tree)]
+                for title, tree in [('Por material', self.material_tree), ('Evolução por dia', self.day_tree), ('Por usuário responsável', self.user_tree)]
             ],
         }
 
-    def save_as_pdf(self):
-        report = self._report()
+    def save_as_pdf(self, report=None, pages=None):
+        report = self._report() if report is None else report
         if report is None:
             return
         path = filedialog.asksaveasfilename(
@@ -131,7 +135,10 @@ class ProductionDashboard(tk.Toplevel):
             return
         try:
             from ui.production_dashboard_report import save_report_pdf
-            save_report_pdf(report, path)
+            if pages is None:
+                save_report_pdf(report, path)
+            else:
+                save_report_pdf(report, path, pages=pages)
             messagebox.showinfo('Painel de Produção', f'Relatório salvo em:\n{path}', parent=self)
         except Exception as exc:
             messagebox.showerror('Salvar Painel de Produção', f'Não foi possível salvar o relatório:\n{exc}', parent=self)
@@ -140,6 +147,51 @@ class ProductionDashboard(tk.Toplevel):
         report = self._report()
         if report is None:
             return
+        return self._open_preview(report)
+
+    def show_compact_summary(self, mode):
+        monthly = mode == 'month'
+        default = self.start.get().strip() or date.today().isoformat()
+        value = simpledialog.askstring(
+            'Resumo mensal' if monthly else 'Resumo diário',
+            'Informe o mês (AAAA-MM):' if monthly else 'Informe o dia (AAAA-MM-DD):',
+            initialvalue=default[:7] if monthly else default, parent=self,
+        )
+        if value is None:
+            return
+        try:
+            value = value.strip()
+            start = date.fromisoformat(value + '-01' if monthly else value)
+            if value != (start.isoformat()[:7] if monthly else start.isoformat()):
+                raise ValueError('Formato de data inválido.')
+            end = start.replace(day=monthrange(start.year, start.month)[1]) if monthly else start
+        except ValueError:
+            messagebox.showerror('Resumo de produção', 'Informe um mês válido (AAAA-MM).' if monthly else 'Informe um dia válido (AAAA-MM-DD).', parent=self)
+            return
+        try:
+            sessions, layouts = fetch_data(self.db)
+            data = summarize(sessions, layouts, start, end, self._materials[self.material.get()])
+            from ui.production_dashboard_report import build_compact_report
+            report = build_compact_report(data, start, end, self.material.get(), monthly)
+        except Exception as exc:
+            messagebox.showerror('Resumo de produção', f'Não foi possível gerar o resumo:\n{exc}', parent=self)
+            return
+        return self._open_preview(report)
+
+    def _open_preview(self, report):
+        try:
+            from ui.production_dashboard_report import render_report
+            from ui.production_dashboard_preview import ProductionReportPreview
+            pages = render_report(report)
+            return ProductionReportPreview(
+                self, pages,
+                on_print=lambda: self._print_report(report, pages),
+                on_save=lambda: self.save_as_pdf(report, pages),
+            )
+        except Exception as exc:
+            messagebox.showerror('Pré-visualização', f'Não foi possível abrir a pré-visualização:\n{exc}', parent=self)
+
+    def _print_report(self, report, pages=None):
         path = None
         keep_file = False
         try:
@@ -147,7 +199,10 @@ class ProductionDashboard(tk.Toplevel):
             fd, name = tempfile.mkstemp(prefix='painel_producao_', suffix='.pdf')
             os.close(fd)
             path = Path(name)
-            save_report_pdf(report, path)
+            if pages is None:
+                save_report_pdf(report, path)
+            else:
+                save_report_pdf(report, path, pages=pages)
             if sys.platform == 'win32':
                 os.startfile(str(path), 'print')
                 # O leitor de PDF do Windows pode consumir o arquivo de forma assíncrona.

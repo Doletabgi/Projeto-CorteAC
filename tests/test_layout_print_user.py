@@ -43,12 +43,13 @@ class TestLayoutPrintUser(unittest.TestCase):
         if not self.root:
             self.skipTest('Ambiente sem display Tkinter')
         db=DatabaseManager(':memory:')
-        dlg=LayoutPrintDialog(self.root,layout_data={'db':db,'active_user':'Lucas','sheet_w_mm':1380,'sheet_h_mm':1080})
+        dlg=LayoutPrintDialog(self.root,layout_data={'db':db,'active_user':'Outro operador','production_user':'Lucas','sheet_w_mm':1380,'sheet_h_mm':1080})
         self.addCleanup(dlg.destroy)
         text=' '.join(dlg.print_texts)
-        self.assertIn('Operador (usuário ativo): Lucas',text)
-        self.assertLess(text.index('FICHA DE PRODUÇÃO'),text.index('Operador (usuário ativo): Lucas'))
-        self.assertLess(text.index('Operador (usuário ativo): Lucas'),text.index('PREPARAÇÃO DO MATERIAL'))
+        self.assertIn('Usuário responsável pela produção: Lucas',text)
+        self.assertNotIn('Outro operador', text)
+        self.assertLess(text.index('FICHA DE PRODUÇÃO'),text.index('Usuário responsável pela produção: Lucas'))
+        self.assertLess(text.index('Usuário responsável pela produção: Lucas'),text.index('PREPARAÇÃO DO MATERIAL'))
 
 
     def test_03_pillow_renders_user_text(self):

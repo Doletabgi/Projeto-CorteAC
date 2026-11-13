@@ -13,6 +13,7 @@ from pathlib import Path
 from typing import Optional, List, Dict, Any
 from config import DATABASE_PATH, DEFAULT_MATERIALS
 import db.config as db_config
+import db.connection as db_connection
 from db.config import SHAPES_NETWORK_DIR, SESSIONS_NETWORK_DIR
 from cad.colors import get_color_for_size
 from db import (
@@ -57,6 +58,24 @@ class DatabaseManager:
     def backend(self) -> str:
         """Retorna o backend de banco de dados ativo ('mysql' ou 'sqlite')."""
         return get_active_backend()
+
+    def get_connection_info(self) -> dict:
+        """Identifica o destino em uso, sem abrir conexão nem expor credenciais."""
+        backend = "sqlite" if self._memory_conn is not None else self.backend
+        if backend == "mysql":
+            return {
+                "backend": backend,
+                "database": self.db_path or db_connection.MYSQL_DB,
+                "host": db_connection.MYSQL_HOST,
+                "port": db_connection.MYSQL_PORT,
+                "fallback": False,
+            }
+        path = self.db_path or db_connection.SQLITE_PATH
+        return {
+            "backend": backend,
+            "database": str(Path(path).resolve()) if path != ":memory:" else path,
+            "fallback": db_connection.DB_BACKEND == "mysql" and self._memory_conn is None,
+        }
 
     def get_connection(self) -> DBConnection:
         if self._memory_conn is not None:
@@ -573,6 +592,16 @@ class DatabaseManager:
                     cursor.execute("ALTER TABLE layout_pieces ADD COLUMN tag TEXT DEFAULT 'Pasted'")
                 if "quality_zone" not in lp_cols:
                     cursor.execute("ALTER TABLE layout_pieces ADD COLUMN quality_zone INTEGER DEFAULT 1")
+
+            # Responsável registrado na produção, independente de quem a imprime depois.
+            cursor.execute("PRAGMA table_info(layouts)")
+            layout_columns = {row.get("Field", row.get("name")) for row in cursor.fetchall()}
+            if "production_user" not in layout_columns:
+                cursor.execute("ALTER TABLE layouts ADD COLUMN production_user VARCHAR(150) DEFAULT ''")
+            cursor.execute("PRAGMA table_info(dieproc_presets)")
+            preset_columns = {row.get("Field", row.get("name")) for row in cursor.fetchall()}
+            if "wizard_settings_json" not in preset_columns:
+                cursor.execute("ALTER TABLE dieproc_presets ADD COLUMN wizard_settings_json TEXT NULL")
 
             # Tabela de pastas de produção (job_folders) e usuários (users) para MySQL e SQLite
             if conn.backend == "mysql":
@@ -1972,8 +2001,8 @@ class DatabaseManager:
             cursor = conn.cursor()
             cursor.execute("""
             REPLACE INTO dieproc_presets 
-            (name, coupling, step, solutions, range1_from, range1_to, range1_step, range2_from, range2_to, range2_step, range3_from, range3_to, range3_step, gap1, gap2, gap3, row_interlock, diagonal, macro_script)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            (name, coupling, step, solutions, range1_from, range1_to, range1_step, range2_from, range2_to, range2_step, range3_from, range3_to, range3_step, gap1, gap2, gap3, row_interlock, diagonal, macro_script, wizard_settings_json)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """, (
                 p.get("name", "ALTERNADO"),
                 p.get("coupling", "0/0 0/180"),
@@ -1993,7 +2022,8 @@ class DatabaseManager:
                 float(p.get("gap3", 0.0)),
                 1 if p.get("row_interlock", True) else 0,
                 1 if p.get("diagonal", False) else 0,
-                str(p.get("macro_script", "") or "")
+                str(p.get("macro_script", "") or ""),
+                p.get("wizard_settings_json"),
             ))
             conn.commit()
 
@@ -2025,7 +2055,8 @@ class DatabaseManager:
         Salva um LayoutData nas tabelas layouts e layout_pieces, atualizando a sessão.
         Suporta controle de versão otimista (expected_version) e auditoria de operador (created_by/updated_by).
         """
-        operator_info = get_current_operator()
+        production_user = self.get_active_user()
+        operator_info = production_user or get_current_operator()
         max_retries = 5
 
         for attempt in range(max_retries):
@@ -2192,6 +2223,8 @@ class DatabaseManager:
                             operator_info
                         ))
                         actual_lid = cursor.lastrowid
+
+                    cursor.execute("UPDATE layouts SET production_user = ? WHERE id = ?", (production_user, actual_lid))
 
                     # Mapeia moldes existentes no banco para linkar FK mold_id / shape_id
                     cursor.execute("SELECT id, name FROM shapes")
@@ -2438,7 +2471,7 @@ class DatabaseManager:
 
             return layouts
 
-    def save_session_layouts(self, session_id: int, layouts: list, operator_info: str = "Operator") -> bool:
+    def save_session_layouts(self, session_id: int, layouts: list, operator_info: Optional[str] = None) -> bool:
         """
         Salva todos os layouts de uma sessão de forma atômica no banco de dados (layouts e layout_pieces).
         Atualiza também a tabela sessions com o layout 0 (para retrocompatibilidade).
@@ -2446,6 +2479,8 @@ class DatabaseManager:
         if not session_id or not layouts:
             return False
 
+        production_user = self.get_active_user()
+        operator_info = operator_info or production_user or get_current_operator()
         with self.get_connection() as conn:
             cursor = conn.cursor()
             now_sql = "NOW()" if conn.backend == "mysql" else "CURRENT_TIMESTAMP"
@@ -2501,6 +2536,7 @@ class DatabaseManager:
                     json.dumps(pieces), operator_info, operator_info
                 ))
                 layout_id = cursor.lastrowid
+                cursor.execute("UPDATE layouts SET production_user = ? WHERE id = ?", (production_user, layout_id))
 
                 # Insere as peças em layout_pieces
                 pieces_data = []
@@ -2554,6 +2590,8 @@ class DatabaseManager:
             """, (json.dumps(first_pieces), avg_yield, session_id))
 
             conn.commit()
+            for layout in layouts:
+                layout["production_user"] = production_user
             return True
 
     def delete_session_layouts(self, session_id: int) -> bool:

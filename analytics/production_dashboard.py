@@ -28,7 +28,13 @@ def fetch_data(db):
         cur = conn.cursor()
         cur.execute('SELECT s.id, s.order_id, s.material_id, s.created_at, s.shapes_json, m.name AS material_name FROM sessions s LEFT JOIN materials m ON m.id = s.material_id')
         sessions = [dict(r) for r in cur.fetchall()]
-        cur.execute('SELECT session_id, width_mm, height_mm, yield_percent, yield_pct FROM layouts')
+        try:
+            cur.execute('SELECT session_id, width_mm, height_mm, yield_percent, yield_pct, production_user FROM layouts')
+        except Exception as exc:
+            # Bancos antigos ainda sem o responsável registrado.
+            if 'production_user' not in str(exc):
+                raise
+            cur.execute('SELECT session_id, width_mm, height_mm, yield_percent, yield_pct FROM layouts')
         layouts = [dict(r) for r in cur.fetchall()]
     return sessions, layouts
 
@@ -51,6 +57,7 @@ def summarize(sessions, layouts, start=None, end=None, material=None):
     by_id = {s['id']: s for s in selected}
     groups = defaultdict(lambda: {'layouts': 0, 'area': 0.0, 'used': 0.0})
     days = defaultdict(lambda: {'layouts': 0, 'area': 0.0, 'used': 0.0})
+    users = defaultdict(lambda: {'layouts': 0, 'area': 0.0, 'used': 0.0})
     orders = {s.get('order_id') for s in selected if s.get('order_id') is not None}
     pairs, missing_pairs = 0, 0
     for s in selected:
@@ -82,7 +89,8 @@ def summarize(sessions, layouts, start=None, end=None, material=None):
         area = w * h / 1_000_000
         key = (str(session.get('material_id') or ''), session.get('material_name') or 'Sem material')
         d = str(session.get('created_at') or '')[:10]
-        for row in (groups[key], days[d]):
+        user = str(ly.get('production_user') or '').strip() or 'Não informado'
+        for row in (groups[key], days[d], users[user]):
             row['layouts'] += 1
             row['area'] += area
             row['used'] += area * y / 100
@@ -96,4 +104,5 @@ def summarize(sessions, layouts, start=None, end=None, material=None):
             'area_m2_per_layer': area, 'unoccupied_m2_per_layer': max(0, area - used),
             'yield_pct': used / area * 100 if area else None,
             'materials': [(k, finish(v)) for k, v in sorted(groups.items())],
-            'days': [(k, finish(v)) for k, v in sorted(days.items())]}
+            'days': [(k, finish(v)) for k, v in sorted(days.items())],
+            'users': [(k, finish(v)) for k, v in sorted(users.items())]}

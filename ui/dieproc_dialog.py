@@ -16,13 +16,13 @@ class DieProcDialog(tk.Toplevel):
         self.parent_window = parent
         self.db = db
         self.on_select_cb = on_select
-        self.title("DieProc configuration")
+        self.title("Editor DieProc — Parâmetros de encaixe")
         self.transient(parent)
         self.grab_set()
         self.resizable(False, False)
         self.configure(bg=THEME["bg_surface"])
 
-        dlg_w, dlg_h = 680, 460
+        dlg_w, dlg_h = 780, 550
         self.geometry(f"{dlg_w}x{dlg_h}")
 
         # Centraliza sobre a janela pai
@@ -43,6 +43,18 @@ class DieProcDialog(tk.Toplevel):
     def setup_ui(self):
         main_box = tk.Frame(self, bg=THEME["bg_surface"], padx=8, pady=8)
         main_box.pack(fill="both", expand=True)
+
+        guide_bar = tk.Frame(main_box, bg='#e8f0ff', padx=10, pady=8)
+        guide_bar.pack(fill='x', pady=(0, 8))
+        self.btn_wizard = IconButton(
+            guide_bar, text='Criar encaixe com assistente', icon='auto',
+            command=self.open_wizard, bg='#215eea', fg='white',
+            activebackground='#194bc0', activeforeground='white',
+            font=('Segoe UI', 10, 'bold'), relief='flat', padx=12, pady=6,
+        )
+        self.btn_wizard.pack(side='left')
+        tk.Label(guide_bar, text='5 etapas · escolhas visuais · teste na sessão',
+                 bg='#e8f0ff', fg='#304e7b', font=('Segoe UI', 9)).pack(side='left', padx=10)
 
         content_frame = tk.Frame(main_box, bg=THEME["bg_surface"])
         content_frame.pack(fill="both", expand=True)
@@ -433,7 +445,7 @@ class DieProcDialog(tk.Toplevel):
         if hasattr(self, "txt_macro"):
             self.txt_macro.delete("1.0", "end")
             macro_val = preset.get("macro_script") or ""
-            if not macro_val and (name == "MACRO_IA_TESTE" or "IA" in name.upper()):
+            if not macro_val and name == "MACRO_IA_TESTE":
                 from cad.macro_engine import DEFAULT_IA_TESTE_MACRO
                 macro_val = DEFAULT_IA_TESTE_MACRO
             self.txt_macro.insert("1.0", macro_val)
@@ -446,7 +458,7 @@ class DieProcDialog(tk.Toplevel):
             except Exception:
                 self.lbl_ai_status.config(text="IA Local: Ativa")
 
-        if (name == "MACRO_IA_TESTE" or "IA" in name.upper()) and hasattr(self, "notebook") and hasattr(self, "tab_macro"):
+        if (name == "MACRO_IA_TESTE" or preset.get('macro_script')) and hasattr(self, "notebook") and hasattr(self, "tab_macro"):
             self.notebook.select(self.tab_macro)
 
     def restore_default_macro(self):
@@ -498,7 +510,53 @@ class DieProcDialog(tk.Toplevel):
             "row_interlock": 1 if self.var_row_interlock.get() else 0,
             "diagonal": 1 if self.var_diagonal.get() else 0,
             "macro_script": self.txt_macro.get("1.0", "end-1c") if hasattr(self, "txt_macro") else "",
+            "wizard_settings_json": self.presets.get(name, {}).get('wizard_settings_json'),
         }
+
+    def open_wizard(self):
+        from ui.nesting_wizard import NestingWizard
+        from cad.layers_rule import pecas_na_mesa
+        import copy
+        import math
+
+        owner = self.parent_window
+        view = owner if hasattr(owner, 'session_data') and hasattr(owner, 'get_gap_mm') else getattr(owner, 'session_view', None)
+        context = {'can_apply': bool(view and view.session_data.get('id')), 'gap': 1.0}
+        if view:
+            session = view.session_data
+            context.update(session_name=session.get('name') or f"Sessão #{session.get('id')}", gap=view.get_gap_mm())
+            material = session.get('material') or {}
+            if not material and session.get('material_id'):
+                material = self.db.get_material(session['material_id']) or {}
+            shapes = copy.deepcopy(view.shapes_list)
+            for index, shape in enumerate(shapes):
+                if not shape.get('contour') and shape.get('id'):
+                    stored = self.db.get_shape(shape['id']) or {}
+                    shapes[index] = {**stored, **shape, 'contour': stored.get('contour') or []}
+            shapes = [shape for shape in shapes if len(shape.get('contour') or []) >= 3]
+            width = float(session.get('sheet_width') or material.get('width_mm') or 0)
+            height = float(session.get('sheet_height') or material.get('height_mm') or 0)
+            layers = view.get_session_layers() or material.get('layers') or 2
+            limit = min(80, sum(pecas_na_mesa(shape.get('pairs', 1), layers) for shape in shapes))
+            if shapes and limit > 0 and all(math.isfinite(n) and n > 0 for n in (width, height)):
+                context['job'] = dict(shapes=shapes, width=width, height=height, layers=layers,
+                                      limit=limit, margins=view.get_margins())
+            else:
+                context['test_unavailable'] = 'Para testar, selecione o material e adicione moldes com quantidades na sessão.'
+
+        def created(profile, apply):
+            self.populate_presets()
+            self.select_preset(profile['name'])
+            self.notebook.select(self.tab_dieproc)
+            if view:
+                view.refresh_params_list()
+            if apply:
+                if not view or not self.on_select_cb:
+                    raise ValueError('Abra uma sessão para aplicar a configuração.')
+                self.on_select_cb(profile)
+                self.destroy()
+
+        return NestingWizard(self, self.db, context=context, on_created=created)
 
     def on_listbox_select(self, event):
         sel = self.preset_listbox.curselection()

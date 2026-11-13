@@ -39,7 +39,7 @@ from db.config import SHAPES_NETWORK_DIR, SESSIONS_NETWORK_DIR
 from cad.semver import SemVer
 
 APP_NAME = "OpenCorte"
-APP_VERSION = "1.8.12"
+APP_VERSION = "1.8.13"
 
 # UI Classic Windows XP Theme Palette (Amostrado exatamente dos prints do usuário)
 THEME = {

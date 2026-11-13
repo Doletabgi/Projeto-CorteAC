@@ -153,6 +153,7 @@ def render_sheet(dialog, dpi=150):
         text(margin, 51, f'Emissão: {dialog.date_str}', 9)
         y = 71
         paragraph(identity,9,True)
+        paragraph(f"Usuário responsável pela produção: {source.get('production_user') or missing}",9,True)
         payload,label = dialog.get_barcode_payload_and_label()
         barcode = generate_code128_pillow(payload,height=round(23*scale),module_width=max(1,round(scale)),show_text=True,label=label)
         if barcode:
@@ -171,7 +172,7 @@ def render_sheet(dialog, dpi=150):
         y += 3
         line(y); y += 8
     new_page()
-    paragraph(f'Ordem: {order} | Operador (usuário ativo): {dialog.active_user or missing}',bold=True)
+    paragraph(f'Ordem: {order}',bold=True)
     material = re.sub(r'\(\s*\d+\s*layer\(s\)\s*\)', '', dialog.material_name, flags=re.I).strip()
     paragraph('PREPARAÇÃO DO MATERIAL',11,True)
     paragraph(f'Material: {material}',14,True)

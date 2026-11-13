@@ -204,7 +204,7 @@ class TestNestingModeArchitecture(unittest.TestCase):
         # Instanciação direta do DieProcDialog via MacroPanel
         dlg = DieProcDialog(self.root, self.db, initial_preset="ALTERNADO")
         self.assertIsNotNone(dlg)
-        self.assertEqual(dlg.title(), "DieProc configuration")
+        self.assertEqual(dlg.title(), "Editor DieProc — Parâmetros de encaixe")
         dlg.destroy()
 
     def test_09_env_vars_still_work_as_fallback(self):

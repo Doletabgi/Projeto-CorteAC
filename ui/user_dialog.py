@@ -71,8 +71,8 @@ class UserManagementDialog(tk.Toplevel):
 
         tk.Label(
             main_box,
-            text="Cadastre os operadores do sistema. O usuário ativo sairá impresso\n"
-                 "nas folhas de layout logo abaixo do nome da placa (ex: lay0000.lay).",
+            text="Cadastre os operadores e selecione quem está trabalhando.\n"
+                 "Ao salvar a produção, o usuário ativo será registrado na folha.",
             font=("Segoe UI", 8), bg=THEME["bg_surface"], fg="#555555", justify="left"
         ).pack(anchor="w", pady=(0, 10))
 

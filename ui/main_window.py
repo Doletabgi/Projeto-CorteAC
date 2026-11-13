@@ -51,7 +51,6 @@ from ui.shape_library_view import ShapeLibraryView
 from ui.layout_editor_view import LayoutEditorView
 from ui.material_codes_view import MaterialCodesView
 from ui.options_dialog import OptionsDialog
-from ui.params_dialog import NestingParamsDialog
 from ui.dieproc_dialog import DieProcDialog
 from ui.sort_utils import natural_sort_key, size_sort_key, clean_session_display_name
 from ui.tooltip import ToolTip
@@ -77,7 +76,7 @@ class MainWindow(tk.Tk):
 
         # Título da janela com versão dinâmica sincronizada de config.APP_VERSION
         v_str = APP_VERSION if APP_VERSION.startswith("v") else f"v{APP_VERSION}"
-        self.title(f"{APP_NAME} {v_str} - C:\\NSDATA\\")
+        self.title(f"{APP_NAME} {v_str}")
         self.geometry("1180x720")
         self.minsize(980, 600)
         self.configure(bg=THEME["bg_main"])
@@ -108,7 +107,7 @@ class MainWindow(tk.Tk):
         # Carrega a família de ícones compartilhada, no tamanho da tela
         self.load_icons()
 
-        # Banco de Dados SQLite
+        # Banco de dados ativo (MySQL ou SQLite)
         self.db = DatabaseManager()
         self.materials = self.db.get_materials()
         self.current_material = self.materials[0] if self.materials else None
@@ -331,8 +330,7 @@ class MainWindow(tk.Tk):
         tools_menu.add_command(label="📥 Importar lista de materiais...", command=self.open_import_materials_dialog)
         tools_menu.add_command(label="📂 Importar Shape (.die)...", command=self.on_import_die)
         tools_menu.add_separator()
-        tools_menu.add_command(label="Parâmetros de Nesting...", command=self.open_params_dialog)
-        tools_menu.add_command(label="⚙️ Configuração DieProc (Encaixe Sintético)...", command=self.open_dieproc_dialog)
+        tools_menu.add_command(label="Editor DieProc (Parâmetros de encaixe)...", icon="settings", command=self.open_dieproc_dialog)
         tools_menu.add_command(label="Executar Auto-Nest...", command=self.on_auto_nest)
         tools_menu.add_command(label="Simular Corte na Mesa...", command=self.on_toggle_sim)
         tools_menu.add_command(label="💾 Exportar G-Code (ATOM)...", command=self.on_export_gcode)
@@ -399,6 +397,13 @@ class MainWindow(tk.Tk):
         tbar = tk.Frame(self, bg=THEME["bg_surface"], height=32, padx=4, pady=2, relief="raised", borderwidth=1)
         tbar.pack(side="top", fill="x")
 
+        self.btn_tb_users = IconButton(
+            tbar, text="Usuários", icon="user", bg=THEME["bg_surface"],
+            fg=THEME["text_main"], relief="raised", bd=2, padx=6,
+            font=("Segoe UI", 8), command=self.show_user_dialog,
+        )
+        self.bind_tooltip(self.btn_tb_users, "Cadastrar usuários e selecionar o responsável pela produção")
+
         # Botão Nova Sessão (Ctrl+N)
         btn_new_kw = {"image": self.icons["btn_new"]} if self.icons.get("btn_new") else {"text": "➕"}
         self.btn_tb_new_session = IconButton(
@@ -448,6 +453,7 @@ class MainWindow(tk.Tk):
         )
         self.btn_shape_catalog.pack(side="left", padx=1)
         self.bind_tooltip(self.btn_shape_catalog, "Catálogo de Moldes", "Busca moldes por pasta e tamanho e adiciona a seleção à sessão")
+        self.btn_tb_users.pack(side="left", padx=2)
 
         self.btn_tb_import_die = IconButton(
             tbar, text="📂 Importar .die", bg=THEME["bg_surface"], fg=THEME["text_main"],
@@ -461,11 +467,11 @@ class MainWindow(tk.Tk):
 
         # Ações diretas úteis
         self.btn_tb_params = IconButton(
-            tbar, text="⚙️ Parâmetros", bg=THEME["bg_surface"], fg=THEME["text_main"],
-            relief="raised", bd=2, padx=6, font=("Segoe UI", 8), command=self.open_params_dialog
+            tbar, text="⚙️ Configurações", bg=THEME["bg_surface"], fg=THEME["text_main"],
+            relief="raised", bd=2, padx=6, font=("Segoe UI", 8), command=self.open_dieproc_dialog
         )
         self.btn_tb_params.pack(side="left", padx=2)
-        self.bind_tooltip(self.btn_tb_params, "Parâmetros de Encaixe", "Configura opções e parâmetros de auto-nesting")
+        self.bind_tooltip(self.btn_tb_params, "Configurações", "Edita, salva e seleciona os parâmetros usados no encaixe da sessão")
 
         self.btn_tb_auto_nest = IconButton(
             tbar, text="⚡ Auto-Nest", bg=THEME["bg_surface"], fg=THEME["text_main"],
@@ -3232,12 +3238,6 @@ class MainWindow(tk.Tk):
         now_date = datetime.datetime.now().strftime("%d/%m/%Y")
         tk.Label(p3, text=now_date, bg=THEME["bg_surface"], fg=THEME["text_main"], font=("Segoe UI", 8)).pack()
 
-        # Painel 4: Mensagem do sistema
-        p4 = tk.Frame(sbar, relief="sunken", bd=1, bg=THEME["bg_surface"], padx=8, pady=1)
-        p4.pack(side="left", fill="x", expand=True, padx=1)
-        self.lbl_status_msg = tk.Label(p4, text="Job Manager está pronto", bg=THEME["bg_surface"], fg=THEME["text_main"], font=("Segoe UI", 8), anchor="w")
-        self.lbl_status_msg.pack(fill="x")
-
         # Painel 8: Espaçador rebaixado no final da barra
         p8 = tk.Frame(sbar, relief="sunken", bd=1, bg=THEME["bg_surface"], width=20, pady=1)
         p8.pack(side="right", padx=1)
@@ -3253,6 +3253,58 @@ class MainWindow(tk.Tk):
         self.lbl_status_user.pack()
         self.lbl_status_user.bind("<Button-1>", lambda e: self.show_user_dialog())
         self.bind_tooltip(self.lbl_status_user, "Clique para cadastrar ou trocar o operador / usuário ativo")
+
+        # Reserva espaço para o banco antes da mensagem variável do sistema.
+        p_database = tk.Frame(sbar, relief="sunken", bd=1, bg=THEME["bg_surface"], padx=8, pady=1)
+        p_database.pack(side="right", padx=1)
+        self.lbl_status_database = tk.Label(
+            p_database, bg=THEME["bg_surface"], font=("Segoe UI", 8, "bold"),
+            anchor="w", cursor="hand2",
+        )
+        self.lbl_status_database.pack()
+        self.lbl_status_database.bind("<Button-1>", lambda e: self.show_database_connection_dialog())
+        self._database_indicator_tooltip = ToolTip(self.lbl_status_database, "")
+        self.update_database_indicator()
+        self.lbl_status_database.bind(
+            "<Destroy>", lambda e: self.after_cancel(self._database_indicator_job), add="+"
+        )
+
+        # A mensagem ocupa o espaço restante, preservando os indicadores fixos.
+        p4 = tk.Frame(sbar, relief="sunken", bd=1, bg=THEME["bg_surface"], padx=8, pady=1)
+        p4.pack(side="left", fill="x", expand=True, padx=1)
+        self.lbl_status_msg = tk.Label(p4, text="Job Manager está pronto", bg=THEME["bg_surface"], fg=THEME["text_main"], font=("Segoe UI", 8), anchor="w")
+        self.lbl_status_msg.pack(fill="x")
+
+    def update_database_indicator(self):
+        """Acompanha inclusive a troca automática para SQLite, sem consultar o banco."""
+        info = self.db.get_connection_info()
+        if info["backend"] == "mysql":
+            database_target = f"MySQL: {info['host']}:{info['port']}/{info['database']}"
+            target = f"{info['database']} @ {info['host']}:{info['port']}"
+            text = f"Banco: MySQL | {target}"
+            details = f"Banco em uso: MySQL\nBanco: {info['database']}\nServidor: {info['host']}:{info['port']}"
+            color = THEME["accent_blue"]
+        else:
+            path = info["database"]
+            database_target = path
+            name = Path(path).name if path != ":memory:" else "em memória"
+            mode = "contingência" if info["fallback"] else "local"
+            text = f"Banco: SQLite ({mode}) | {name}"
+            details = f"Banco em uso: SQLite ({mode})\nArquivo: {path}"
+            if info["fallback"]:
+                details += "\nO servidor MySQL ficou indisponível; o sistema está usando o banco local."
+            color = THEME["accent_amber"] if info["fallback"] else THEME["text_main"]
+        v_str = APP_VERSION if APP_VERSION.startswith("v") else f"v{APP_VERSION}"
+        title = f"{APP_NAME} {v_str} - {database_target}"
+        if self.title() != title:
+            self.title(title)
+        if len(text) > 52:
+            text = text[:49] + "..."
+        self.lbl_status_database.config(text=text, fg=color)
+        details += "\nClique para configurar a conexão. Alterações valem na próxima abertura."
+        if self._database_indicator_tooltip.text != details:
+            self._database_indicator_tooltip.update_text(details)
+        self._database_indicator_job = self.after(1000, self.update_database_indicator)
 
     # =========================================================================
     # Lógica de Carregamento e Alternância de Modos (Prints 1, 2 e 3)
@@ -7104,14 +7156,13 @@ class MainWindow(tk.Tk):
             if sv != self.session_view and getattr(sv, "session_data", None) and sv.session_data.get("id") == curr_id:
                 sv.update_summary_text(len(self.canvas.placed_pieces), yield_pct, est_sec)
 
-    def open_params_dialog(self):
-        NestingParamsDialog(self)
-
     def open_dieproc_dialog(self, initial_preset=None, callback=None):
         """Abre a janela de configuração DieProc (dp98) para ajuste de coupling, ranges e row interlock."""
         preset = initial_preset
         if not preset and getattr(self, "session_view", None):
             preset = self.session_view.get_params()
+        if preset:
+            preset, _ = parse_session_params(preset)
 
         def _on_select(data):
             if callback:
@@ -7120,7 +7171,7 @@ class MainWindow(tk.Tk):
                 self.session_view.on_dieproc_preset_selected(data)
             self.lbl_status_msg.config(text=f"Perfil DieProc '{data['name']}' selecionado.")
 
-        DieProcDialog(self, self.db, initial_preset=preset, on_select=_on_select)
+        return DieProcDialog(self, self.db, initial_preset=preset, on_select=_on_select)
 
     def _select_session_in_tree(self, parent_item, target_sess_id):
         """Busca recursivamente o item da sessão na árvore e o seleciona/abre."""

@@ -2398,6 +2398,15 @@ class SessionView(tk.Frame):
     def on_dieproc_preset_selected(self, preset_data):
         if not preset_data:
             return
+        _, options = parse_session_params(self.get_params())
+        from cad.nesting_wizard import is_guided_profile, validate_gap
+        guided = is_guided_profile(preset_data)
+        if guided:
+            gap = validate_gap(preset_data.get('gap1'))
+            self.set_nesting_mode('custom')
+            self.cb_strategy.set('flashnestsheet')
+            self.session_data.update(strategy='flashnestsheet', nesting_mode='custom')
+            self.set_gap_mm(gap, persist=False)
         name = preset_data.get("name", "ALTERNADO")
         self.active_dieproc_params = preset_data
         self.refresh_params_list()
@@ -2406,7 +2415,12 @@ class SessionView(tk.Frame):
             cur_vals.insert(0, name)
             self.cb_params["values"] = cur_vals
         self.cb_params.set(name)
-        self.session_data["params"] = name
+        self.session_data["params"] = encode_session_params(name, options)
+        if self.db and self.session_data.get("id"):
+            updates = {'params': self.session_data['params']}
+            if guided:
+                updates.update(strategy='flashnestsheet', nesting_mode='custom', gap_mm=gap)
+            self.db.update_session(self.session_data["id"], **updates)
         if self.on_strategy_change_cb:
             self.on_strategy_change_cb(self.get_strategy(), name)
 

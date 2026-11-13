@@ -6,13 +6,46 @@ from PIL import Image, ImageDraw, ImageFont
 
 
 SOURCE = ('Fonte: sessões e layouts persistidos. Área não ocupada é estimativa '
-          'geométrica por camada; não é desperdício medido.')
+          'geométrica por camada; não é desperdício medido. Usuário responsável '
+          'registrado ao salvar a produção; registros antigos sem usuário: Não informado.')
 LIMITS = ('Produção efetiva, corte concluído, tempo de processamento e filtro por '
           'operador: indisponíveis até haver registros confiáveis.')
 
 
+def build_compact_report(data, start, end, material, monthly=False):
+    """Totais e até cinco linhas de responsáveis, preservando os totais de Outros."""
+    users = sorted(data['users'], key=lambda item: (-item[1]['layouts'], item[0]))
+    if len(users) > 5:
+        remainder = users[4:]
+        area = sum(row['area'] for _, row in remainder)
+        used = sum(row['used'] for _, row in remainder)
+        users = users[:4] + [(f'Outros ({len(remainder)} usuários)', {
+            'layouts': sum(row['layouts'] for _, row in remainder), 'area': area,
+            'used': used, 'yield_pct': used / area * 100 if area else None,
+        })]
+    def short(value, limit):
+        value = ' '.join(str(value).split())
+        return value if len(value) <= limit else value[:limit - 3] + '...'
+    rows = [(short(name, 48), row['layouts'], f"{row['area']:.2f}",
+             f"{row['yield_pct']:.2f}" if row['yield_pct'] is not None else 'Indisponível',
+             f"{max(0, row['area'] - row['used']):.2f}") for name, row in users]
+    rate = f"{data['yield_pct']:.2f}%" if data['yield_pct'] is not None else 'Indisponível'
+    partial = ' (parcial)' if data['sessions_missing_pairs'] else ''
+    return {
+        'compact': True,
+        'title': 'Resumo mensal de produção' if monthly else 'Resumo diário de produção',
+        'filters': f"Período: {start.strftime('%d/%m/%Y')} a {end.strftime('%d/%m/%Y')} | Material: {short(material, 80)}",
+        'summary': (f"Ordens: {data['orders']} | Sessões: {data['sessions']} | Layouts salvos: {data['layouts']}\n"
+                    f"Pares planejados: {data['pairs_planned']}{partial} | Aproveitamento ponderado: {rate}\n"
+                    f"Área por camada: {data['area_m2_per_layer']:.2f} m² | Área não ocupada: {data['unoccupied_m2_per_layer']:.2f} m²"),
+        'notice': f"Layouts com dados inválidos: {data['invalid_layouts']} | Sessões com quantidades inválidas: {data['sessions_missing_pairs']}",
+        'tables': [('Por usuário responsável — layouts válidos',
+                    ('Usuário responsável', 'Layouts válidos', 'Área por camada (m²)', 'Aproveitamento (%)', 'Área não ocupada (m²)'), rows)],
+    }
+
+
 def render_report(report, dpi=150):
-    """Inclui todas as linhas das duas tabelas, repetindo cabeçalhos nas continuações."""
+    """Inclui todas as linhas das tabelas, repetindo cabeçalhos nas continuações."""
     scale = dpi / 72
     width, height = 841.89, 595.28  # A4 paisagem
     margin, bottom = 30, height - 36
@@ -65,7 +98,7 @@ def render_report(report, dpi=150):
         page = Image.new('RGB', (round(width * scale), round(height * scale)), 'white')
         pages.append(page)
         draw = ImageDraw.Draw(page)
-        text(margin, 22, 'Painel de Produção — Planejamento', 15, True)
+        text(margin, 22, report.get('title', 'Painel de Produção — Planejamento'), 15, True)
         text(margin, 45, f'Planejamento salvo • período pela data de criação da sessão • Emitido em {stamp}', 8)
         y = 62
         for line in wrap(report['filters'], width - 2 * margin, 8):
@@ -86,8 +119,11 @@ def render_report(report, dpi=150):
     new_page()
     paragraph(report['summary'], 10)
     paragraph(report['notice'], 8)
-    paragraph(SOURCE, 8)
-    paragraph(LIMITS, 8)
+    if report.get('compact'):
+        paragraph('Planejamento salvo; área estimada por camada. Responsável registrado ao salvar. Sem registro: Não informado.', 8)
+    else:
+        paragraph(SOURCE, 8)
+        paragraph(LIMITS, 8)
     widths = [241.89, 95, 145, 140, 160]
 
     def table_row(cells, bold=False):
@@ -144,10 +180,12 @@ def render_report(report, dpi=150):
     return pages
 
 
-def save_report_pdf(report, path):
-    pages = render_report(report)
+def save_report_pdf(report, path, pages=None):
+    owned = pages is None
+    pages = render_report(report) if owned else pages
     try:
         pages[0].save(str(path), 'PDF', resolution=150, save_all=True, append_images=pages[1:])
     finally:
-        for page in pages:
-            page.close()
+        if owned:
+            for page in pages:
+                page.close()

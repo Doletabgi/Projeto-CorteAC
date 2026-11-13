@@ -51,9 +51,37 @@ def test_report_applies_current_filters_and_contains_both_tables(panel):
     report = panel._report()
     assert '2026-01-02' in report['filters'] and 'B — Lona' in report['filters']
     assert 'Pares planejados: 5' in report['summary']
-    material, days = report['tables']
+    material, days, users = report['tables']
     assert material[2] == [('B — Lona', '1', '2.00', '80.00', '0.40')]
     assert days[2] == [('2026-01-02', '1', '2.00', '80.00', '0.40')]
+    assert users[2] == [('Não informado', '1', '2.00', '80.00', '0.40')]
+
+
+def test_responsaveis_registrados_aparecem_na_impressao_com_os_filtros(panel, monkeypatch):
+    with panel.db.get_connection() as conn:
+        conn.execute('ALTER TABLE layouts ADD COLUMN production_user TEXT')
+        conn.execute("UPDATE layouts SET production_user = 'Ana' WHERE session_id = 1")
+        conn.execute("UPDATE layouts SET production_user = 'Bruno' WHERE session_id = 2")
+    report = panel._report()
+    assert report['tables'][2][2] == [
+        ('Ana', '1', '1.00', '50.00', '0.50'),
+        ('Bruno', '1', '2.00', '80.00', '0.40'),
+    ]
+    panel.material.set('B — Lona')
+    report = panel._report()
+    assert report['tables'][2][2] == [('Bruno', '1', '2.00', '80.00', '0.40')]
+    texts = []
+    original = ImageDraw.ImageDraw.text
+    def record(draw, xy, value, *args, **kwargs):
+        texts.append(str(value))
+        return original(draw, xy, value, *args, **kwargs)
+    monkeypatch.setattr(ImageDraw.ImageDraw, 'text', record)
+    pages = render_report(report, dpi=100)
+    assert 'Por usuário responsável' in texts
+    assert 'Bruno' in texts
+    assert 'Ana' not in texts
+    for page in pages:
+        page.close()
 
 
 def test_pdf_saved_and_cancel_does_not_render(panel, tmp_path, monkeypatch):
@@ -101,7 +129,7 @@ def test_print_sends_pdf_as_argument_and_cleans_spool_file(panel, monkeypatch):
 
     spool = MagicMock(side_effect=send)
     monkeypatch.setattr('ui.production_dashboard.subprocess.run', spool)
-    panel.do_print()
+    panel._print_report(panel._report())
     from pathlib import Path
     assert not Path(spool.call_args.args[0][1]).exists()
     errors.assert_not_called()
@@ -114,7 +142,7 @@ def test_rejected_print_does_not_claim_success(panel, monkeypatch):
     info, errors = MagicMock(), MagicMock()
     monkeypatch.setattr('ui.production_dashboard.messagebox.showinfo', info)
     monkeypatch.setattr('ui.production_dashboard.messagebox.showerror', errors)
-    panel.do_print()
+    panel._print_report(panel._report())
     info.assert_not_called()
     assert 'Sem impressora' in errors.call_args.args[1]
 
@@ -125,7 +153,7 @@ def test_windows_print_keeps_pdf_for_async_reader(panel, monkeypatch):
     startfile = MagicMock()
     monkeypatch.setattr('ui.production_dashboard.os.startfile', startfile, raising=False)
     monkeypatch.setattr('ui.production_dashboard.messagebox.showinfo', MagicMock())
-    panel.do_print()
+    panel._print_report(panel._report())
     path, verb = startfile.call_args.args
     try:
         assert verb == 'print' and Path(path).read_bytes().startswith(b'%PDF-')
@@ -176,7 +204,7 @@ def test_empty_report_keeps_limitations_and_both_sections(panel, monkeypatch):
     pages = render_report(report, dpi=100)
     try:
         assert 'Indisponível' in '\n'.join(texts)
-        assert texts.count('Nenhum registro para os filtros selecionados.') == 2
+        assert texts.count('Nenhum registro para os filtros selecionados.') == 3
         assert 'não é desperdício medido.' in ' '.join(texts)
     finally:
         for page in pages:
@@ -189,7 +217,7 @@ def test_no_spooler_keeps_pdf_and_explains_fallback(panel, monkeypatch):
     monkeypatch.setattr('ui.production_dashboard.shutil.which', lambda cmd: None)
     info = MagicMock()
     monkeypatch.setattr('ui.production_dashboard.messagebox.showinfo', info)
-    panel.do_print()
+    panel._print_report(panel._report())
     message = info.call_args.args[1]
     path = Path(message.split('\n')[-1])
     try:
