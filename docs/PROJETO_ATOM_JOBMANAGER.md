@@ -14,9 +14,9 @@ pré-requisitos, escopo dos testes e regras de retomada.
 > **Regra de ouro:** o que está marcado `[CONFIRMADO]` veio do relatório, do código ou do usuário. O que está `[NÃO CONFIRMADO]` é suposição e não deve virar "fato" sem validação. O que está `[PREENCHER]` a IA deve completar lendo o código real.
 
 <!-- AUTO:header:start -->
-**Versão do aplicativo:** `1.8.14`
+**Versão do aplicativo:** `1.8.15`
 
-**Última sincronização com o código:** 2026-11-13 10:30 (HEAD ao gerar: `6001da5`; 213 arquivos Python, ~90816 linhas)
+**Última sincronização com o código:** 2026-11-13 10:41 (HEAD ao gerar: `67df97a`; 213 arquivos Python, ~90779 linhas)
 <!-- AUTO:header:end -->
 **Versão deste documento:** 2
 
@@ -254,6 +254,7 @@ docs/fases/SIMBOLICA_COMELZ.md
 docs/ref/layout_re/help_topics.json
 docs/releases/v1.8.13.md
 docs/releases/v1.8.14.md
+docs/releases/v1.8.15.md
 output/pdf/validacao-sessao-188.json
 tests/_catalog_fixtures.py                           # tests/_catalog_fixtures.py
 tests/conftest.py                                    # tests/conftest.py
@@ -5157,6 +5158,7 @@ Com dados confiáveis e validações definidas, avaliar comparação do aproveit
 <!-- AUTO:gitlog:start -->
 | Commit | Data | Autor | Mensagem |
 |---|---|---|---|
+| `67df97a` | 2026-11-13 | Doletabgi | chore(release): OpenCorte v1.8.14 |
 | `6001da5` | 2026-11-13 | Doletabgi | fix(release): padronizar downloads e pacotes como OpenCorte |
 | `c2c560a` | 2026-11-13 | Doletabgi | fix(release): preencher e sincronizar alteracoes de cada versao |
 | `77f9f0f` | 2026-11-13 | Doletabgi | chore(release): OpenCorte v1.8.13 |
@@ -5171,7 +5173,6 @@ Com dados confiáveis e validações definidas, avaliar comparação do aproveit
 | `10389ab` | 2026-11-11 | Doletabgi | fix(print): ficha de producao e manutencao gradual v1.8.5 |
 | `856b186` | 2026-11-09 | Doletabgi | fix(release): publica apenas instalador com versao |
 | `e1ae4bc` | 2026-11-09 | Doletabgi | feat: otimiza sobras em ponta e placa separada v1.8.4 |
-| `6168ca7` | 2026-11-09 | Doletabgi | feat: destino das sobras e correção do salvamento v1.8.0 |
 <!-- AUTO:gitlog:end -->
 
 ---

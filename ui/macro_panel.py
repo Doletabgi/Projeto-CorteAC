@@ -154,27 +154,6 @@ class MacroPanel(tk.LabelFrame):
         )
         self.btn_reset.pack(side="right")
 
-        tk.Label(self, text="Aprendizado e uso por código de material",
-                 bg=card_bg, fg=THEME.get("text_main", "#000000"),
-                 font=("Segoe UI", 9, "bold"), anchor="w").pack(fill="x", pady=(6, 2))
-        history_frame = tk.Frame(self, bg=card_bg)
-        history_frame.pack(fill="x")
-        self.learning_table = ttk.Treeview(history_frame, columns=("code", "examples", "runs", "used", "last"),
-                                           show="headings", height=4, selectmode="browse")
-        for name, title, width in (("code", "Código", 100), ("examples", "Padrões salvos", 100),
-                                    ("runs", "Cálculos da macro", 120), ("used", "Cálculos com ajustes", 140),
-                                    ("last", "Último resultado", 240)):
-            self.learning_table.heading(name, text=title)
-            self.learning_table.column(name, width=width, minwidth=65, stretch=(name == "last"))
-        scrollbar = ttk.Scrollbar(history_frame, orient="vertical", command=self.learning_table.yview)
-        self.learning_table.configure(yscrollcommand=scrollbar.set)
-        self.learning_table.pack(side="left", fill="x", expand=True)
-        scrollbar.pack(side="right", fill="y")
-        self.lbl_history = tk.Label(self, text="", bg=card_bg,
-                                    fg=THEME.get("text_dim", "#555555"), anchor="w", font=("Segoe UI", 8))
-        self.lbl_history.pack(fill="x", pady=(2, 0))
-        ttk.Button(self, text="Atualizar histórico", command=self.refresh_status).pack(anchor="e")
-
         self.refresh_presets()
         self.refresh_status()
 
@@ -220,22 +199,6 @@ class MacroPanel(tk.LabelFrame):
     def refresh_status(self):
         from cad.ai_learner import NestingAIBrain
         brain = NestingAIBrain(self.db, material_code=self.material_code)
-        if hasattr(self, "learning_table"):
-            rows = NestingAIBrain.material_activity(self.db, self.material_code)
-            self.learning_table.delete(*self.learning_table.get_children())
-            for index, row in enumerate(rows):
-                code = row["material_code"]
-                self.learning_table.insert("", "end", iid=str(index), values=(
-                    code, row["habits_count"], row.get("macro_runs", "Sem registro"),
-                    row.get("applied_runs", "Sem registro"), row.get("last_result", "Uso ainda não registrado")))
-                if code == self.material_code:
-                    self.learning_table.selection_set(str(index))
-                    self.learning_table.see(str(index))
-            self.lbl_history.config(text=(
-                "Nenhum material com histórico registrado." if not rows else
-                "Cálculos com ajustes = execuções em que exemplos salvos mudaram posições ou rotações."
-            ))
-
         if not brain.material_code:
             self.lbl_status.config(text="Selecione um material com código para usar o aprendizado")
             self.btn_reset.config(state="disabled")
