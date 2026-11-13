@@ -569,6 +569,9 @@ class OmniNestMacroEngine:
         if not available_shapes:
             return []
 
+        self.ai_brain = NestingAIBrain(
+            db=self.db, material_code=(dieproc_params or {}).get("material_code")
+        )
         config = MacroCompiler.compile(macro_script)
         # Se gap_mm explícito foi passado, prioriza o valor mestre
         if gap_mm is not None and gap_mm >= 0.0:
@@ -888,6 +891,11 @@ class OmniNestMacroEngine:
         # Remove qualquer peça que após o empurrão tenha saído dos limites da placa
         placed = [p for p in placed if p["bbox"][0] >= m_left - 0.05 and p["bbox"][1] >= m_bottom - 0.05 and p["bbox"][2] <= bed_width_mm - m_right + 0.05 and p["bbox"][3] <= bed_height_mm - m_top + 0.05]
 
+        # Use manual examples only after the baseline is complete. Each proposed move
+        # retains every piece, respects macro rotations and must not enlarge the footprint.
+        applied = self._apply_operator_habits(placed, config, bed_width_mm, bed_height_mm, margins_dict, gap)
+        self.ai_brain.record_activity(applied=applied)
+
         # 9. Cálculo de Rendimento e Feedback ao Cérebro de IA
         useful_area_mm2 = sum(polygon_area(p.get("contour", [])) for p in placed)
         bed_area_m2 = (bed_width_mm * bed_height_mm) / 1_000_000.0
@@ -925,6 +933,80 @@ class OmniNestMacroEngine:
     # -----------------------------------------------------------------------
     # Métodos Auxiliares de Otimização Física
     # -----------------------------------------------------------------------
+
+    def _apply_operator_habits(self, placed, config, bed_w, bed_h, margins, gap):
+        habits = [h for h in self.ai_brain.get_learned_habits() if h.get("version") == 2]
+        if not habits or len(placed) < 2:
+            return 0
+        # Index both directions; old records lack reliable rotated centers and are ignored.
+        relations = {}
+        for h in habits:
+            try:
+                source, target = tuple(h["source"]), tuple(h["target"])
+                rot1, rot2, dx, dy = (float(h[k]) for k in ("rot1", "rot2", "dx", "dy"))
+                if not all(math.isfinite(v) for v in (rot1, rot2, dx, dy)):
+                    continue
+                relations.setdefault((source, target), []).append((rot1, rot2, dx, dy))
+                relations.setdefault((target, source), []).append((rot2, rot1, -dx, -dy))
+            except (KeyError, TypeError, ValueError):
+                continue
+        identities = {p["id"]: self.ai_brain.shape_identity(p) for p in placed}
+
+        def footprint(boxes):
+            return ((max(b[2] for b in boxes) - min(b[0] for b in boxes)) *
+                    (max(b[3] for b in boxes) - min(b[1] for b in boxes)))
+
+        def allowed(angle):
+            for base in config.cluster_angles:
+                delta = (angle - base + 180) % 360 - 180
+                if abs(delta) < 0.001 or config.sweep_from - 0.001 <= delta <= config.sweep_to + 0.001:
+                    return True
+            return False
+
+        target_ids = {target for source, target in relations}
+        # A bounded pass keeps repeated production jobs responsive.
+        attempts = 0
+        applied = 0
+        for piece in placed:
+            if identities[piece["id"]] not in target_ids:
+                continue
+            attempts += 1
+            if attempts > 128:
+                break
+            other = [p for p in placed if p is not piece]
+            best_area = footprint([p["bbox"] for p in placed])
+            best = None
+            # Bound work on large jobs, prioritizing nearby anchors and frequent patterns.
+            anchors = sorted(other, key=lambda p: abs(p["x"] - piece["x"]) + abs(p["y"] - piece["y"]))[:16]
+            for anchor in anchors:
+                patterns = relations.get((identities[anchor["id"]], identities[piece["id"]]), [])[:8]
+                for rot1, rot2, dx, dy in patterns:
+                    if abs((anchor["rotation"] - rot1 + 180) % 360 - 180) > 0.001 or not allowed(rot2):
+                        continue
+                    poly0 = transform_contour(piece["contour"], 0, 0, rot2)
+                    b0, ba = polygon_bbox(poly0), anchor["bbox"]
+                    x = round((ba[0] + ba[2] - b0[0] - b0[2]) / 2 + dx, 3)
+                    y = round((ba[1] + ba[3] - b0[1] - b0[3]) / 2 + dy, 3)
+                    poly = transform_contour(piece["contour"], x, y, rot2)
+                    bbox = polygon_bbox(poly)
+                    if (bbox[0] < margins["left"] or bbox[1] < margins["bottom"] or
+                            bbox[2] > bed_w - margins["right"] or bbox[3] > bed_h - margins["top"]):
+                        continue
+                    area = footprint([p["bbox"] for p in other] + [bbox])
+                    if area > best_area + 1e-6:
+                        continue
+                    if any(polygons_collide(poly, p["poly"], gap=gap, bbox_a=bbox, bbox_b=p["bbox"]) for p in other):
+                        continue
+                    if best is None or area < best_area - 1e-6:
+                        best_area = area
+                        best = dict(x=x, y=y, rotation=rot2, rot=rot2, poly=poly, bbox=bbox)
+            if best:
+                changed = (abs(piece["x"] - best["x"]) > 0.001 or
+                           abs(piece["y"] - best["y"]) > 0.001 or
+                           abs((piece["rotation"] - best["rotation"] + 180) % 360 - 180) > 0.001)
+                piece.update(best)
+                applied += int(changed)
+        return applied
 
     def _apply_vector_gravity(
         self,

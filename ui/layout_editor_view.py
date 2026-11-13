@@ -6837,29 +6837,40 @@ class LayoutEditorView(tk.Frame):
         self._saved_undo_index = len(self.undo_stack)
         self.set_modified(False)
 
-        # Imitation Learning da IA Local ('IA-teste')
-        ai_learned = False
-        if not error_msg and getattr(self, "db", None) and len(self.placed_pieces) >= 2:
+        # Results are polled on the UI thread; never report success before persistence.
+        learning_queue = None
+        learning_token = object()
+        self._learning_save_token = learning_token
+        if not error_msg and (saved_db or saved_file) and getattr(self, "db", None) and len(self.placed_pieces) >= 2:
             try:
+                import queue
                 import threading
+                from copy import deepcopy
                 from cad.ai_learner import NestingAIBrain
-                brain = NestingAIBrain(self.db)
-                t = threading.Thread(
-                    target=brain.learn_from_operator_save,
-                    args=(self.placed_pieces, self.sheet_width, self.sheet_height),
-                    daemon=True
-                )
-                t.start()
-                ai_learned = True
-            except Exception as e:
-                print(f"[IA-teste] Aviso ao registrar aprendizado: {e}")
+                brain = NestingAIBrain(self.db, material_code=(self.material or {}).get("code"))
+                if brain.learning_enabled():
+                    learning_queue = queue.SimpleQueue()
+                    snapshot = deepcopy(self.placed_pieces)
+                    width, height = self.sheet_width, self.sheet_height
+
+                    def record_examples():
+                        try:
+                            count = brain.learn_from_operator_save(snapshot, width, height)
+                            learning_queue.put((count, None))
+                        except Exception as exc:
+                            learning_queue.put((0, str(exc)))
+
+                    threading.Thread(target=record_examples, daemon=True).start()
+            except Exception as exc:
+                learning_queue = None
+                print(f"[IA-teste] Aviso ao registrar aprendizado: {exc}")
 
         if error_msg:
             status_text = f"Aviso ao salvar: {error_msg}"
             status_color = "#dc2626"
         else:
             n_pieces = len(self.placed_pieces)
-            extra_ai = " | IA Local aprendeu com este ajuste" if ai_learned else ""
+            extra_ai = " | Registrando exemplos para a macro..." if learning_queue else ""
             if saved_file:
                 status_text = f"Layout salvo no banco e em '{Path(self.layout_filepath).name}' ({n_pieces} peças) [Ctrl+S]{extra_ai}."
             else:
@@ -6868,6 +6879,35 @@ class LayoutEditorView(tk.Frame):
 
         if getattr(self, "lbl_stat_pos", None) is not None:
             self.lbl_stat_pos.config(text=status_text, fg=status_color)
+
+        if learning_queue is not None:
+            base_status = status_text.replace(" | Registrando exemplos para a macro...", "")
+
+            def poll_learning():
+                if self._learning_save_token is not learning_token:
+                    return
+                try:
+                    count, error = learning_queue.get_nowait()
+                except queue.Empty:
+                    self.after(100, poll_learning)
+                    return
+                if error:
+                    detail = " | Não foi possível registrar exemplos para a macro"
+                elif count:
+                    detail = f" | {count} exemplos registrados para a macro (material {brain.material_code})"
+                else:
+                    detail = " | Nenhum novo exemplo aplicável registrado"
+                if getattr(self, "lbl_stat_pos", None) is not None:
+                    self.lbl_stat_pos.config(text=base_status + detail, fg=status_color)
+                parent = getattr(self, "master", None)
+                while parent is not None:
+                    session = getattr(parent, "session_view", None)
+                    if session is not None and hasattr(session, "macro_panel"):
+                        session.macro_panel.refresh_status()
+                        break
+                    parent = getattr(parent, "master", None)
+
+            self.after(100, poll_learning)
 
         return "break"
 

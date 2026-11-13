@@ -331,6 +331,7 @@ class MainWindow(tk.Tk):
         tools_menu.add_command(label="📂 Importar Shape (.die)...", command=self.on_import_die)
         tools_menu.add_separator()
         tools_menu.add_command(label="Editor DieProc (Parâmetros de encaixe)...", icon="settings", command=self.open_dieproc_dialog)
+        tools_menu.add_command(label="Consultar aprendizado por material...", command=self.open_learning_history)
         tools_menu.add_command(label="Executar Auto-Nest...", command=self.on_auto_nest)
         tools_menu.add_command(label="Simular Corte na Mesa...", command=self.on_toggle_sim)
         tools_menu.add_command(label="💾 Exportar G-Code (ATOM)...", command=self.on_export_gcode)
@@ -1749,6 +1750,19 @@ class MainWindow(tk.Tk):
 
         doc_name = layout_name or (active_sess.get("layout_name") if active_sess else None) or "[I0000]"
         self.lbl_status_msg.config(text=f"Layout Editor: {doc_name} aberto na área de trabalho.")
+
+    def open_learning_history(self):
+        from ui.learning_history_dialog import LearningHistoryDialog
+        window = getattr(self, "learning_history_dialog", None)
+        if window is not None and window.winfo_exists():
+            window.refresh()
+            window.deiconify()
+            window.lift()
+            return window
+        self.learning_history_dialog = LearningHistoryDialog(
+            self, self.db, material_code=(self.current_material or {}).get("code")
+        )
+        return self.learning_history_dialog
 
     def show_material_codes_window(self):
         """Abre ou ativa a janela MDI Códigos materiais (Listagem de materiais)."""
@@ -6237,6 +6251,9 @@ class MainWindow(tk.Tk):
             if self.db:
                 dieproc_params = self.db.get_dieproc_preset(clean_preset_batch)
 
+            dieproc_params = dict(dieproc_params or {})
+            dieproc_params["material_code"] = mat.get("code")
+
             def _piece_prog(placed, tot):
                 q.put(("SESSION_PROGRESS", placed, tot))
 
@@ -6546,6 +6563,9 @@ class MainWindow(tk.Tk):
             dieproc_params = self.session_view.get_dieproc_params()
         if not dieproc_params and self.db:
             dieproc_params = self.db.get_dieproc_preset(clean_preset_db)
+
+        dieproc_params = dict(dieproc_params or {})
+        dieproc_params["material_code"] = self.current_material.get("code")
 
         # Determina o Modo de Encaixe ativo (Camada 1)
         nesting_mode = "custom"
@@ -6871,6 +6891,8 @@ class MainWindow(tk.Tk):
             self.session_view.hide_progress()
 
         if status == "SUCCESS":
+            if getattr(self, "session_view", None) and hasattr(self.session_view, "macro_panel"):
+                self.session_view.macro_panel.refresh_status()
             nest_result = data
             if nest_result.get("cancelled"):
                 self.lbl_status_msg.config(text="Cálculo cancelado pelo operador.")
@@ -7171,7 +7193,10 @@ class MainWindow(tk.Tk):
                 self.session_view.on_dieproc_preset_selected(data)
             self.lbl_status_msg.config(text=f"Perfil DieProc '{data['name']}' selecionado.")
 
-        return DieProcDialog(self, self.db, initial_preset=preset, on_select=_on_select)
+        return DieProcDialog(
+            self, self.db, initial_preset=preset, on_select=_on_select,
+            material_code=(self.current_material or {}).get("code"),
+        )
 
     def _select_session_in_tree(self, parent_item, target_sess_id):
         """Busca recursivamente o item da sessão na árvore e o seleciona/abre."""

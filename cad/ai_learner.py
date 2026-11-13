@@ -7,16 +7,19 @@ Módulo de Inteligência Artificial Local para Nesting Industrial:
 2. NestingAIBrain:
    - Aprendizado por Imitação (learn_from_operator_save): captura padrões e vetores relativos no Ctrl+S.
    - Aprendizado por Reforço UCB1 (suggest_optimized_macro_params / record_macro_execution_feedback):
-     calibração dinâmica dos hiperparâmetros de nesting por família geométrica.
+     calibração dinâmica dos hiperparâmetros por código de material e família geométrica.
    - Persistência idempotente via tabela `settings` (MySQL 8.0 e SQLite).
 """
 
+import base64
+import hashlib
 import math
 import json
+from datetime import datetime, timezone
 from dataclasses import dataclass
 from typing import List, Dict, Any, Optional, Tuple
 
-from cad.geometry import polygon_area, polygon_perimeter, polygon_bbox
+from cad.geometry import polygon_area, polygon_perimeter, polygon_bbox, transform_contour, polygons_collide
 from cad.die_parser import clean_shape_name
 
 
@@ -190,139 +193,171 @@ class NestingAIBrain:
     """
     Cérebro de Inteligência Artificial Local Embarcada.
     - Não requer internet nem bibliotecas externas.
+    - Isola a memória pelo código do material; sem código não registra aprendizado.
     - Executa aprendizado por imitação com base nos salvamentos manuais dos operadores (Ctrl+S).
     - Executa calibração contínua de hiperparâmetros por UCB1 Multi-Armed Bandit.
     """
 
-    def __init__(self, db=None):
+    def __init__(self, db=None, material_code=None):
         self.db = db
+        self.material_code = str(material_code).strip() if material_code is not None else ""
+
+    @property
+    def settings_prefix(self):
+        # Fixed size fits MySQL settings.key (100 chars), including the family.
+        digest = hashlib.sha256(self.material_code.encode("utf-8")).digest()
+        token = base64.urlsafe_b64encode(digest).decode("ascii").rstrip("=")
+        return f"ai_mat_{token}__"
+
+    def _key(self, suffix):
+        return self.settings_prefix + suffix
+
+    def learning_enabled(self):
+        if not self.db or not self.material_code:
+            return False
+        return str(self.db.get_setting("ai_continuous_learning", "1")) in ("1", "true", "True")
+
+    def record_activity(self, applied=None):
+        """Usage telemetry is independent of whether new learning is enabled."""
+        if not self.db or not self.material_code:
+            return
+        try:
+            data = json.loads(self.db.get_setting(self._key("activity"), "{}"))
+            data["material_code"] = self.material_code
+            now = datetime.now(timezone.utc).isoformat()
+            if applied is None:
+                data["last_learned"] = now
+            else:
+                data["macro_runs"] = data.get("macro_runs", 0) + 1
+                data["applied_runs"] = data.get("applied_runs", 0) + bool(applied)
+                data["adjusted_pieces"] = data.get("adjusted_pieces", 0) + applied
+                data["last_macro"] = now
+                data["last_result"] = (f"{applied} peças ajustadas" if applied else
+                                       "Consultou; sem ajuste aplicável" if self.get_learned_habits() else
+                                       "Sem exemplos salvos")
+            self.db.set_setting(self._key("activity"), json.dumps(data))
+        except Exception as exc:
+            print(f"[IA-teste] Falha ao registrar atividade: {exc}")
+
+    @classmethod
+    def material_activity(cls, db, current_code=None):
+        """Include previous scoped histories using codes from the material catalog."""
+        if not db:
+            return []
+        settings = db.get_all_settings()
+        codes = {str(current_code).strip()} if current_code else set()
+        if hasattr(db, "get_materials"):
+            codes.update(str(m["code"]).strip() for m in db.get_materials() if m.get("code"))
+        for key, value in settings.items():
+            if key.startswith("ai_mat_") and key.endswith("__activity"):
+                try:
+                    codes.add(str(json.loads(value)["material_code"]))
+                except (ValueError, KeyError, TypeError):
+                    pass
+        rows = []
+        for code in sorted(codes):
+            brain = cls(db, code)
+            prefix = brain.settings_prefix
+            if not any(k.startswith(prefix) for k in settings):
+                continue
+            try:
+                activity = json.loads(settings.get(brain._key("activity"), "{}"))
+                habits = json.loads(settings.get(brain._key("operator_habits"), "[]"))
+                rows.append(dict(activity, material_code=code, habits_count=len(habits)))
+            except (ValueError, TypeError):
+                continue
+        return rows
+
+    def reset_learning(self):
+        """Delete only this material's learning; leave unassigned legacy data intact."""
+        if not self.db or not self.material_code:
+            return
+        keys = [key for key in self.db.get_all_settings() if key.startswith(self.settings_prefix)]
+        with self.db.get_connection() as conn:
+            cursor = conn.cursor()
+            for key in keys:
+                cursor.execute("DELETE FROM settings WHERE `key` = ?", (key,))
+            conn.commit()
 
     # -----------------------------------------------------------------------
     # Aprendizado por Imitação (Ctrl+S do Operador)
     # -----------------------------------------------------------------------
 
-    def learn_from_operator_save(
-        self,
-        placed_pieces: List[Dict[str, Any]],
-        sheet_w: float,
-        sheet_h: float
-    ) -> int:
-        """
-        Extrai relações e vetores espaciais relativos aprendidos entre pares de peças
-        que o operador organizou e salvou no LayoutEditorView (Ctrl+S).
-        Retorna o número de novos hábitos registrados.
-        """
-        if not placed_pieces or len(placed_pieces) < 2:
+    @staticmethod
+    def shape_identity(piece):
+        """Exact geometry and model identity; never transfer offsets to another size."""
+        contour = piece.get("contour") or piece.get("shape", {}).get("contour", [])
+        geometry = [(round(float(p["x"]), 4), round(float(p["y"]), 4)) for p in contour]
+        digest = hashlib.sha256(json.dumps(geometry).encode("utf-8")).hexdigest()
+        return clean_shape_name(str(piece.get("name", "Molde"))), digest
+
+    def learn_from_operator_save(self, placed_pieces, sheet_w, sheet_h):
+        """Record directed relations using the centers of the ROTATED contours."""
+        if not self.learning_enabled() or len(placed_pieces) < 2:
             return 0
-
-        learned_pairs = []
-        n = len(placed_pieces)
-        extractor = ShapeFeatureExtractor()
-
-        for i in range(n):
-            p1 = placed_pieces[i]
-            c1 = p1.get("contour", [])
-            x1 = float(p1.get("x", 0.0))
-            y1 = float(p1.get("y", 0.0))
-            rot1 = float(p1.get("rotation", 0.0))
-            name1 = clean_shape_name(str(p1.get("name", "M1")))
-            fam1 = extractor.classify_family(c1)
-
-            # Centro aproximado
-            if c1:
-                b1 = polygon_bbox(c1)
-                cx1 = x1 + (b1[0] + b1[2]) / 2.0
-                cy1 = y1 + (b1[1] + b1[3]) / 2.0
-            else:
-                cx1, cy1 = x1, y1
-
-            for j in range(i + 1, min(i + 8, n)):
-                p2 = placed_pieces[j]
-                c2 = p2.get("contour", [])
-                x2 = float(p2.get("x", 0.0))
-                y2 = float(p2.get("y", 0.0))
-                rot2 = float(p2.get("rotation", 0.0))
-                name2 = clean_shape_name(str(p2.get("name", "M2")))
-                fam2 = extractor.classify_family(c2)
-
-                if c2:
-                    b2 = polygon_bbox(c2)
-                    cx2 = x2 + (b2[0] + b2[2]) / 2.0
-                    cy2 = y2 + (b2[1] + b2[3]) / 2.0
-                else:
-                    cx2, cy2 = x2, y2
-
-                dist = math.hypot(cx2 - cx1, cy2 - cy1)
-                # Analisa pares vizinhos próximos na mesa de corte
-                if 5.0 <= dist <= 180.0:
-                    dx = cx2 - cx1
-                    dy = cy2 - cy1
-                    delta_angle = (rot2 - rot1) % 360.0
-                    pair_key = f"{name1}::{name2}" if name1 <= name2 else f"{name2}::{name1}"
-                    fam_pair_key = f"{fam1}::{fam2}" if fam1 <= fam2 else f"{fam2}::{fam1}"
-
-                    learned_pairs.append({
-                        "pair_key": pair_key,
-                        "fam_pair_key": fam_pair_key,
-                        "dx": round(dx, 2),
-                        "dy": round(dy, 2),
-                        "delta_angle": round(delta_angle, 1),
-                        "dist": round(dist, 2),
-                        "rot1": round(rot1, 1),
-                        "rot2": round(rot2, 1)
-                    })
-
-        if not learned_pairs or not self.db:
+        samples = []
+        for piece in placed_pieces:
+            # Mirrored geometry needs a dedicated representation before it can be imitated.
+            if piece.get("is_mirrored") or piece.get("mirrored"):
+                continue
+            contour = piece.get("contour") or piece.get("shape", {}).get("contour", [])
+            if len(contour) < 3:
+                continue
+            rot = float(piece.get("rotation", 0.0)) % 360
+            poly = transform_contour(contour, float(piece.get("x", 0)), float(piece.get("y", 0)), rot)
+            bbox = polygon_bbox(poly)
+            if not all(math.isfinite(v) for v in bbox):
+                continue
+            if bbox[0] < 0 or bbox[1] < 0 or bbox[2] > sheet_w or bbox[3] > sheet_h:
+                continue
+            samples.append((self.shape_identity(piece), rot, poly, bbox,
+                            ShapeFeatureExtractor.classify_family(contour)))
+        learned = []
+        for i, (identity1, rot1, poly1, b1, fam1) in enumerate(samples):
+            for identity2, rot2, poly2, b2, fam2 in samples[i + 1:i + 8]:
+                dx = (b2[0] + b2[2] - b1[0] - b1[2]) / 2
+                dy = (b2[1] + b2[3] - b1[1] - b1[3]) / 2
+                dist = math.hypot(dx, dy)
+                if not (5 <= dist <= 180) or polygons_collide(poly1, poly2):
+                    continue
+                learned.append(dict(version=2, source=list(identity1), target=list(identity2),
+                                    rot1=rot1, rot2=rot2, dx=dx, dy=dy, dist=dist,
+                                    pair_key="::".join(sorted((identity1[0], identity2[0]))),
+                                    fam_pair_key="::".join(sorted((fam1, fam2))),
+                                    delta_angle=(rot2 - rot1) % 360, count=1))
+        if not learned:
             return 0
-
-        # Carrega hábitos existentes da tabela settings
-        existing_habits = []
+        def key(h):
+            return (tuple(h["source"]), tuple(h["target"]), h["rot1"], h["rot2"])
+        habits = {key(h): h for h in self.get_learned_habits() if h.get("version") == 2}
+        for habit in learned:
+            k = key(habit)
+            old = habits.get(k)
+            if old:
+                count = old["count"] + 1
+                for field in ("dx", "dy"):
+                    habit[field] = (old[field] * old["count"] + habit[field]) / count
+                habit["count"] = count
+                habit["dist"] = math.hypot(habit["dx"], habit["dy"])
+            habits[k] = habit
+        ranked = sorted(habits.values(), key=lambda h: (-h["count"], h["dist"]))[:200]
+        # Check again if the operator paused learning while the geometry was processed.
+        if not self.learning_enabled():
+            return 0
         try:
-            raw = self.db.get_setting("ai_operator_habits", "[]")
-            existing_habits = json.loads(raw) if raw else []
-            if not isinstance(existing_habits, list):
-                existing_habits = []
-        except Exception:
-            existing_habits = []
-
-        # Mescla com hábitos já aprendidos, priorizando novas evidências
-        habits_map = {}
-        for h in existing_habits:
-            k = (h.get("pair_key"), round(h.get("delta_angle", 0.0), 0))
-            habits_map[k] = h
-
-        for lp in learned_pairs:
-            k = (lp["pair_key"], round(lp["delta_angle"], 0))
-            if k in habits_map:
-                habits_map[k]["count"] = habits_map[k].get("count", 1) + 1
-                # Média ponderada do deslocamento
-                c = habits_map[k]["count"]
-                habits_map[k]["dx"] = round((habits_map[k]["dx"] * (c - 1) + lp["dx"]) / c, 2)
-                habits_map[k]["dy"] = round((habits_map[k]["dy"] * (c - 1) + lp["dy"]) / c, 2)
-            else:
-                lp["count"] = 1
-                habits_map[k] = lp
-
-        # Ranqueia os melhores 200 padrões da fábrica (por frequência de uso e compacidade)
-        sorted_habits = sorted(
-            habits_map.values(),
-            key=lambda x: (x.get("count", 1), -x.get("dist", 999)),
-            reverse=True
-        )[:200]
-
-        try:
-            self.db.set_setting("ai_operator_habits", json.dumps(sorted_habits))
-        except Exception as e:
-            print(f"[NestingAIBrain] Erro ao persistir hábitos no banco: {e}")
-
-        return len(learned_pairs)
+            self.db.set_setting(self._key("operator_habits"), json.dumps(ranked))
+        except Exception as exc:
+            print(f"[NestingAIBrain] Erro ao persistir hábitos: {exc}")
+            return 0
+        self.record_activity()
+        return len(learned)
 
     def get_learned_habits(self, fam_pair_key: Optional[str] = None) -> List[Dict[str, Any]]:
         """Retorna os hábitos aprendidos armazenados no banco de dados."""
-        if not self.db:
+        if not self.db or not self.material_code:
             return []
         try:
-            raw = self.db.get_setting("ai_operator_habits", "[]")
+            raw = self.db.get_setting(self._key("operator_habits"), "[]")
             habits = json.loads(raw) if raw else []
             if not isinstance(habits, list):
                 return []
@@ -343,10 +378,10 @@ class NestingAIBrain:
         Garante equilíbrio entre explorar novos passos e explorar os melhores resultados.
         Se deterministic=True, congela exploração aleatória e seleciona estritamente por melhor recompensa média ou braço 0 padrão.
         """
-        setting_key = f"ai_bandit_{family_name}"
+        setting_key = self._key(f"bandit_{family_name}")
         bandit_data = {}
 
-        if self.db:
+        if self.db and self.material_code:
             try:
                 raw = self.db.get_setting(setting_key, "{}")
                 bandit_data = json.loads(raw) if raw else {}
@@ -355,7 +390,7 @@ class NestingAIBrain:
 
         arms_stats = bandit_data.get("arms", {})
 
-        if deterministic:
+        if deterministic or not self.learning_enabled():
             # Seleção puramente determinística para testes e reproducibilidade exata
             if not arms_stats:
                 return {
@@ -430,10 +465,10 @@ class NestingAIBrain:
         Registra a recompensa obtida (rendimento percentual do layout gerado)
         para atualizar a média e contagem do braço no UCB1 Bandit.
         """
-        if not self.db or achieved_yield <= 0.0:
+        if not self.learning_enabled() or achieved_yield <= 0.0:
             return
 
-        setting_key = f"ai_bandit_{family_name}"
+        setting_key = self._key(f"bandit_{family_name}")
         bandit_data = {}
 
         try:
@@ -485,9 +520,9 @@ class NestingAIBrain:
         families_tuned = 0
         total_runs = 0
 
-        if self.db:
+        if self.db and self.material_code:
             for fam in ["TIRA_LONGA", "CURVA_CONCAVA_GASPEA", "COMPACTA_SOLA_CALCANHAR", "PADRAO_IRREGULAR"]:
-                raw = self.db.get_setting(f"ai_bandit_{fam}")
+                raw = self.db.get_setting(self._key(f"bandit_{fam}"))
                 if raw:
                     try:
                         d = json.loads(raw)
@@ -500,7 +535,7 @@ class NestingAIBrain:
 
         status_text = "Ativo" if (habits or families_tuned > 0 or self.db is not None) else "Stand by"
         summary = (
-            f"IA Local Ativa — {len(habits)} hábitos aprendidos (Ctrl+S), "
+            f"Material {self.material_code or 'não definido'} — {len(habits)} hábitos aprendidos (Ctrl+S), "
             f"{families_tuned} famílias calibradas por UCB1 ({total_runs} execuções)"
         )
 

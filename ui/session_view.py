@@ -690,6 +690,7 @@ class SessionView(tk.Frame):
             bg=THEME["bg_card"]
         )
         self.macro_panel.pack(fill="x", pady=(2, 6))
+        self.macro_panel.set_material_code((self.session_data.get("material") or {}).get("code"))
 
         # -------------------------------------------------------------
         # Camada 4: Debug / Diagnóstico
@@ -2393,7 +2394,7 @@ class SessionView(tk.Frame):
         if self.on_open_dieproc_cb:
             self.on_open_dieproc_cb(initial_preset=self.cb_params.get(), callback=self.on_dieproc_preset_selected)
         elif self.db:
-            DieProcDialog(self, self.db, initial_preset=self.cb_params.get(), on_select=self.on_dieproc_preset_selected)
+            DieProcDialog(self, self.db, initial_preset=self.cb_params.get(), on_select=self.on_dieproc_preset_selected, material_code=self.macro_panel.material_code)
 
     def on_dieproc_preset_selected(self, preset_data):
         if not preset_data:
@@ -3007,6 +3008,9 @@ class SessionView(tk.Frame):
         if hasattr(self, "cb_mat_code"):
             self.cb_mat_code.set("(unspecified)")
 
+        if hasattr(self, "macro_panel"):
+            self.macro_panel.set_material_code(None)
+
         # 6. Notifica o MainWindow
         if self.on_material_change_cb:
             self.on_material_change_cb(None)
@@ -3021,6 +3025,8 @@ class SessionView(tk.Frame):
         return "break"
 
     def set_material_data(self, material=None):
+        if hasattr(self, "macro_panel"):
+            self.macro_panel.set_material_code((material or {}).get("code"))
         if not hasattr(self, "tree_mat"):
             return
         self.tree_mat.delete(*self.tree_mat.get_children())
@@ -3039,7 +3045,7 @@ class SessionView(tk.Frame):
                 defn = "como placa"
             elif defn in ("leather", "couro", "como couro"):
                 defn = "como couro"
-            code = str(material.get("id") if material.get("id") is not None else material.get("code", "853412"))
+            code = str(material.get("code") or "")
             desc = str(material.get("name") or material.get("desc") or material.get("description") or "")
             if not desc and material.get("code") and material.get("id") and str(material.get("code")) != str(material.get("id")):
                 desc = str(material.get("code"))
@@ -3545,6 +3551,8 @@ class SessionView(tk.Frame):
             est_sec = self.session_data.get("cutting_time_sec", 0.0)
             self.update_summary_text(layouts_cnt, yield_pct, est_sec)
 
+        if hasattr(self, "macro_panel"):
+            self.macro_panel.set_material_code(code)
         if self.on_material_change_cb:
             self.on_material_change_cb(mat_dict)
 

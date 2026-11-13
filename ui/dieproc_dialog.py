@@ -11,10 +11,11 @@ from tkinter import ttk, messagebox
 from config import THEME
 
 class DieProcDialog(tk.Toplevel):
-    def __init__(self, parent, db, initial_preset=None, on_select=None):
+    def __init__(self, parent, db, initial_preset=None, on_select=None, material_code=None):
         super().__init__(parent)
         self.parent_window = parent
         self.db = db
+        self.material_code = material_code
         self.on_select_cb = on_select
         self.title("Editor DieProc — Parâmetros de encaixe")
         self.transient(parent)
@@ -453,7 +454,7 @@ class DieProcDialog(tk.Toplevel):
         if hasattr(self, "lbl_ai_status"):
             try:
                 from cad.ai_learner import NestingAIBrain
-                ai_info = NestingAIBrain(self.db).get_memory_status()
+                ai_info = NestingAIBrain(self.db, self.material_code).get_memory_status()
                 self.lbl_ai_status.config(text=f"IA Local: {ai_info.get('summary', 'Ativa')}")
             except Exception:
                 self.lbl_ai_status.config(text="IA Local: Ativa")
