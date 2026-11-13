@@ -9,7 +9,7 @@
 #endif
 #define MyAppPublisher "ATOM / OpenCorte Industrial"
 #define MyAppURL "https://github.com/Doletabgi/Projeto-CorteAC"
-#define MyAppExeName "CorteAC.exe"
+#define MyAppExeName "OpenCorte.exe"
 
 [Setup]
 AppId={{8B84F01A-417A-4D46-9D3E-94A57F083F30}}
@@ -23,7 +23,7 @@ DefaultDirName=C:\CorteAC
 DefaultGroupName={#MyAppName}
 AllowNoIcons=yes
 OutputDir=..\dist
-OutputBaseFilename=CorteAC-Setup-{#MyAppVersion}
+OutputBaseFilename=OpenCorte-Setup-{#MyAppVersion}
 SetupIconFile=..\assets\app_icon.ico
 Compression=lzma2/ultra64
 SolidCompression=yes

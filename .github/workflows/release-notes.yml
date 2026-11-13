@@ -20,7 +20,7 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
-      - name: Sincronizar alterações sem modificar os instaladores
+      - name: Sincronizar notas e nomes dos downloads sem modificar o conteúdo
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           REPOSITORY: ${{ github.repository }}
@@ -29,11 +29,13 @@ jobs:
           import os
           import re
           from pathlib import Path
-          from atualizar import GitHub
+          from atualizar import GitHub, current_version
           api = GitHub(os.environ['REPOSITORY'])
           for path in sorted(Path('docs/releases').glob('v*.md')):
               if not re.fullmatch(r'v\d+\.\d+\.\d+', path.stem):
                   continue
               changed = api.update_release_notes(path.stem, path.read_text(encoding='utf-8'))
               print(f'{path.stem}: notas atualizadas' if changed else f'{path.stem}: sem alterações ou ainda não publicada')
+          renamed = api.rename_release_assets('v' + current_version(Path.cwd()))
+          print(f'Arquivos renomeados para OpenCorte: {renamed}')
           PY

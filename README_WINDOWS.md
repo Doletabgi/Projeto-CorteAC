@@ -11,9 +11,9 @@ Você **não precisa instalar o Python nem configurar nada**. Basta baixar o pac
 1. Acesse a página oficial de lançamentos (Releases):
    👉 **[https://github.com/Doletabgi/Projeto-CorteAC/releases](https://github.com/Doletabgi/Projeto-CorteAC/releases)**
 2. Localize a versão mais recente e baixe o arquivo:
-   📦 **`CorteAC-Windows-x64.zip`** (ou `CorteAC.exe`)
+   📦 **`OpenCorte-Windows-x64.zip`** (ou `OpenCorte.exe`)
 3. Extraia o conteúdo do arquivo `.zip` em uma pasta de sua preferência (ex: `C:\CorteAC` ou na sua Área de Trabalho).
-4. Dê duplo clique no arquivo **`CorteAC.exe`**.
+4. Dê duplo clique no arquivo **`OpenCorte.exe`**.
 
 > **Nota sobre o Banco de Dados:**
 > Ao abrir pela primeira vez, o OpenCorte cria automaticamente seu banco de dados SQLite local (`jobmanager.db`) na mesma pasta do executável, garantindo que todas as ordens, modelos e chapas fiquem salvas permanentemente.
@@ -45,7 +45,7 @@ Caso deseje gerar um novo arquivo executável localmente:
    **`python atualizar.py --build`**
 2. Aguarde o processo de compilação do PyInstaller.
 3. Ao finalizar, o executável estará pronto na pasta:
-   📂 `dist\CorteAC.exe`
+   📂 `dist\OpenCorte.exe`
 
 ---
 
@@ -81,10 +81,10 @@ A configuração é gravada no arquivo `db.ini`, ao lado do executável. A ediç
 
 ## Ícone do atalho na Área de Trabalho
 
-O executável `CorteAC.exe` já carrega o ícone oficial (`assets/app_icon.ico`) gerado a cada
+O executável `OpenCorte.exe` já carrega o ícone oficial (`assets/app_icon.ico`) gerado a cada
 release. O atalho da Área de Trabalho herda esse ícone automaticamente **quando criado a partir
 do .exe**. Se você substituiu o `.exe` na mesma pasta, o Windows mantém o ícone antigo em cache:
-para atualizar, crie um atalho novo (botão direito no `CorteAC.exe` → Enviar para → Área de
+para atualizar, crie um atalho novo (botão direito no `OpenCorte.exe` → Enviar para → Área de
 Trabalho) ou reinicie o Explorer (`taskkill /f /im explorer.exe && start explorer`).
 
 ## Atalho versionado na Área de Trabalho
@@ -94,7 +94,7 @@ O pacote Windows traz `criar_atalho_windows.ps1` e `versao.txt`. Clique com o bo
 `powershell -ExecutionPolicy Bypass -File .\criar_atalho_windows.ps1`).
 
 Ele cria o atalho **`CorteAC-<versão>.lnk`** (ex.: `CorteAC-1.6.11.lnk`) apontando para o
-`CorteAC.exe`, usando o ícone embutido no executável, e **remove os atalhos antigos** do OpenCorte
+`OpenCorte.exe`, usando o ícone embutido no executável, e **remove os atalhos antigos** do OpenCorte
 da Área de Trabalho. Assim o operador sempre sabe qual build está instalado.
 
 O setup oferece **Instalar localmente** ou **Usar um servidor na rede**. No modo

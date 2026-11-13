@@ -117,8 +117,8 @@ def test_github_requires_success_and_all_five_assets(monkeypatch):
     api = update.GitHub('example/OpenCorte')
     run = dict(id=5, run_attempt=1, status='completed', conclusion='success',
                path='.github/workflows/release.yml',html_url='https://github.com/example/OpenCorte/actions/runs/5')
-    required = ['CorteAC.exe','CorteAC-Windows-x64.zip','corteac_linux',
-                'CorteAC-Linux-x64.tar.gz','CorteAC-Setup-1.2.4.exe']
+    required = ['OpenCorte.exe','OpenCorte-Windows-x64.zip','opencorte_linux',
+                'OpenCorte-Linux-x64.tar.gz','OpenCorte-Setup-1.2.4.exe']
     release = dict(html_url='https://github.com/example/OpenCorte/releases/tag/v1.2.4',
                    draft=False, assets=[dict(name=n,size=1) for n in required])
     def get(path, **kwargs):
@@ -237,21 +237,21 @@ def test_packaging_includes_generated_shortcuts_without_source_scripts(tmp_path,
     for name in ['README_WINDOWS.txt','README_LINUX.txt','db.example.ini']:
         (stage/name).write_text('distribuicao')
     dist=stage/'dist';dist.mkdir()
-    binary=dist/('CorteAC.exe' if platform=='win32' else 'CorteAC')
+    binary=dist/('OpenCorte.exe' if platform=='win32' else 'OpenCorte')
     binary.write_bytes(b'executable')
     files=update.package_distribution(stage,binary,'1.2.4',platform)
     assert all(p.exists() for p in files)
     assert (dist/'versao.txt').read_text()=='1.2.4'
     if platform=='linux':
-        with tarfile.open(dist/'CorteAC-Linux-x64.tar.gz') as archive:
-            installer=archive.extractfile('CorteAC/instalar_atalho.sh').read().decode()
+        with tarfile.open(dist/'OpenCorte-Linux-x64.tar.gz') as archive:
+            installer=archive.extractfile('OpenCorte/instalar_atalho.sh').read().decode()
             assert '1.2.4' in installer
             assert '@VERSAO@' not in installer
-            assert archive.extractfile('CorteAC/corteac_linux').read()==b'executable'
-            assert b'exec "$DIR/corteac_linux"' in archive.extractfile('CorteAC/run.sh').read()
+            assert archive.extractfile('OpenCorte/opencorte_linux').read()==b'executable'
+            assert b'exec "$DIR/opencorte_linux"' in archive.extractfile('OpenCorte/run.sh').read()
     else:
-        with zipfile.ZipFile(dist/'CorteAC-Windows-x64.zip') as archive:
-            assert archive.read('CorteAC.exe')==b'executable'
+        with zipfile.ZipFile(dist/'OpenCorte-Windows-x64.zip') as archive:
+            assert archive.read('OpenCorte.exe')==b'executable'
             assert 'CreateShortcut' in archive.read('criar_atalho_windows.ps1').decode('utf-8-sig')
             assert archive.read('versao.txt')==b'1.2.4'
     assert not (stage/'packaging').exists()
@@ -276,10 +276,10 @@ def test_windows_installer_uses_version_and_accepts_paths_with_spaces(tmp_path,m
     seen=[]
     def command(args,cwd,**kwargs):
         seen.append((args,cwd))
-        (stage/'dist/CorteAC-Setup-1.2.4.exe').write_bytes(b'installer')
+        (stage/'dist/OpenCorte-Setup-1.2.4.exe').write_bytes(b'installer')
     monkeypatch.setattr(update,'command',command)
     artifact=update.build_windows_installer(stage,'1.2.4',compiler)
-    assert artifact.name=='CorteAC-Setup-1.2.4.exe'
+    assert artifact.name=='OpenCorte-Setup-1.2.4.exe'
     assert seen==[([compiler,'/DMyAppVersion=1.2.4',stage/'packaging/corteac_setup.iss'],stage)]
 
 

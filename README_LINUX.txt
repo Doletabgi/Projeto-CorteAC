@@ -6,9 +6,9 @@
 COMO EXECUTAR NO LINUX:
 1. Abra o terminal nesta pasta.
 2. Dê permissão de execução (se necessário):
-   chmod +x ./corteac_linux
+   chmod +x ./opencorte_linux
 3. Execute:
-   ./corteac_linux
+   ./opencorte_linux
 
 ATALHO COM ICONE NA AREA DE TRABALHO (OPCIONAL):
 1. Dê permissão e execute:

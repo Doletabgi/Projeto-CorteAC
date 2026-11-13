@@ -47,8 +47,8 @@ Recriação moderna em **Python** do sistema industrial **OpenCorte** (evoluçã
 ### Opção 1: Baixar a Versão Pronta (.exe Standalone) — [Recomendada]
 Não é necessário instalar Python nem configurar nada:
 1. Acesse a aba **[Releases](https://github.com/Doletabgi/Projeto-CorteAC/releases)** do repositório.
-2. Baixe o pacote **`CorteAC-Windows-x64.zip`** (ou o executável direto `CorteAC.exe`).
-3. Extraia o conteúdo e dê dois cliques em **`CorteAC.exe`**.
+2. Baixe o pacote **`OpenCorte-Windows-x64.zip`** (ou o executável direto `OpenCorte.exe`).
+3. Extraia o conteúdo e dê dois cliques em **`OpenCorte.exe`**.
 4. O sistema cria automaticamente o banco SQLite local (`jobmanager.db`) e abre imediatamente!
 
 👉 Para o guia passo a passo completo, consulte o [README_WINDOWS.md](README_WINDOWS.md).
@@ -100,14 +100,14 @@ python3 atualizar.py --build
 ```
 O executável gerado estará em:
 ```bash
-./dist/CorteAC
+./dist/OpenCorte
 ```
 
 ### No Windows 10 / 11:
 Para gerar o executável `.exe` direto no Windows:
 1. Execute `python atualizar.py --build` no terminal da pasta do projeto.
-2. Ele instalará o PyInstaller e gerará o executável em `dist\CorteAC.exe`.
-3. Pronto! O arquivo `dist\CorteAC.exe` pode ser levado para qualquer Windows 10/11 sem precisar do Python instalado.
+2. Ele instalará o PyInstaller e gerará o executável em `dist\OpenCorte.exe`.
+3. Pronto! O arquivo `dist\OpenCorte.exe` pode ser levado para qualquer Windows 10/11 sem precisar do Python instalado.
 
 ---
 

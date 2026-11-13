@@ -52,9 +52,9 @@ jobs:
         with:
           name: windows-binaries
           path: |
-            dist/CorteAC.exe
-            dist/CorteAC-Windows-x64.zip
-            dist/CorteAC-Setup-*.exe
+            dist/OpenCorte.exe
+            dist/OpenCorte-Windows-x64.zip
+            dist/OpenCorte-Setup-*.exe
           retention-days: 7
 
 
@@ -93,8 +93,8 @@ jobs:
         with:
           name: linux-binaries
           path: |
-            dist/corteac_linux
-            dist/CorteAC-Linux-x64.tar.gz
+            dist/opencorte_linux
+            dist/OpenCorte-Linux-x64.tar.gz
           retention-days: 7
 
   publish-release:
@@ -173,7 +173,7 @@ jobs:
             const assets = await github.paginate(github.rest.repos.listReleaseAssets, {
               owner, repo, release_id: release.id
             });
-            for (const asset of assets.filter(a => a.name === 'CorteAC-Setup.exe')) {
+            for (const asset of assets.filter(a => ['CorteAC-Setup.exe', 'OpenCorte-Setup.exe'].includes(a.name))) {
               await github.rest.repos.deleteReleaseAsset({ owner, repo, asset_id: asset.id });
               core.info(`Removido instalador sem versão: ${asset.name}`);
             }
@@ -196,12 +196,12 @@ jobs:
 
             ### 🪟 Para Usuários Windows (Windows 10 e Windows 11):
             1. **Instalador Oficial com Suporte a Rede (Recomendado)**:
-               - Baixe o instalador **`CorteAC-Setup-<versão>.exe`** correspondente à versão desta release, abaixo na seção **Assets**.
+               - Baixe o instalador **`OpenCorte-Setup-<versão>.exe`** correspondente à versão desta release, abaixo na seção **Assets**.
                - Dê dois cliques e siga o assistente (permite configurar as pastas de Moldes e Sessões na rede da fábrica).
                - O instalador cria atalhos na Área de Trabalho e registra no Adicionar/Remover Programas.
             2. **Versão Portátil (.zip ou .exe direto)**:
-               - Baixe o pacote **`CorteAC-Windows-x64.zip`** (ou diretamente o **`CorteAC.exe`**).
-               - Extraia e dê dois cliques no **`CorteAC.exe`**.
+               - Baixe o pacote **`OpenCorte-Windows-x64.zip`** (ou diretamente o **`OpenCorte.exe`**).
+               - Extraia e dê dois cliques no **`OpenCorte.exe`**.
                - O banco SQLite local (`jobmanager.db`) é inicializado automaticamente na pasta ao iniciar.
 
             *Nota SmartScreen: Se o Windows exibir a tela de proteção, clique em "Mais informações" e depois em "Executar assim mesmo".*
@@ -210,11 +210,11 @@ jobs:
             ---
 
             ### 🐧 Para Usuários Linux (Ubuntu, Mint, Debian, Fedora, etc.):
-            1. Baixe o pacote **`CorteAC-Linux-x64.tar.gz`** (ou diretamente o **`corteac_linux`**).
+            1. Baixe o pacote **`OpenCorte-Linux-x64.tar.gz`** (ou diretamente o **`opencorte_linux`**).
             2. Extraia os arquivos e no terminal execute:
                ```bash
-               chmod +x ./corteac_linux
-               ./corteac_linux
+               chmod +x ./opencorte_linux
+               ./opencorte_linux
                ```
             3. O sistema abre a interface gráfica nativa imediatamente.
 
@@ -226,11 +226,11 @@ jobs:
             A compilação dos pacotes não substitui a homologação operacional em máquina.
           generate_release_notes: false
           files: |
-            dist-release/**/CorteAC.exe
-            dist-release/**/CorteAC-Setup-*.exe
+            dist-release/**/OpenCorte.exe
+            dist-release/**/OpenCorte-Setup-*.exe
             dist-release/**/*.zip
             dist-release/**/*.tar.gz
-            dist-release/**/corteac_linux
+            dist-release/**/opencorte_linux
           draft: false
           prerelease: false
         env:

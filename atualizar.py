@@ -34,7 +34,7 @@ SOURCE_SUFFIXES = {'.py', '.md', '.rst', '.txt', '.sql', '.ini', '.toml', '.yml'
                    '.yaml', '.sh', '.bat', '.ps1', '.iss', '.json', '.png', '.ico',
                    '.gif', '.jpg', '.jpeg', '.svg', '.ttf', '.otf', '.css', '.html',
                    '.die', '.lay', '.onx', '.cmz'}
-CHECKS = ['tests/test_atualizar.py', 'tests/test_release_notes.py', 'tests/test_semver.py', 'tests/test_desktop_shortcut.py',
+CHECKS = ['tests/test_atualizar.py', 'tests/test_release_notes.py', 'tests/test_release_assets.py', 'tests/test_semver.py', 'tests/test_desktop_shortcut.py',
           'tests/test_database_cleanup.py', 'tests/test_installation_settings.py',
           'tests/test_production_sheet.py', 'tests/test_layout_print_legend.py',
           'tests/test_symbolic_notches.py', 'tests/test_project_packager.py',
@@ -262,18 +262,57 @@ class GitHub:
         body = replace_release_changes(release.get('body') or '', notes)
         if body.strip() == (release.get('body') or '').strip():
             return False
+        self.patch(f'releases/{release["id"]}', {'body': body})
+        return True
+
+    def patch(self, path, payload):
         if not self.token:
-            raise UpdateError('Para atualizar as notas no GitHub, configure GH_TOKEN com permissão de escrita em conteúdo.')
-        request = Request(f'https://api.github.com/repos/{self.repo}/releases/{release["id"]}',
-                          data=json.dumps({'body': body}, ensure_ascii=False).encode('utf-8'),
+            raise UpdateError('Configure GH_TOKEN com permissão de escrita em conteúdo para atualizar a release.')
+        request = Request(f'https://api.github.com/repos/{self.repo}/{path}',
+                          data=json.dumps(payload, ensure_ascii=False).encode('utf-8'),
                           headers={'Authorization': f'Bearer {self.token}', 'Accept': 'application/vnd.github+json',
                                    'User-Agent': 'OpenCorte-update', 'Content-Type': 'application/json'}, method='PATCH')
         try:
             with urlopen(request, timeout=30) as response:
-                json.load(response)
+                return json.load(response)
         except (HTTPError, URLError) as exc:
-            raise UpdateError(f'Não foi possível atualizar as notas da versão {tag} no GitHub.') from exc
-        return True
+            raise UpdateError('Não foi possível atualizar a release no GitHub.') from exc
+
+    def rename_release_assets(self, tag):
+        """Renomeia somente os metadados dos downloads, preservando seus IDs e bytes."""
+        release = self.get(f'releases/tags/{quote(tag, safe="")}', missing_ok=True)
+        if not release:
+            return 0
+        assets = release.get('assets', [])
+        names = {asset['name'] for asset in assets}
+        changes = []
+        for asset in assets:
+            name = asset['name']
+            if name == 'corteac_linux':
+                target = 'opencorte_linux'
+            elif name == 'CorteAC.exe' or re.fullmatch(r'CorteAC-(Linux-x64\.tar\.gz|Windows-x64\.zip|Setup-\d+\.\d+\.\d+\.exe)', name):
+                target = name.replace('CorteAC', 'OpenCorte', 1)
+            else:
+                continue
+            if target in names:
+                raise UpdateError(f'A release já contém {target}; nenhum arquivo será sobrescrito.')
+            changes.append((asset, target))
+        for asset, target in changes:
+            renamed = self.patch(f'releases/assets/{asset["id"]}', {'name': target})
+            if renamed['id'] != asset['id'] or renamed['size'] != asset['size'] or renamed.get('digest') != asset.get('digest'):
+                raise UpdateError('Os metadados do arquivo renomeado divergiram do original.')
+        body = release.get('body') or ''
+        # Pacotes já publicados mantêm seus iniciadores internos originais.
+        body = body.replace('Extraia e dê dois cliques no **`CorteAC.exe`**.', 'Extraia o pacote e abra o executável incluído.')
+        body = body.replace('Extraia os arquivos e no terminal execute:', 'Extraia o pacote e execute `./run.sh`. Para o arquivo Linux avulso, execute:')
+        for old, new in (('CorteAC.exe', 'OpenCorte.exe'), ('CorteAC-Setup-', 'OpenCorte-Setup-'),
+                         ('CorteAC-Windows-x64.zip', 'OpenCorte-Windows-x64.zip'),
+                         ('CorteAC-Linux-x64.tar.gz', 'OpenCorte-Linux-x64.tar.gz'),
+                         ('corteac_linux', 'opencorte_linux')):
+            body = body.replace(old, new)
+        if body != (release.get('body') or ''):
+            self.patch(f'releases/{release["id"]}', {'body': body})
+        return len(changes)
 
     def wait_release(self, sha, tag, version, minutes):
         deadline = time.monotonic() + minutes*60
@@ -292,8 +331,8 @@ class GitHub:
                     if run['conclusion'] != 'success':
                         raise UpdateError(f"Build/release falhou: {run['html_url']}. Corrija/reexecute no GitHub e use --retomar.")
                     release = self.get(f'releases/tags/{quote(tag, safe="")}', missing_ok=True)
-                    required = {'CorteAC.exe', 'CorteAC-Windows-x64.zip', 'corteac_linux',
-                                'CorteAC-Linux-x64.tar.gz', f'CorteAC-Setup-{version}.exe'}
+                    required = {'OpenCorte.exe', 'OpenCorte-Windows-x64.zip', 'opencorte_linux',
+                                'OpenCorte-Linux-x64.tar.gz', f'OpenCorte-Setup-{version}.exe'}
                     assets = {a['name'] for a in (release or {}).get('assets', []) if a.get('size', 0) > 0}
                     if release and not release.get('draft') and required <= assets:
                         return release['html_url']
@@ -757,8 +796,12 @@ DIR="$(cd "$(dirname "$0")" && pwd)"
 
 # 1. Descobre a versão: primeiro perguntando ao próprio binário, depois o valor gravado no pacote
 VERSAO=""
-if [ -x "$DIR/corteac_linux" ]; then
-    VERSAO="$("$DIR/corteac_linux" --version 2>/dev/null | awk '{print $NF}' | head -n1 || true)"
+BINARIO="$DIR/opencorte_linux"
+if [ ! -x "$BINARIO" ] && [ -x "$DIR/corteac_linux" ]; then
+    BINARIO="$DIR/corteac_linux"
+fi
+if [ -x "$BINARIO" ]; then
+    VERSAO="$("$BINARIO" --version 2>/dev/null | awk '{print $NF}' | head -n1 || true)"
 fi
 case "$VERSAO" in
     [0-9]*) : ;;
@@ -795,12 +838,12 @@ Type=Application
 Name=$NOME
 GenericName=Encaixe e Corte
 Comment=JobManager 2000 Reborn - encaixe de couro e corte CAM (v$VERSAO)
-Exec="$DIR/corteac_linux"
+Exec="$BINARIO"
 Path=$DIR
 Icon=$DIR/corteac.png
 Terminal=false
 Categories=Graphics;Engineering;
-StartupWMClass=corteac_linux
+StartupWMClass=opencorte_linux
 X-CorteAC-Version=$VERSAO
 ENTRY
 chmod +x "$DESK"
@@ -829,10 +872,10 @@ WINDOWS_SHORTCUT_TEMPLATE = r'''# Cria/atualiza o atalho do CorteAC na Area de T
 
 $ErrorActionPreference = 'Stop'
 $pasta = Split-Path -Parent $MyInvocation.MyCommand.Definition
-$exe = Join-Path $pasta 'CorteAC.exe'
+$exe = Join-Path $pasta 'OpenCorte.exe'
 
 if (-not (Test-Path $exe)) {
-    Write-Host "CorteAC.exe nao encontrado nesta pasta: $pasta" -ForegroundColor Red
+    Write-Host "OpenCorte.exe nao encontrado nesta pasta: $pasta" -ForegroundColor Red
     exit 1
 }
 
@@ -961,10 +1004,10 @@ def package_distribution(stage, executable, version, platform=None):
     (dist/'versao.txt').write_text(version, encoding='utf-8')
     artifacts = [executable, dist/'versao.txt']
     with tempfile.TemporaryDirectory(prefix='opencorte-package-') as temp:
-        package = Path(temp)/'CorteAC'
+        package = Path(temp)/'OpenCorte'
         package.mkdir()
         windows = platform == 'win32'
-        name = 'CorteAC.exe' if windows else 'corteac_linux'
+        name = 'OpenCorte.exe' if windows else 'opencorte_linux'
         shutil.copy2(executable, package/name)
         for source, target in [('db.example.ini','db.example.ini'),
                                ('README_WINDOWS.txt' if windows else 'README_LINUX.txt',
@@ -974,7 +1017,7 @@ def package_distribution(stage, executable, version, platform=None):
             (package/'criar_atalho_windows.ps1').write_text(windows_shortcut_installer(), encoding='utf-8-sig')
             shutil.copy2(package/'criar_atalho_windows.ps1', dist/'criar_atalho_windows.ps1')
             shutil.copy2(dist/'versao.txt', package/'versao.txt')
-            archive = dist/'CorteAC-Windows-x64.zip'
+            archive = dist/'OpenCorte-Windows-x64.zip'
             with zipfile.ZipFile(archive,'w',compression=zipfile.ZIP_DEFLATED) as output:
                 for path in sorted(package.rglob('*')):
                     if path.is_file():
@@ -983,16 +1026,16 @@ def package_distribution(stage, executable, version, platform=None):
         else:
             shutil.copy2(stage/'assets/app_icon.png', package/'corteac.png')
             (package/'instalar_atalho.sh').write_text(linux_shortcut_installer(version), encoding='utf-8')
-            (package/'run.sh').write_text('#!/usr/bin/env bash\nset -e\nDIR="$(cd "$(dirname "$0")" && pwd)"\nexec "$DIR/corteac_linux" "$@"\n', encoding='utf-8')
-            for name in ('corteac_linux','instalar_atalho.sh','run.sh'):
+            (package/'run.sh').write_text('#!/usr/bin/env bash\nset -e\nDIR="$(cd "$(dirname "$0")" && pwd)"\nexec "$DIR/opencorte_linux" "$@"\n', encoding='utf-8')
+            for name in ('opencorte_linux','instalar_atalho.sh','run.sh'):
                 (package/name).chmod(0o755)
-            alias = dist/'corteac_linux'
+            alias = dist/'opencorte_linux'
             if executable != alias:
                 shutil.copy2(executable,alias)
             artifacts.append(alias)
-            archive = dist/'CorteAC-Linux-x64.tar.gz'
+            archive = dist/'OpenCorte-Linux-x64.tar.gz'
             with tarfile.open(archive,'w:gz') as output:
-                output.add(package,arcname='CorteAC')
+                output.add(package,arcname='OpenCorte')
         artifacts.append(archive)
     return artifacts
 
@@ -1008,7 +1051,7 @@ def windows_installer_compiler():
 
 def build_windows_installer(stage, version, compiler):
     command([compiler,f'/DMyAppVersion={version}',stage/'packaging/corteac_setup.iss'],stage)
-    artifact = stage/'dist'/f'CorteAC-Setup-{version}.exe'
+    artifact = stage/'dist'/f'OpenCorte-Setup-{version}.exe'
     if not artifact.is_file() or artifact.stat().st_size == 0:
         raise UpdateError('O Inno Setup não gerou o instalador Windows esperado.')
     return artifact
@@ -1060,10 +1103,10 @@ def build_distribution(stage):
                'ui.shape_backup_restore_dialog','ui.alter_sheet_dialog']
     for module in modules:
         args.extend(['--hidden-import',module])
-    args.extend(['--name','CorteAC','main.py'])
+    args.extend(['--name','OpenCorte','main.py'])
     env = isolated_env(stage)
     command(args,stage,env=env)
-    executable = stage/'dist'/('CorteAC.exe' if windows else 'CorteAC')
+    executable = stage/'dist'/('OpenCorte.exe' if windows else 'OpenCorte')
     reported = command([executable,'--version'],stage,capture=True,env=env,timeout=60)
     version = current_version(stage)
     if reported.strip() != f"OpenCorte {version}":
@@ -1229,19 +1272,19 @@ class Updater:
             if db.execute('SELECT count(*) FROM layouts').fetchone()[0]:
                 raise UpdateError('O banco de distribuição ainda contém layouts.')
         build_distribution(stage)
-        executable = stage/'dist'/('CorteAC.exe' if sys.platform=='win32' else 'CorteAC')
+        executable = stage/'dist'/('OpenCorte.exe' if sys.platform=='win32' else 'OpenCorte')
         self.state['verified_binary'] = hashlib.sha256(executable.read_bytes()).hexdigest()
 
     def install(self):
         stage = Path(self.state['stage'])
         backup = self.root/'.release/backups'/self.state['version']
-        source = stage / ('dist/CorteAC' if sys.platform.startswith('linux') else 'dist/CorteAC.exe')
+        source = stage / ('dist/OpenCorte' if sys.platform.startswith('linux') else 'dist/OpenCorte.exe')
         if hashlib.sha256(source.read_bytes()).hexdigest() != self.state['verified_binary']:
             raise UpdateError('O binário mudou após a verificação.')
         if sys.platform.startswith('linux'):
-            for name in ('corteac_linux', 'teste_dola_linux', 'dist/CorteAC', 'dist/corteac_linux', 'dist/teste_dola'):
+            for name in ('opencorte_linux', 'corteac_linux', 'teste_dola_linux', 'dist/OpenCorte', 'dist/opencorte_linux', 'dist/teste_dola'):
                 atomic_copy(source, self.root/name, backup)
-            atomic_copy(stage/'dist/CorteAC-Linux-x64.tar.gz', self.root/'dist/CorteAC-Linux-x64.tar.gz', backup)
+            atomic_copy(stage/'dist/OpenCorte-Linux-x64.tar.gz', self.root/'dist/OpenCorte-Linux-x64.tar.gz', backup)
             spec = importlib.util.spec_from_file_location('update_shortcut', self.root/'ui/desktop_shortcut.py')
             shortcuts = importlib.util.module_from_spec(spec)
             spec.loader.exec_module(shortcuts)
@@ -1253,16 +1296,16 @@ class Updater:
                         desktop = Path(value)
                 desktop.mkdir(parents=True, exist_ok=True)
             result = shortcuts.sincronizar_atalho(self.state['version'],
-                exe_path=str(self.root/'corteac_linux'), icon_path=str(self.root/'assets/app_icon.png'),
+                exe_path=str(self.root/'opencorte_linux'), icon_path=str(self.root/'assets/app_icon.png'),
                 criar_se_ausente=True)
             desktop_dirs = shortcuts._desktop_dirs()
             if result.get('erro') or not any(Path(p).parent in desktop_dirs for p in result.get('criados', [])):
                 raise UpdateError('Não foi possível atualizar a Área de Trabalho: ' + str(result.get('erro')))
             self.state['shortcuts'] = result['criados']
         else:
-            atomic_copy(stage/'dist/CorteAC.exe', self.root/'dist/CorteAC.exe', backup)
-            atomic_copy(stage/'dist/CorteAC-Windows-x64.zip', self.root/'dist/CorteAC-Windows-x64.zip', backup)
-            installer = stage/'dist'/f'CorteAC-Setup-{self.state["version"]}.exe'
+            atomic_copy(stage/'dist/OpenCorte.exe', self.root/'dist/OpenCorte.exe', backup)
+            atomic_copy(stage/'dist/OpenCorte-Windows-x64.zip', self.root/'dist/OpenCorte-Windows-x64.zip', backup)
+            installer = stage/'dist'/f'OpenCorte-Setup-{self.state["version"]}.exe'
             if installer.exists():
                 atomic_copy(installer,self.root/'dist'/installer.name,backup)
             (self.root/'dist/criar_atalho_windows.ps1').write_text(windows_shortcut_installer(),encoding='utf-8-sig')

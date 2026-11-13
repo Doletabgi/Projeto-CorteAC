@@ -4,7 +4,7 @@
 ============================================================
 
 COMO EXECUTAR:
-1. De duplo clique no arquivo "CorteAC.exe".
+1. De duplo clique no arquivo "OpenCorte.exe".
 2. O sistema inicializara imediatamente.
 
 BANCO DE DADOS:

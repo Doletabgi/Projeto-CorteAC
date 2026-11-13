@@ -7,6 +7,7 @@ build/
 dist/
 teste_dola_linux
 corteac_linux
+opencorte_linux
 *.zip
 *.spec
 db.ini
