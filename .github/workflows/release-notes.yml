@@ -1,0 +1,39 @@
+name: Atualizar notas das versões publicadas
+
+on:
+  push:
+    branches: [master, main]
+    paths:
+      - 'docs/releases/*.md'
+      - '.github/workflows/release-notes.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: corteac-release-notes
+  cancel-in-progress: false
+
+jobs:
+  update-notes:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Sincronizar alterações sem modificar os instaladores
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPOSITORY: ${{ github.repository }}
+        run: |
+          python3 - <<'PY'
+          import os
+          import re
+          from pathlib import Path
+          from atualizar import GitHub
+          api = GitHub(os.environ['REPOSITORY'])
+          for path in sorted(Path('docs/releases').glob('v*.md')):
+              if not re.fullmatch(r'v\d+\.\d+\.\d+', path.stem):
+                  continue
+              changed = api.update_release_notes(path.stem, path.read_text(encoding='utf-8'))
+              print(f'{path.stem}: notas atualizadas' if changed else f'{path.stem}: sem alterações ou ainda não publicada')
+          PY

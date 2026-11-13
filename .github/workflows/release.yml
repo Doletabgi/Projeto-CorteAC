@@ -107,6 +107,8 @@ jobs:
     steps:
       - name: Baixar Código para Referência
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Criar Diretório de Distribuição
         run: mkdir -p dist-release
@@ -134,6 +136,23 @@ jobs:
             VERSION=$(python3 -c "import config; print(config.APP_VERSION)")
             echo "tag=v${VERSION}" >> $GITHUB_OUTPUT
           fi
+
+      - name: Preparar alterações desta versão
+        id: release_notes
+        env:
+          RELEASE_TAG: ${{ steps.release_tag.outputs.tag }}
+        run: |
+          python3 - <<'PY'
+          import os
+          import uuid
+          from pathlib import Path
+          from atualizar import release_notes
+          tag = os.environ['RELEASE_TAG']
+          notes = release_notes(Path.cwd(), tag.removeprefix('v'), ref=tag)
+          delimiter = 'NOTES_' + uuid.uuid4().hex
+          with open(os.environ['GITHUB_OUTPUT'], 'a', encoding='utf-8') as output:
+              output.write(f'changes<<{delimiter}\n{notes}\n{delimiter}\n')
+          PY
 
       - name: Remover cópia antiga do instalador sem versão
         uses: actions/github-script@v7
@@ -202,9 +221,10 @@ jobs:
             ---
 
             ### Alterações desta versão
-            Consulte as notas geradas a partir dos commits e o documento `docs/PROJETO_ATOM_JOBMANAGER.md` da tag publicada.
+            ${{ steps.release_notes.outputs.changes }}
+
             A compilação dos pacotes não substitui a homologação operacional em máquina.
-          generate_release_notes: true
+          generate_release_notes: false
           files: |
             dist-release/**/CorteAC.exe
             dist-release/**/CorteAC-Setup-*.exe

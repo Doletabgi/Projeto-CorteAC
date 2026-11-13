@@ -34,7 +34,7 @@ SOURCE_SUFFIXES = {'.py', '.md', '.rst', '.txt', '.sql', '.ini', '.toml', '.yml'
                    '.yaml', '.sh', '.bat', '.ps1', '.iss', '.json', '.png', '.ico',
                    '.gif', '.jpg', '.jpeg', '.svg', '.ttf', '.otf', '.css', '.html',
                    '.die', '.lay', '.onx', '.cmz'}
-CHECKS = ['tests/test_atualizar.py', 'tests/test_semver.py', 'tests/test_desktop_shortcut.py',
+CHECKS = ['tests/test_atualizar.py', 'tests/test_release_notes.py', 'tests/test_semver.py', 'tests/test_desktop_shortcut.py',
           'tests/test_database_cleanup.py', 'tests/test_installation_settings.py',
           'tests/test_production_sheet.py', 'tests/test_layout_print_legend.py',
           'tests/test_symbolic_notches.py', 'tests/test_project_packager.py',
@@ -96,6 +96,79 @@ def next_version(version, increment):
     if increment == 'minor':
         return f'{major}.{minor+1}.0'
     return f'{major}.{minor}.{patch+1}'
+
+
+def release_notes(root, version, ref=None):
+    """Usa notas revisadas ou resume os fontes alterados desde a versão anterior."""
+    from cad.semver import SemVer
+    version = str(SemVer.parse(version))
+    name = f'docs/releases/v{version}.md'
+    try:
+        existing = git(root, 'show', f'{ref}:{name}') if ref else (root/name).read_text(encoding='utf-8')
+    except (OSError, UpdateError):
+        existing = ''
+    if re.search(r'^- \S', existing, re.M) and 'Consulte as notas geradas' not in existing:
+        return existing.strip() + '\n'
+    target = ref or 'HEAD'
+    try:
+        previous = git(root, 'describe', '--tags', '--abbrev=0', '--match', 'v[0-9]*', target+'^' if ref else target)
+    except UpdateError:
+        previous = None
+    if previous:
+        changed = git(root, 'diff', '--name-only', previous, *([ref] if ref else [])).splitlines()
+    else:
+        changed = git(root, 'ls-tree', '-r', '--name-only', target).splitlines()
+    if not ref:
+        changed += git(root, 'ls-files', '--others', '--exclude-standard').splitlines()
+    files = {name for name in changed if allowed_source(name)}
+    rules = [
+        ({'cad/nesting_wizard.py', 'ui/nesting_wizard.py', 'ui/dieproc_dialog.py'}, 'Assistente de encaixe e editor DieProc: ajustes na criação e configuração dos perfis.'),
+        ({'analytics/production_dashboard.py', 'ui/production_dashboard.py', 'ui/production_dashboard_report.py', 'ui/production_dashboard_preview.py'}, 'Painel de Produção: melhorias na consulta, visualização e impressão dos relatórios.'),
+        ({'ui/user_dialog.py', 'ui/production_sheet.py', 'ui/layout_print_dialog.py'}, 'Usuários e folha de produção: ajustes no cadastro e na identificação dos responsáveis.'),
+        ({'ui/main_window.py', 'ui/params_dialog.py'}, 'Janela principal: atualização da interface e dos acessos às ferramentas.'),
+        ({'ui/session_view.py'}, 'Sessões de produção: ajustes na configuração e no salvamento do trabalho.'),
+        ({'database.py', 'db/connection.py', 'db/config.py'}, 'Banco de dados: ajustes na persistência e na compatibilidade dos dados.'),
+        ({'atualizar.py', '.github/workflows/release.yml'}, 'Atualizador e publicação: melhorias no processo de atualização e nas notas das versões.'),
+    ]
+    lines = []
+    for paths, description in rules:
+        if files & paths:
+            lines.append('- ' + description)
+            files -= paths
+    if any(name.startswith('tests/') for name in files):
+        lines.append('- Atualização das verificações automatizadas.')
+    if any(name.startswith('docs/') or name.startswith('README') for name in files):
+        lines.append('- Documentação do sistema atualizada.')
+    others = sorted(name for name in files if not name.startswith(('tests/', 'docs/', 'README'))
+                    and name not in {'config.py', 'packaging/corteac_setup.iss'})
+    for name in others[:12]:
+        lines.append(f'- Ajustes em `{name}`.')
+    if len(others) > 12:
+        lines.append(f'- Ajustes em mais {len(others)-12} arquivos do sistema.')
+    if not lines:
+        lines.append('- Atualização da versão e dos pacotes de distribuição do OpenCorte.')
+    return '\n'.join(lines) + '\n'
+
+
+def write_release_notes(root, version):
+    notes = release_notes(root, version)
+    path = root/'docs'/'releases'/f'v{version}.md'
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(notes, encoding='utf-8')
+    return path
+
+
+def replace_release_changes(body, notes):
+    """Atualiza só a seção de alterações, preservando instruções e outras seções."""
+    heading = '### Alterações desta versão'
+    match = re.search(r'(?m)^### Alterações desta versão[^\S\n]*\n', body)
+    if not match:
+        return body.rstrip() + '\n\n' + heading + '\n\n' + notes.strip() + '\n'
+    following = re.search(r'(?m)^#{1,3} ', body[match.end():])
+    end = match.end() + following.start() if following else len(body)
+    notice = 'A compilação dos pacotes não substitui a homologação operacional em máquina.'
+    tail = '\n\n' + notice if notice in body[match.end():end] else ''
+    return body[:match.end()] + '\n' + notes.strip() + tail + '\n\n' + body[end:]
 
 
 def allowed_source(name):
@@ -179,6 +252,28 @@ class GitHub:
             raise UpdateError(f'GitHub HTTP {exc.code}. Verifique acesso ao repositório; para privado, defina GH_TOKEN com leitura de Actions.') from exc
         except URLError as exc:
             raise UpdateError('Não foi possível consultar o GitHub. Verifique a rede e use --retomar.') from exc
+
+    def update_release_notes(self, tag, notes):
+        if not re.search(r'^- \S', notes, re.M):
+            raise UpdateError('As alterações da versão precisam conter uma lista preenchida.')
+        release = self.get(f'releases/tags/{quote(tag, safe="")}', missing_ok=True)
+        if not release:
+            return False
+        body = replace_release_changes(release.get('body') or '', notes)
+        if body.strip() == (release.get('body') or '').strip():
+            return False
+        if not self.token:
+            raise UpdateError('Para atualizar as notas no GitHub, configure GH_TOKEN com permissão de escrita em conteúdo.')
+        request = Request(f'https://api.github.com/repos/{self.repo}/releases/{release["id"]}',
+                          data=json.dumps({'body': body}, ensure_ascii=False).encode('utf-8'),
+                          headers={'Authorization': f'Bearer {self.token}', 'Accept': 'application/vnd.github+json',
+                                   'User-Agent': 'OpenCorte-update', 'Content-Type': 'application/json'}, method='PATCH')
+        try:
+            with urlopen(request, timeout=30) as response:
+                json.load(response)
+        except (HTTPError, URLError) as exc:
+            raise UpdateError(f'Não foi possível atualizar as notas da versão {tag} no GitHub.') from exc
+        return True
 
     def wait_release(self, sha, tag, version, minutes):
         deadline = time.monotonic() + minutes*60
@@ -1107,6 +1202,7 @@ class Updater:
 
     def prepare(self):
         set_version(self.root,self.state['version'])
+        write_release_notes(self.root, self.state['version'])
         sync_documentation(self.root)
         sync_documentation(self.root,check=True)
         files = source_files(self.root)

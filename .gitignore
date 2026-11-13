@@ -19,6 +19,8 @@ profile_*.txt
 *.json
 docs/*
 !docs/PROJETO_ATOM_JOBMANAGER.md
+!docs/releases/
+!docs/releases/*.md
 !docs/fases/
 !docs/fases/*
 !docs/img/

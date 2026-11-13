@@ -6,6 +6,11 @@ as etapas sem alterar nada, use `python3 atualizar.py --simular`. Depois de uma
 falha, use `python3 atualizar.py --retomar` para continuar a mesma versão.
 Veja o [guia da atualização completa](docs/fases/ATUALIZACAO_UNIFICADA.md).
 
+O atualizador preenche as alterações de cada versão em `docs/releases/v<versão>.md`.
+Esse texto é publicado na seção **Alterações desta versão** do GitHub. Notas já
+revisadas são preservadas ao retomar a atualização; alterações nesses arquivos
+também atualizam as notas de versões publicadas, sem recompilar os instaladores.
+
 Recriação moderna em **Python** do sistema industrial **OpenCorte** (evolução direta do legado **JobManager 2000 / Jm2k** e **ATOM Nesting System**, originalmente desenvolvido em Visual Basic 6 para Windows XP).
 
 ---

@@ -16,7 +16,7 @@ pré-requisitos, escopo dos testes e regras de retomada.
 <!-- AUTO:header:start -->
 **Versão do aplicativo:** `1.8.13`
 
-**Última sincronização com o código:** 2026-11-13 07:51 (HEAD ao gerar: `26d4c13`; 208 arquivos Python, ~89892 linhas)
+**Última sincronização com o código:** 2026-11-13 08:02 (HEAD ao gerar: `77f9f0f`; 209 arquivos Python, ~90099 linhas)
 <!-- AUTO:header:end -->
 **Versão deste documento:** 2
 
@@ -252,6 +252,7 @@ docs/fases/RELATORIO_REVERSA_COMELZ_ONX.md
 docs/fases/RELATORIO_SISTEMA_COMPLETO.md
 docs/fases/SIMBOLICA_COMELZ.md
 docs/ref/layout_re/help_topics.json
+docs/releases/v1.8.13.md
 output/pdf/validacao-sessao-188.json
 tests/_catalog_fixtures.py                           # tests/_catalog_fixtures.py
 tests/conftest.py                                    # tests/conftest.py
@@ -321,6 +322,7 @@ tests/test_production_dashboard_summary.py
 tests/test_production_sheet.py                       # Regressões industriais e de paginação da ficha, sem gravar no banco real.
 tests/test_production_user.py                        # O responsável pertence à produção, não ao usuário que imprime depois.
 tests/test_project_packager.py                       # Testes do empacotador de sessão multi-placa (cad/project_packager.py).
+tests/test_release_notes.py                          # Notas preenchidas, reproduzíveis por tag e sem dados operacionais.
 tests/test_semver.py                                 # Testes Automatizados para o Sistema de Versionamento SemVer (MAJOR.MINOR.PATCH)
 tests/test_session_context_menu_export.py            # Testes para a opção 'Salvar Sessão para Máquina' no menu de contexto da sessão.
 tests/test_session_material_delete.py                # Testes automatizados para remoção de material na sessão via tecla Delete / botão / menu:
@@ -433,9 +435,9 @@ ui/user_dialog.py                                    # JobManager 2000 (Python E
 <!-- AUTO:symbols:start -->
 ### `atualizar.py`
 - `class UpdateError` (linha 46, 0 métodos)
-- `class GitHub` (linha 162, 3 métodos)
-- `class Updater` (linha 1008, 10 métodos)
-- funções: `command`, `git`, `current_version`, `set_version`, `next_version`, `allowed_source`, `source_files`, `fingerprint`, `snapshot`, `isolated_env`, `repository_name`, `atomic_copy`, `execution_lock`, `doc_document_brand`, `doc_read` (+27)
+- `class GitHub` (linha 235, 4 métodos)
+- `class Updater` (linha 1103, 10 métodos)
+- funções: `command`, `git`, `current_version`, `set_version`, `next_version`, `release_notes`, `write_release_notes`, `replace_release_changes`, `allowed_source`, `source_files`, `fingerprint`, `snapshot`, `isolated_env`, `repository_name`, `atomic_copy` (+30)
 
 ### `database.py`
 - `class DatabaseManager` (linha 47, 71 métodos)
@@ -817,6 +819,9 @@ ui/user_dialog.py                                    # JobManager 2000 (Python E
 ### `tests/test_project_packager.py`
 - `class FakeDB` (linha 39, 4 métodos): Banco mínimo, com a mesma interface usada pelo packager.
 - funções: `_piece`, `_session`, `_read_lay`, `_lay_value`, `test_export_all_layouts_and_only_referenced_dies`, `test_lay_line2_and_dlib_point_to_export_folder`, `test_generated_die_is_valid_fustella`, `test_original_die_is_copied_byte_for_byte`, `test_shapes_search_root_finds_nested_original`, `test_missing_die_is_reported_and_can_be_strict`, `test_same_die_in_two_layouts_is_deduplicated`, `test_no_subfolder_writes_directly_to_target`, `test_reference_mode_does_not_copy_dies_and_uses_dlib_override`, `test_pack_session_folder_creates_zip_with_relative_names`, `test_export_session_cac_returns_cac_and_cleans_temp` (+11)
+
+### `tests/test_release_notes.py`
+- funções: `test_gera_notas_das_mudancas_e_ignora_banco_e_credenciais`, `test_notas_revisadas_sao_preservadas_na_retomada`, `test_notas_geradas_entram_na_copia_e_no_commit`, `test_tag_sem_arquivo_de_notas_gera_resumo_daquela_versao`, `test_tag_utiliza_notas_versionadas`, `test_primeira_versao_e_versao_so_com_metadados_nao_ficam_vazias`, `test_workflow_publica_notas_explicitamente`, `test_substitui_apenas_alteracoes_e_preserva_secoes`, `test_atualiza_release_sem_mexer_em_assets`, `test_nao_edita_release_inexistente_ou_inalterada`
 
 ### `tests/test_semver.py`
 - `class TestSemVer` (linha 12, 8 métodos)
@@ -5133,6 +5138,7 @@ Com dados confiáveis e validações definidas, avaliar comparação do aproveit
 <!-- AUTO:gitlog:start -->
 | Commit | Data | Autor | Mensagem |
 |---|---|---|---|
+| `77f9f0f` | 2026-11-13 | Doletabgi | chore(release): OpenCorte v1.8.13 |
 | `26d4c13` | 2026-11-12 | Doletabgi | chore(release): OpenCorte v1.8.12 |
 | `9b065e9` | 2026-11-12 | Doletabgi | chore(release): OpenCorte v1.8.11 |
 | `359c9b0` | 2026-11-12 | Doletabgi | chore(release): OpenCorte v1.8.10 |
@@ -5147,7 +5153,6 @@ Com dados confiáveis e validações definidas, avaliar comparação do aproveit
 | `6168ca7` | 2026-11-09 | Doletabgi | feat: destino das sobras e correção do salvamento v1.8.0 |
 | `980d73c` | 2026-11-09 | Doletabgi | feat: painel de produção e diagnóstico de nesting v1.7.0 |
 | `368490c` | 2026-11-08 | Doletabgi | feat(packaging): instalador inno setup com suporte a pastas na rede e release automatica (v1.6.49) |
-| `c3c5e13` | 2026-11-08 | Doletabgi | feat(layout): alterar medidas da chapa apos encaixe e correcao de limites em refile (v1.6.48) |
 <!-- AUTO:gitlog:end -->
 
 ---
