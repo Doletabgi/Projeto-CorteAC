@@ -332,6 +332,7 @@ class MainWindow(tk.Tk):
         tools_menu.add_separator()
         tools_menu.add_command(label="Editor DieProc (Parâmetros de encaixe)...", icon="settings", command=self.open_dieproc_dialog)
         tools_menu.add_command(label="Consultar aprendizado por material...", command=self.open_learning_history)
+        tools_menu.add_command(label="Debug / Diagnóstico...", command=self.open_debug_dialog)
         tools_menu.add_command(label="Executar Auto-Nest...", command=self.on_auto_nest)
         tools_menu.add_command(label="Simular Corte na Mesa...", command=self.on_toggle_sim)
         tools_menu.add_command(label="💾 Exportar G-Code (ATOM)...", command=self.on_export_gcode)
@@ -1750,6 +1751,18 @@ class MainWindow(tk.Tk):
 
         doc_name = layout_name or (active_sess.get("layout_name") if active_sess else None) or "[I0000]"
         self.lbl_status_msg.config(text=f"Layout Editor: {doc_name} aberto na área de trabalho.")
+
+    def open_debug_dialog(self):
+        """Abre o diagnóstico da sessão ativa pelo menu Ferramentas."""
+        view = getattr(self, "session_view", None)
+        if view is None:
+            messagebox.showinfo(
+                "Debug / Diagnóstico",
+                "Abra uma sessão para acessar o diagnóstico do encaixe.",
+                parent=self,
+            )
+            return None
+        return view.show_debug_dialog()
 
     def open_learning_history(self):
         from ui.learning_history_dialog import LearningHistoryDialog

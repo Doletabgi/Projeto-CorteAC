@@ -693,14 +693,21 @@ class SessionView(tk.Frame):
         self.macro_panel.set_material_code((self.session_data.get("material") or {}).get("code"))
 
         # -------------------------------------------------------------
-        # Camada 4: Debug / Diagnóstico
+        # Diagnóstico acessível pelo menu Ferramentas da janela principal.
+        # A janela fica oculta para preservar as opções ao fechar e reabrir.
         # -------------------------------------------------------------
+        self.debug_window = tk.Toplevel(self)
+        self.debug_window.withdraw()
+        self.debug_window.configure(bg=THEME["bg_card"])
+        self.debug_window.transient(self.winfo_toplevel())
+        self.debug_window.resizable(False, False)
+        self.debug_window.protocol("WM_DELETE_WINDOW", self.debug_window.withdraw)
         self.debug_panel = DebugPanel(
-            gen_container,
+            self.debug_window,
             on_engine_change=self._on_debug_engine_changed,
             bg=THEME["bg_card"]
         )
-        self.debug_panel.pack(fill="x", pady=(2, 6))
+        self.debug_panel.pack(fill="both", expand=True, padx=10, pady=10)
 
         # Linha de Botões de Ação estilo Windows XP
         btn_action_box = tk.Frame(gen_container, bg=THEME["bg_card"])
@@ -2220,6 +2227,16 @@ class SessionView(tk.Frame):
 
     def _on_debug_engine_changed(self, engine_name: str):
         self._on_decision_changed("Engine")
+
+    def show_debug_dialog(self):
+        """Exibe os controles de diagnóstico da sessão sem recriar seu estado."""
+        self.debug_window.title(
+            f"Debug / Diagnóstico — Sessão #{self.session_data.get('id', '')}"
+        )
+        self.debug_window.deiconify()
+        self.debug_window.lift()
+        self.debug_window.focus_set()
+        return self.debug_window
 
     def _on_decision_changed(self, decision_name: str):
         """Disparado quando usuário altera Strategy, Params, Engine ou Macro."""
