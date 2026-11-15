@@ -62,13 +62,7 @@ def get_icon(widget, name, size=18, color=None):
         cache = root._modern_icon_cache = {}
     key = (name, pixels, color)
     if key not in cache:
-        path = ASSETS_DIR / "icons" / f"{name}.png"
-        with Image.open(path) as source:
-            bitmap = source.convert("RGBA").resize((pixels, pixels), Image.Resampling.LANCZOS)
-        if color:
-            tinted = Image.new('RGBA', bitmap.size, color)
-            tinted.putalpha(bitmap.getchannel('A'))
-            bitmap = tinted
+        bitmap = _bitmap(name, pixels, color, getattr(root, "_icon_theme", "classic"))
         buffer = io.BytesIO()
         bitmap.save(buffer, format="PNG")
         cache[key] = tk.PhotoImage(data=buffer.getvalue(), master=root)
@@ -87,3 +81,29 @@ def split_icon_text(text):
     if stripped.endswith(" ▶"):
         return "right", stripped[:-2].rstrip()
     return None, text
+
+
+def _bitmap(name, pixels, color, theme):
+    if theme == "classic":
+        with Image.open(ASSETS_DIR / "icons" / f"{name}.png") as source:
+            bitmap = source.convert("RGBA").resize((pixels, pixels), Image.Resampling.LANCZOS)
+    else:
+        from ui.icon_art import render_icon
+        bitmap = render_icon(name, pixels, theme=theme)
+    if color:
+        tinted = Image.new("RGBA", bitmap.size, color)
+        tinted.putalpha(bitmap.getchannel("A"))
+        bitmap = tinted
+    return bitmap
+
+
+def refresh_icons(root):
+    """Atualiza as imagens existentes, inclusive árvores e menus, sem recriar controles."""
+    theme = getattr(root, "_icon_theme", "classic")
+    if getattr(root, "_rendered_icon_theme", "classic") == theme:
+        return
+    for (name, pixels, color), photo in getattr(root, "_modern_icon_cache", {}).items():
+        buffer = io.BytesIO()
+        _bitmap(name, pixels, color, theme).save(buffer, format="PNG")
+        photo.configure(data=buffer.getvalue())
+    root._rendered_icon_theme = theme

@@ -28,10 +28,15 @@ ICON_NAMES = (
 )
 
 
-def render_icon(name, size=24):
+def render_icon(name, size=24, theme="classic"):
     """Retorna RGBA transparente; erro explícito evita ícones trocados."""
     if name not in ICON_NAMES:
         raise KeyError(name)
+    BLUE, TEAL, SLATE, RED, AMBER, PALE, WHITE = ("#2563eb", "#0f766e", "#334155", "#c24146", "#b45309", "#eff6ff", "#ffffff")
+    if theme == "graphite":
+        BLUE, TEAL, SLATE, RED, AMBER, PALE, WHITE = ("#64ded1", "#64ded1", "#e6ebf2", "#ff9299", "#f4c974", "#283f46", "#343d49")
+    elif theme == "petroleum":
+        BLUE, TEAL, SLATE, RED, AMBER, PALE, WHITE = ("#287f78", "#20535a", "#405c55", "#b34848", "#a47932", "#e1eeea", "#fefefc")
     scale = size * 4 / 24
     image = Image.new("RGBA", (size * 4, size * 4))
     d = ImageDraw.Draw(image)
@@ -41,22 +46,27 @@ def render_icon(name, size=24):
 
     def line(values, color=SLATE, width=1.8):
         points = pts(values)
-        w = max(1, round(width * scale))
+        w = max(1, round(width * scale * (1.15 if theme == "petroleum" else 0.9 if theme == "graphite" else 1)))
         d.line(points, fill=color, width=w, joint="curve")
         r = w / 2
         for x, y in (points[0], points[-1]):
             d.ellipse((x-r, y-r, x+r, y+r), fill=color)
 
+    def themed_fill(fill):
+        if theme in ("graphite", "petroleum") and fill in ("#fff7df", "#fef3c7", "#dbeafe", "#ccfbf1", "#fee2e2", "#f0fdfa", "#fffbeb"):
+            return PALE
+        return fill
+
     def rect(box, color=BLUE, fill=None, radius=1.6, width=1.7):
-        d.rounded_rectangle(tuple(v * scale for v in box), radius=radius*scale,
-                            fill=fill, outline=color, width=max(1, round(width*scale)))
+        d.rounded_rectangle(tuple(v * scale for v in box), radius=(min(radius, 0.5) if theme == "blue" else radius)*scale,
+                            fill=themed_fill(fill), outline=color, width=max(1, round(width*scale)))
 
     def circle(box, color=BLUE, fill=None, width=1.8):
-        d.ellipse(tuple(v * scale for v in box), fill=fill, outline=color,
+        d.ellipse(tuple(v * scale for v in box), fill=themed_fill(fill), outline=color,
                   width=max(1, round(width*scale)))
 
     def polygon(values, color=BLUE, fill=PALE):
-        d.polygon(pts(values), fill=fill)
+        d.polygon(pts(values), fill=themed_fill(fill))
         line(values + [values[0]], color)
 
     def arrow(direction, color=BLUE):

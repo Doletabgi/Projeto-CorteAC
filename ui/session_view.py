@@ -733,6 +733,7 @@ class SessionView(tk.Frame):
             font=("Segoe UI", 9, "bold"),
             command=self.on_nest_button_click
         )
+        self.btn_action_nest._theme_primary = True
         self.btn_action_nest.pack(side="left", padx=(0, 6))
 
         self.btn_action_standby = IconButton(

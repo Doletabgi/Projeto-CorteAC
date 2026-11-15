@@ -236,3 +236,7 @@ Se o servidor MySQL estiver fora do ar ou o terminal for levado para campo/demon
    backend = sqlite
    ```
 3. O OpenCorte inicializará instantaneamente utilizando o banco local `jobmanager.db`, garantindo 100% das funcionalidades operacionais mesmo sem conexão com a rede.
+
+### Temas da interface
+
+Em **Ferramentas → Temas**, escolha **Clássico**, **Azul claro**, **Grafite** ou **Verde-petróleo**. A troca é imediata, preserva as sessões abertas e é salva para a próxima inicialização. Cada tema moderno possui uma família de ícones própria; o clássico mantém os ícones existentes.

@@ -74,6 +74,11 @@ class MainWindow(tk.Tk):
     def __init__(self):
         super().__init__()
 
+        from ui.themes import ThemeManager
+        self.db = DatabaseManager()
+        self.app_settings = self.db.get_all_settings()
+        self.theme_manager = ThemeManager(self, self.app_settings.get("ui_theme", "classic"))
+
         # Título da janela com versão dinâmica sincronizada de config.APP_VERSION
         v_str = APP_VERSION if APP_VERSION.startswith("v") else f"v{APP_VERSION}"
         self.title(f"{APP_NAME} {v_str}")
@@ -108,7 +113,6 @@ class MainWindow(tk.Tk):
         self.load_icons()
 
         # Banco de dados ativo (MySQL ou SQLite)
-        self.db = DatabaseManager()
         self.materials = self.db.get_materials()
         self.current_material = self.materials[0] if self.materials else None
         if self.current_material:
@@ -158,6 +162,19 @@ class MainWindow(tk.Tk):
 
         # Carrega Dados Iniciais
         self.load_initial_data()
+        self.theme_manager.refresh()
+
+    def change_theme(self, name):
+        previous = self.theme_manager.name
+        try:
+            self.db.set_setting("ui_theme", name)
+        except Exception as exc:
+            self.theme_var.set(previous)
+            messagebox.showerror("Temas", f"Não foi possível salvar o tema: {exc}", parent=self)
+            return
+        self.theme_manager.apply(name)
+        self.theme_var.set(name)
+        self.app_settings["ui_theme"] = name
 
     def load_icons(self):
         assets_dir = get_assets_dir()
@@ -320,6 +337,13 @@ class MainWindow(tk.Tk):
         tools_menu.add_command(label="📊 Painel de Produção...", command=self.open_production_dashboard)
         tools_menu.add_command(label="Atualizar", accelerator="F5", command=self.on_refresh_f5)
         tools_menu.add_command(label="Opções", command=self.show_options_dialog)
+        from ui.themes import THEMES
+        self.theme_var = tk.StringVar(self, self.theme_manager.name)
+        self.themes_menu = IconMenu(tools_menu, tearoff=0)
+        for theme_id, (label, _) in THEMES.items():
+            self.themes_menu.add_radiobutton(label=label, variable=self.theme_var,
+                value=theme_id, command=lambda value=theme_id: self.change_theme(value))
+        tools_menu.add_cascade(label="Temas", icon="palette", menu=self.themes_menu)
         tools_menu.add_command(label="Conexão com Banco de Dados...", icon="materials", command=self.show_database_connection_dialog)
         tools_menu.add_command(label="👤 Cadastrar Usuário...", command=self.show_user_dialog)
         tools_menu.add_separator()
