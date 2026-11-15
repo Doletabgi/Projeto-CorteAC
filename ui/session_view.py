@@ -313,6 +313,10 @@ class SessionView(tk.Frame):
         self._cancel_nest = False
         self.on_cancel_cb = on_cancel
         self.setup_ui()
+        from ui.session_layouts import SessionLayouts
+        self.theme_layout = SessionLayouts(self)
+        manager = getattr(self._root(), "theme_manager", None)
+        self.apply_theme_layout(manager.name if manager else "classic")
 
     def setup_ui(self):
         # Barra de Título MDI interna no estilo original clássico Win2000
@@ -367,6 +371,7 @@ class SessionView(tk.Frame):
         # Recriação autêntica dos prints media_1792035929049.png e frmSessionGeneral.gif
         # -----------------------------------------------------------------
         gen_container = tk.Frame(tab_gen, bg=THEME["bg_card"])
+        self.gen_container = gen_container
         gen_container.pack(fill="both", expand=True)
 
         # -------------------------------------------------------------
@@ -397,11 +402,13 @@ class SessionView(tk.Frame):
 
         # Grade de 2 colunas para Estratégia, Parâmetros, Códigos materiais e Máquina
         grid_params = tk.Frame(self.box_advanced, bg=THEME["bg_card"])
+        self.grid_params = grid_params
         grid_params.pack(fill="x", pady=(2, 4))
 
         # Coluna 1 (Esquerda): Estratégia e Parâmetros
-        col_left = tk.Frame(grid_params, bg=THEME["bg_card"])
-        col_left.pack(side="left", fill="x", expand=True, padx=(0, 16))
+        col_left = tk.Frame(gen_container, bg=THEME["bg_card"])
+        self.cut_controls = col_left
+        col_left.pack(in_=grid_params, side="left", fill="x", expand=True, padx=(0, 16))
 
         # 1. Estratégia
         self.lbl_strat_title = tk.Label(
@@ -500,6 +507,7 @@ class SessionView(tk.Frame):
 
         # Container horizontal para checkboxes de parâmetros (lado a lado)
         frame_checks = tk.Frame(col_left, bg=THEME["bg_card"])
+        self.frame_checks = frame_checks
         frame_checks.pack(fill="x", pady=(0, 4))
 
         # Checkbox 1: Separar sobras de 4 camadas em 2 camadas
@@ -555,8 +563,9 @@ class SessionView(tk.Frame):
 
 
         # Coluna 2 (Direita): Códigos materiais e Máquina de corte
-        col_right = tk.Frame(grid_params, bg=THEME["bg_card"])
-        col_right.pack(side="left", fill="x", expand=True, padx=(16, 0))
+        col_right = tk.Frame(gen_container, bg=THEME["bg_card"])
+        self.material_controls = col_right
+        col_right.pack(in_=grid_params, side="left", fill="x", expand=True, padx=(16, 0))
 
         # 3. Códigos materiais
         tk.Label(
@@ -717,6 +726,7 @@ class SessionView(tk.Frame):
 
         # Linha de Botões de Ação estilo Windows XP
         btn_action_box = tk.Frame(gen_container, bg=THEME["bg_card"])
+        self.action_box = btn_action_box
         btn_action_box.pack(fill="x", pady=(6, 10))
 
         row_btn1 = tk.Frame(btn_action_box, bg=THEME["bg_card"])
@@ -812,6 +822,7 @@ class SessionView(tk.Frame):
             padx=10,
             pady=8
         )
+        self.info_frame = info_frame
         info_frame.pack(fill="x", pady=(4, 2))
 
         row_info = tk.Frame(info_frame, bg=THEME["bg_card"])
@@ -1799,10 +1810,18 @@ class SessionView(tk.Frame):
             {"x": 0.0, "y": 45.0}
         ]
 
-    def draw_mini_layout_preview(self):
-        if not hasattr(self, "mini_layout_canvas"):
+    def apply_theme_layout(self, name):
+        if hasattr(self, "theme_layout"):
+            self.theme_layout.apply(name)
+
+    def draw_mini_layout_preview(self, canvas=None):
+        cv = canvas if canvas is not None else getattr(self, "mini_layout_canvas", None)
+        if cv is None:
             return
-        cv = self.mini_layout_canvas
+        themed = getattr(getattr(self, "theme_layout", None), "preview", None)
+        if canvas is None and themed is not None and themed.winfo_ismapped():
+            self.draw_mini_layout_preview(themed)
+        is_themed = cv is themed
         cv.delete("all")
 
         cw = cv.winfo_width()
@@ -1882,11 +1901,11 @@ class SessionView(tk.Frame):
         if not placed_pieces:
             cv.config(cursor="")
             # Sessão em branco / sem encaixe: exibe a chapa vazia limpa sem peças falsas
-            cv.create_rectangle(x1, y1, x2, y2, fill="#d4d0c8", outline="#808080", width=1)
+            cv.create_rectangle(x1, y1, x2, y2, fill=THEME["canvas_bed"] if is_themed else "#d4d0c8", outline=THEME["border"] if is_themed else "#808080", width=1)
             cv.create_text(
                 cw / 2, ch / 2,
                 text="Sem layout de corte\n(Adicione os moldes na aba Moldes)",
-                fill="#666666",
+                fill=THEME["text_muted"] if is_themed else "#666666",
                 font=("Segoe UI", 8),
                 justify="center"
             )
@@ -1895,19 +1914,19 @@ class SessionView(tk.Frame):
         cv.config(cursor="hand2")
 
         # Fundo da chapa de corte cinza (#9b9b9b) com borda preta nítida (em pé/portrait)
-        cv.create_rectangle(x1, y1, x2, y2, fill="#9b9b9b", outline="#000000", width=1.5)
+        cv.create_rectangle(x1, y1, x2, y2, fill=THEME["canvas_bed"] if is_themed else "#9b9b9b", outline=THEME["border"] if is_themed else "#000000", width=1.5)
 
         # Grade milimétrica sutil
         gx = 0.0
         while gx <= sheet_w:
             sx = x1 + gx * sc
-            cv.create_line(sx, y1, sx, y2, fill="#8c8c8c", width=1)
+            cv.create_line(sx, y1, sx, y2, fill=THEME["canvas_grid"] if is_themed else "#8c8c8c", width=1)
             gx += 300.0
 
         gy = 0.0
         while gy <= sheet_h:
             sy = y2 - gy * sc
-            cv.create_line(x1, sy, x2, sy, fill="#8c8c8c", width=1)
+            cv.create_line(x1, sy, x2, sy, fill=THEME["canvas_grid"] if is_themed else "#8c8c8c", width=1)
             gy += 300.0
 
         # Rótulo com dimensões no topo da chapa (estilo Placa (298.00 X 138.00 cm) ou Placa 0 - lay0000 (...))
@@ -1917,7 +1936,7 @@ class SessionView(tk.Frame):
             cw / 2,
             max(8, y1 - 8),
             text=header_text,
-            fill="#000000",
+            fill=THEME["text_main"] if is_themed else "#000000",
             font=("Segoe UI", 8, "bold")
         )
 

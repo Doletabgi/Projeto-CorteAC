@@ -240,3 +240,5 @@ Se o servidor MySQL estiver fora do ar ou o terminal for levado para campo/demon
 ### Temas da interface
 
 Em **Ferramentas → Temas**, escolha **Clássico**, **Azul claro**, **Grafite** ou **Verde-petróleo**. A troca é imediata, preserva as sessões abertas e é salva para a próxima inicialização. Cada tema moderno possui uma família de ícones própria; o clássico mantém os ícones existentes.
+
+Os temas **Claro moderno**, **Escuro técnico** e **Claro compacto** também reorganizam a interface: configurações em painéis, prévia do encaixe com inspetor lateral e navegação horizontal, respectivamente. Os controles e sessões abertos são preservados ao alternar; em telas menores o inspetor técnico possui rolagem e o compacto distribui os painéis em duas linhas.

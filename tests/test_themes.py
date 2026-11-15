@@ -60,7 +60,7 @@ def test_tools_menu_and_saved_theme_on_restart():
         app = MainWindow()
         app.withdraw()
         try:
-            assert [app.themes_menu.entrycget(i, "label") for i in range(4)] == [v[0] for v in THEMES.values()]
+            assert [app.themes_menu.entrycget(i, "label") for i in range(len(THEMES))] == [v[0] for v in THEMES.values()]
             app.themes_menu.invoke(2)
             assert app.theme_manager.name == "graphite"
             assert database.get_setting("ui_theme") == "graphite"
@@ -74,3 +74,89 @@ def test_tools_menu_and_saved_theme_on_restart():
         finally:
             app.destroy()
             THEME.update(CLASSIC)
+
+
+def test_layouts_reuse_widgets_and_restore_classic(themed_root):
+    from ui.session_view import SessionView
+    root, manager = themed_root
+    root.theme_manager = manager
+    root.geometry("1600x950")
+    database = DatabaseManager(":memory:")
+    view = SessionView(root, db=database, session_data={"id": 188, "name": "Sessão #188", "status": "Stand by", "shapes": []})
+    view.pack(fill="both", expand=True)
+    view.entry_sname.delete(0, 'end')
+    view.entry_sname.insert(0, 'Nome ainda não salvo')
+    original = view.cb_params
+    value = original.get()
+    checked = view.var_refile_auto.get()
+    for name in ("modern", "technical", "compact", "classic", "technical", "blue", "compact", "classic"):
+        manager.apply(name)
+        root.update_idletasks()
+        assert view.entry_sname.get() == "Nome ainda não salvo"
+        assert view.cb_params is original
+        assert original.get() == value
+        assert view.var_refile_auto.get() == checked
+        assert view.btn_action_nest.cget('state') == 'normal'
+        if name == 'technical':
+            assert view.box_advanced.pack_info()['in'] == view.theme_layout.inspector
+        elif name in ('modern', 'compact'):
+            assert view.box_advanced.winfo_manager() == 'grid'
+        else:
+            assert view.box_advanced.winfo_manager() == 'pack'
+            assert view.material_controls.pack_info()['in'] == view.grid_params
+    assert view.mode_widget.winfo_manager() == 'pack'
+    assert view.macro_panel.winfo_manager() == 'pack'
+
+
+@pytest.mark.parametrize('name', ['modern', 'technical', 'compact'])
+def test_saved_layout_and_navigation_on_startup(name):
+    from ui.main_window import MainWindow
+    database = DatabaseManager(":memory:")
+    database.set_setting('ui_theme', name)
+    with patch('ui.main_window.DatabaseManager', return_value=database):
+        app = MainWindow()
+        app.withdraw()
+        try:
+            assert app.theme_manager.name == name
+            assert str(app.main_paned.cget('orient')) == ('vertical' if name == 'compact' else 'horizontal')
+            app.change_theme('classic')
+            assert str(app.main_paned.cget('orient')) == 'horizontal'
+        finally:
+            app.destroy()
+            THEME.update(CLASSIC)
+
+
+def test_preview_draws_real_pieces_without_changing_session(themed_root):
+    import copy
+    from ui.session_view import SessionView
+    root, manager = themed_root
+    data = {'id': 188, 'name': 'Teste', 'shapes': [], 'placed_pieces': [
+        {'x': 10, 'y': 15, 'rotation': 30, 'color': '#ff0000', 'contour': [
+            {'x': 0, 'y': 0}, {'x': 100, 'y': 0}, {'x': 0, 'y': 100}]}]}
+    view = SessionView(root, session_data=data, db=DatabaseManager(':memory:'))
+    snapshot = copy.deepcopy(view.session_data)
+    manager.apply('technical')
+    canvas = view.theme_layout.preview
+    view.draw_mini_layout_preview(canvas)
+    polygons = [i for i in canvas.find_all() if canvas.type(i) == 'polygon']
+    assert len(polygons) == 1
+    assert canvas.itemcget(polygons[0], 'fill') == '#ff0000'
+    assert view.session_data == snapshot
+
+
+@pytest.mark.parametrize('name', ['modern', 'compact'])
+def test_short_window_can_scroll_to_actions(themed_root, name):
+    from ui.session_view import SessionView
+    root, manager = themed_root
+    root.geometry('1000x580+50+50')
+    view = SessionView(root, db=DatabaseManager(':memory:'),
+                       session_data={'id': 188, 'name': 'Teste', 'shapes': []})
+    view.pack(fill='both', expand=True)
+    root.deiconify()
+    manager.apply(name)
+    root.update()
+    layout = view.theme_layout
+    layout.viewport.yview_moveto(1)
+    root.update()
+    assert view.btn_action_nest.winfo_ismapped()
+    assert view.btn_action_nest.winfo_rooty() + view.btn_action_nest.winfo_height() <= root.winfo_rooty() + root.winfo_height()

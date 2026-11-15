@@ -11,6 +11,13 @@ THEMES = {
     "petroleum": ("Verde-petróleo", dict(bg_main="#f5f5f1", bg_surface="#f5f5f1", bg_card="#f5f5f1", bg_input="#fefefc", bg_workspace="#dce5e0", canvas_bg="#dce5e0", bg_hover="#e6ece8", border="#d2d8d4", border_dark="#94aaa3", border_light="#fefefc", text_main="#263330", text_muted="#596b64", title_bar_bg="#20535a", select_bg="#287f78", accent_blue="#287f78")),
 }
 
+# Layouts completos reutilizam as paletas e as famílias de ícones correspondentes.
+LAYOUT_THEMES = {"modern": "blue", "technical": "graphite", "compact": "petroleum"}
+for key, label in (("modern", "Claro moderno"), ("technical", "Escuro técnico"), ("compact", "Claro compacto")):
+    THEMES[key] = (label, dict(THEMES[LAYOUT_THEMES[key]][1]))
+
+THEMES["technical"][1].update(canvas_bed="#263a40", canvas_grid="#38515b")
+
 class ThemeManager:
     def __init__(self, root, name="classic"):
         self.root = root
@@ -22,7 +29,7 @@ class ThemeManager:
     def set_palette(self):
         THEME.update(CLASSIC)
         THEME.update(THEMES[self.name][1])
-        self.root._icon_theme = self.name
+        self.root._icon_theme = LAYOUT_THEMES.get(self.name, self.name)
 
     def on_map(self, event):
         if self.pending is None:
@@ -43,6 +50,9 @@ class ThemeManager:
         palette = dict(THEME)
         def visit(widget):
             try:
+                layout_hook = getattr(widget, "apply_theme_layout", None)
+                if layout_hook:
+                    layout_hook(self.name)
                 options = widget.keys()
                 changes = {}
                 for key in ("background", "foreground", "activebackground", "activeforeground", "selectbackground", "selectforeground", "selectcolor", "insertbackground", "disabledforeground", "disabledbackground", "highlightbackground"):
@@ -61,6 +71,8 @@ class ThemeManager:
                                 role = next((k for k in priorities if str(CLASSIC.get(k, "")).lower() == value), None)
                             if role is None and value in ("#d9d9d9", "#d4d0c8"):
                                 role = "bg_surface"
+                            if role is None and value in ("#444444", "#666666", "#808080"):
+                                role = "text_muted" if "foreground" in key else None
                             if role is None and value in ("#006400", "green"):
                                 role = "accent_green"
                             saved[key] = (role, widget.cget(key))
@@ -75,6 +87,8 @@ class ThemeManager:
                     changes["relief"] = original if self.name == "classic" else "flat"
                 if getattr(widget, "_theme_primary", False):
                     changes.update(background=palette["bg_surface"] if self.name == "classic" else palette["select_bg"], foreground=palette["text_main"] if self.name == "classic" else palette["select_fg"])
+                if self.name in ("modern", "compact") and getattr(widget, "_layout_card", False) and "background" in options:
+                    changes["background"] = palette["bg_input"]
                 if changes:
                     widget.configure(**changes)
                 if isinstance(widget, ttk.Treeview):

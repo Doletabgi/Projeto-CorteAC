@@ -164,6 +164,27 @@ class MainWindow(tk.Tk):
         self.load_initial_data()
         self.theme_manager.refresh()
 
+    def apply_theme_layout(self, name):
+        if not hasattr(self, "main_paned") or getattr(self, "_navigation_theme", None) == name:
+            return
+        previous = getattr(self, "_navigation_theme", "classic")
+        self._navigation_theme = name
+        if name == "compact":
+            self._navigation_sash = self.main_paned.sash_coord(0)[0]
+            self.main_paned.configure(orient="vertical")
+            self.navigation_paned.configure(orient="horizontal")
+            self.main_paned.paneconfigure(self.navigation_box, minsize=170, height=190)
+            self.main_paned.paneconfigure(self.right_box, minsize=350)
+            self.main_paned.sash_place(0, 0, 190)
+        elif previous == "compact":
+            self.main_paned.configure(orient="horizontal")
+            self.navigation_paned.configure(orient="vertical")
+            self.main_paned.paneconfigure(self.navigation_box, minsize=180, width=210)
+            self.main_paned.paneconfigure(self.right_box, minsize=450)
+            self.main_paned.sash_place(0, max(210, getattr(self, "_navigation_sash", 210)), 0)
+        elif name in ("modern", "technical"):
+            self.main_paned.sash_place(0, 250, 0)
+
     def change_theme(self, name):
         previous = self.theme_manager.name
         try:
@@ -513,12 +534,14 @@ class MainWindow(tk.Tk):
     # =========================================================================
     def create_main_split_layout(self):
         paned = tk.PanedWindow(self, orient="horizontal", bg=THEME["bg_main"], sashwidth=4, sashrelief="raised")
+        self.main_paned = paned
         paned.pack(fill="both", expand=True)
 
         # -------------------------------------------------------------
         # PAINEL ESQUERDO: Barra de 3 Botões de Modo + Árvore + Grid
         # -------------------------------------------------------------
         left_box = tk.Frame(paned, bg=THEME["bg_surface"], width=210, relief="sunken", bd=1)
+        self.navigation_box = left_box
         paned.add(left_box, width=210, minsize=180)
 
         # Barra de seleção de modo com os 3 botões quadrados idênticos aos prints
@@ -555,6 +578,7 @@ class MainWindow(tk.Tk):
 
         # Divisão vertical esquerda: Árvore no topo e Grid embaixo
         v_paned = tk.PanedWindow(left_box, orient="vertical", bg=THEME["bg_surface"], sashwidth=4, sashrelief="raised")
+        self.navigation_paned = v_paned
         v_paned.pack(fill="both", expand=True)
 
         # Árvore Superior (Tree View) com moldura rebaixada
