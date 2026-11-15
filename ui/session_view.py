@@ -700,11 +700,16 @@ class SessionView(tk.Frame):
         self.debug_window.withdraw()
         self.debug_window.configure(bg=THEME["bg_card"])
         self.debug_window.transient(self.winfo_toplevel())
-        self.debug_window.resizable(False, False)
+        self.debug_window.geometry("800x640")
+        self.debug_window.minsize(760, 600)
+        self.debug_window.resizable(True, True)
         self.debug_window.protocol("WM_DELETE_WINDOW", self.debug_window.withdraw)
+        self.debug_window.bind("<Escape>", lambda _: self.debug_window.withdraw())
         self.debug_panel = DebugPanel(
             self.debug_window,
             on_engine_change=self._on_debug_engine_changed,
+            get_context=self.get_diagnostic_context,
+            on_open_section=self.open_diagnostic_section,
             bg=THEME["bg_card"]
         )
         self.debug_panel.pack(fill="both", expand=True, padx=10, pady=10)
@@ -2231,12 +2236,47 @@ class SessionView(tk.Frame):
     def show_debug_dialog(self):
         """Exibe os controles de diagnóstico da sessão sem recriar seu estado."""
         self.debug_window.title(
-            f"Debug / Diagnóstico — Sessão #{self.session_data.get('id', '')}"
+            f"Assistente de diagnóstico — Sessão #{self.session_data.get('id', '')}"
         )
+        self.debug_panel.refresh_context()
         self.debug_window.deiconify()
         self.debug_window.lift()
         self.debug_window.focus_set()
         return self.debug_window
+
+    def get_diagnostic_context(self):
+        """Lê os dados atuais da interface sem salvar ou recalcular a sessão."""
+        session = self.session_data
+        layouts = session.get("layouts") or []
+        pieces = sum(len(layout.get("pieces") or layout.get("placed_pieces") or []) for layout in layouts)
+        if not layouts:
+            pieces = len(session.get("placed_pieces") or [])
+        return {
+            "session_id": session.get("id"),
+            "session_name": self.entry_sname.get(),
+            "mode": self.get_nesting_mode(),
+            "strategy": self.get_strategy(),
+            "params": self.get_params(),
+            "material": dict(session.get("material") or {}),
+            "shapes": [{"pairs": shape.get("pairs"),
+                        "contour_points": len(shape.get("contour") or [])}
+                       for shape in self.shapes_list],
+            "gap_mm": self.entry_gap.get(),
+            "margins": self.get_margins(),
+            "layouts_count": len(layouts) or (1 if pieces else 0),
+            "placed_count": pieces,
+            "nesting_in_progress": bool(getattr(self.winfo_toplevel(), "_nesting_in_progress", False)),
+        }
+
+    def open_diagnostic_section(self, section):
+        """Volta à aba correspondente da mesma sessão que está sendo analisada."""
+        tabs = {"general": 0, "shapes": 1, "materials": 2, "layouts": 3}
+        self.debug_window.withdraw()
+        main = self.winfo_toplevel()
+        if hasattr(main, "activate_window"):
+            main.activate_window(self)
+        self.notebook.select(tabs[section])
+        self.focus_set()
 
     def _on_decision_changed(self, decision_name: str):
         """Disparado quando usuário altera Strategy, Params, Engine ou Macro."""
