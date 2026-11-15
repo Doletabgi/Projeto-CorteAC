@@ -700,7 +700,8 @@ class SessionView(tk.Frame):
         self.debug_window.withdraw()
         self.debug_window.configure(bg=THEME["bg_card"])
         self.debug_window.transient(self.winfo_toplevel())
-        self.debug_window.geometry("800x640")
+        debug_height = min(700, max(600, self.debug_window.winfo_screenheight() - 110))
+        self.debug_window.geometry(f"820x{debug_height}")
         self.debug_window.minsize(760, 600)
         self.debug_window.resizable(True, True)
         self.debug_window.protocol("WM_DELETE_WINDOW", self.debug_window.withdraw)
@@ -2239,6 +2240,7 @@ class SessionView(tk.Frame):
             f"Assistente de diagnóstico — Sessão #{self.session_data.get('id', '')}"
         )
         self.debug_panel.refresh_context()
+        self.debug_panel.on_reopen()
         self.debug_window.deiconify()
         self.debug_window.lift()
         self.debug_window.focus_set()

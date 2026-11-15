@@ -168,3 +168,93 @@ def test_background_test_reports_completion_and_errors_on_the_ui(panel, tmp_path
     else:
         assert json.loads(path.read_text()) == {'pieces': 60, 'runs': 2}
         assert 'Teste concluído' in panel.lbl_action_msg.cget('text')
+
+
+def test_assistant_reads_the_problem_and_guides_the_actual_pending_item(panel, context):
+    context['material'] = {}
+    assistant = panel.assistant
+    assistant.respond('Não consigo gerar meu encaixe')
+    assert assistant.issue == 'generate'
+    assert 'Nenhum material selecionado' in assistant.history[-1]['text']
+    assert 'Materiais' in assistant.history[-1]['text']
+    assert assistant.progress['value'] == 3
+
+
+def test_assistant_checks_corrections_on_return_without_assuming_success(panel, context):
+    context['material'] = {}
+    opened = []
+    panel.on_open_section = opened.append
+    assistant = panel.assistant
+    assistant.choose('Conferir', 'check')
+    assistant.choose('Abrir Materiais', 'open:materials')
+    assert opened == ['materials']
+    panel.on_reopen()
+    assert 'Nenhum material selecionado' in assistant.history[-1]['text']
+    context['material'] = {'code': 'EVA', 'width_mm': 1000, 'height_mm': 2000}
+    assistant.choose('Já ajustei', 'recheck')
+    assert 'há peças no layout' in assistant.history[-1]['text']
+    assert assistant.phase != 'complete'
+    assistant.choose('Sim, funcionou', 'resolved')
+    assert assistant.phase == 'complete'
+
+
+def test_assistant_includes_the_users_description_in_the_support_report(panel, context, tmp_path, monkeypatch):
+    path = tmp_path / 'conversa.txt'
+    monkeypatch.setattr('ui.debug_panel.filedialog.asksaveasfilename', lambda **kw: str(path))
+    assistant = panel.assistant
+    assistant.choose('Preciso de suporte', 'support')
+    assistant.respond('Ao gerar aparece a mensagem: nenhuma peça coube.')
+    assert assistant.phase == 'report'
+    assert not path.exists()
+    assistant.choose('Salvar conversa e relatório', 'save')
+    report = path.read_text(encoding='utf-8')
+    assert 'Conversa com o assistente' in report
+    assert 'Você: Ao gerar aparece a mensagem: nenhuma peça coube.' in report
+    assert 'Motivo: Preciso de suporte' in report
+    assert assistant.phase == 'report_saved'
+
+
+def test_assistant_does_not_claim_cleanup_happened_while_nesting(panel, context):
+    context['nesting_in_progress'] = True
+    assistant = panel.assistant
+    assistant.choose('O cálculo está lento', 'slow')
+    assert 'sendo calculado' in assistant.history[-1]['text']
+    assistant.choose('Liberar memória', 'clear')
+    assert 'Não consegui concluir' in assistant.history[-1]['text']
+    assert assistant.phase != 'resolution'
+
+
+def test_assistant_keeps_cancelled_report_available_for_retry(panel, monkeypatch):
+    monkeypatch.setattr('ui.debug_panel.filedialog.asksaveasfilename', lambda **kw: '')
+    assistant = panel.assistant
+    assistant.choose('Preciso de suporte', 'support')
+    assistant.respond('O programa demorou para gerar.')
+    assistant.choose('Salvar', 'save')
+    assert assistant.phase == 'report'
+    assert 'Relatório salvo' not in assistant.history[-1]['text']
+
+
+def test_assistant_restart_only_clears_the_conversation(panel, context):
+    original = copy.deepcopy(context)
+    assistant = panel.assistant
+    assistant.respond('Quero conferir a sessão')
+    panel.var_profile.set(True)
+    assistant.restart()
+    assert len(assistant.history) == 1
+    assert assistant.phase == 'welcome'
+    assert context == original
+    assert panel.var_profile.get() is True
+
+
+def test_assistant_handles_an_immediately_completed_performance_test(panel):
+    assistant = panel.assistant
+
+    def immediate_test():
+        assistant.benchmark_finished(True, 'resultado.json')
+        return True
+
+    assistant.test_performance = immediate_test
+    assistant.choose('Testar com exemplos', 'test')
+    assert assistant.phase == 'test_complete'
+    assert 'terminou' in assistant.history[-1]['text']
+    assert 'em andamento' not in assistant.history[-1]['text']

@@ -13,6 +13,7 @@ from typing import Callable, Optional
 
 from cad.session_diagnostics import check_session
 from config import APP_NAME, APP_VERSION, THEME
+from ui.diagnostic_assistant import DiagnosticAssistant
 from ui.icon_widgets import IconButton
 
 
@@ -54,13 +55,20 @@ class DebugPanel(tk.Frame):
         self._poll_id = None
         self.bind("<Destroy>", self._on_destroy, add="+")
 
-        self._label(self, "Como podemos ajudar?", font=("Segoe UI", 15, "bold")).pack(anchor="w")
-        self._label(self, "Confira a sessão, resolva dúvidas e prepare informações para o suporte.").pack(anchor="w", pady=(3, 12))
+        self._label(self, "Assistente de diagnóstico", font=("Segoe UI", 15, "bold")).pack(anchor="w")
+        self._label(self, "Descreva o problema e siga as orientações, uma etapa de cada vez.").pack(anchor="w", pady=(3, 12))
         self.tabs = ttk.Notebook(self)
         self.tabs.pack(fill="both", expand=True)
+        self.assistant = DiagnosticAssistant(
+            self.tabs, analyze=self._analyze_for_assistant,
+            open_section=self._open_assistant_section,
+            clear_memory=self.clear_caches, save_report=self.save_support_report,
+            test_performance=self.export_benchmark,
+        )
         self.guide_tab = tk.Frame(self.tabs, bg=self.card_bg, padx=12, pady=10)
         self.advanced_tab = tk.Frame(self.tabs, bg=self.card_bg, padx=12, pady=10)
-        self.tabs.add(self.guide_tab, text="Ajuda rápida")
+        self.tabs.add(self.assistant, text="Conversar com o assistente")
+        self.tabs.add(self.guide_tab, text="Resumo da sessão")
         self.tabs.add(self.advanced_tab, text="Avançado / suporte")
         self._build_guide()
         self._build_advanced()
@@ -187,6 +195,18 @@ class DebugPanel(tk.Frame):
         else:
             self.refresh_context()
 
+    def _analyze_for_assistant(self):
+        if not self.refresh_context():
+            return None
+        return {"context": self._context, "checks": self._checks}
+
+    def _open_assistant_section(self, section):
+        if self.on_open_section:
+            self.on_open_section(section)
+
+    def on_reopen(self):
+        self.assistant.on_reopen()
+
     def refresh_context(self):
         """Relê a sessão a cada verificação e reabertura da janela."""
         try:
@@ -204,6 +224,7 @@ class DebugPanel(tk.Frame):
         modes = {"auto": "Automático", "custom": "Personalizado", "fast": "Rápido", "economic": "Econômico",
                  "tapes": "Fitas / Correias", "remnants": "Sobras / Retalhos"}
         self.lbl_session.config(text=f"Sessão #{self._context.get('session_id', '—')} · {self._context.get('session_name', '')} · Modo {modes.get(mode, mode)}")
+        self.assistant.lbl_session.config(text=f"Sessão #{self._context.get('session_id', '—')} · {self._context.get('session_name', '')}")
         self.var_sanity.set(os.environ.get("CORTEAC_NFP_SANITY", "0").strip() == "1")
         self.results.delete(*self.results.get_children())
         labels = {"ok": "OK", "attention": "Ajustar", "info": "Conferir"}
@@ -215,7 +236,9 @@ class DebugPanel(tk.Frame):
                      next((c for c in self._checks if c["status"] == "info"), self._checks[0]))
         self.results.selection_set(first["key"])
         self._show_selected_check()
-        self.lbl_action_msg.config(text="Verificação atualizada. Selecione uma linha para ver o próximo passo.")
+        self.lbl_action_msg.config(text="Dados da sessão atualizados. Continue a conversa com o assistente."
+                                   if self.tabs.select() == str(self.assistant)
+                                   else "Verificação atualizada. Selecione uma linha para ver o próximo passo.")
         return True
 
     def _selected_check(self):
@@ -279,7 +302,7 @@ class DebugPanel(tk.Frame):
 
     def clear_caches(self):
         if not self._can_run_maintenance():
-            return
+            return False
         from cad.geometry import clear_transform_cache
         from cad.nfp import clear_nfp_cache
         from cad.macro_engine import clear_macro_caches
@@ -291,8 +314,10 @@ class DebugPanel(tk.Frame):
                 failures.append(str(exc))
         if failures:
             self.lbl_action_msg.config(text="A liberação ficou incompleta: " + "; ".join(failures))
+            return False
         else:
             self.lbl_action_msg.config(text="Memória temporária liberada. Volte à sessão e tente Gerar novamente. Seus dados foram mantidos.")
+            return True
 
     def save_support_report(self):
         if not self.refresh_context():
@@ -304,13 +329,23 @@ class DebugPanel(tk.Frame):
             return
         mode = self._context.get("mode", self._current_mode)
         effective_engine = self.get_engine() if mode == "custom" else "nfp"
+        reason = self.ISSUES[self.issue_var.get()][0]
+        if len(self.assistant.history) > 1:
+            reason = {"check": "Conferir minha sessão", "generate": "Não consigo gerar o encaixe",
+                      "layout": "Conferir as posições das peças", "slow": "O cálculo está lento",
+                      "support": "Preciso de suporte"}.get(self.assistant.issue, reason)
         lines = [f"{APP_NAME} {APP_VERSION} — Diagnóstico da sessão", datetime.now().astimezone().isoformat(timespec="seconds"),
-                 self.lbl_session.cget("text"), f"Motivo: {self.ISSUES[self.issue_var.get()][0]}",
+                 self.lbl_session.cget("text"), f"Motivo: {reason}",
                  f"Motor previsto: {effective_engine} | Estratégia: {self._context.get('strategy', '—')} | Parâmetros: {self._context.get('params', '—')}",
                  f"Conferência extra: {'ativa' if self.var_sanity.get() else 'desativada'}", "",
                  "Verificação de cadastro e configurações; não analisa colisões entre peças."]
         for check in self._checks:
             lines.extend(["", f"{check['title']}: {check['result']}", check["guidance"]])
+        if len(self.assistant.history) > 1:
+            lines.extend(["", "Conversa com o assistente", "-----------------------"])
+            for message in self.assistant.history:
+                speaker = "Você" if message["role"] == "user" else "Assistente"
+                lines.extend(["", f"{speaker}: {message['text']}"])
         try:
             with open(path, "w", encoding="utf-8") as report:
                 report.write("\n".join(lines) + "\n")
@@ -318,15 +353,16 @@ class DebugPanel(tk.Frame):
             self.lbl_action_msg.config(text=f"Não foi possível salvar o relatório: {exc}")
             return
         self.lbl_action_msg.config(text=f"Relatório salvo em {path}. Envie ao suporte com a descrição do problema.")
+        return path
 
     def export_benchmark(self):
         if not self._can_run_maintenance():
-            return
+            return False
         path = filedialog.asksaveasfilename(parent=self.winfo_toplevel(), title="Salvar teste de desempenho",
                                           initialfile="teste_desempenho.json", defaultextension=".json",
                                           filetypes=[("Relatório JSON", "*.json")])
         if not path:
-            return
+            return False
         self._benchmark_running = True
         self.btn_export_bench.config(state="disabled")
         self.btn_clear_cache.config(state="disabled")
@@ -347,6 +383,7 @@ class DebugPanel(tk.Frame):
 
         threading.Thread(target=worker, daemon=True).start()
         self._poll_benchmark(results_queue)
+        return True
 
     def _poll_benchmark(self, results_queue):
         self._poll_id = None
@@ -361,6 +398,7 @@ class DebugPanel(tk.Frame):
         self.btn_export_bench.config(state="normal")
         self.btn_clear_cache.config(state="normal")
         self.lbl_action_msg.config(text=f"Teste concluído. Relatório salvo em {detail}." if success else f"Não foi possível concluir o teste: {detail}")
+        self.assistant.benchmark_finished(success, detail)
 
     def _on_destroy(self, event):
         if event.widget is self and self._poll_id is not None:
