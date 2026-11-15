@@ -258,3 +258,11 @@ def test_assistant_handles_an_immediately_completed_performance_test(panel):
     assert assistant.phase == 'test_complete'
     assert 'terminou' in assistant.history[-1]['text']
     assert 'em andamento' not in assistant.history[-1]['text']
+
+
+def test_assistant_accepts_typed_yes_after_asking_if_the_problem_was_resolved(panel):
+    assistant = panel.assistant
+    assistant.respond('Quero conferir minha sessão')
+    assert assistant.phase == 'resolution'
+    assistant.respond('sim')
+    assert assistant.phase == 'complete'

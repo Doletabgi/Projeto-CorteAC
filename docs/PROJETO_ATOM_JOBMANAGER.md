@@ -14,9 +14,9 @@ pré-requisitos, escopo dos testes e regras de retomada.
 > **Regra de ouro:** o que está marcado `[CONFIRMADO]` veio do relatório, do código ou do usuário. O que está `[NÃO CONFIRMADO]` é suposição e não deve virar "fato" sem validação. O que está `[PREENCHER]` a IA deve completar lendo o código real.
 
 <!-- AUTO:header:start -->
-**Versão do aplicativo:** `1.8.18`
+**Versão do aplicativo:** `1.8.19`
 
-**Última sincronização com o código:** 2026-11-15 06:13 (HEAD ao gerar: `c01ca3a`; 216 arquivos Python, ~91582 linhas)
+**Última sincronização com o código:** 2026-11-15 06:16 (HEAD ao gerar: `4ff4ea1`; 216 arquivos Python, ~91591 linhas)
 <!-- AUTO:header:end -->
 **Versão deste documento:** 2
 
@@ -259,6 +259,7 @@ docs/releases/v1.8.15.md
 docs/releases/v1.8.16.md
 docs/releases/v1.8.17.md
 docs/releases/v1.8.18.md
+docs/releases/v1.8.19.md
 output/pdf/validacao-sessao-188.json
 tests/_catalog_fixtures.py                           # tests/_catalog_fixtures.py
 tests/conftest.py                                    # tests/conftest.py
@@ -857,7 +858,7 @@ ui/user_dialog.py                                    # JobManager 2000 (Python E
 - `class TestSessionContextMenuExport` (linha 27, 11 métodos)
 
 ### `tests/test_session_diagnostics.py`
-- funções: `context`, `by_key`, `test_valid_session_is_read_only`, `test_empty_session_explains_what_to_fill`, `test_invalid_demand_is_not_reported_as_ready`, `test_only_requested_shapes_need_geometry`, `test_invalid_cutting_spaces_have_actionable_result`, `test_zero_gap_and_missing_layout_are_information`, `panel`, `test_checks_refresh_and_point_to_the_right_tab`, `test_report_contains_current_findings_without_running_nesting`, `test_advanced_settings_preserve_auto_lock_and_single_use_profile`, `test_cleanup_waits_for_live_nesting`, `test_background_test_reports_completion_and_errors_on_the_ui`, `test_assistant_reads_the_problem_and_guides_the_actual_pending_item` (+6)
+- funções: `context`, `by_key`, `test_valid_session_is_read_only`, `test_empty_session_explains_what_to_fill`, `test_invalid_demand_is_not_reported_as_ready`, `test_only_requested_shapes_need_geometry`, `test_invalid_cutting_spaces_have_actionable_result`, `test_zero_gap_and_missing_layout_are_information`, `panel`, `test_checks_refresh_and_point_to_the_right_tab`, `test_report_contains_current_findings_without_running_nesting`, `test_advanced_settings_preserve_auto_lock_and_single_use_profile`, `test_cleanup_waits_for_live_nesting`, `test_background_test_reports_completion_and_errors_on_the_ui`, `test_assistant_reads_the_problem_and_guides_the_actual_pending_item` (+7)
 
 ### `tests/test_session_material_delete.py`
 - `class TestSessionMaterialDelete` (linha 17, 10 métodos)
@@ -5175,6 +5176,7 @@ Com dados confiáveis e validações definidas, avaliar comparação do aproveit
 <!-- AUTO:gitlog:start -->
 | Commit | Data | Autor | Mensagem |
 |---|---|---|---|
+| `4ff4ea1` | 2026-11-15 | Doletabgi | chore(release): OpenCorte v1.8.18 |
 | `c01ca3a` | 2026-11-15 | Doletabgi | chore(release): OpenCorte v1.8.17 |
 | `485fb10` | 2026-11-15 | Doletabgi | chore(release): OpenCorte v1.8.16 |
 | `88f105c` | 2026-11-13 | Doletabgi | chore(release): OpenCorte v1.8.15 |
@@ -5189,7 +5191,6 @@ Com dados confiáveis e validações definidas, avaliar comparação do aproveit
 | `6af24e9` | 2026-11-12 | Doletabgi | chore(release): OpenCorte v1.8.8 |
 | `5d008da` | 2026-11-12 | Doletabgi | chore(release): OpenCorte v1.8.7 |
 | `2e6caf9` | 2026-11-11 | Doletabgi | docs: registra publicacao e validacao da v1.8.6 [skip ci] |
-| `e0b9a26` | 2026-11-11 | Doletabgi | fix(ci): estabiliza build Linux e prepara v1.8.6 |
 <!-- AUTO:gitlog:end -->
 
 ---

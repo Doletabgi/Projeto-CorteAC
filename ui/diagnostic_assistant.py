@@ -226,6 +226,7 @@ class DiagnosticAssistant(tk.Frame):
             self._choices([("Abrir Geral", "open:general"), ("Já gerei, conferir resultado", "recheck"),
                            ("Aparece uma mensagem de erro", "support")])
         else:
+            self.phase = "resolution"
             self._say("Os dados básicos estão preenchidos e há peças no layout. Abra Layout para revisar o resultado. O problema que você percebeu foi resolvido?")
             self._choices([("Abrir Layout", "open:layouts"), ("Sim, funcionou", "resolved"),
                            ("Ainda preciso de ajuda", "unresolved")])
