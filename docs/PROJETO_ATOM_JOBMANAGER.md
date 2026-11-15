@@ -14,9 +14,9 @@ pré-requisitos, escopo dos testes e regras de retomada.
 > **Regra de ouro:** o que está marcado `[CONFIRMADO]` veio do relatório, do código ou do usuário. O que está `[NÃO CONFIRMADO]` é suposição e não deve virar "fato" sem validação. O que está `[PREENCHER]` a IA deve completar lendo o código real.
 
 <!-- AUTO:header:start -->
-**Versão do aplicativo:** `1.8.19`
+**Versão do aplicativo:** `1.8.20`
 
-**Última sincronização com o código:** 2026-11-15 06:16 (HEAD ao gerar: `4ff4ea1`; 216 arquivos Python, ~91591 linhas)
+**Última sincronização com o código:** 2026-11-15 06:25 (HEAD ao gerar: `3e5b0c6`; 216 arquivos Python, ~91755 linhas)
 <!-- AUTO:header:end -->
 **Versão deste documento:** 2
 
@@ -260,6 +260,7 @@ docs/releases/v1.8.16.md
 docs/releases/v1.8.17.md
 docs/releases/v1.8.18.md
 docs/releases/v1.8.19.md
+docs/releases/v1.8.20.md
 output/pdf/validacao-sessao-188.json
 tests/_catalog_fixtures.py                           # tests/_catalog_fixtures.py
 tests/conftest.py                                    # tests/conftest.py
@@ -621,7 +622,7 @@ ui/user_dialog.py                                    # JobManager 2000 (Python E
 
 ### `tests/test_batch_autonest.py`
 - `class FakeBatchWindow` (linha 22, 1 métodos): Mock leve de MainWindow contendo todos os componentes e métodos de batch.
-- `class TestBatchAutoNest` (linha 115, 13 métodos)
+- `class TestBatchAutoNest` (linha 115, 18 métodos)
 
 ### `tests/test_batch_print_sessions.py`
 - `class TestBatchPrintSessions` (linha 21, 8 métodos)
@@ -1054,8 +1055,8 @@ ui/user_dialog.py                                    # JobManager 2000 (Python E
 - funções: `calc_pieces_minimum`, `count_pieces_outside`
 
 ### `ui/batch_nest_dialog.py`
-- `class BatchAutoNestDialog` (linha 15, 4 métodos): Diálogo para revisar as sessões selecionadas em massa, ajustar as configurações
-- `class BatchProgressDialog` (linha 376, 7 métodos): Janela modal de progresso em tempo real durante a execução do lote de cálculo.
+- `class BatchAutoNestDialog` (linha 16, 5 métodos): Diálogo para revisar as sessões selecionadas em massa, ajustar as configurações
+- `class BatchProgressDialog` (linha 449, 7 métodos): Janela modal de progresso em tempo real durante a execução do lote de cálculo.
 
 ### `ui/cad_canvas.py`
 - `class CADCanvas` (linha 12, 24 métodos)
@@ -5176,6 +5177,7 @@ Com dados confiáveis e validações definidas, avaliar comparação do aproveit
 <!-- AUTO:gitlog:start -->
 | Commit | Data | Autor | Mensagem |
 |---|---|---|---|
+| `3e5b0c6` | 2026-11-15 | Doletabgi | chore(release): OpenCorte v1.8.19 |
 | `4ff4ea1` | 2026-11-15 | Doletabgi | chore(release): OpenCorte v1.8.18 |
 | `c01ca3a` | 2026-11-15 | Doletabgi | chore(release): OpenCorte v1.8.17 |
 | `485fb10` | 2026-11-15 | Doletabgi | chore(release): OpenCorte v1.8.16 |
@@ -5190,7 +5192,6 @@ Com dados confiáveis e validações definidas, avaliar comparação do aproveit
 | `79ed30e` | 2026-11-12 | Doletabgi | chore(release): OpenCorte v1.8.9 |
 | `6af24e9` | 2026-11-12 | Doletabgi | chore(release): OpenCorte v1.8.8 |
 | `5d008da` | 2026-11-12 | Doletabgi | chore(release): OpenCorte v1.8.7 |
-| `2e6caf9` | 2026-11-11 | Doletabgi | docs: registra publicacao e validacao da v1.8.6 [skip ci] |
 <!-- AUTO:gitlog:end -->
 
 ---

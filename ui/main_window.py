@@ -6341,7 +6341,8 @@ class MainWindow(tk.Tk):
                                 layouts=layouts,
                                 session=sess_obj,
                                 shapes=sorted_shapes,
-                                params=config.get("params", "")
+                                params=config.get("params", ""),
+                                tip_mode=config.get("tip_mode"),
                             )
 
                             try:

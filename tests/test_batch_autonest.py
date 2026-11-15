@@ -16,7 +16,7 @@ from tkinter import ttk
 from database import DatabaseManager
 from ui.main_window import MainWindow
 from ui.batch_nest_dialog import BatchAutoNestDialog, BatchProgressDialog
-from cad.layers_rule import is_refile_auto_enabled, is_separar_sobras_enabled
+from cad.layers_rule import is_refile_auto_enabled, is_separar_sobras_enabled, parse_session_params, layers_for_piece
 
 
 class FakeBatchWindow:
@@ -402,6 +402,96 @@ class TestBatchAutoNest(unittest.TestCase):
         self.assertEqual(msg[0], "BATCH_CANCELLED")
         self.assertEqual(msg[1], 0)  # 0 concluídas
 
+
+    def test_batch_dialog_loads_saved_separation_options(self):
+        dlg = BatchAutoNestDialog(self.root, [], initial_config={
+            "params": "FastNest;destino_sobras=placa;tip_mode=faixa;folga_ponta=12;outra_opcao=manter",
+        })
+        self.assertEqual(dlg.var_params.get(), "FastNest")
+        self.assertEqual(dlg.var_destino_sobras.get(), "placa")
+        self.assertEqual(dlg.cb_tip_mode.current(), 1)
+        self.assertEqual(str(dlg.cb_tip_mode.cget("state")), "disabled")
+        dlg.var_destino_sobras.set("ponta")
+        dlg._update_sobras_controls()
+        self.assertEqual(str(dlg.cb_tip_mode.cget("state")), "readonly")
+        dlg.on_confirm()
+        preset, options = parse_session_params(dlg.result_config["params"])
+        self.assertEqual(preset, "FastNest")
+        self.assertEqual(options["destino_sobras"], "ponta")
+        self.assertEqual(options["tip_mode"], "faixa")
+        self.assertEqual(options["folga_ponta"], "12.0")
+        self.assertEqual(options["outra_opcao"], "manter")
+
+    def test_batch_dialog_encodes_both_destinations_and_tip_formats(self):
+        for destination, mode in (("ponta", "canto"), ("ponta", "faixa"), ("placa", "faixa")):
+            with self.subTest(destination=destination, mode=mode):
+                dlg = BatchAutoNestDialog(self.root, [], initial_config={"params": "HighYield;destino_sobras=placa"})
+                dlg.var_destino_sobras.set(destination)
+                dlg.cb_tip_mode.current(0 if mode == "canto" else 1)
+                dlg.var_folga_ponta.set("7,5")
+                dlg.on_confirm()
+                _, options = parse_session_params(dlg.result_config["params"])
+                self.assertEqual(options["destino_sobras"], destination)
+                self.assertEqual(options["tip_mode"], mode)
+                self.assertEqual(float(options["folga_ponta"]), 7.5)
+                self.assertEqual(dlg.result_config["destino_sobras"], destination)
+
+    def test_batch_dialog_disables_separation_controls_without_losing_choice(self):
+        dlg = BatchAutoNestDialog(self.root, [], initial_config={"destino_sobras": "placa", "tip_mode": "faixa"})
+        dlg.var_sobras.set(False)
+        dlg._update_sobras_controls()
+        self.assertTrue(all(str(button.cget("state")) == "disabled" for button in dlg._destination_buttons))
+        self.assertEqual(str(dlg.entry_folga_ponta.cget("state")), "disabled")
+        dlg.on_confirm()
+        _, options = parse_session_params(dlg.result_config["params"])
+        self.assertEqual(options["separar_sobras"], "0")
+        self.assertEqual(options["destino_sobras"], "placa")
+        self.assertEqual(options["tip_mode"], "faixa")
+
+    def test_batch_dialog_rejects_invalid_tip_spacing(self):
+        dlg = BatchAutoNestDialog(self.root, [])
+        with patch("ui.batch_nest_dialog.messagebox.showwarning") as warning:
+            for value in ("-1", "nan", "infinito", "inf"):
+                dlg.var_folga_ponta.set(value)
+                dlg.on_confirm()
+                self.assertFalse(dlg.confirmed)
+            self.assertEqual(warning.call_count, 4)
+        dlg.var_folga_ponta.set("0")
+        dlg.on_confirm()
+        self.assertEqual(dlg.result_config["folga_ponta"], 0.0)
+
+    def test_batch_worker_applies_and_persists_separate_sheet_for_all_sessions(self):
+        contour = [{"x": 0, "y": 0}, {"x": 50, "y": 0}, {"x": 50, "y": 40}, {"x": 0, "y": 40}]
+        sessions = []
+        for sid in (101, 102):
+            shape = {"name": "Palmilha", "size": "41", "pairs": 5, "sequence": 1, "contour": contour}
+            self.app.db.update_session_shapes(sid, [shape])
+            self.app.db.update_session(sid, layers=4)
+            session = next(s for s in self.app.sessions if s["id"] == sid)
+            session.update(layers=4, shapes=[shape], material={"width_mm": 500, "height_mm": 500, "layers": 4},
+                           params="FastNest;destino_sobras=ponta")
+            sessions.append(copy.deepcopy(session))
+        dlg = BatchAutoNestDialog(self.root, sessions, initial_config={"params": "FastNest", "nesting_mode": "fast"})
+        dlg.var_destino_sobras.set("placa")
+        dlg.cb_tip_mode.current(1)
+        dlg.var_refile.set(False)
+        dlg.on_confirm()
+        config = dlg.result_config
+        q = queue.Queue()
+        self.app._batch_nest_worker(sessions, config, q)
+        progress = MagicMock()
+        progress.winfo_exists.return_value = True
+        self.app._poll_batch_worker(q, progress, config)
+        for sid in (101, 102):
+            with self.subTest(session_id=sid):
+                stored = self.app.db.get_session(sid)
+                _, options = parse_session_params(stored["params"])
+                self.assertEqual(options["destino_sobras"], "placa")
+                self.assertEqual(options["tip_mode"], "faixa")
+                layouts = self.app.db.get_session_layouts(sid)
+                self.assertTrue(any(layout["layers"] == 2 for layout in layouts))
+                self.assertFalse(any(layout.get("tip_zone") for layout in layouts))
+                self.assertEqual(sum(layers_for_piece(layout, piece) for layout in layouts for piece in layout["pieces"]), 10)
 
     def test_batch_dialog_machine_export_configuration(self):
         """O checkbox de exportação para a máquina deve entrar no config do batch."""

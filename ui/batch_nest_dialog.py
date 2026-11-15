@@ -3,13 +3,14 @@ JobManager 2000 (Python Edition)
 ui/batch_nest_dialog.py - Diálogo de Configuração e Execução de Auto-Nest em Massa
 """
 
+import math
 import tkinter as tk
 from ui.icon_widgets import IconButton, IconCheckbutton, IconLabel
 from tkinter import ttk, messagebox, filedialog
 from typing import List, Dict, Any, Optional, Callable
 
 from config import THEME
-from cad.layers_rule import encode_session_params
+from cad.layers_rule import encode_session_params, parse_session_params
 
 
 class BatchAutoNestDialog(tk.Toplevel):
@@ -28,13 +29,15 @@ class BatchAutoNestDialog(tk.Toplevel):
         self.parent = parent
         self.selected_sessions = selected_sessions or []
         self.initial_config = initial_config or {}
+        self._initial_preset, self._initial_options = parse_session_params(self.initial_config.get("params") or "HighYield")
         self.on_start_batch = on_start_batch
         self.confirmed = False
         self.result_config = None
 
         self.title("⚡ Auto-Nest em Massa (Batch Nesting)")
-        self.geometry("740x650")
-        self.minsize(620, 560)
+        height = min(740, max(620, self.winfo_screenheight() - 110))
+        self.geometry(f"820x{height}")
+        self.minsize(720, 620)
         self.configure(bg=THEME["bg_surface"])
 
         try:
@@ -63,7 +66,9 @@ class BatchAutoNestDialog(tk.Toplevel):
             text="As configurações abaixo serão salvas e aplicadas em todas as sessões selecionadas para o cálculo de encaixe.",
             font=("Segoe UI", 8),
             bg=THEME["bg_surface"],
-            fg=THEME["text_muted"]
+            fg=THEME["text_muted"],
+            wraplength=680,
+            justify="left"
         ).pack(anchor="w", pady=(2, 0))
 
         # 2. Tabela de Sessões Selecionadas
@@ -170,7 +175,7 @@ class BatchAutoNestDialog(tk.Toplevel):
         r2.pack(fill="x", pady=2)
 
         tk.Label(r2, text="Parâmetros:", width=15, anchor="w", bg=THEME["bg_surface"], fg=THEME["text_main"], font=("Segoe UI", 8)).pack(side="left")
-        self.var_params = tk.StringVar(value=self.initial_config.get("params", "HighYield"))
+        self.var_params = tk.StringVar(value=self._initial_preset)
         cb_params = ttk.Combobox(r2, textvariable=self.var_params, values=["HighYield", "FastNest", "stdNOTFill", "std", "ALTERNADO"], width=14)
         cb_params.pack(side="left", padx=(0, 20))
 
@@ -207,19 +212,55 @@ class BatchAutoNestDialog(tk.Toplevel):
             activebackground=THEME["bg_surface"],
             font=("Segoe UI", 8)
         )
-        chk_refile.pack(side="left", padx=(0, 16))
+        chk_refile.pack(anchor="w")
 
         self.var_sobras = tk.BooleanVar(value=bool(self.initial_config.get("separar_sobras", True)))
         chk_sobras = IconCheckbutton(
             r4,
             text="🗂️ Separar sobras de 4 camadas em layout de 2 camadas",
             variable=self.var_sobras,
+            command=self._update_sobras_controls,
             bg=THEME["bg_surface"],
             fg=THEME["text_main"],
             activebackground=THEME["bg_surface"],
             font=("Segoe UI", 8)
         )
-        chk_sobras.pack(side="left")
+        chk_sobras.pack(anchor="w", pady=(3, 0))
+
+        sobras_frame = tk.LabelFrame(config_frame, text="Modalidade das sobras de 2 camadas",
+                                    bg=THEME["bg_surface"], fg=THEME["text_main"],
+                                    font=("Segoe UI", 8, "bold"), padx=8, pady=5)
+        sobras_frame.pack(fill="x", pady=(3, 6))
+        destination = self.initial_config.get("destino_sobras", self._initial_options.get("destino_sobras", "ponta"))
+        self.var_destino_sobras = tk.StringVar(value=destination if destination in ("ponta", "placa") else "ponta")
+        destination_row = tk.Frame(sobras_frame, bg=THEME["bg_surface"])
+        destination_row.pack(fill="x")
+        self._destination_buttons = []
+        for label, value in (("Ponta na última placa (enfesto em degrau)", "ponta"),
+                             ("Nova placa separada com 2 camadas", "placa")):
+            button = tk.Radiobutton(destination_row, text=label, variable=self.var_destino_sobras,
+                                    value=value, command=self._update_sobras_controls,
+                                    bg=THEME["bg_surface"], activebackground=THEME["bg_surface"],
+                                    fg=THEME["text_main"], font=("Segoe UI", 8))
+            button.pack(side="left", padx=(0, 10))
+            self._destination_buttons.append(button)
+        tip_row = tk.Frame(sobras_frame, bg=THEME["bg_surface"])
+        tip_row.pack(fill="x", pady=(5, 0))
+        tk.Label(tip_row, text="Formato da ponta:", bg=THEME["bg_surface"],
+                 fg=THEME["text_main"], font=("Segoe UI", 8)).pack(side="left")
+        self._tip_labels = {"canto": "Canto no final da chapa", "faixa": "Faixa inteira no final da chapa"}
+        tip_mode = self.initial_config.get("tip_mode", self._initial_options.get("tip_mode", "canto"))
+        self.var_tip_mode = tk.StringVar(value=self._tip_labels.get(tip_mode, self._tip_labels["canto"]))
+        self.cb_tip_mode = ttk.Combobox(tip_row, textvariable=self.var_tip_mode,
+                                       values=list(self._tip_labels.values()), state="readonly", width=29)
+        self.cb_tip_mode.pack(side="left", padx=(6, 16))
+        tk.Label(tip_row, text="Folga extra (mm):", bg=THEME["bg_surface"],
+                 fg=THEME["text_main"], font=("Segoe UI", 8)).pack(side="left")
+        folga = self.initial_config.get("folga_ponta", self._initial_options.get("folga_ponta", "15.0"))
+        self.var_folga_ponta = tk.StringVar(value=str(folga))
+        self.entry_folga_ponta = tk.Entry(tip_row, textvariable=self.var_folga_ponta, width=7)
+        self.entry_folga_ponta.pack(side="left", padx=(6, 0))
+        self._update_sobras_controls()
 
         # Linha 5: Salvar no banco
         r5 = tk.Frame(config_frame, bg=THEME["bg_surface"])
@@ -297,6 +338,21 @@ class BatchAutoNestDialog(tk.Toplevel):
             command=self.on_confirm
         )
         btn_start.pack(side="right")
+        # Reserva as configurações e os botões; a lista de sessões pode rolar.
+        table_frame.pack_forget()
+        config_frame.pack_forget()
+        btn_bar.pack_forget()
+        btn_bar.pack(fill="x", side="bottom")
+        config_frame.pack(fill="x", side="bottom", padx=12, pady=(0, 10))
+        table_frame.pack(fill="both", expand=True, padx=12, pady=(0, 8))
+
+    def _update_sobras_controls(self):
+        enabled = self.var_sobras.get()
+        for button in self._destination_buttons:
+            button.config(state="normal" if enabled else "disabled")
+        is_tip = enabled and self.var_destino_sobras.get() == "ponta"
+        self.cb_tip_mode.config(state="readonly" if is_tip else "disabled")
+        self.entry_folga_ponta.config(state="normal" if is_tip else "disabled")
 
     def _choose_machine_dir(self):
         initial = self.var_machine_dir.get().strip() or None
@@ -310,6 +366,16 @@ class BatchAutoNestDialog(tk.Toplevel):
             self.var_machine_dir.set(chosen)
 
     def on_confirm(self):
+        try:
+            folga_ponta = float(self.var_folga_ponta.get().replace(",", "."))
+            if not math.isfinite(folga_ponta) or folga_ponta < 0:
+                raise ValueError
+        except ValueError:
+            if self.var_sobras.get() and self.var_destino_sobras.get() == "ponta":
+                messagebox.showwarning("Folga da ponta", "Informe uma folga extra maior ou igual a zero, em milímetros.", parent=self)
+                self.entry_folga_ponta.focus_set()
+                return
+            folga_ponta = 15.0
         try:
             gap_val = float(self.var_gap.get().replace(",", "."))
         except ValueError:
@@ -336,14 +402,18 @@ class BatchAutoNestDialog(tk.Toplevel):
                 return
             self.var_machine_dir.set(machine_dir)
 
-        raw_preset = self.var_params.get().strip() or "HighYield"
-        encoded_params = encode_session_params(
-            raw_preset,
-            {
-                "separar_sobras": "1" if self.var_sobras.get() else "0",
-                "refile_auto": "1" if self.var_refile.get() else "0",
-            }
-        )
+        raw_preset, typed_options = parse_session_params(self.var_params.get().strip() or "HighYield")
+        tip_mode = next((key for key, label in self._tip_labels.items() if label == self.var_tip_mode.get()), "canto")
+        options = dict(self._initial_options)
+        options.update(typed_options)
+        options.update({
+            "separar_sobras": "1" if self.var_sobras.get() else "0",
+            "refile_auto": "1" if self.var_refile.get() else "0",
+            "destino_sobras": self.var_destino_sobras.get(),
+            "tip_mode": tip_mode,
+            "folga_ponta": str(folga_ponta),
+        })
+        encoded_params = encode_session_params(raw_preset, options)
 
         self.result_config = {
             "nesting_mode": self.var_mode.get(),
@@ -361,6 +431,9 @@ class BatchAutoNestDialog(tk.Toplevel):
             },
             "refile_auto": self.var_refile.get(),
             "separar_sobras": self.var_sobras.get(),
+            "destino_sobras": self.var_destino_sobras.get(),
+            "tip_mode": tip_mode,
+            "folga_ponta": folga_ponta,
             "save_to_db": self.var_save_db.get(),
             "export_machine": self.var_export_machine.get(),
             "machine_target_dir": machine_dir,

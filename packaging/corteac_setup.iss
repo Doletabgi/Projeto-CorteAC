@@ -5,7 +5,7 @@
 
 #define MyAppName "OpenCorte"
 #ifndef MyAppVersion
-  #define MyAppVersion "1.8.19"
+  #define MyAppVersion "1.8.20"
 #endif
 #define MyAppPublisher "ATOM / OpenCorte Industrial"
 #define MyAppURL "https://github.com/Doletabgi/Projeto-CorteAC"
