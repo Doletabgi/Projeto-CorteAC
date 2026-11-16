@@ -650,6 +650,8 @@ class LayoutEditorView(tk.Frame):
         self._drag_indices = []
         self._drag_piece_origins = {}
         self._drag_anchor_idx = None
+        self._manual_piece = None
+        self._manual_pointer_xy = None
 
         # Estado da rotação livre 360° com botão direito do mouse (R-Drag) e Menu 102
         self._rdrag_active = False
@@ -1972,6 +1974,8 @@ class LayoutEditorView(tk.Frame):
 
     def on_canvas_double_click(self, event):
         """Duplo clique na barra lateral adiciona uma nova peça; duplo clique na divisória reseta."""
+        if self._manual_piece is not None and event.x < self.sidebar_div_x - 6:
+            return self._finish_manual_placement(event)
         if hasattr(self, "sidebar_div_x") and abs(event.x - self.sidebar_div_x) <= 6:
             self.custom_divider_x = None
             self.custom_divider_ratio = None
@@ -1990,7 +1994,7 @@ class LayoutEditorView(tk.Frame):
                     clicked_idx = row_idx * num_cols + col_idx
                     if 0 <= clicked_idx < len(self.sidebar_targets):
                         self.active_target_index = clicked_idx
-                        self.add_piece_for_target(self.sidebar_targets[clicked_idx])
+                        self.add_piece_for_target(self.sidebar_targets[clicked_idx], event=event)
             return
 
         # Duplo-clique na mesa CAD: se em área vazia (fora de qualquer peça), desmarca tudo
@@ -2155,12 +2159,17 @@ class LayoutEditorView(tk.Frame):
             target = self.sidebar_targets[idx]
             self.add_piece_for_target(target)
 
-    def add_piece_for_target(self, target):
-        """Adiciona uma nova peça na mesa garantindo que não colida."""
+    def add_piece_for_target(self, target, event=None):
+        """Pela miniatura, prende a peça ao mouse; pelo catálogo, busca posição livre."""
+        if event is not None:
+            self.cancel_drag()
+            self._manual_piece = self._build_piece_for_target(target, 0.0, 0.0)
+            self.canvas.focus_set()
+            self._update_manual_placement(event.x, event.y)
+            return
+
         self.push_undo()
         contour = target.get("contour") or CONTOUR_CON
-        size_str = str(target.get("size") or "")
-        color = target.get("color") or get_color_for_size(size_str)
 
         # Encontra uma posição livre na mesa para não sobrepor
         new_x = 300.0
@@ -2181,26 +2190,92 @@ class LayoutEditorView(tk.Frame):
                 new_x = 100.0
                 new_y += 70.0
 
-        self.placed_pieces.append({
+        self._insert_piece(self._build_piece_for_target(target, new_x, new_y))
+
+    def _build_piece_for_target(self, target, x, y):
+        size_str = str(target.get("size") or "")
+        return {
             "target_id": target.get("id"),
             "name": target.get("name", "Molde"),
             "size": size_str,
-            "color": color,
-            "contour": copy.deepcopy(contour),
+            "color": target.get("color") or get_color_for_size(size_str),
+            "contour": copy.deepcopy(target.get("contour") or CONTOUR_CON),
             "holes": copy.deepcopy(target.get("holes") or []),
             "stitching": copy.deepcopy(target.get("stitching") or []),
             "internal_cuts": copy.deepcopy(target.get("internal_cuts") or []),
-            "x": new_x,
-            "y": new_y,
+            "x": x,
+            "y": y,
             "rotation": 0.0,
             "is_mirrored": bool(target.get("is_mirrored", False)),
-        })
+        }
+
+    def _insert_piece(self, piece):
+        self.placed_pieces.append(piece)
         self.selected_index = len(self.placed_pieces) - 1
         self.selected_indices = [self.selected_index]
         self._sync_current_layout_pieces()
         self.set_modified(True)
         self.redraw()
         self.update_status()
+
+    def _update_manual_placement(self, canvas_x, canvas_y):
+        self._manual_pointer_xy = (canvas_x, canvas_y)
+        return self._draw_manual_placement()
+
+    def _draw_manual_placement(self):
+        """Prévia separada das peças salvas, centrada no ponteiro mesmo com zoom/pan."""
+        piece = self._manual_piece
+        if piece is None:
+            return False
+        self.canvas.delete("manual_piece_preview")
+
+        canvas_x, canvas_y = self._manual_pointer_xy
+        wx, wy = self.screen_to_world(canvas_x, canvas_y)
+        local_poly = transform_contour(piece["contour"], 0.0, 0.0, piece["rotation"])
+        bx0, by0, bx1, by1 = polygon_bbox(local_poly)
+        piece["x"] = wx - (bx0 + bx1) / 2.0
+        piece["y"] = wy - (by0 + by1) / 2.0
+        poly = transform_contour(piece["contour"], piece["x"], piece["y"], piece["rotation"])
+        bbox = polygon_bbox(poly)
+        valid = (
+            0 <= canvas_x < self.sidebar_div_x - 6
+            and 0 <= canvas_y < self.canvas.winfo_height()
+            and bbox[0] >= -0.01 and bbox[1] >= -0.01
+            and bbox[2] <= self.sheet_width + 0.01
+            and bbox[3] <= self.sheet_height + 0.01
+        )
+        if valid:
+            for other in self.placed_pieces:
+                other_poly, other_bbox = self._get_piece_geom(other)
+                if bbox_overlap(bbox, other_bbox, 0.0) and polygons_collide(
+                    poly, other_poly, gap=0.0, bbox_a=bbox, bbox_b=other_bbox
+                ):
+                    valid = False
+                    break
+
+        screen_pts = [coord for pt in poly for coord in self.world_to_screen(pt["x"], pt["y"])]
+        if len(screen_pts) >= 6:
+            self.canvas.create_polygon(
+                screen_pts, fill="", outline="#2563eb" if valid else "#ef4444",
+                width=2.5, tags="manual_piece_preview"
+            )
+        self._set_cursor("crosshair")
+        self.lbl_stat_left.config(text="Clique para posicionar a peça. Esc cancela.")
+        return valid
+
+    def _finish_manual_placement(self, event):
+        if not self._update_manual_placement(event.x, event.y):
+            self.lbl_stat_left.config(text="Escolha uma posição dentro da chapa, sem sobrepor outras peças. Esc cancela.")
+            return "break"
+        self.push_undo()
+        piece = self._manual_piece
+        self._manual_piece = None
+        self._manual_pointer_xy = None
+        self.canvas.delete("manual_piece_preview")
+        self._set_cursor("arrow")
+        self._insert_piece(piece)
+        self.lbl_stat_left.config(text="Peça posicionada.")
+        return "break"
 
     # Stubs para compatibilidade com código que acessava o painel lateral
     def setup_sidebar(self):
@@ -2415,6 +2490,9 @@ class LayoutEditorView(tk.Frame):
         """
         if not getattr(self, "layouts", None) or index < 0 or index >= len(self.layouts):
             return False
+
+        if self._manual_piece is not None:
+            self.cancel_drag()
 
         if save_current and 0 <= getattr(self, "current_layout_index", 0) < len(self.layouts):
             cur_idx = self.current_layout_index
@@ -3476,10 +3554,15 @@ class LayoutEditorView(tk.Frame):
 
         self.update_sheet_status()
 
+        self._draw_manual_placement()
+
     # -------------------------------------------------------------
     # Rastreamento de Movimento do Mouse e Interações
     # -------------------------------------------------------------
     def on_mouse_move(self, event):
+        if self._manual_piece is not None:
+            self._update_manual_placement(event.x, event.y)
+            return
         # Durante o arraste de peca, on_canvas_drag e o dono do cursor/status (com throttle).
         # Sem isso, o Tk dispara <Motion> e <B1-Motion> para o mesmo evento fisico e cada
         # pixel movido reconfigurava a barra de status (custo de layout no Tk).
@@ -3520,6 +3603,10 @@ class LayoutEditorView(tk.Frame):
 
     def on_canvas_click(self, event):
         self.canvas.focus_set()
+        if self._manual_piece is not None:
+            if event.x < self.sidebar_div_x - 6:
+                return self._finish_manual_placement(event)
+            self.cancel_drag()
         if getattr(self, "sim_running", False):
             self.stop_simulation()
         # Um clique novo encerra qualquer atualizacao/redraw pendente do gesto anterior
@@ -3679,6 +3766,9 @@ class LayoutEditorView(tk.Frame):
                 self.update_status()
 
     def on_canvas_drag(self, event):
+        if self._manual_piece is not None:
+            self._update_manual_placement(event.x, event.y)
+            return "break"
         # 0. Bump armado por duplo-clique: o primeiro movimento inicia o bump
         if getattr(self, "_bump_armed", False):
             if not self._bump_mode:
@@ -3967,6 +4057,14 @@ class LayoutEditorView(tk.Frame):
 
     def cancel_drag(self, event=None):
         """Cancela o arraste em andamento, a caixa elástica, a simulação CAM ou a rotação livre R-Drag via Escape."""
+        if self._manual_piece is not None:
+            self._manual_piece = None
+            self._manual_pointer_xy = None
+            self.canvas.delete("manual_piece_preview")
+            self._set_cursor("arrow")
+            self.update_status()
+            self.lbl_stat_left.config(text="Inclusão de peça cancelada.")
+            return "break"
         if getattr(self, "sim_running", False):
             self.stop_simulation()
             return "break"
@@ -4002,6 +4100,8 @@ class LayoutEditorView(tk.Frame):
         return None
 
     def on_canvas_release(self, event):
+        if self._manual_piece is not None:
+            return "break"
         # 0. Bump (duplo-clique armado ou arrasto em andamento)
         if getattr(self, "_bump_armed", False) or self._bump_mode:
             if self._bump_mode:
@@ -5006,6 +5106,8 @@ class LayoutEditorView(tk.Frame):
 
     def undo_action(self, event=None):
         """Desfaz a última alteração feita no layout (Ctrl+Z). Não existe redo (Ctrl+Y proibido)."""
+        if self._manual_piece is not None:
+            return self.cancel_drag(event)
         if self.undo_stack:
             prev_state = self.undo_stack.pop()
             if isinstance(prev_state, dict):
