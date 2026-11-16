@@ -14,9 +14,9 @@ pré-requisitos, escopo dos testes e regras de retomada.
 > **Regra de ouro:** o que está marcado `[CONFIRMADO]` veio do relatório, do código ou do usuário. O que está `[NÃO CONFIRMADO]` é suposição e não deve virar "fato" sem validação. O que está `[PREENCHER]` a IA deve completar lendo o código real.
 
 <!-- AUTO:header:start -->
-**Versão do aplicativo:** `1.8.23`
+**Versão do aplicativo:** `1.8.24`
 
-**Última sincronização com o código:** 2026-11-16 10:36 (HEAD ao gerar: `1dccbf6`; 220 arquivos Python, ~92639 linhas)
+**Última sincronização com o código:** 2026-11-16 10:55 (HEAD ao gerar: `1cbe06a`; 220 arquivos Python, ~92737 linhas)
 <!-- AUTO:header:end -->
 **Versão deste documento:** 2
 
@@ -264,6 +264,7 @@ docs/releases/v1.8.20.md
 docs/releases/v1.8.21.md
 docs/releases/v1.8.22.md
 docs/releases/v1.8.23.md
+docs/releases/v1.8.24.md
 output/pdf/validacao-sessao-188.json
 tests/_catalog_fixtures.py                           # tests/_catalog_fixtures.py
 tests/conftest.py                                    # tests/conftest.py
@@ -730,7 +731,7 @@ ui/user_dialog.py                                    # JobManager 2000 (Python E
 
 ### `tests/test_layout_editor_sidebar_selection.py`
 - `class DummyMouseEvent` (linha 21, 1 métodos)
-- `class TestSidebarSelection` (linha 29, 16 métodos)
+- `class TestSidebarSelection` (linha 29, 19 métodos)
 
 ### `tests/test_layout_editor_trim.py`
 - `class TestLayoutEditorTrim` (linha 16, 9 métodos)
@@ -1123,7 +1124,7 @@ ui/user_dialog.py                                    # JobManager 2000 (Python E
 
 ### `ui/layout_editor_view.py`
 - `class LayoutSubWindow` (linha 271, 8 métodos): Subjanela MDI para visualização de uma placa (layout) individual da sessão
-- `class LayoutEditorView` (linha 550, 182 métodos)
+- `class LayoutEditorView` (linha 550, 185 métodos)
 - funções: `_contour_area_mm2`, `_shade_color`, `_contour_key`, `rotate_piece_in_place`
 
 ### `ui/layout_print_dialog.py`
@@ -5197,6 +5198,7 @@ Com dados confiáveis e validações definidas, avaliar comparação do aproveit
 <!-- AUTO:gitlog:start -->
 | Commit | Data | Autor | Mensagem |
 |---|---|---|---|
+| `1cbe06a` | 2026-11-16 | Doletabgi | chore(release): OpenCorte v1.8.23 |
 | `1dccbf6` | 2026-11-15 | Doletabgi | chore(release): OpenCorte v1.8.22 |
 | `f0a9bb2` | 2026-11-15 | Doletabgi | chore(release): OpenCorte v1.8.21 |
 | `e5225b7` | 2026-11-15 | Doletabgi | chore(release): OpenCorte v1.8.20 |
@@ -5211,7 +5213,6 @@ Com dados confiáveis e validações definidas, avaliar comparação do aproveit
 | `77f9f0f` | 2026-11-13 | Doletabgi | chore(release): OpenCorte v1.8.13 |
 | `26d4c13` | 2026-11-12 | Doletabgi | chore(release): OpenCorte v1.8.12 |
 | `9b065e9` | 2026-11-12 | Doletabgi | chore(release): OpenCorte v1.8.11 |
-| `359c9b0` | 2026-11-12 | Doletabgi | chore(release): OpenCorte v1.8.10 |
 <!-- AUTO:gitlog:end -->
 
 ---

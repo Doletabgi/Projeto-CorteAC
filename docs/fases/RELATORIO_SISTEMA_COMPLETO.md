@@ -138,7 +138,7 @@ Contém a suíte completa de motores de encaixe industrial:
   - Miniatura do contorno vetorial preenchida com a cor do número e borda preta nítida de 1px.
   - Linha 1: Nome do molde (com truncamento inteligente `...`).
   - Linha 2: Tamanho e relação de produção (`3/3 0/3`, `Nº 25a 16/32 16/32`).
-  - Interação: Clique simples seleciona a peça na mesa; duplo clique insere peça na mesa em posição livre de colisão; botão `+` adiciona peça do molde ativo.
+  - Interação do catálogo: clique simples ativa o molde sem alterar a seleção da mesa; duplo clique prende uma nova peça ao ponteiro até o clique de posicionamento; botão direito → `Select` seleciona as instâncias daquele molde, preservando a seleção existente, como no original. Na mesa, Shift+clique acrescenta ou remove peças da seleção.
 - **Mecanismos de Segurança de Edição**:
   - **Bloqueio de Colisão por Drag & Drop**: Se o operador soltar uma peça sobreposta a outra, a peça é revertida para a posição anterior com alerta sonoro/visual.
   - **Histórico Undo (`Ctrl+Z`)**: Até 50 níveis de desfeitas.

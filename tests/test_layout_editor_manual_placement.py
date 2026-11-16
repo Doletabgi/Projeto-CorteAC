@@ -179,19 +179,25 @@ class TestManualPlacement(unittest.TestCase):
         self.assertEqual(self.view.placed_pieces, [])
 
     def test_tk_bindings_double_click_move_and_place(self):
+        originals = [self.view._build_piece_for_target(SHAPE, x, 100.0) for x in (100.0, 220.0)]
+        self.view.set_pieces(copy.deepcopy(originals))
         canvas = self.view.canvas
         sidebar = self._sidebar_event()
         for sequence, timestamp in (("<ButtonPress-1>", 1000), ("<ButtonRelease-1>", 1010),
                                     ("<ButtonPress-1>", 1100), ("<ButtonRelease-1>", 1110)):
             canvas.event_generate(sequence, x=sidebar.x, y=sidebar.y, time=timestamp)
         self.assertIsNotNone(self.view._manual_piece)
+        self.assertEqual(self.view.selected_indices, [])
+        self.assertEqual(self.view.placed_pieces, originals)
         pointer = self._table_event()
         canvas.event_generate("<Motion>", x=pointer.x, y=pointer.y, state=0)
         self._assert_center_at_pointer(self.view._manual_piece, pointer)
         canvas.event_generate("<ButtonPress-1>", x=pointer.x, y=pointer.y, time=2000)
         canvas.event_generate("<ButtonRelease-1>", x=pointer.x, y=pointer.y, time=2010)
-        self.assertEqual(len(self.view.placed_pieces), 1)
-        self._assert_center_at_pointer(self.view.placed_pieces[0], pointer)
+        self.assertEqual(len(self.view.placed_pieces), 3)
+        self.assertEqual(self.view.selected_indices, [2])
+        self.assertEqual(self.view.placed_pieces[:2], originals)
+        self._assert_center_at_pointer(self.view.placed_pieces[2], pointer)
 
 
 if __name__ == "__main__":

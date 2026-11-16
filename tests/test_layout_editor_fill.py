@@ -408,9 +408,11 @@ class TestLayoutEditorFill(unittest.TestCase):
         self.view.selected_indices = set()
 
         with patch.object(self.view.context_menu_102, "tk_popup") as mock_popup:
-            press_ev = DummyMouseEvent(x=200, y=200)
+            # O ponto deve ficar na mesa, à esquerda do catálogo, mesmo sem janela mapeada.
+            table_x = int(self.view.sidebar_div_x / 2)
+            press_ev = DummyMouseEvent(x=table_x, y=200)
             self.view.on_rbutton_press(press_ev)
-            release_ev = DummyMouseEvent(x=200, y=200)
+            release_ev = DummyMouseEvent(x=table_x, y=200)
             self.view.on_rbutton_release(release_ev)
 
             mock_popup.assert_called_once()

@@ -1927,8 +1927,8 @@ class LayoutEditorView(tk.Frame):
             prev = getattr(self, "_prev_status_text", "")
             self.lbl_stat_pos.config(text=prev, fg="#000000")
 
-    def on_sidebar_click(self, event):
-        """Trata cliques na barra lateral: seleciona o molde na grade e destaca peças na mesa."""
+    def _sidebar_target_index_at(self, event):
+        """Localiza a miniatura sem alterar a seleção da mesa."""
         y_start, item_h, col_width, num_cols = self._get_sidebar_grid_layout()
 
         rel_x = event.x - (self.sidebar_div_x + 15)
@@ -1943,25 +1943,25 @@ class LayoutEditorView(tk.Frame):
 
         clicked_idx = row_idx * num_cols + col_idx
         if 0 <= clicked_idx < len(self.sidebar_targets):
+            return clicked_idx
+        return None
+
+    def on_sidebar_click(self, event):
+        """Ativa apenas o molde do catálogo, como no clique simples do original."""
+        clicked_idx = self._sidebar_target_index_at(event)
+        if clicked_idx is not None:
             self.active_target_index = clicked_idx
             target = self.sidebar_targets[clicked_idx]
-
-            # Seleciona TODAS as peças deste molde presentes na placa atual
-            # (antes selecionava apenas a primeira encontrada).
             matching = [i for i, p in enumerate(self.placed_pieces)
                         if self._piece_matches_target(p, target)]
-            self.selected_indices = matching
-            self.selected_index = matching[0] if matching else None
-            self._drag_outline_state = None
-            self._drag_colliding_others = set()
 
             self.redraw()
             self.update_status()
             nome = target.get("name") or target.get("size") or "molde"
             if matching:
                 qtd = len(matching)
-                texto = (f"{qtd} peça{'s' if qtd > 1 else ''} do molde {nome} "
-                         f"selecionada{'s' if qtd > 1 else ''} nesta placa")
+                texto = (f"Molde {nome}: {qtd} peça{'s' if qtd > 1 else ''} nesta placa. "
+                         "Duplo clique para adicionar; botão direito → Select para selecionar.")
             else:
                 plates = self.get_plates_for_target(target)
                 if plates:
@@ -1971,6 +1971,40 @@ class LayoutEditorView(tk.Frame):
                     texto = f"Molde {nome}: nenhuma peça alocada na sessão"
             if hasattr(self, "lbl_stat_pos") and self.lbl_stat_pos.winfo_exists():
                 self.lbl_stat_pos.config(text=texto, fg="#1e40af")
+
+    def select_active_target_pieces(self):
+        """Comando Select do catálogo (52100): acrescenta as instâncias do molde."""
+        if not self.sidebar_targets:
+            return
+        target = self.sidebar_targets[self.active_target_index]
+        matching = [i for i, piece in enumerate(self.placed_pieces)
+                    if self._piece_matches_target(piece, target)]
+        self.selected_indices = list(dict.fromkeys(self.get_selected_indices() + matching))
+        if matching:
+            self.selected_index = matching[0]
+        self._drag_outline_state = None
+        self._drag_colliding_others = set()
+        self.redraw()
+        self.update_status()
+        qtd = len(matching)
+        self.lbl_stat_pos.config(
+            text=f"{qtd} peça{'s' if qtd != 1 else ''} do molde "
+                 f"{target.get('name') or target.get('size') or 'molde'} "
+                 f"selecionada{'s' if qtd != 1 else ''} nesta placa", fg="#1e40af")
+
+    def open_sidebar_context_menu(self, event):
+        clicked_idx = self._sidebar_target_index_at(event)
+        if clicked_idx is None:
+            return "break"
+        self.active_target_index = clicked_idx
+        self.redraw()
+        try:
+            self.sidebar_context_menu.tk_popup(
+                self.canvas.winfo_rootx() + int(event.x),
+                self.canvas.winfo_rooty() + int(event.y))
+        finally:
+            self.sidebar_context_menu.grab_release()
+        return "break"
 
     def on_canvas_double_click(self, event):
         """Duplo clique na barra lateral adiciona uma nova peça; duplo clique na divisória reseta."""
@@ -1983,18 +2017,10 @@ class LayoutEditorView(tk.Frame):
             return
 
         if hasattr(self, "sidebar_div_x") and event.x > self.sidebar_div_x:
-            y_start, item_h, col_width, num_cols = self._get_sidebar_grid_layout()
-
-            rel_x = event.x - (self.sidebar_div_x + 15)
-            rel_y = event.y - y_start
-            if rel_x >= 0 and rel_y >= 0:
-                col_idx = int(rel_x // col_width)
-                row_idx = int(rel_y // item_h)
-                if 0 <= col_idx < num_cols and row_idx >= 0:
-                    clicked_idx = row_idx * num_cols + col_idx
-                    if 0 <= clicked_idx < len(self.sidebar_targets):
-                        self.active_target_index = clicked_idx
-                        self.add_piece_for_target(self.sidebar_targets[clicked_idx], event=event)
+            clicked_idx = self._sidebar_target_index_at(event)
+            if clicked_idx is not None:
+                self.active_target_index = clicked_idx
+                self.add_piece_for_target(self.sidebar_targets[clicked_idx], event=event)
             return
 
         # Duplo-clique na mesa CAD: se em área vazia (fora de qualquer peça), desmarca tudo
@@ -4304,6 +4330,8 @@ class LayoutEditorView(tk.Frame):
         Ordem estrita conforme captura media_1792931613851.jpg e LAYOUT_EDITOR_RE.md.
         """
         self.context_menu_102 = IconMenu(self, tearoff=0)
+        self.sidebar_context_menu = IconMenu(self, tearoff=0)
+        self.sidebar_context_menu.add_command(label="Select", command=self.select_active_target_pieces)
 
         # Submenu Fill (ordem estrita Win32 ID 52103, 52104, 50007, 52105, 52106, 50003)
         self.fill_submenu = IconMenu(self.context_menu_102, tearoff=0)
@@ -4660,11 +4688,18 @@ class LayoutEditorView(tk.Frame):
         self._cancel_drag_job()
         self._pending_drag_xy = None
         self._cancel_redraw_job()
+        if self._manual_piece is not None:
+            self.cancel_drag()
 
         # Ponto inicial do clique direito
         self._rdrag_start_x = event.x
         self._rdrag_start_y = event.y
         self._rdrag_moved = False
+        self._rdrag_sidebar = event.x > self.sidebar_div_x
+        if self._rdrag_sidebar:
+            self._rdrag_active = False
+            self._rdrag_rotating = False
+            return "break"
         # O botão direito NÃO altera a seleção existente (selected_index e selected_indices inalterados)
         sel_indices = set(self.get_selected_indices())
 
@@ -4908,6 +4943,12 @@ class LayoutEditorView(tk.Frame):
         self._rdrag_active = False
         self._rdrag_rotating = False
         self._rdrag_moved = False
+
+        if getattr(self, "_rdrag_sidebar", False):
+            self._rdrag_sidebar = False
+            if not was_drag:
+                return self.open_sidebar_context_menu(event)
+            return "break"
 
         if not was_drag:
             # Clique rápido (< 6.0 px sem rotação): abre o Menu de Contexto 102

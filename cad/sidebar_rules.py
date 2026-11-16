@@ -9,7 +9,7 @@ def piece_matches_target(piece, target) -> bool:
     """
     Regra única de correspondência peça <-> molde da barra lateral.
 
-    Usada tanto pelos CONTADORES quanto pela SELEÇÃO por clique na miniatura,
+    Usada tanto pelos CONTADORES quanto pelo comando Select da miniatura,
     para que o número exibido e as peças selecionadas nunca divirjam.
     """
     if not piece or not target:
