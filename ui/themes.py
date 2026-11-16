@@ -1,5 +1,6 @@
 """Temas da interface: preserva widgets, geometria e estado das sessões."""
 import tkinter as tk
+from weakref import WeakSet
 from tkinter import ttk
 from config import THEME
 
@@ -23,6 +24,9 @@ class ThemeManager:
         self.root = root
         self.name = name if name in THEMES else "classic"
         self.pending = None
+        self._styled_widgets = WeakSet()
+        self._pending_widgets = WeakSet()
+        self._configured_tree_styles = set()
         self.set_palette()
         root.bind_all("<Map>", self.on_map, add="+")
 
@@ -32,8 +36,20 @@ class ThemeManager:
         self.root._icon_theme = LAYOUT_THEMES.get(self.name, self.name)
 
     def on_map(self, event):
+        widget = event.widget
+        # Menus/dropdowns também podem produzir caminhos Tcl sem widget Python.
+        if not isinstance(widget, tk.Misc) or widget in self._styled_widgets:
+            return
+        self._pending_widgets.add(widget)
         if self.pending is None:
-            self.pending = self.root.after_idle(self.refresh)
+            self.pending = self.root.after_idle(self._refresh_mapped)
+
+    def _refresh_mapped(self):
+        self.pending = None
+        widgets = list(self._pending_widgets)
+        self._pending_widgets.clear()
+        if widgets:
+            self.refresh(widgets=widgets)
 
     def apply(self, name):
         if name not in THEMES:
@@ -44,12 +60,21 @@ class ThemeManager:
         self.set_palette()
         self.refresh(old)
 
-    def refresh(self, old=None):
-        self.pending = None
+    def refresh(self, old=None, *, widgets=None):
+        if self.pending is not None:
+            self.root.after_cancel(self.pending)
+            self.pending = None
+        if widgets is None:
+            self._pending_widgets.clear()
+            self._configured_tree_styles.clear()
         old = old or dict(THEME)
         palette = dict(THEME)
         def visit(widget):
+            if widgets is not None and widget in self._styled_widgets:
+                return
             try:
+                # Marcar antes dos hooks: eles podem remapear controles existentes.
+                self._styled_widgets.add(widget)
                 layout_hook = getattr(widget, "apply_theme_layout", None)
                 if layout_hook:
                     layout_hook(self.name)
@@ -89,28 +114,37 @@ class ThemeManager:
                     changes.update(background=palette["bg_surface"] if self.name == "classic" else palette["select_bg"], foreground=palette["text_main"] if self.name == "classic" else palette["select_fg"])
                 if self.name in ("modern", "compact") and getattr(widget, "_layout_card", False) and "background" in options:
                     changes["background"] = palette["bg_input"]
+                changes = {key: value for key, value in changes.items()
+                           if str(widget.cget(key)) != str(value)}
                 if changes:
                     widget.configure(**changes)
                 if isinstance(widget, ttk.Treeview):
                     style_name = widget.cget("style") or "Treeview"
-                    self.style.configure(style_name, background=palette["bg_input"], fieldbackground=palette["bg_input"], foreground=palette["text_main"])
-                    self.style.map(style_name, background=[("selected",palette["select_bg"])], foreground=[("selected",palette["select_fg"])])
+                    if style_name not in self._configured_tree_styles:
+                        self.style.configure(style_name, background=palette["bg_input"], fieldbackground=palette["bg_input"], foreground=palette["text_main"])
+                        self.style.map(style_name, background=[("selected",palette["select_bg"])], foreground=[("selected",palette["select_fg"])])
+                        self._configured_tree_styles.add(style_name)
                 for child in widget.winfo_children():
                     visit(child)
             except tk.TclError:
                 pass
-        self.style = ttk.Style(self.root)
-        if self.style.theme_use() != "clam":
-            self.style.theme_use("clam")
-        self.style.configure(".", background=palette["bg_surface"], foreground=palette["text_main"], bordercolor=palette["border"], lightcolor=palette["border_light"], darkcolor=palette["border_dark"], troughcolor=palette["bg_main"], selectbackground=palette["select_bg"], selectforeground=palette["select_fg"])
-        for name in ("TEntry", "TCombobox", "TSpinbox"):
-            self.style.configure(name, fieldbackground=palette["bg_input"], foreground=palette["text_main"], insertcolor=palette["text_main"], arrowcolor=palette["text_main"])
-            self.style.map(name, fieldbackground=[("readonly",palette["bg_input"]),("disabled",palette["bg_surface"])], foreground=[("disabled",palette["text_muted"]),("readonly",palette["text_main"])])
-        for name in ("TNotebook", "WinClassic.TNotebook"):
-            self.style.configure(name, background=palette["bg_surface"])
-            self.style.configure(name+".Tab", background=palette["bg_card"], foreground=palette["text_main"])
-            self.style.map(name+".Tab", background=[("selected",palette["bg_surface"])], foreground=[("selected",palette["accent_blue"])])
-        self.style.configure("Treeview.Heading", background=palette["bg_surface"], foreground=palette["text_main"])
-        visit(self.root)
-        from ui.icons import refresh_icons
-        refresh_icons(self.root)
+        if widgets is None or not hasattr(self, "style"):
+            self.style = ttk.Style(self.root)
+            if self.style.theme_use() != "clam":
+                self.style.theme_use("clam")
+            self.style.configure(".", background=palette["bg_surface"], foreground=palette["text_main"], bordercolor=palette["border"], lightcolor=palette["border_light"], darkcolor=palette["border_dark"], troughcolor=palette["bg_main"], selectbackground=palette["select_bg"], selectforeground=palette["select_fg"])
+            for name in ("TEntry", "TCombobox", "TSpinbox"):
+                self.style.configure(name, fieldbackground=palette["bg_input"], foreground=palette["text_main"], insertcolor=palette["text_main"], arrowcolor=palette["text_main"])
+                self.style.map(name, fieldbackground=[("readonly",palette["bg_input"]),("disabled",palette["bg_surface"])], foreground=[("disabled",palette["text_muted"]),("readonly",palette["text_main"])])
+            for name in ("TNotebook", "WinClassic.TNotebook"):
+                self.style.configure(name, background=palette["bg_surface"])
+                self.style.configure(name+".Tab", background=palette["bg_card"], foreground=palette["text_main"])
+                self.style.map(name+".Tab", background=[("selected",palette["bg_surface"])], foreground=[("selected",palette["accent_blue"])])
+            self.style.configure("Treeview.Heading", background=palette["bg_surface"], foreground=palette["text_main"])
+        for widget in (widgets if widgets is not None else [self.root]):
+            visit(widget)
+        # Imagens novas já usam a paleta atual. Atualizar as existentes só na
+        # troca explícita de tema; Map não deve repintar a aplicação inteira.
+        if widgets is None:
+            from ui.icons import refresh_icons
+            refresh_icons(self.root)

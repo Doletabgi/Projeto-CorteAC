@@ -53,6 +53,69 @@ def test_new_controls_in_dark_theme_and_disabled_state(themed_root):
     assert entry.cget("bg") == THEME["bg_input"]
     assert entry.cget("fg") == THEME["text_main"]
 
+
+def test_new_window_does_not_repaint_existing_controls_or_icons(themed_root):
+    root, manager = themed_root
+    manager.apply("graphite")
+    root.geometry("800x500+5000+5000")
+    existing = tk.Frame(root, bg=CLASSIC["bg_surface"])
+    existing.pack(fill="both", expand=True)
+    ttk.Treeview(existing).pack()
+    hook_calls = []
+    existing.apply_theme_layout = lambda name: hook_calls.append(name)
+    root.deiconify()
+    root.update()
+    hook_calls.clear()
+
+    with patch.object(existing, "configure", wraps=existing.configure) as configure, \
+         patch("ui.icons.refresh_icons") as icons, \
+         patch.object(manager.style, "configure", wraps=manager.style.configure) as styles:
+        dialog = tk.Toplevel(root)
+        entry = tk.Entry(dialog, bg="white", fg="black")
+        entry.pack()
+        ttk.Treeview(dialog).pack()
+        root.update()
+        assert entry.cget("bg") == THEME["bg_input"]
+        assert entry.cget("fg") == THEME["text_main"]
+        configure.assert_not_called()
+        icons.assert_not_called()
+        assert hook_calls == []
+        styles.assert_not_called()
+        # Reabrir a mesma janela não deve reaplicar tema nem agendar refresh.
+        for _ in range(3):
+            dialog.withdraw()
+            root.update()
+            dialog.deiconify()
+            root.update()
+        assert manager.pending is None
+        configure.assert_not_called()
+        icons.assert_not_called()
+        assert hook_calls == []
+        dialog.destroy()
+
+
+def test_idle_after_opening_layout_stops_redrawing(themed_root):
+    from ui.layout_editor_view import LayoutEditorView
+    root, manager = themed_root
+    root.geometry("1100x750+5000+5000")
+    view = LayoutEditorView(root, load_sample=False)
+    view.pack(fill="both", expand=True)
+    root.deiconify()
+    root.update()
+    with patch.object(view, "redraw", wraps=view.redraw) as redraw, \
+         patch.object(view.canvas, "configure", wraps=view.canvas.configure) as configure, \
+         patch("ui.icons.refresh_icons") as icons:
+        dialog = tk.Toplevel(root)
+        tk.Label(dialog, text="Janela de teste").pack()
+        root.update()
+        root.after(250, root.quit)
+        root.mainloop()
+        redraw.assert_not_called()
+        configure.assert_not_called()
+        icons.assert_not_called()
+        assert manager.pending is None
+        dialog.destroy()
+
 def test_tools_menu_and_saved_theme_on_restart():
     from ui.main_window import MainWindow
     database = DatabaseManager(":memory:")

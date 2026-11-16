@@ -14,9 +14,9 @@ pré-requisitos, escopo dos testes e regras de retomada.
 > **Regra de ouro:** o que está marcado `[CONFIRMADO]` veio do relatório, do código ou do usuário. O que está `[NÃO CONFIRMADO]` é suposição e não deve virar "fato" sem validação. O que está `[PREENCHER]` a IA deve completar lendo o código real.
 
 <!-- AUTO:header:start -->
-**Versão do aplicativo:** `1.8.25`
+**Versão do aplicativo:** `1.8.26`
 
-**Última sincronização com o código:** 2026-11-16 20:29 (HEAD ao gerar: `9506664`; 221 arquivos Python, ~92784 linhas)
+**Última sincronização com o código:** 2026-11-16 20:36 (HEAD ao gerar: `8fa792f`; 221 arquivos Python, ~92881 linhas)
 <!-- AUTO:header:end -->
 **Versão deste documento:** 2
 
@@ -266,6 +266,7 @@ docs/releases/v1.8.22.md
 docs/releases/v1.8.23.md
 docs/releases/v1.8.24.md
 docs/releases/v1.8.25.md
+docs/releases/v1.8.26.md
 output/pdf/validacao-sessao-188.json
 tests/_catalog_fixtures.py                           # tests/_catalog_fixtures.py
 tests/conftest.py                                    # tests/conftest.py
@@ -973,7 +974,7 @@ ui/user_dialog.py                                    # JobManager 2000 (Python E
 - funções: `test_notch_is_inward_on_each_edge_and_winding`, `test_duplicate_closing_point_and_double_notch`, `test_size_rules_use_last_digit_and_reject_ambiguous_sizes`, `test_invalid_placement_is_rejected_without_mutating`, `test_thin_piece_rejects_cut_through_opposite_edge`, `test_die_roundtrip_preserves_notch`, `editor`, `test_editor_lock_click_dirty_undo_and_escape`, `test_failed_editor_click_creates_no_undo`, `test_database_and_package_keep_manual_symbols_over_old_library`, `test_dialog_accept_and_cancel`, `test_dense_contour_accepts_notch_across_several_segments`, `test_curved_contour_and_wraparound_keep_valid_notch`, `test_toolbar_click_on_dense_piece_and_save_with_lock`
 
 ### `tests/test_themes.py`
-- funções: `themed_root`, `test_cycle_preserves_controls_values_selection_and_icon_references`, `test_new_controls_in_dark_theme_and_disabled_state`, `test_tools_menu_and_saved_theme_on_restart`, `test_layouts_reuse_widgets_and_restore_classic`, `test_saved_layout_and_navigation_on_startup`, `test_preview_draws_real_pieces_without_changing_session`, `test_short_window_can_scroll_to_actions`
+- funções: `themed_root`, `test_cycle_preserves_controls_values_selection_and_icon_references`, `test_new_controls_in_dark_theme_and_disabled_state`, `test_new_window_does_not_repaint_existing_controls_or_icons`, `test_idle_after_opening_layout_stops_redrawing`, `test_tools_menu_and_saved_theme_on_restart`, `test_layouts_reuse_widgets_and_restore_classic`, `test_saved_layout_and_navigation_on_startup`, `test_preview_draws_real_pieces_without_changing_session`, `test_short_window_can_scroll_to_actions`
 
 ### `tests/test_tools_menu_items.py`
 - `class TestToolsMenuItems` (linha 10, 4 métodos)
@@ -1205,7 +1206,7 @@ ui/user_dialog.py                                    # JobManager 2000 (Python E
 - `class SymbolicDialog` (linha 7, 3 métodos)
 
 ### `ui/themes.py`
-- `class ThemeManager` (linha 21, 5 métodos)
+- `class ThemeManager` (linha 22, 6 métodos)
 
 ### `ui/tooltip.py`
 - `class ToolTip` (linha 18, 8 métodos): Tooltip simples: agenda no <Enter>, mostra perto do cursor e esconde no <Leave>.
@@ -5203,6 +5204,7 @@ Com dados confiáveis e validações definidas, avaliar comparação do aproveit
 <!-- AUTO:gitlog:start -->
 | Commit | Data | Autor | Mensagem |
 |---|---|---|---|
+| `8fa792f` | 2026-11-16 | Doletabgi | chore(release): OpenCorte v1.8.25 |
 | `9506664` | 2026-11-16 | Doletabgi | chore(release): OpenCorte v1.8.24 |
 | `1cbe06a` | 2026-11-16 | Doletabgi | chore(release): OpenCorte v1.8.23 |
 | `1dccbf6` | 2026-11-15 | Doletabgi | chore(release): OpenCorte v1.8.22 |
@@ -5217,7 +5219,6 @@ Com dados confiáveis e validações definidas, avaliar comparação do aproveit
 | `6001da5` | 2026-11-13 | Doletabgi | fix(release): padronizar downloads e pacotes como OpenCorte |
 | `c2c560a` | 2026-11-13 | Doletabgi | fix(release): preencher e sincronizar alteracoes de cada versao |
 | `77f9f0f` | 2026-11-13 | Doletabgi | chore(release): OpenCorte v1.8.13 |
-| `26d4c13` | 2026-11-12 | Doletabgi | chore(release): OpenCorte v1.8.12 |
 <!-- AUTO:gitlog:end -->
 
 ---
