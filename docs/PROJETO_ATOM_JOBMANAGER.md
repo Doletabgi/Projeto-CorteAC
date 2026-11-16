@@ -14,9 +14,9 @@ pré-requisitos, escopo dos testes e regras de retomada.
 > **Regra de ouro:** o que está marcado `[CONFIRMADO]` veio do relatório, do código ou do usuário. O que está `[NÃO CONFIRMADO]` é suposição e não deve virar "fato" sem validação. O que está `[PREENCHER]` a IA deve completar lendo o código real.
 
 <!-- AUTO:header:start -->
-**Versão do aplicativo:** `1.8.24`
+**Versão do aplicativo:** `1.8.25`
 
-**Última sincronização com o código:** 2026-11-16 10:55 (HEAD ao gerar: `1cbe06a`; 220 arquivos Python, ~92737 linhas)
+**Última sincronização com o código:** 2026-11-16 20:29 (HEAD ao gerar: `9506664`; 221 arquivos Python, ~92784 linhas)
 <!-- AUTO:header:end -->
 **Versão deste documento:** 2
 
@@ -265,6 +265,7 @@ docs/releases/v1.8.21.md
 docs/releases/v1.8.22.md
 docs/releases/v1.8.23.md
 docs/releases/v1.8.24.md
+docs/releases/v1.8.25.md
 output/pdf/validacao-sessao-188.json
 tests/_catalog_fixtures.py                           # tests/_catalog_fixtures.py
 tests/conftest.py                                    # tests/conftest.py
@@ -302,6 +303,7 @@ tests/test_layout_editor_manual_placement.py         # Inclusão pela miniatura 
 tests/test_layout_editor_multi_window.py
 tests/test_layout_editor_shortcuts.py                # Testes Automatizados para Atalhos do LayoutEditorView:
 tests/test_layout_editor_sidebar_selection.py        # tests/test_layout_editor_sidebar_selection.py
+tests/test_layout_editor_status_geometry.py          # Mensagens e dicas não podem redimensionar a área de edição.
 tests/test_layout_editor_trim.py                     # Testes Automatizados para a Funcionalidade de Refilar Layout (Corte Automático CAM):
 tests/test_layout_editor_visual_regression.py        # tests/test_layout_editor_visual_regression.py
 tests/test_layout_layers.py                          # tests/test_layout_layers.py
@@ -732,6 +734,9 @@ ui/user_dialog.py                                    # JobManager 2000 (Python E
 ### `tests/test_layout_editor_sidebar_selection.py`
 - `class DummyMouseEvent` (linha 21, 1 métodos)
 - `class TestSidebarSelection` (linha 29, 19 métodos)
+
+### `tests/test_layout_editor_status_geometry.py`
+- `class TestStatusGeometry` (linha 9, 1 métodos)
 
 ### `tests/test_layout_editor_trim.py`
 - `class TestLayoutEditorTrim` (linha 16, 9 métodos)
@@ -5198,6 +5203,7 @@ Com dados confiáveis e validações definidas, avaliar comparação do aproveit
 <!-- AUTO:gitlog:start -->
 | Commit | Data | Autor | Mensagem |
 |---|---|---|---|
+| `9506664` | 2026-11-16 | Doletabgi | chore(release): OpenCorte v1.8.24 |
 | `1cbe06a` | 2026-11-16 | Doletabgi | chore(release): OpenCorte v1.8.23 |
 | `1dccbf6` | 2026-11-15 | Doletabgi | chore(release): OpenCorte v1.8.22 |
 | `f0a9bb2` | 2026-11-15 | Doletabgi | chore(release): OpenCorte v1.8.21 |
@@ -5212,7 +5218,6 @@ Com dados confiáveis e validações definidas, avaliar comparação do aproveit
 | `c2c560a` | 2026-11-13 | Doletabgi | fix(release): preencher e sincronizar alteracoes de cada versao |
 | `77f9f0f` | 2026-11-13 | Doletabgi | chore(release): OpenCorte v1.8.13 |
 | `26d4c13` | 2026-11-12 | Doletabgi | chore(release): OpenCorte v1.8.12 |
-| `9b065e9` | 2026-11-12 | Doletabgi | chore(release): OpenCorte v1.8.11 |
 <!-- AUTO:gitlog:end -->
 
 ---

@@ -1194,6 +1194,10 @@ class LayoutEditorView(tk.Frame):
             fg=THEME["text_main"],
             font=("Segoe UI", 8),
             anchor="w",
+            # O texto muda em cliques/hover. Não pode redimensionar o editor
+            # e disparar Configure/redraw/Enter/Leave repetidamente.
+            width=1,
+            height=1,
             padx=4
         )
         self.lbl_stat_pos.pack(side="left", fill="x", expand=True)
