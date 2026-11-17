@@ -4,6 +4,7 @@ Database Manager - Conexão Central MySQL 8.0 & Reserva SQLite
 """
 
 import json
+import pickle
 import math
 import time
 import random
@@ -2472,26 +2473,57 @@ class DatabaseManager:
             return layouts
 
     def save_session_layouts(self, session_id: int, layouts: list, operator_info: Optional[str] = None) -> bool:
-        """
-        Salva todos os layouts de uma sessão de forma atômica no banco de dados (layouts e layout_pieces).
-        Atualiza também a tabela sessions com o layout 0 (para retrocompatibilidade).
-        """
+        """Salva somente placas alteradas, mantendo IDs e atomicidade da sessão."""
         if not session_id or not layouts:
             return False
-
+        indices = [int(ly.get("layout_index", idx)) for idx, ly in enumerate(layouts)]
+        if len(set(indices)) != len(indices):
+            raise ValueError("A sessão contém índices de placa duplicados.")
         production_user = self.get_active_user()
         operator_info = operator_info or production_user or get_current_operator()
+        saved = []
+        # Cache apenas da última sessão salva. Nunca deserializamos pickle:
+        # os bytes servem somente para comparar snapshots de estruturas mutáveis.
+        cache = (getattr(self, "_layout_serialization_cache", {})
+                 if getattr(self, "_layout_serialization_session", None) == session_id else {})
+        next_cache = {}
         with self.get_connection() as conn:
             cursor = conn.cursor()
             now_sql = "NOW()" if conn.backend == "mysql" else "CURRENT_TIMESTAMP"
+            # Serializa gravações da sessão; qualquer falha desfaz todo o lote.
+            if conn.backend == "sqlite":
+                cursor.execute("BEGIN IMMEDIATE")
+            else:
+                cursor.execute("SELECT id FROM sessions WHERE id = ? FOR UPDATE", (session_id,))
+                cursor.fetchall()
+            cursor.execute("SELECT * FROM layouts WHERE session_id = ?", (session_id,))
+            existing = {}
+            for row in cursor.fetchall():
+                row = dict(row)
+                index = int(row.get("layout_index") or 0)
+                if index in existing:
+                    raise ValueError("O banco contém índices de placa duplicados nesta sessão.")
+                existing[index] = row
+            for index in existing.keys() - set(indices):
+                lid = existing[index]["id"]
+                cursor.execute("DELETE FROM layout_pieces WHERE layout_id = ?", (lid,))
+                cursor.execute("DELETE FROM layouts WHERE id = ? AND session_id = ?", (lid, session_id))
+            shape_lookup = None
+            columns = [
+                "session_id", "layout_index", "name", "code", "width_mm", "height_mm", "ris_w", "ris_l",
+                "gap_mm", "area_mm2", "yield_percent", "yield_pct", "num_items", "num_dies",
+                "margin_left", "margin_right", "margin_top", "margin_bottom", "status", "layers",
+                "trim_cut_line_json", "tip_zone_json", "layers_tip", "placed_pieces_json",
+            ]
+            json_columns = {"placed_pieces_json", "trim_cut_line_json", "tip_zone_json"}
 
-            # 1. Remove layouts anteriores da sessão
-            cursor.execute("DELETE FROM layout_pieces WHERE layout_id IN (SELECT id FROM layouts WHERE session_id = ?)", (session_id,))
-            cursor.execute("DELETE FROM layouts WHERE session_id = ?", (session_id,))
-
-            # 2. Mapeia moldes existentes no banco para linkar FK mold_id / shape_id
-            cursor.execute("SELECT id, name FROM shapes")
-            shape_lookup = {row["name"].lower(): row["id"] for row in cursor.fetchall()}
+            def same_json(stored, value):
+                if stored == value:
+                    return True
+                try:
+                    return json.loads(stored) == json.loads(value) if stored and value else False
+                except (ValueError, TypeError):
+                    return False
 
             for idx, ly in enumerate(layouts):
                 l_idx = int(ly.get("layout_index", idx))
@@ -2502,6 +2534,15 @@ class DatabaseManager:
                 area_m2 = (w * h) / 1_000_000.0
                 yield_pct = float(ly.get("yield_percent", ly.get("yield_pct", 0.0)))
                 pieces = ly.get("pieces") or ly.get("placed_pieces") or []
+                previous = existing.get(l_idx)
+                canonical_pieces = [dict(sorted(piece.items())) for piece in pieces]
+                signature = pickle.dumps(canonical_pieces, protocol=5)
+                cached = cache.get(previous["id"]) if previous is not None else None
+                if (cached is not None and cached[0] == previous.get("version")
+                        and cached[1] == previous.get("placed_pieces_json") and cached[2] == signature):
+                    pieces_json = cached[1]
+                else:
+                    pieces_json = json.dumps(canonical_pieces)
                 m_l = float(ly.get("margin_left", 10.0))
                 m_r = float(ly.get("margin_right", 10.0))
                 m_t = float(ly.get("margin_top", 10.0))
@@ -2518,26 +2559,60 @@ class DatabaseManager:
                 items_cnt = len(pieces) if pieces else int(ly.get("num_items") or 0)
                 dies_cnt = len(set(p.get("name") for p in pieces)) if pieces else int(ly.get("num_dies") or 0)
 
-                # Insere o layout na tabela layouts
-                sql_ins = f"""
-                INSERT INTO layouts (
-                    session_id, layout_index, name, code, width_mm, height_mm, ris_w, ris_l,
-                    gap_mm, area_mm2, yield_percent, yield_pct, num_items, num_dies,
-                    margin_left, margin_right, margin_top, margin_bottom, status,
-                    layers, trim_cut_line_json, tip_zone_json, layers_tip,
-                    placed_pieces_json, version, created_at, updated_at, created_by, updated_by
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, {now_sql}, {now_sql}, ?, ?)
-                """
-                cursor.execute(sql_ins, (
-                    session_id, l_idx, l_name, l_code, w, h, w, h,
-                    gap, area_m2 * 1_000_000.0, yield_pct, yield_pct, items_cnt, dies_cnt,
-                    m_l, m_r, m_t, m_b, status,
-                    ly_layers, trim_cut_json, tip_zone_json, layers_tip_val,
-                    json.dumps(pieces), operator_info, operator_info
-                ))
-                layout_id = cursor.lastrowid
-                cursor.execute("UPDATE layouts SET production_user = ? WHERE id = ?", (production_user, layout_id))
-
+                values = (
+                    session_id, l_idx, l_name, l_code, w, h, w, h, gap,
+                    area_m2 * 1_000_000.0, yield_pct, yield_pct, items_cnt, dies_cnt,
+                    m_l, m_r, m_t, m_b, status, ly_layers,
+                    trim_cut_json, tip_zone_json, layers_tip_val, pieces_json
+                )
+                # JSON determinístico evita decodificar milhares de contornos
+                # para comparar peças. O primeiro save normaliza o formato legado.
+                pieces_changed = previous is None or previous.get("placed_pieces_json") != values[-1]
+                changed = previous is None
+                if previous is not None:
+                    for column, value in zip(columns, values):
+                        stored = previous.get(column)
+                        if column == "placed_pieces_json":
+                            equal = not pieces_changed
+                        elif column in json_columns:
+                            equal = same_json(stored, value)
+                        else:
+                            equal = stored == value
+                        if not equal:
+                            changed = True
+                            break
+                    if not changed:
+                        saved.append((ly, previous["id"], previous.get("version") or 1,
+                                      previous.get("production_user") or ""))
+                        next_cache[previous["id"]] = (previous.get("version"), pieces_json, signature)
+                        continue
+                if previous is None:
+                    sql = ("INSERT INTO layouts (" + ", ".join(columns) +
+                           ", version, created_at, updated_at, created_by, updated_by, production_user) VALUES (" +
+                           ", ".join("?" for _ in columns) +
+                           f", 1, {now_sql}, {now_sql}, ?, ?, ?)")
+                    cursor.execute(sql, values + (operator_info, operator_info, production_user))
+                    layout_id, version, owner = cursor.lastrowid, 1, production_user
+                else:
+                    layout_id = previous["id"]
+                    version = int(previous.get("version") or 1)
+                    owner = previous.get("production_user") or ""
+                    sql = ("UPDATE layouts SET " + ", ".join(column + " = ?" for column in columns) +
+                           f", version = version + 1, updated_at = {now_sql}, updated_by = ? "
+                           "WHERE id = ? AND version = ?")
+                    cursor.execute(sql, values + (operator_info, layout_id, version))
+                    if cursor.rowcount != 1:
+                        raise VersionConflictError(f"A placa {l_idx} foi alterada durante o salvamento.")
+                    version += 1
+                saved.append((ly, layout_id, version, owner))
+                next_cache[layout_id] = (version, pieces_json, signature)
+                if previous is not None:
+                    if not pieces_changed:
+                        continue
+                    cursor.execute("DELETE FROM layout_pieces WHERE layout_id = ?", (layout_id,))
+                if shape_lookup is None:
+                    cursor.execute("SELECT id, name FROM shapes")
+                    shape_lookup = {row["name"].lower(): row["id"] for row in cursor.fetchall()}
                 # Insere as peças em layout_pieces
                 pieces_data = []
                 for p_idx, it in enumerate(pieces):
@@ -2578,21 +2653,27 @@ class DatabaseManager:
                     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     """, pieces_data)
 
-            # Atualiza a sessão pai com o layout 0 para retrocompatibilidade
             first_lay = layouts[0]
             first_pieces = first_lay.get("pieces") or first_lay.get("placed_pieces") or []
             avg_yield = sum(float(l.get("yield_percent", 0.0)) for l in layouts) / max(1, len(layouts))
-
-            cursor.execute("""
-            UPDATE sessions
-            SET placed_pieces_json = ?, yield_percent = ?, status = 'Nested'
-            WHERE id = ?
-            """, (json.dumps(first_pieces), avg_yield, session_id))
-
+            first_json = json.dumps(first_pieces, sort_keys=True, separators=(",", ":"))
+            cursor.execute("SELECT placed_pieces_json, yield_percent, status FROM sessions WHERE id = ?", (session_id,))
+            parent = cursor.fetchone()
+            if parent is not None:
+                parent = dict(parent)
+                try:
+                    same_pieces = parent.get("placed_pieces_json") == first_json or json.loads(parent.get("placed_pieces_json") or "[]") == first_pieces
+                except (ValueError, TypeError):
+                    same_pieces = False
+                if not same_pieces or parent.get("yield_percent") != avg_yield or parent.get("status") != "Nested":
+                    cursor.execute("UPDATE sessions SET placed_pieces_json = ?, yield_percent = ?, status = 'Nested' WHERE id = ?",
+                                   (first_json, avg_yield, session_id))
             conn.commit()
-            for layout in layouts:
-                layout["production_user"] = production_user
-            return True
+        self._layout_serialization_session = session_id
+        self._layout_serialization_cache = next_cache
+        for layout, lid, version, owner in saved:
+            layout.update(id=lid, version=version, production_user=owner)
+        return True
 
     def delete_session_layouts(self, session_id: int) -> bool:
         """Remove todos os layouts e peças associadas de uma sessão no banco de dados.

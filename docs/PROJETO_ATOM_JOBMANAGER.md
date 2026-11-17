@@ -14,9 +14,9 @@ pré-requisitos, escopo dos testes e regras de retomada.
 > **Regra de ouro:** o que está marcado `[CONFIRMADO]` veio do relatório, do código ou do usuário. O que está `[NÃO CONFIRMADO]` é suposição e não deve virar "fato" sem validação. O que está `[PREENCHER]` a IA deve completar lendo o código real.
 
 <!-- AUTO:header:start -->
-**Versão do aplicativo:** `1.8.27`
+**Versão do aplicativo:** `1.8.28`
 
-**Última sincronização com o código:** 2026-11-17 13:39 (HEAD ao gerar: `1a4aff0`; 222 arquivos Python, ~93017 linhas)
+**Última sincronização com o código:** 2026-11-17 13:58 (HEAD ao gerar: `a17b84a`; 224 arquivos Python, ~93327 linhas)
 <!-- AUTO:header:end -->
 **Versão deste documento:** 2
 
@@ -252,6 +252,8 @@ docs/fases/RELATORIO_IMPLEMENTACAO_MELHORIAS.md
 docs/fases/RELATORIO_REVERSA_COMELZ_ONX.md
 docs/fases/RELATORIO_SISTEMA_COMPLETO.md
 docs/fases/SIMBOLICA_COMELZ.md
+docs/performance/incremental-save-v1.8.28.json
+docs/performance/incremental-save-v1.8.28.md
 docs/ref/layout_re/help_topics.json
 docs/releases/v1.8.13.md
 docs/releases/v1.8.14.md
@@ -268,6 +270,7 @@ docs/releases/v1.8.24.md
 docs/releases/v1.8.25.md
 docs/releases/v1.8.26.md
 docs/releases/v1.8.27.md
+docs/releases/v1.8.28.md
 output/pdf/validacao-sessao-188.json
 tests/_catalog_fixtures.py                           # tests/_catalog_fixtures.py
 tests/conftest.py                                    # tests/conftest.py
@@ -291,6 +294,7 @@ tests/test_desktop_shortcut.py                       # tests/test_desktop_shortc
 tests/test_dieproc_selection.py                      # Selecionar um perfil deve persistir a escolha sem apagar opções da sessão.
 tests/test_dual_exporter.py                          # JobManager 2000 (Python Edition)
 tests/test_exporter_tsp.py                           # tests/test_exporter_tsp.py
+tests/test_incremental_layout_save.py
 tests/test_installation_settings.py                  # Setup local/rede sem tocar na instalação ou nos bancos do operador.
 tests/test_lay_parser.py                             # Testes Unitários para o Parser e Gerador de Arquivos .lay (ATOM $$LAYOUT.v3$$)
 tests/test_layers_pairs_nesting.py                   # Testes unitários para validação da regra de camadas (layers) no cálculo de peças
@@ -384,6 +388,7 @@ tests/fixtures/ia_teste_baseline.json
 tools/bench_10k_pieces.py                            # tools/bench_10k_pieces.py
 tools/bench_ia_teste.py                              # tools/bench_ia_teste.py
 tools/bench_ia_teste_optimized.py                    # tools/bench_ia_teste_optimized.py
+tools/bench_incremental_layout_save.py               # Compara salvamento antigo/incremental em SQLite temporário, sem banco operacional.
 tools/bench_layout_drag.py                           # tools/bench_layout_drag.py
 tools/bench_multi_sheet.py                           # tools/bench_multi_sheet.py
 tools/bench_nest.py                                  # tools/bench_nest.py
@@ -467,7 +472,7 @@ ui/user_dialog.py                                    # JobManager 2000 (Python E
 - funções: `command`, `git`, `current_version`, `set_version`, `next_version`, `release_notes`, `write_release_notes`, `replace_release_changes`, `allowed_source`, `source_files`, `fingerprint`, `snapshot`, `isolated_env`, `repository_name`, `atomic_copy` (+30)
 
 ### `database.py`
-- `class DatabaseManager` (linha 47, 71 métodos)
+- `class DatabaseManager` (linha 48, 71 métodos)
 - funções: `get_current_operator`
 
 ### `main.py`
@@ -688,6 +693,9 @@ ui/user_dialog.py                                    # JobManager 2000 (Python E
 ### `tests/test_exporter_tsp.py`
 - `class TestExporterTSP` (linha 38, 13 métodos)
 - funções: `calculate_tour_distance`
+
+### `tests/test_incremental_layout_save.py`
+- funções: `layouts`, `saved`, `snapshot`, `test_unchanged_save_performs_no_writes_even_with_different_json_key_order`, `test_only_edited_sheet_and_its_pieces_change`, `test_metadata_changes_preserve_relational_pieces_and_production_owner`, `test_insert_and_remove_only_requested_sheets`, `test_failure_rolls_back_deletions_and_updates_without_mutating_input`, `test_parent_session_remains_synchronized`, `test_duplicate_indices_rejected_without_changes`, `test_nested_geometry_edit_is_detected_with_serialization_cache`, `test_fresh_database_instance_without_cache_saves_unchanged_plates_without_writes`
 
 ### `tests/test_installation_settings.py`
 - funções: `test_single_address_resolves_database_host_and_shared_root`, `test_invalid_address_does_not_change_existing_configuration`, `read_config`, `test_network_configures_all_three_destinations_without_creating_data`, `test_network_reconfiguration_keeps_custom_credentials_and_unrelated_options`, `test_switching_to_local_clears_both_network_paths_without_touching_data`, `test_failed_write_and_invalid_ini_preserve_original`, `test_setup_command_uses_installation_directory_and_reports_failures`
@@ -1001,6 +1009,9 @@ ui/user_dialog.py                                    # JobManager 2000 (Python E
 
 ### `tools/bench_ia_teste_optimized.py`
 - funções: `calculate_sheet_g00`, `run_optimized_benchmark`, `main`
+
+### `tools/bench_incremental_layout_save.py`
+- funções: `old_save`, `make_layouts`, `main`
 
 ### `tools/bench_layout_drag.py`
 - funções: `build_pieces`, `screen_of`, `run_single_benchmark`, `main`
@@ -5209,6 +5220,7 @@ Com dados confiáveis e validações definidas, avaliar comparação do aproveit
 <!-- AUTO:gitlog:start -->
 | Commit | Data | Autor | Mensagem |
 |---|---|---|---|
+| `a17b84a` | 2026-11-17 | Doletabgi | chore(release): OpenCorte v1.8.27 |
 | `1a4aff0` | 2026-11-16 | Doletabgi | chore(release): OpenCorte v1.8.26 |
 | `8fa792f` | 2026-11-16 | Doletabgi | chore(release): OpenCorte v1.8.25 |
 | `9506664` | 2026-11-16 | Doletabgi | chore(release): OpenCorte v1.8.24 |
@@ -5223,7 +5235,6 @@ Com dados confiáveis e validações definidas, avaliar comparação do aproveit
 | `88f105c` | 2026-11-13 | Doletabgi | chore(release): OpenCorte v1.8.15 |
 | `67df97a` | 2026-11-13 | Doletabgi | chore(release): OpenCorte v1.8.14 |
 | `6001da5` | 2026-11-13 | Doletabgi | fix(release): padronizar downloads e pacotes como OpenCorte |
-| `c2c560a` | 2026-11-13 | Doletabgi | fix(release): preencher e sincronizar alteracoes de cada versao |
 <!-- AUTO:gitlog:end -->
 
 ---
