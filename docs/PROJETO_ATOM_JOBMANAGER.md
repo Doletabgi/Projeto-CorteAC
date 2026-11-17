@@ -16,7 +16,7 @@ pré-requisitos, escopo dos testes e regras de retomada.
 <!-- AUTO:header:start -->
 **Versão do aplicativo:** `1.8.28`
 
-**Última sincronização com o código:** 2026-11-17 13:58 (HEAD ao gerar: `a17b84a`; 224 arquivos Python, ~93327 linhas)
+**Última sincronização com o código:** 2026-11-17 14:01 (HEAD ao gerar: `e835fc9`; 224 arquivos Python, ~93327 linhas)
 <!-- AUTO:header:end -->
 **Versão deste documento:** 2
 
@@ -5220,6 +5220,7 @@ Com dados confiáveis e validações definidas, avaliar comparação do aproveit
 <!-- AUTO:gitlog:start -->
 | Commit | Data | Autor | Mensagem |
 |---|---|---|---|
+| `e835fc9` | 2026-11-17 | Doletabgi | chore(release): OpenCorte v1.8.28 |
 | `a17b84a` | 2026-11-17 | Doletabgi | chore(release): OpenCorte v1.8.27 |
 | `1a4aff0` | 2026-11-16 | Doletabgi | chore(release): OpenCorte v1.8.26 |
 | `8fa792f` | 2026-11-16 | Doletabgi | chore(release): OpenCorte v1.8.25 |
@@ -5234,7 +5235,6 @@ Com dados confiáveis e validações definidas, avaliar comparação do aproveit
 | `485fb10` | 2026-11-15 | Doletabgi | chore(release): OpenCorte v1.8.16 |
 | `88f105c` | 2026-11-13 | Doletabgi | chore(release): OpenCorte v1.8.15 |
 | `67df97a` | 2026-11-13 | Doletabgi | chore(release): OpenCorte v1.8.14 |
-| `6001da5` | 2026-11-13 | Doletabgi | fix(release): padronizar downloads e pacotes como OpenCorte |
 <!-- AUTO:gitlog:end -->
 
 ---
