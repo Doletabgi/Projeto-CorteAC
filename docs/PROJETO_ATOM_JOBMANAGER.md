@@ -14,9 +14,9 @@ pré-requisitos, escopo dos testes e regras de retomada.
 > **Regra de ouro:** o que está marcado `[CONFIRMADO]` veio do relatório, do código ou do usuário. O que está `[NÃO CONFIRMADO]` é suposição e não deve virar "fato" sem validação. O que está `[PREENCHER]` a IA deve completar lendo o código real.
 
 <!-- AUTO:header:start -->
-**Versão do aplicativo:** `1.8.26`
+**Versão do aplicativo:** `1.8.27`
 
-**Última sincronização com o código:** 2026-11-16 20:36 (HEAD ao gerar: `8fa792f`; 221 arquivos Python, ~92881 linhas)
+**Última sincronização com o código:** 2026-11-17 13:39 (HEAD ao gerar: `1a4aff0`; 222 arquivos Python, ~93017 linhas)
 <!-- AUTO:header:end -->
 **Versão deste documento:** 2
 
@@ -267,6 +267,7 @@ docs/releases/v1.8.23.md
 docs/releases/v1.8.24.md
 docs/releases/v1.8.25.md
 docs/releases/v1.8.26.md
+docs/releases/v1.8.27.md
 output/pdf/validacao-sessao-188.json
 tests/_catalog_fixtures.py                           # tests/_catalog_fixtures.py
 tests/conftest.py                                    # tests/conftest.py
@@ -313,6 +314,7 @@ tests/test_layout_print_material.py                  # Testes unitários para va
 tests/test_layout_print_pagination.py                # tests/test_layout_print_pagination.py
 tests/test_layout_print_user.py
 tests/test_layout_save_refile.py                     # tests/test_layout_save_refile.py
+tests/test_lazy_editors.py                           # Abertura leve e criação/reutilização dos editores nos acessos explícitos.
 tests/test_library_presentations.py                  # Trocas de apresentação mantêm os moldes, filtros e quantidades do operador.
 tests/test_macro_engine_ia_teste.py                  # Testes de Homologação para o Motor de Cálculo "IA-teste":
 tests/test_macro_engine_ia_teste_optimized.py        # JobManager 2000 (Python Edition)
@@ -765,6 +767,9 @@ ui/user_dialog.py                                    # JobManager 2000 (Python E
 - `class TestSalvarRefile` (linha 39, 6 métodos)
 - funções: `_pecas`
 
+### `tests/test_lazy_editors.py`
+- funções: `app`, `test_startup_does_not_construct_editors_or_read_global_contours`, `test_first_access_creates_and_reopening_reuses_view`, `test_background_changes_do_not_create_layout_editor`, `test_shapes_navigation_loads_global_catalog_once_on_demand`, `test_first_layout_open_uses_latest_session_and_material`, `test_machine_export_can_create_layout_editor_on_first_access`
+
 ### `tests/test_library_presentations.py`
 - funções: `visible_text`, `test_switch_preserves_filters_selection_pairs_and_destination`, `test_click_selects_correct_shape_and_adds_to_session`, `test_compact_cards_show_more_columns_than_large_cards`, `test_details_show_real_measurements_and_sort_numerically`, `test_details_horizontal_scroll_and_header_stay_aligned`, `test_empty_results_and_invalid_shapes_are_safe_in_every_mode`, `test_large_results_render_only_visible_items`, `test_keyboard_moves_one_row_in_list_and_details`, `test_mode_survives_refresh_and_invalid_mode_does_not_change_it`, `test_metrics_do_not_mutate_geometry_and_invalid_contour_has_no_measurements`, `test_visualization_selector_opens_the_requested_presentation`
 
@@ -1147,7 +1152,7 @@ ui/user_dialog.py                                    # JobManager 2000 (Python E
 - `class MacroPanel` (linha 23, 13 métodos): Camada 3: Macro / Aprendizado.
 
 ### `ui/main_window.py`
-- `class MainWindow` (linha 69, 171 métodos)
+- `class MainWindow` (linha 69, 172 métodos)
 - funções: `get_assets_dir`
 
 ### `ui/material_codes_view.py`
@@ -2074,7 +2079,7 @@ A ordem de corte do `.lay` para a mesa **não pode** ser aleatória:
 | Alt+Up | `ui/session_view.py:4024` | `entry.bind("<Alt-Up>", lambda e: adjust_number(+1))` |
 | Backspace | `ui/cad_canvas.py:72` | `self.master.bind("<BackSpace>", lambda e: self.delete_selected())` |
 | Backspace | `ui/dieproc_dialog.py:101` | `self.preset_listbox.bind("<BackSpace>", lambda e: self.on_delete_clicked())` |
-| Backspace | `ui/main_window.py:758` | `self.bind_all("<BackSpace>", self.on_global_delete_key, add="+")` |
+| Backspace | `ui/main_window.py:716` | `self.bind_all("<BackSpace>", self.on_global_delete_key, add="+")` |
 | Backspace | `ui/session_view.py:930` | `self.tree_shapes.bind("<BackSpace>", lambda e: self._on_tree_shapes_delete())` |
 | Backspace | `ui/session_view.py:1090` | `w.bind("<BackSpace>", self.remove_session_material)` |
 | Backspace | `ui/session_view.py:1091` | `w.bind("<Key-BackSpace>", self.remove_session_material)` |
@@ -2086,13 +2091,13 @@ A ordem de corte do `.lay` para a mesa **não pode** ser aleatória:
 | Ctrl+A | `ui/layout_editor_view.py:1100` | `w.bind("<Control-Key-A>", self.select_all)` |
 | Ctrl+A | `ui/layout_editor_view.py:1105` | `self.bind_all("<Control-a>", self.select_all)` |
 | Ctrl+A | `ui/layout_editor_view.py:1106` | `self.bind_all("<Control-A>", self.select_all)` |
-| Ctrl+A | `ui/main_window.py:343` | `edit_menu.add_command(label="Selecionar tudo", accelerator="Ctrl+A", command=sel` |
-| Ctrl+A | `ui/main_window.py:759` | `self.bind_all("<Control-a>", self.on_select_all, add="+")` |
-| Ctrl+A | `ui/main_window.py:760` | `self.bind_all("<Control-A>", self.on_select_all, add="+")` |
-| Ctrl+A | `ui/main_window.py:761` | `self.bind_all("<Control-Key-a>", self.on_select_all, add="+")` |
-| Ctrl+A | `ui/main_window.py:762` | `self.bind_all("<Control-Key-A>", self.on_select_all, add="+")` |
+| Ctrl+A | `ui/main_window.py:344` | `edit_menu.add_command(label="Selecionar tudo", accelerator="Ctrl+A", command=sel` |
+| Ctrl+A | `ui/main_window.py:717` | `self.bind_all("<Control-a>", self.on_select_all, add="+")` |
+| Ctrl+A | `ui/main_window.py:718` | `self.bind_all("<Control-A>", self.on_select_all, add="+")` |
+| Ctrl+A | `ui/main_window.py:719` | `self.bind_all("<Control-Key-a>", self.on_select_all, add="+")` |
+| Ctrl+A | `ui/main_window.py:720` | `self.bind_all("<Control-Key-A>", self.on_select_all, add="+")` |
 | Ctrl+A | `ui/shape_library_view.py:217` | `self.cards_canvas.bind('<Control-a>', self._select_all_key)` |
-| Ctrl+C | `ui/main_window.py:339` | `edit_menu.add_command(label="Copiar", accelerator="Ctrl+C")` |
+| Ctrl+C | `ui/main_window.py:340` | `edit_menu.add_command(label="Copiar", accelerator="Ctrl+C")` |
 | Ctrl+Down | `ui/layout_editor_view.py:1117` | `self.bind_all("<Control-Down>", lambda e: self.nudge_selected(0, -0.5))` |
 | Ctrl+Down | `ui/session_view.py:4023` | `entry.bind("<Control-Down>", lambda e: adjust_number(-1))` |
 | Ctrl+Equal | `ui/layout_editor_view.py:998` | `w.bind("<Control-equal>", lambda e: (self.zoom_in(), "break")[1])` |
@@ -2171,8 +2176,8 @@ A ordem de corte do `.lay` para a mesa **não pode** ser aleatória:
 | Ctrl+Tab | `ui/shape_editor_view.py:627` | `self.canvas.bind("<Control-Tab>", self.next_shape)` |
 | Ctrl+Up | `ui/layout_editor_view.py:1116` | `self.bind_all("<Control-Up>", lambda e: self.nudge_selected(0, 0.5))` |
 | Ctrl+Up | `ui/session_view.py:4022` | `entry.bind("<Control-Up>", lambda e: adjust_number(+1))` |
-| Ctrl+V | `ui/main_window.py:340` | `edit_menu.add_command(label="Colar", accelerator="Ctrl+V")` |
-| Ctrl+X | `ui/main_window.py:338` | `edit_menu.add_command(label="Recortar", accelerator="Ctrl+X")` |
+| Ctrl+V | `ui/main_window.py:341` | `edit_menu.add_command(label="Colar", accelerator="Ctrl+V")` |
+| Ctrl+X | `ui/main_window.py:339` | `edit_menu.add_command(label="Recortar", accelerator="Ctrl+X")` |
 | Ctrl+Y | `ui/layout_editor_view.py:1014` | `self.canvas.bind("<Control-y>", lambda e: "break")` |
 | Ctrl+Y | `ui/layout_editor_view.py:1015` | `self.canvas.bind("<Control-Y>", lambda e: "break")` |
 | Ctrl+Y | `ui/layout_editor_view.py:1016` | `self.bind("<Control-y>", lambda e: "break")` |
@@ -2181,11 +2186,11 @@ A ordem de corte do `.lay` para a mesa **não pode** ser aleatória:
 | Ctrl+Z | `ui/layout_editor_view.py:1009` | `self.canvas.bind("<Control-Z>", self.undo_action)` |
 | Ctrl+Z | `ui/layout_editor_view.py:1010` | `self.bind("<Control-z>", self.undo_action)` |
 | Ctrl+Z | `ui/layout_editor_view.py:1011` | `self.bind("<Control-Z>", self.undo_action)` |
-| Ctrl+Z | `ui/main_window.py:336` | `edit_menu.add_command(label="Desfazer / Reverter", accelerator="Ctrl+Z", command` |
-| Ctrl+Z | `ui/main_window.py:763` | `self.bind_all("<Control-z>", self.on_global_undo, add="+")` |
-| Ctrl+Z | `ui/main_window.py:764` | `self.bind_all("<Control-Z>", self.on_global_undo, add="+")` |
-| Ctrl+Z | `ui/main_window.py:765` | `self.bind_all("<Control-Key-z>", self.on_global_undo, add="+")` |
-| Ctrl+Z | `ui/main_window.py:766` | `self.bind_all("<Control-Key-Z>", self.on_global_undo, add="+")` |
+| Ctrl+Z | `ui/main_window.py:337` | `edit_menu.add_command(label="Desfazer / Reverter", accelerator="Ctrl+Z", command` |
+| Ctrl+Z | `ui/main_window.py:721` | `self.bind_all("<Control-z>", self.on_global_undo, add="+")` |
+| Ctrl+Z | `ui/main_window.py:722` | `self.bind_all("<Control-Z>", self.on_global_undo, add="+")` |
+| Ctrl+Z | `ui/main_window.py:723` | `self.bind_all("<Control-Key-z>", self.on_global_undo, add="+")` |
+| Ctrl+Z | `ui/main_window.py:724` | `self.bind_all("<Control-Key-Z>", self.on_global_undo, add="+")` |
 | Ctrl+Z | `ui/shape_catalog_view.py:270` | `self.bind("<Control-z>", lambda e: self.action_undo())` |
 | Ctrl+Z | `ui/shape_catalog_view.py:271` | `self.bind("<Control-Z>", lambda e: self.action_undo())` |
 | Ctrl+Z | `ui/shape_editor_view.py:600` | `self.bind("<Control-z>", self.undo_or_revert)` |
@@ -2199,12 +2204,12 @@ A ordem de corte do `.lay` para a mesa **não pode** ser aleatória:
 | Delete | `ui/cad_canvas.py:71` | `self.master.bind("<Delete>", lambda e: self.delete_selected())` |
 | Delete | `ui/dieproc_dialog.py:100` | `self.preset_listbox.bind("<Delete>", lambda e: self.on_delete_clicked())` |
 | Delete | `ui/layout_editor_view.py:1104` | `self.bind_all("<Delete>", lambda e: self.delete_selected())` |
-| Delete | `ui/main_window.py:341` | `edit_menu.add_command(label="Excluir", accelerator="Del", command=self.on_global` |
-| Delete | `ui/main_window.py:757` | `self.bind_all("<Delete>", self.on_global_delete_key, add="+")` |
-| Delete | `ui/main_window.py:3843` | `accelerator="Del",` |
-| Delete | `ui/main_window.py:3862` | `accelerator="Del",` |
-| Delete | `ui/main_window.py:4139` | `accelerator="Del",` |
-| Delete | `ui/main_window.py:4158` | `accelerator="Del",` |
+| Delete | `ui/main_window.py:342` | `edit_menu.add_command(label="Excluir", accelerator="Del", command=self.on_global` |
+| Delete | `ui/main_window.py:715` | `self.bind_all("<Delete>", self.on_global_delete_key, add="+")` |
+| Delete | `ui/main_window.py:3869` | `accelerator="Del",` |
+| Delete | `ui/main_window.py:3888` | `accelerator="Del",` |
+| Delete | `ui/main_window.py:4165` | `accelerator="Del",` |
+| Delete | `ui/main_window.py:4184` | `accelerator="Del",` |
 | Delete | `ui/session_view.py:929` | `self.tree_shapes.bind("<Delete>", lambda e: self._on_tree_shapes_delete())` |
 | Delete | `ui/session_view.py:1088` | `w.bind("<Delete>", self.remove_session_material)` |
 | Delete | `ui/session_view.py:1089` | `w.bind("<Key-Delete>", self.remove_session_material)` |
@@ -2227,8 +2232,8 @@ A ordem de corte do `.lay` para a mesa **não pode** ser aleatória:
 | Escape | `ui/layout_print_dialog.py:997` | `self.bind("<Escape>", self.on_escape)` |
 | Escape | `ui/learning_history_dialog.py:61` | `self.bind('<Escape>', lambda _: self.destroy())` |
 | Escape | `ui/main_window.py:99` | `self.bind("<Escape>", self.exit_fullscreen)` |
-| Escape | `ui/main_window.py:756` | `self.bind_all("<Escape>", self.dismiss_popup_menus, add="+")` |
-| Escape | `ui/main_window.py:4466` | `dialog.bind("<Escape>", lambda e: dialog.destroy())` |
+| Escape | `ui/main_window.py:714` | `self.bind_all("<Escape>", self.dismiss_popup_menus, add="+")` |
+| Escape | `ui/main_window.py:4492` | `dialog.bind("<Escape>", lambda e: dialog.destroy())` |
 | Escape | `ui/material_codes_view.py:509` | `dlg.bind("<Escape>", lambda e: dlg.destroy())` |
 | Escape | `ui/nesting_wizard.py:40` | `self.bind('<Escape>', lambda e: self.destroy())` |
 | Escape | `ui/options_dialog.py:41` | `self.bind("<Escape>", lambda e: self.on_cancel())` |
@@ -2258,14 +2263,14 @@ A ordem de corte do `.lay` para a mesa **não pode** ser aleatória:
 | F3 | `ui/layout_editor_view.py:1085` | `w.bind("<Key-F3>", self.on_f3_press)` |
 | F4 | `ui/layout_editor_view.py:1092` | `w.bind("<F4>", self.on_f4_press)` |
 | F4 | `ui/layout_editor_view.py:1093` | `w.bind("<Key-F4>", self.on_f4_press)` |
-| F5 | `ui/main_window.py:147` | `self.bind_all("<F5>", lambda e: self.on_refresh_f5())` |
-| F5 | `ui/main_window.py:359` | `tools_menu.add_command(label="Atualizar", accelerator="F5", command=self.on_refr` |
-| F8 | `ui/main_window.py:327` | `file_menu.add_command(label="📟 Abrir por Código de Barras / ID...", accelerator=` |
-| F8 | `ui/main_window.py:772` | `self.bind_all("<F8>", lambda e: self.on_open_by_barcode_dialog())` |
+| F5 | `ui/main_window.py:148` | `self.bind_all("<F5>", lambda e: self.on_refresh_f5())` |
+| F5 | `ui/main_window.py:360` | `tools_menu.add_command(label="Atualizar", accelerator="F5", command=self.on_refr` |
+| F8 | `ui/main_window.py:328` | `file_menu.add_command(label="📟 Abrir por Código de Barras / ID...", accelerator=` |
+| F8 | `ui/main_window.py:730` | `self.bind_all("<F8>", lambda e: self.on_open_by_barcode_dialog())` |
 | Iso_left_tab | `ui/session_view.py:4016` | `entry.bind("<ISO_Left_Tab>", move_prev_col)` |
 | Kp_down | `ui/session_view.py:4008` | `entry.bind("<KP_Down>", move_down)` |
 | Kp_enter | `ui/fill_user_dialog.py:156` | `self.bind("<KP_Enter>", lambda e: self.on_ok())` |
-| Kp_enter | `ui/main_window.py:626` | `self.tree_main.bind("<KP_Enter>", self.on_tree_key_return)` |
+| Kp_enter | `ui/main_window.py:627` | `self.tree_main.bind("<KP_Enter>", self.on_tree_key_return)` |
 | Kp_enter | `ui/session_view.py:932` | `self.tree_shapes.bind("<KP_Enter>", self.on_tree_shape_enter)` |
 | Kp_enter | `ui/session_view.py:4012` | `entry.bind("<KP_Enter>", move_down)` |
 | Kp_enter | `ui/shape_catalog_view.py:268` | `self.bind("<KP_Enter>", lambda e: self.open_selected_shape())` |
@@ -2285,9 +2290,9 @@ A ordem de corte do `.lay` para a mesa **não pode** ser aleatória:
 | Return | `ui/edit_shape_in_session_dialog.py:147` | `self.bind("<Return>", lambda e: self.on_save())` |
 | Return | `ui/fill_user_dialog.py:155` | `self.bind("<Return>", lambda e: self.on_ok())` |
 | Return | `ui/import_materials_dialog.py:85` | `self.ent_filepath.bind("<Return>", lambda e: self.load_file_from_path(self.ent_f` |
-| Return | `ui/main_window.py:625` | `self.tree_main.bind("<Return>", self.on_tree_key_return)` |
-| Return | `ui/main_window.py:672` | `self.grid_lower.bind("<Return>", self.on_grid_double_click)` |
-| Return | `ui/main_window.py:4465` | `dialog.bind("<Return>", lambda e: save())` |
+| Return | `ui/main_window.py:626` | `self.tree_main.bind("<Return>", self.on_tree_key_return)` |
+| Return | `ui/main_window.py:673` | `self.grid_lower.bind("<Return>", self.on_grid_double_click)` |
+| Return | `ui/main_window.py:4491` | `dialog.bind("<Return>", lambda e: save())` |
 | Return | `ui/material_codes_view.py:211` | `self.tree.bind("<Return>", lambda e: self.open_edit_selected_dialog())` |
 | Return | `ui/material_codes_view.py:508` | `dlg.bind("<Return>", lambda e: save_action())` |
 | Return | `ui/session_view.py:630` | `self.entry_gap.bind("<Return>", self._on_gap_entry_change)` |
@@ -2315,7 +2320,7 @@ A ordem de corte do `.lay` para a mesa **não pode** ser aleatória:
 | Shift+Tab | `ui/session_view.py:3461` | `entry.bind("<Shift-Tab>", on_shift_tab)` |
 | Shift+Tab | `ui/session_view.py:4015` | `entry.bind("<Shift-Tab>", move_prev_col)` |
 | Space | `ui/add_shapes_dialog.py:157` | `self.tree.bind("<space>", self.on_tree_space)` |
-| Space | `ui/main_window.py:622` | `self.tree_main.bind("<space>", self.on_tree_space_toggle)` |
+| Space | `ui/main_window.py:623` | `self.tree_main.bind("<space>", self.on_tree_space_toggle)` |
 | Space | `ui/shape_library_view.py:215` | `self.cards_canvas.bind('<space>', lambda event: self.toggle_shape(self.focused_i` |
 | Tab | `ui/session_view.py:3460` | `entry.bind("<Tab>", on_tab)` |
 | Tab | `ui/session_view.py:4014` | `entry.bind("<Tab>", move_next_col)` |
@@ -5204,6 +5209,7 @@ Com dados confiáveis e validações definidas, avaliar comparação do aproveit
 <!-- AUTO:gitlog:start -->
 | Commit | Data | Autor | Mensagem |
 |---|---|---|---|
+| `1a4aff0` | 2026-11-16 | Doletabgi | chore(release): OpenCorte v1.8.26 |
 | `8fa792f` | 2026-11-16 | Doletabgi | chore(release): OpenCorte v1.8.25 |
 | `9506664` | 2026-11-16 | Doletabgi | chore(release): OpenCorte v1.8.24 |
 | `1cbe06a` | 2026-11-16 | Doletabgi | chore(release): OpenCorte v1.8.23 |
@@ -5218,7 +5224,6 @@ Com dados confiáveis e validações definidas, avaliar comparação do aproveit
 | `67df97a` | 2026-11-13 | Doletabgi | chore(release): OpenCorte v1.8.14 |
 | `6001da5` | 2026-11-13 | Doletabgi | fix(release): padronizar downloads e pacotes como OpenCorte |
 | `c2c560a` | 2026-11-13 | Doletabgi | fix(release): preencher e sincronizar alteracoes de cada versao |
-| `77f9f0f` | 2026-11-13 | Doletabgi | chore(release): OpenCorte v1.8.13 |
 <!-- AUTO:gitlog:end -->
 
 ---

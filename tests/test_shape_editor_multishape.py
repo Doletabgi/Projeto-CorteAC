@@ -22,6 +22,7 @@ class TestShapeEditorMultiShape(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.root = MainWindow()
+        cls.root.show_shape_editor()
         cls.root.update()
 
     @classmethod

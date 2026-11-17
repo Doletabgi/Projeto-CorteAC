@@ -131,6 +131,7 @@ class MainWindow(tk.Tk):
             self.current_material.setdefault("code", "853412")
             self.current_material.setdefault("type", "como placa")
         self.current_shapes = []
+        self._shapes_loaded = False
         self.sessions = []
         self.current_session = None
         self.orders = []
@@ -689,55 +690,12 @@ class MainWindow(tk.Tk):
         # Barra inferior de janelas minimizadas MDI (Dock clássico Windows XP)
         self.mdi_dock = tk.Frame(self.right_box, bg="#404040", height=28, relief="sunken", bd=1)
 
-        # Criação das views filhas MDI únicas
-        self.order_view = OrderView(
-            self.mdi_workspace,
-            on_close=lambda *args: self.close_window(self.order_view),
-            on_minimize=lambda *args: self.minimize_window(self.order_view),
-            on_maximize=lambda *args: self.toggle_maximize_window(self.order_view)
-        )
-        self.shape_editor_view = ShapeEditorView(
-            self,
-            on_close=lambda *args: self.close_window(self.shape_editor_view),
-            on_minimize=lambda *args: self.minimize_window(self.shape_editor_view),
-            on_maximize=lambda *args: self.toggle_maximize_window(self.shape_editor_view),
-            on_save=self.on_shape_saved,
-            on_import_die=self.on_import_die
-        )
-        self.shape_catalog_view = ShapeLibraryView(
-            self,
-            db=self.db,
-            on_close=lambda *args: self.close_window(self.shape_catalog_view),
-            on_minimize=lambda *args: self.minimize_window(self.shape_catalog_view),
-            on_maximize=lambda *args: self.toggle_maximize_window(self.shape_catalog_view),
-            on_edit_shape=self.show_shape_editor,
-            on_session_updated=self.on_catalog_session_updated,
-            on_new_session=self.on_catalog_new_session
-        )
-        self.layout_editor_view = LayoutEditorView(
-            self,
-            on_close=lambda *args: self.close_window(self.layout_editor_view),
-            on_minimize=lambda *args: self.minimize_window(self.layout_editor_view),
-            on_maximize=lambda *args: self.toggle_maximize_window(self.layout_editor_view),
-            on_save=self.on_layout_editor_save,
-            db=self.db
-        )
-        self.material_codes_view = MaterialCodesView(
-            self.mdi_workspace,
-            self.db,
-            on_close=lambda *args: self.close_window(self.material_codes_view),
-            on_minimize=lambda *args: self.minimize_window(self.material_codes_view),
-            on_maximize=lambda *args: self.toggle_maximize_window(self.material_codes_view),
-            on_material_changed=self.refresh_materials_everywhere
-        )
-        if self.current_material:
-            if hasattr(self.layout_editor_view, "set_material"):
-                self.layout_editor_view.set_material(self.current_material)
-            else:
-                self.layout_editor_view.set_sheet_size(
-                    self.current_material["width_mm"],
-                    self.current_material["height_mm"]
-                )
+        # Editores são criados no primeiro acesso e reutilizados depois.
+        self.order_view = None
+        self.shape_editor_view = None
+        self.shape_catalog_view = None
+        self.layout_editor_view = None
+        self.material_codes_view = None
 
         # Inicializa a view da primeira sessão
         self.session_view = None
@@ -770,6 +728,64 @@ class MainWindow(tk.Tk):
         self._scanner_last_key_time = 0.0
         self.bind_all("<Key>", self._on_global_key_scanner, add="+")
         self.bind_all("<F8>", lambda e: self.on_open_by_barcode_dialog())
+
+    def _ensure_mdi_view(self, name):
+        """Cria a view no acesso explícito e preserva a instância para reabertura."""
+        view = getattr(self, name, None)
+        if view is not None:
+            return view
+        if name == "order_view":
+            self.order_view = OrderView(
+                self.mdi_workspace,
+                on_close=lambda *args: self.close_window(self.order_view),
+                on_minimize=lambda *args: self.minimize_window(self.order_view),
+                on_maximize=lambda *args: self.toggle_maximize_window(self.order_view)
+            )
+        elif name == "shape_editor_view":
+            self.shape_editor_view = ShapeEditorView(
+                self,
+                on_close=lambda *args: self.close_window(self.shape_editor_view),
+                on_minimize=lambda *args: self.minimize_window(self.shape_editor_view),
+                on_maximize=lambda *args: self.toggle_maximize_window(self.shape_editor_view),
+                on_save=self.on_shape_saved,
+                on_import_die=self.on_import_die
+            )
+        elif name == "shape_catalog_view":
+            self.shape_catalog_view = ShapeLibraryView(
+                self,
+                db=self.db,
+                on_close=lambda *args: self.close_window(self.shape_catalog_view),
+                on_minimize=lambda *args: self.minimize_window(self.shape_catalog_view),
+                on_maximize=lambda *args: self.toggle_maximize_window(self.shape_catalog_view),
+                on_edit_shape=self.show_shape_editor,
+                on_session_updated=self.on_catalog_session_updated,
+                on_new_session=self.on_catalog_new_session
+            )
+        elif name == "layout_editor_view":
+            self.layout_editor_view = LayoutEditorView(
+                self,
+                on_close=lambda *args: self.close_window(self.layout_editor_view),
+                on_minimize=lambda *args: self.minimize_window(self.layout_editor_view),
+                on_maximize=lambda *args: self.toggle_maximize_window(self.layout_editor_view),
+                on_save=self.on_layout_editor_save,
+                load_sample=False,
+                db=self.db
+            )
+        elif name == "material_codes_view":
+            self.material_codes_view = MaterialCodesView(
+                self.mdi_workspace,
+                self.db,
+                on_close=lambda *args: self.close_window(self.material_codes_view),
+                on_minimize=lambda *args: self.minimize_window(self.material_codes_view),
+                on_maximize=lambda *args: self.toggle_maximize_window(self.material_codes_view),
+                on_material_changed=self.refresh_materials_everywhere
+            )
+        else:
+            raise ValueError(f"View MDI desconhecida: {name}")
+        view = getattr(self, name)
+        if name == "layout_editor_view" and self.current_material:
+            view.set_material(self.current_material)
+        return view
 
     def setup_cad_in_session(self):
         # CADCanvas para gestão em segundo plano de peças, simulação e exportação
@@ -853,7 +869,7 @@ class MainWindow(tk.Tk):
         self.canvas.set_material(self.current_material)
 
         # Atualiza a chapa e dados do material no Layout Editor
-        if hasattr(self, "layout_editor_view"):
+        if getattr(self, "layout_editor_view", None) is not None:
             if hasattr(self.layout_editor_view, "set_material"):
                 self.layout_editor_view.set_material(mat_dict)
             else:
@@ -973,7 +989,7 @@ class MainWindow(tk.Tk):
                 break
         if self.current_session and self.current_session["id"] == sess_id:
             self.current_session["shapes"] = list(shapes)
-        if hasattr(self, "layout_editor_view") and self.layout_editor_view:
+        if getattr(self, "layout_editor_view", None) is not None and self.layout_editor_view:
             self.layout_editor_view.set_session_shapes(shapes)
         cnt = len(shapes)
         self.lbl_status_msg.config(text=f"Sessão #{sess_id}: {cnt} molde(s) configurado(s) na aba Moldes.")
@@ -1110,7 +1126,7 @@ class MainWindow(tk.Tk):
             pass
 
     def handle_ctrl_s(self, event=None):
-        if hasattr(self, "layout_editor_view") and self.layout_editor_view.winfo_ismapped():
+        if getattr(self, "layout_editor_view", None) is not None and self.layout_editor_view.winfo_ismapped():
             self.layout_editor_view.save_layout_dialog()
             return "break"
         if hasattr(self, "session_view") and self.session_view and self.session_view.winfo_ismapped():
@@ -1118,7 +1134,7 @@ class MainWindow(tk.Tk):
             return "break"
 
     def handle_ctrl_p(self, event=None):
-        if hasattr(self, "layout_editor_view") and self.layout_editor_view and self.layout_editor_view.winfo_ismapped():
+        if getattr(self, "layout_editor_view", None) is not None and self.layout_editor_view and self.layout_editor_view.winfo_ismapped():
             self.layout_editor_view.print_layout()
             return "break"
         if hasattr(self, "session_view") and self.session_view and self.session_view.winfo_ismapped():
@@ -1127,7 +1143,7 @@ class MainWindow(tk.Tk):
         return None
 
     def handle_ctrl_t(self, event=None):
-        if hasattr(self, "layout_editor_view") and self.layout_editor_view and self.layout_editor_view.winfo_ismapped():
+        if getattr(self, "layout_editor_view", None) is not None and self.layout_editor_view and self.layout_editor_view.winfo_ismapped():
             self.layout_editor_view.trim_layout_auto()
             return "break"
         return None
@@ -1145,7 +1161,7 @@ class MainWindow(tk.Tk):
         active_sess["placed_pieces"] = copy.deepcopy(placed_pieces)
         active_sess["sheet_width"] = float(sheet_w)
         active_sess["sheet_height"] = float(sheet_h)
-        if hasattr(self, "layout_editor_view") and getattr(self.layout_editor_view, "trim_cut_line", None):
+        if getattr(self, "layout_editor_view", None) is not None and getattr(self.layout_editor_view, "trim_cut_line", None):
             active_sess["trim_cut_line"] = copy.deepcopy(self.layout_editor_view.trim_cut_line)
 
         # 2. Recalcula a área utilizada e a eficiência de aproveitamento (Yield %)
@@ -1185,7 +1201,7 @@ class MainWindow(tk.Tk):
             sess_view.session_data["placed_pieces"] = copy.deepcopy(placed_pieces)
             sess_view.session_data["sheet_width"] = float(sheet_w)
             sess_view.session_data["sheet_height"] = float(sheet_h)
-            if hasattr(self, "layout_editor_view") and getattr(self.layout_editor_view, "trim_cut_line", None):
+            if getattr(self, "layout_editor_view", None) is not None and getattr(self.layout_editor_view, "trim_cut_line", None):
                 sess_view.session_data["trim_cut_line"] = copy.deepcopy(self.layout_editor_view.trim_cut_line)
             sess_view.session_data["yield_percent"] = yield_pct
             sess_view.session_data["used_area_m2"] = used_area_m2
@@ -1309,7 +1325,7 @@ class MainWindow(tk.Tk):
         if not self.open_windows:
             return
         if (
-            hasattr(self, "layout_editor_view")
+            getattr(self, "layout_editor_view", None) is not None
             and self.layout_editor_view in self.open_windows
             and self.layout_editor_view.winfo_ismapped()
             and (getattr(self, "active_child", None) == self.layout_editor_view or len(self.open_windows) == 1)
@@ -1335,7 +1351,7 @@ class MainWindow(tk.Tk):
         if not self.open_windows:
             return
         if (
-            hasattr(self, "layout_editor_view")
+            getattr(self, "layout_editor_view", None) is not None
             and self.layout_editor_view in self.open_windows
             and self.layout_editor_view.winfo_ismapped()
             and (getattr(self, "active_child", None) == self.layout_editor_view or len(self.open_windows) == 1)
@@ -1361,7 +1377,7 @@ class MainWindow(tk.Tk):
         if not self.open_windows:
             return
         if (
-            hasattr(self, "layout_editor_view")
+            getattr(self, "layout_editor_view", None) is not None
             and self.layout_editor_view in self.open_windows
             and self.layout_editor_view.winfo_ismapped()
             and (getattr(self, "active_child", None) == self.layout_editor_view or len(self.open_windows) == 1)
@@ -1475,7 +1491,7 @@ class MainWindow(tk.Tk):
         self.show_session_window(target_sess)
         if self.session_view:
             self.session_view.notebook.select(self.session_view.tab_lays)
-        if target_sess.get("material") and hasattr(self, "layout_editor_view") and hasattr(self.layout_editor_view, "set_material"):
+        if target_sess.get("material") and getattr(self, "layout_editor_view", None) is not None and hasattr(self.layout_editor_view, "set_material"):
             self.layout_editor_view.set_material(target_sess["material"])
         self.update_all_metrics()
 
@@ -1519,6 +1535,7 @@ class MainWindow(tk.Tk):
                 break
 
     def show_order_window(self, order_id_or_data=None):
+        self._ensure_mdi_view("order_view")
         target_order = None
         if isinstance(order_id_or_data, dict):
             target_order = order_id_or_data
@@ -1575,6 +1592,7 @@ class MainWindow(tk.Tk):
         return False
 
     def show_shape_editor(self, shape_id_or_data=None):
+        self._ensure_mdi_view("shape_editor_view")
         target_shapes = []
 
         if isinstance(shape_id_or_data, (list, tuple)):
@@ -1606,7 +1624,7 @@ class MainWindow(tk.Tk):
         if self.shape_editor_view in self.minimized_windows:
             self.restore_window(self.shape_editor_view)
         self.maximize_window(self.shape_editor_view)
-        self.after(50, lambda: self.shape_editor_view.reset_view() if hasattr(self, "shape_editor_view") else None)
+        self.after(50, lambda: self.shape_editor_view.reset_view() if getattr(self, "shape_editor_view", None) is not None else None)
 
         if target_shapes:
             if len(target_shapes) > 1:
@@ -1619,11 +1637,17 @@ class MainWindow(tk.Tk):
 
     def show_shape_catalog(self, article_id=None):
         """Abre a biblioteca global; artigo explícito funciona como filtro opcional."""
-        catalog = self.shape_catalog_view
+        was_loaded = self.shape_catalog_view is not None
+        catalog = self._ensure_mdi_view("shape_catalog_view")
         catalog.db = self.db
-        catalog.reload_data()
+        if was_loaded:
+            catalog.reload_data()
         active_id = self.current_session.get("id") if self.current_session else None
         catalog.set_session_context(catalog.sessions, active_id)
+        self.current_shapes = catalog.shapes_list
+        self._shapes_loaded = True
+        for session_view in self.open_sessions.values():
+            session_view.all_shapes_catalog = self.current_shapes
         catalog.show_article(article_id if isinstance(article_id, int) else None)
         if catalog in self.minimized_windows:
             self.restore_window(catalog)
@@ -1690,6 +1714,8 @@ class MainWindow(tk.Tk):
             )
             return
 
+        if self.layout_editor_view is None:
+            self._ensure_mdi_view("layout_editor_view")
         if self.layout_editor_view in self.minimized_windows:
             self.restore_window(self.layout_editor_view)
         self.maximize_window(self.layout_editor_view)
@@ -1697,7 +1723,11 @@ class MainWindow(tk.Tk):
         if active_sess:
             sess_mat = active_sess.get("material") or self.current_material
             grid_row = None
-            if getattr(self, "session_view", None) and hasattr(self.session_view, "tree_mat"):
+            session_view_data = getattr(getattr(self, "session_view", None), "session_data", {})
+            same_session = session_view_data is active_sess or (
+                active_sess.get("id") is not None
+                and str(session_view_data.get("id")) == str(active_sess.get("id")))
+            if same_session and getattr(self, "session_view", None) and hasattr(self.session_view, "tree_mat"):
                 m_items = self.session_view.tree_mat.get_children()
                 if m_items:
                     grid_row = self.session_view.tree_mat.item(m_items[0], "values")
@@ -1827,7 +1857,8 @@ class MainWindow(tk.Tk):
 
     def show_material_codes_window(self):
         """Abre ou ativa a janela MDI Códigos materiais (Listagem de materiais)."""
-        if hasattr(self, "material_codes_view"):
+        self._ensure_mdi_view("material_codes_view")
+        if getattr(self, "material_codes_view", None) is not None:
             self.material_codes_view.refresh_table()
             if self.material_codes_view in self.minimized_windows:
                 self.restore_window(self.material_codes_view)
@@ -1838,7 +1869,7 @@ class MainWindow(tk.Tk):
     def open_import_materials_dialog(self):
         """Abre a janela Códigos materiais e exibe o diálogo para importar lista de materiais."""
         self.show_material_codes_window()
-        if hasattr(self, "material_codes_view") and hasattr(self.material_codes_view, "open_import_dialog"):
+        if getattr(self, "material_codes_view", None) is not None and hasattr(self.material_codes_view, "open_import_dialog"):
             self.material_codes_view.open_import_dialog()
 
     def refresh_materials_everywhere(self):
@@ -1848,7 +1879,7 @@ class MainWindow(tk.Tk):
             self.switch_tree_mode("materials")
         for sv in self.open_sessions.values():
             sv.set_materials_list(self.materials)
-        if hasattr(self, "material_codes_view"):
+        if getattr(self, "material_codes_view", None) is not None:
             self.material_codes_view.refresh_table()
 
     def show_options_dialog(self):
@@ -1945,7 +1976,7 @@ class MainWindow(tk.Tk):
             self._window_layout_mode = "windowed"
 
         # Atualiza orientação de chapas se necessário
-        if hasattr(self, "layout_editor_view") and self.current_material:
+        if getattr(self, "layout_editor_view", None) is not None and self.current_material:
             is_horiz = settings.get("materials_horizontal", "0") == "1"
             w = float(self.current_material.get("width_mm", 1380.0))
             h = float(self.current_material.get("height_mm", 2980.0))
@@ -1961,6 +1992,7 @@ class MainWindow(tk.Tk):
         """Atualiza todos os dados do sistema a partir do banco de dados SQLite (F5)."""
         self.materials = self.db.get_materials()
         self.current_shapes = self.db.get_shapes()
+        self._shapes_loaded = True
         self.orders = self.db.get_orders()
         self.sessions = self.db.get_sessions()
         self.app_settings = self.db.get_all_settings()
@@ -1974,7 +2006,7 @@ class MainWindow(tk.Tk):
             sv.all_shapes_catalog = self.current_shapes
 
         # Atualiza tabela de materiais se a view estiver aberta
-        if hasattr(self, "material_codes_view"):
+        if getattr(self, "material_codes_view", None) is not None:
             self.material_codes_view.refresh_table()
 
         if getattr(self, "shape_catalog_view", None):
@@ -2557,7 +2589,7 @@ class MainWindow(tk.Tk):
                     pass
 
             # Se o Shape Editor estiver ativo, carrega nele; se não houver janela ativa, exibe o Shape Editor
-            if hasattr(self, "shape_editor_view") and self.shape_editor_view and self.shape_editor_view.winfo_ismapped() and self.active_child == self.shape_editor_view:
+            if getattr(self, "shape_editor_view", None) is not None and self.shape_editor_view and self.shape_editor_view.winfo_ismapped() and self.active_child == self.shape_editor_view:
                 self.shape_editor_view.load_shape(imported[0])
             elif not sess_is_active:
                 self.show_shape_editor(imported[0])
@@ -2589,7 +2621,7 @@ class MainWindow(tk.Tk):
     def on_open_lay_file(self):
         """Abre e importa um arquivo de layout .lay no Layout Editor e sincroniza com a sessão ativa."""
         self.show_layout_editor(force=True)
-        if hasattr(self, "layout_editor_view") and self.layout_editor_view:
+        if getattr(self, "layout_editor_view", None) is not None and self.layout_editor_view:
             self.layout_editor_view.open_layout_dialog()
 
     def _ensure_separated_sobras_before_export(self):
@@ -2613,7 +2645,7 @@ class MainWindow(tk.Tk):
                         trim_layout_dict(ly, gap_mm=1.0)
                 self.current_session["layouts"] = new_lays
 
-                if hasattr(self, "layout_editor_view") and self.layout_editor_view:
+                if getattr(self, "layout_editor_view", None) is not None and self.layout_editor_view:
                     self.layout_editor_view.set_session_layouts(new_lays)
                 if self.db and self.current_session.get("id"):
                     try:
@@ -2624,14 +2656,16 @@ class MainWindow(tk.Tk):
 
     def on_export_lay_file(self):
         """Exporta o layout atual para arquivo .lay compatível com fn98/dp98 e mesa ATOM CNC."""
+        self._ensure_mdi_view("layout_editor_view")
         self._ensure_separated_sobras_before_export()
-        if hasattr(self, "layout_editor_view") and self.layout_editor_view:
+        if getattr(self, "layout_editor_view", None) is not None and self.layout_editor_view:
             self.layout_editor_view.export_layout_dialog(target_format="lay")
 
     def on_export_dual_file(self):
         """Exporta o layout atual simultaneamente para ATOM (.lay) e Comelz (.onx)."""
+        self._ensure_mdi_view("layout_editor_view")
         self._ensure_separated_sobras_before_export()
-        if hasattr(self, "layout_editor_view") and self.layout_editor_view:
+        if getattr(self, "layout_editor_view", None) is not None and self.layout_editor_view:
             self.layout_editor_view.export_layout_dialog(target_format="dual")
 
     def on_export_session_to_machine(self, session_id=None):
@@ -2649,8 +2683,6 @@ class MainWindow(tk.Tk):
                 "Selecione uma sessão com layouts calculados antes de preparar para a máquina.",
                 parent=self,
             )
-            return
-        if not hasattr(self, "layout_editor_view") or not self.layout_editor_view:
             return
         active = self.current_session or {}
         has_layout = bool(active.get("layouts") or active.get("placed_pieces"))
@@ -3388,6 +3420,7 @@ class MainWindow(tk.Tk):
         """Recarrega os moldes do banco de dados e sincroniza o catálogo com as views."""
         shapes = self.db.get_all_shapes()
         self.current_shapes = shapes if shapes is not None else []
+        self._shapes_loaded = True
         for sv in self.open_sessions.values():
             sv.all_shapes_catalog = self.current_shapes
 
@@ -3450,16 +3483,7 @@ class MainWindow(tk.Tk):
                 self.canvas.redraw()
             self.show_session_window(self.current_session)
 
-        self.reload_shapes()
-
-        if not self.current_shapes:
-            for ord_item in self.orders:
-                articles = self.db.get_articles_by_order(ord_item["id"])
-                if articles:
-                    self.current_shapes = self.db.get_shapes_by_article(articles[0]["id"])
-                    break
-            for sv in self.open_sessions.values():
-                sv.all_shapes_catalog = self.current_shapes
+        # O catálogo global é carregado somente ao abrir Moldes ou a biblioteca.
 
         if self.current_material:
             self.canvas.set_material(self.current_material)
@@ -3482,6 +3506,8 @@ class MainWindow(tk.Tk):
             print(f"[AVISO] Falha ao iniciar agendador de backup de moldes: {sched_err}")
 
     def switch_tree_mode(self, mode):
+        if mode == "shapes" and not getattr(self, "_shapes_loaded", False):
+            self.reload_shapes()
         self.current_mode = mode
         self.tree_main.delete(*self.tree_main.get_children())
 
@@ -3755,10 +3781,10 @@ class MainWindow(tk.Tk):
             for s_view in getattr(self, "open_sessions", {}).values():
                 if hasattr(s_view, "_active_mat_menu") and self._is_inside_menu(s_view._active_mat_menu, xr, yr):
                     return
-            if hasattr(self, "shape_editor_view") and hasattr(self.shape_editor_view, "ctx_menu"):
+            if getattr(self, "shape_editor_view", None) is not None and hasattr(self.shape_editor_view, "ctx_menu"):
                 if self._is_inside_menu(self.shape_editor_view.ctx_menu, xr, yr):
                     return
-            if hasattr(self, "material_codes_view") and hasattr(self.material_codes_view, "ctx_menu"):
+            if getattr(self, "material_codes_view", None) is not None and hasattr(self.material_codes_view, "ctx_menu"):
                 if self._is_inside_menu(self.material_codes_view.ctx_menu, xr, yr):
                     return
 
@@ -3781,9 +3807,9 @@ class MainWindow(tk.Tk):
         for s_view in getattr(self, "open_sessions", {}).values():
             if hasattr(s_view, "dismiss_context_menu"):
                 s_view.dismiss_context_menu()
-        if hasattr(self, "shape_editor_view") and hasattr(self.shape_editor_view, "dismiss_context_menu"):
+        if getattr(self, "shape_editor_view", None) is not None and hasattr(self.shape_editor_view, "dismiss_context_menu"):
             self.shape_editor_view.dismiss_context_menu()
-        if hasattr(self, "material_codes_view") and hasattr(self.material_codes_view, "ctx_menu"):
+        if getattr(self, "material_codes_view", None) is not None and hasattr(self.material_codes_view, "ctx_menu"):
             try:
                 self.material_codes_view.ctx_menu.unpost()
             except Exception:
@@ -4450,7 +4476,7 @@ class MainWindow(tk.Tk):
                 self.session_view.set_material_data(new_mat)
             if hasattr(self, "canvas"):
                 self.canvas.set_material(new_mat)
-            if hasattr(self, "layout_editor_view"):
+            if getattr(self, "layout_editor_view", None) is not None:
                 self.layout_editor_view.set_sheet_size(w_mm, h_mm)
 
             self.update_all_metrics()
@@ -4821,7 +4847,7 @@ class MainWindow(tk.Tk):
                     lbl = f"Grade '{f_name}' ({cnt} moldes)" if (f_name and cnt > 1) else f"{cnt} molde(s)"
 
                     # 1. Se LayoutEditorView estiver aberto, adiciona diretamente aos moldes do layout
-                    if hasattr(self, "layout_editor_view") and self.layout_editor_view and self.layout_editor_view.winfo_ismapped():
+                    if getattr(self, "layout_editor_view", None) is not None and self.layout_editor_view and self.layout_editor_view.winfo_ismapped():
                         self.layout_editor_view.add_session_shapes(shapes_to_add)
                         if self.session_view:
                             self.session_view.add_shapes(shapes_to_add)
@@ -4832,7 +4858,7 @@ class MainWindow(tk.Tk):
                     elif self.session_view and self.session_view.winfo_ismapped():
                         self.session_view.add_shapes(shapes_to_add)
                         self.session_view.notebook.select(1) # Aba Moldes
-                        if hasattr(self, "layout_editor_view") and self.layout_editor_view:
+                        if getattr(self, "layout_editor_view", None) is not None and self.layout_editor_view:
                             self.layout_editor_view.set_session_shapes(self.session_view.shapes_list)
                         self.lbl_status_msg.config(text=f"Toda a {lbl} adicionada com sucesso à aba Moldes da Sessão.")
                     # 3. Se nenhuma view estiver mapeada, abre a sessão ativa e adiciona os moldes
@@ -4841,7 +4867,7 @@ class MainWindow(tk.Tk):
                         if self.session_view:
                             self.session_view.add_shapes(shapes_to_add)
                             self.session_view.notebook.select(1)
-                        if hasattr(self, "layout_editor_view") and self.layout_editor_view:
+                        if getattr(self, "layout_editor_view", None) is not None and self.layout_editor_view:
                             self.layout_editor_view.set_session_shapes(self.session_view.shapes_list if self.session_view else shapes_to_add)
                         self.lbl_status_msg.config(text=f"Toda a {lbl} adicionada aos Moldes da Sessão #{self.current_session['id']}.")
                 else:
@@ -4935,7 +4961,7 @@ class MainWindow(tk.Tk):
             self.canvas.set_material(mat)
 
         # Atualiza o Layout Editor
-        if hasattr(self, "layout_editor_view"):
+        if getattr(self, "layout_editor_view", None) is not None:
             self.layout_editor_view.set_sheet_size(mat["width_mm"], mat["height_mm"])
 
         # Recalcula as métricas
@@ -5198,7 +5224,8 @@ class MainWindow(tk.Tk):
                         break
                 if self.current_order and self.current_order.get("id") == order_id:
                     self.current_order["name"] = new_name
-                    self.order_view.load_order(self.current_order)
+                    if self.order_view is not None:
+                        self.order_view.load_order(self.current_order)
                 if self.current_mode == "jobs":
                     self.switch_tree_mode("jobs")
             elif vals and len(vals) >= 2 and vals[0] == "job_folder":
@@ -5439,9 +5466,9 @@ class MainWindow(tk.Tk):
                     s["order_id"] = None
             if self.current_order and self.current_order.get("id") in del_ids:
                 self.current_order = self.orders[0] if self.orders else None
-                if getattr(self, "active_child", None) == getattr(self, "order_view", None):
+                if self.order_view is not None and getattr(self, "active_child", None) == self.order_view:
                     if self.current_order:
-                        if hasattr(self, "order_view") and self.order_view:
+                        if getattr(self, "order_view", None) is not None and self.order_view:
                             self.order_view.load_order(self.current_order)
                     else:
                         if hasattr(self, "close_child_window"):
@@ -5545,10 +5572,10 @@ class MainWindow(tk.Tk):
         if isinstance(widget, (tk.Entry, ttk.Entry, tk.Text, ttk.Combobox, ttk.Spinbox)):
             return
 
-        if hasattr(self, "layout_editor_view") and self.layout_editor_view and self.layout_editor_view.winfo_ismapped():
+        if getattr(self, "layout_editor_view", None) is not None and self.layout_editor_view and self.layout_editor_view.winfo_ismapped():
             if widget and str(widget).startswith(str(self.layout_editor_view)):
                 return
-        if hasattr(self, "shape_editor_view") and self.shape_editor_view and self.shape_editor_view.winfo_ismapped():
+        if getattr(self, "shape_editor_view", None) is not None and self.shape_editor_view and self.shape_editor_view.winfo_ismapped():
             if widget and str(widget).startswith(str(self.shape_editor_view)):
                 return
 
@@ -5647,14 +5674,14 @@ class MainWindow(tk.Tk):
         active = getattr(self, "active_child", None)
 
         # 1. Se o Shape Editor estiver ativo ou visível
-        if active == getattr(self, "shape_editor_view", None) or (hasattr(self, "shape_editor_view") and self.shape_editor_view and self.shape_editor_view.winfo_ismapped()):
-            if hasattr(self, "shape_editor_view") and self.shape_editor_view:
+        if active == getattr(self, "shape_editor_view", None) or (getattr(self, "shape_editor_view", None) is not None and self.shape_editor_view and self.shape_editor_view.winfo_ismapped()):
+            if getattr(self, "shape_editor_view", None) is not None and self.shape_editor_view:
                 self.shape_editor_view.undo_or_revert()
                 return "break"
 
         # 2. Se o Layout Editor estiver ativo ou visível
-        if active == getattr(self, "layout_editor_view", None) or (hasattr(self, "layout_editor_view") and self.layout_editor_view and self.layout_editor_view.winfo_ismapped()):
-            if hasattr(self, "layout_editor_view") and self.layout_editor_view:
+        if active == getattr(self, "layout_editor_view", None) or (getattr(self, "layout_editor_view", None) is not None and self.layout_editor_view and self.layout_editor_view.winfo_ismapped()):
+            if getattr(self, "layout_editor_view", None) is not None and self.layout_editor_view:
                 self.layout_editor_view.undo_action()
                 return "break"
 
@@ -6506,7 +6533,7 @@ class MainWindow(tk.Tk):
                             self.canvas.set_pieces(pieces)
                             if getattr(self, "session_view", None):
                                 self.session_view.load_session(self.current_session)
-                            if hasattr(self, "layout_editor_view") and self.layout_editor_view:
+                            if getattr(self, "layout_editor_view", None) is not None and self.layout_editor_view:
                                 if hasattr(self.layout_editor_view, "set_session_layouts"):
                                     self.layout_editor_view.set_session_layouts(layouts, initial_index=0)
 
@@ -6728,7 +6755,7 @@ class MainWindow(tk.Tk):
             material=self.current_material,
             grid_material_row=grid_row,
             layout=(self.current_session.get("layouts", [{}])[0] if self.current_session and self.current_session.get("layouts") else None),
-            default=getattr(self.layout_editor_view, "material_layers", 2) if hasattr(self, "layout_editor_view") else 2
+            default=getattr(self.layout_editor_view, "material_layers", 2) if getattr(self, "layout_editor_view", None) is not None else 2
         )
         if not is_layers_defined(
             session=self.current_session,
@@ -6970,7 +6997,7 @@ class MainWindow(tk.Tk):
                             self.db.save_session_layouts(self.current_session["id"], layouts)
                         except Exception as e:
                             print(f"[AVISO] Falha ao persistir layouts da sessão cancelada: {e}")
-                    if hasattr(self, "layout_editor_view") and self.layout_editor_view:
+                    if getattr(self, "layout_editor_view", None) is not None and self.layout_editor_view:
                         if hasattr(self.layout_editor_view, "set_session_layouts"):
                             self.layout_editor_view.set_session_layouts(layouts, initial_index=0)
                         elif hasattr(self.layout_editor_view, "set_pieces"):
@@ -7037,7 +7064,7 @@ class MainWindow(tk.Tk):
                 except Exception as e:
                     print(f"[AVISO] Falha ao persistir layouts da sessão: {e}")
 
-            if hasattr(self, "layout_editor_view") and self.layout_editor_view:
+            if getattr(self, "layout_editor_view", None) is not None and self.layout_editor_view:
                 if hasattr(self.layout_editor_view, "set_session_layouts"):
                     self.layout_editor_view.set_session_layouts(layouts, initial_index=0)
                 elif hasattr(self.layout_editor_view, "set_pieces"):
@@ -7191,7 +7218,7 @@ class MainWindow(tk.Tk):
             if self.db and sess_id:
                 self.db.delete_session_layouts(sess_id)
 
-            if hasattr(self, "layout_editor_view") and self.layout_editor_view:
+            if getattr(self, "layout_editor_view", None) is not None and self.layout_editor_view:
                 if hasattr(self.layout_editor_view, "set_session_layouts"):
                     self.layout_editor_view.set_session_layouts([], initial_index=0)
                 if hasattr(self.layout_editor_view, "set_pieces"):
