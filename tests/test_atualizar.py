@@ -211,8 +211,7 @@ def test_version_updates_installer_fallback_without_loading_config(repository):
 
 
 def test_documentation_is_central_preserves_manual_sections_and_is_idempotent(repository):
-    (repository/'docs').mkdir()
-    doc=repository/'docs/PROJETO_ATOM_JOBMANAGER.md'
+    doc=repository/'AGENTS.md'
     manual='Decisão manual do operador, preservar este texto.\n'
     blocks='\n'.join(f'<!-- AUTO:{n}:start -->\n<!-- AUTO:{n}:end -->' for n in ['header','tree','symbols','schema','shortcuts','gitlog'])
     doc.write_text(manual+blocks)
@@ -221,6 +220,10 @@ def test_documentation_is_central_preserves_manual_sections_and_is_idempotent(re
     assert text.startswith(manual)
     assert '**Versão do aplicativo:** `1.2.3`' in text
     assert 'config.py' in text
+    assert 'AGENTS.md' in update.source_files(repository)
+    tree=text.split('<!-- AUTO:tree:start -->')[1].split('<!-- AUTO:tree:end -->')[0]
+    assert 'AGENTS.md' not in tree
+    assert not (repository/'docs/PROJETO_ATOM_JOBMANAGER.md').exists()
     update.sync_documentation(repository,check=True)
     assert doc.read_text()==text
     (repository/'new.py').write_text('def example():\n    return 1\n')

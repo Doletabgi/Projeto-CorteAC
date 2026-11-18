@@ -1,5 +1,15 @@
 # OpenCorte — Edição Python para Windows 10 / 11
 
+**Comece por [AGENTS.md](AGENTS.md):** guia único para instalar, executar,
+testar e continuar o desenvolvimento, com as regras de produção, a arquitetura
+e o histórico completo do Projeto ATOM.
+
+**Estado do projeto:** desenvolvimento encerrado em 18/11/2026, preservado para
+eventual retomada. O `AGENTS.md` contém o roteiro de retomada, quatro relatórios
+REA de três famílias de sistemas de corte e propostas de melhorias ainda não
+implementadas. Para continuar no futuro, baixe os fontes da branch `master`;
+a documentação de encerramento é posterior à tag funcional `v1.8.28`.
+
 Para atualizar versão, documentação, builds, Área de Trabalho e GitHub com um
 único comando, execute `python3 atualizar.py` na pasta do projeto. Para conferir
 as etapas sem alterar nada, use `python3 atualizar.py --simular`. Depois de uma

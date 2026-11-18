@@ -16,7 +16,7 @@ compilação, pacotes, atalhos e GitHub estão implementados nele.
    estado remoto e exige que ele esteja integrado à branch local.
 2. Incrementa a versão patch, por exemplo `1.8.6` → `1.8.7`, e atualiza a
    versão de reserva do instalador Inno Setup.
-3. Sincroniza `docs/PROJETO_ATOM_JOBMANAGER.md` com os fontes e verifica o
+3. Sincroniza `AGENTS.md`, na raiz do repositório, com os fontes e verifica o
    resultado. Preserva as seções manuais fora dos blocos automáticos.
 4. Copia fontes/assets para uma pasta temporária, sem banco operacional ou
    `db.ini`. Cria um banco próprio, executa a seleção de testes em `CHECKS` e

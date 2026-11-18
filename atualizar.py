@@ -378,7 +378,7 @@ def execution_lock(root):
 
 
 # Documentação: implementação centralizada, somente leitura dos fontes/schema.
-DOC_FILENAME = "PROJETO_ATOM_JOBMANAGER.md"
+DOC_FILENAME = "AGENTS.md"
 DOC_IGNORE_DIRS = {"node_modules", "__pycache__", "venv", "env", "build", "dist"}
 DOC_TREE_EXT = {".py", ".md", ".sql", ".ini", ".json", ".toml", ".yml", ".yaml",
             ".js", ".jsx", ".ts", ".tsx", ".html", ".css", ".sh", ".bat"}
@@ -914,7 +914,7 @@ Write-Host "Se o icone ou o nome nao atualizarem, pressione F5 na Area de Trabal
 
 def sync_documentation(root, *, check=False):
     """Atualiza os blocos automáticos e preserva o restante do documento mestre."""
-    path = root/'docs'/DOC_FILENAME
+    path = root/DOC_FILENAME
     if not path.exists():
         raise UpdateError(f'Documento não encontrado: {path}')
     original = doc_read(path).replace('\r\n', '\n')

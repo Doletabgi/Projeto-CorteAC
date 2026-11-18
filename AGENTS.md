@@ -1,37 +1,539 @@
-# OpenCorte — Documento Vivo do Projeto ATOM JobManager Reborn
+# AGENTS.md — OpenCorte / Projeto ATOM
 
-**Atualização unificada (12/11/2026):** `python3 atualizar.py` coordena aumento
-de versão, sincronização deste documento, verificações e build em cópia isolada,
-instalação local, atalho da Área de Trabalho e publicação de commit/tag no GitHub.
-Espera as builds Windows/Linux e os cinco artefatos da release antes de concluir.
-`--simular` apenas mostra as etapas; `--retomar` continua a mesma versão após
-falha. Consulte [ATUALIZACAO_UNIFICADA.md](fases/ATUALIZACAO_UNIFICADA.md) para
-pré-requisitos, escopo dos testes e regras de retomada.
+**Guia único para instalar, executar, manter e continuar o projeto.**
+Este arquivo reúne o antigo documento do Projeto ATOM e o guia do agente.
+Serve a pessoas e agentes de programação que baixarem este repositório; contém
+orientações práticas, arquitetura, regras industriais, evidências e histórico.
 
-> **Finalidade:** Documento mestre estruturado e autocontido projetado para alimentar e contextualizar qualquer Inteligência Artificial (Antigravity, Claude, ChatGPT, etc.) ou engenheiro sobre 100% do projeto — regras de negócio de calçados/couro (ATOM), arquitetura técnica, schemas de banco (MySQL/SQLite), formatos proprietários (.LAY, .ONX/CZLIB), algoritmos de nesting/CAM, UI/UX e histórico — em um único arquivo de referência imediata.
-**Atalho de leitura:** o comportamento ATUAL de encaixe, sobras, impressão, atalho, entrega para a máquina, código de barras e gestão de usuários/operadores está consolidado na **§8.47**, **§8.48**, **§8.49**, **§8.50**, **§8.51**, **§8.52** e **§8.53**; as seções §8.26–§8.46 são o histórico de como se chegou lá. A manutenção gradual de 11/11/2026 está na **§8.66** e a ficha de produção A4 entregue com 1.8.6 na **§8.67**; o diagnóstico e planejamento de rede/ANP estão na **§9.4**.
->
-> **Regra de ouro:** o que está marcado `[CONFIRMADO]` veio do relatório, do código ou do usuário. O que está `[NÃO CONFIRMADO]` é suposição e não deve virar "fato" sem validação. O que está `[PREENCHER]` a IA deve completar lendo o código real.
+**Estado em 18/11/2026:** desenvolvimento encerrado por solicitação do responsável,
+com o estado atual preservado para uma possível retomada. A referência funcional
+é a versão **1.8.28**. As melhorias futuras e os relatórios REA são documentação;
+não autorizam implementação automática. Para retomar, comece pelo
+[registro de encerramento e retomada](#retomada) e escolha uma tarefa explícita.
+
+O início rápido e o guia prático descrevem a orientação atual. As seções
+numeradas 0–12 preservam a referência técnica e a evolução do sistema.
+As seções 13–16 registram o encerramento, a retomada, as referências REA e
+as propostas de evolução.
+Quando um trecho histórico divergir do comportamento atual confirmado,
+consulte o guia prático, a release correspondente, o código e seus testes.
+Não execute receitas históricas de limpeza ou publicação como instruções atuais.
 
 <!-- AUTO:header:start -->
 **Versão do aplicativo:** `1.8.28`
 
-**Última sincronização com o código:** 2026-11-17 14:01 (HEAD ao gerar: `e835fc9`; 224 arquivos Python, ~93327 linhas)
+**Última sincronização com o código:** 2026-11-18 20:00 (HEAD ao gerar: `e6bfcf2`; 224 arquivos Python, ~93330 linhas)
 <!-- AUTO:header:end -->
-**Versão deste documento:** 2
+
+**Consolidação manual:** 18/11/2026. **Organização do documento:** 3.
+A versão acima é sincronizada pelo atualizador; números de versões e tempos
+no histórico pertencem às respectivas medições.
+
+## Índice de leitura
+
+| Objetivo | Comece aqui |
+| --- | --- |
+| Baixar e abrir o sistema | [Início rápido](#inicio-rapido) |
+| Desenvolver com banco próprio | [Executar pelos fontes](#executar-fontes) |
+| Saber se o ambiente está pronto | [Primeira conferência](#primeira-conferencia) |
+| Continuar uma tarefa com segurança | [Guia prático para pessoas e agentes](#guia-pratico) |
+| Encontrar uma parte do sistema | Guia prático G.2 e seções 1–4 |
+| Conferir quantidades, camadas, fio e sobras | Guia prático G.4 e seção 6 |
+| Entender seleção e inclusão de peças atuais | Guia prático G.5 |
+| Preservar desempenho e medir ganhos | Guia prático G.6 |
+| Escolher testes | Guia prático G.7 |
+| Compilar e publicar | Guia prático G.8 e seções 11–12 |
+| Investigar decisões antigas e pendências | [Referência completa](#referencia-completa), seções 8–10 |
+| Retomar o projeto depois de baixar | [Encerramento e roteiro de retomada](#retomada) |
+| Comparar os três sistemas de referência | [Síntese das quatro análises REA](#referencias-rea) |
+| Avaliar possíveis melhorias | [Propostas priorizadas por velocidade](#melhorias-futuras) |
+| Consultar os relatórios recebidos completos | [Textos integrais REA](#relatorios-rea-integrais) |
+
+<a id="inicio-rapido"></a>
+
+## A. Início rápido para quem acabou de baixar
+
+### A.1. Escolher entre programa pronto e fontes
+
+Para usar o sistema, baixe uma release na
+[página de lançamentos do projeto](https://github.com/Doletabgi/Projeto-CorteAC/releases).
+O instalador Windows se chama `OpenCorte-Setup-<versão>.exe`; os pacotes
+portáteis são `OpenCorte-Windows-x64.zip` e `OpenCorte-Linux-x64.tar.gz`.
+Extraia o pacote e abra `OpenCorte.exe` no Windows ou `opencorte_linux` no Linux.
+No Linux, se necessário, execute `chmod +x ./opencorte_linux` antes de abrir.
+Pacotes prontos incluem o runtime; não exigem instalar as dependências Python
+para executar. Use uma pasta em que sua conta possa gravar os dados do programa.
+
+Para continuar o desenvolvimento, use os fontes. A referência de Python desta
+revisão é **3.12**, a mesma usada no workflow de Windows/Linux. É necessário
+Tkinter/Tcl/Tk e um ambiente gráfico para abrir a interface.
+
+Com Git instalado:
+
+```bash
+git clone https://github.com/Doletabgi/Projeto-CorteAC.git
+cd Projeto-CorteAC
+```
+
+Se baixou o ZIP dos fontes, extraia e abra o terminal na pasta que contém
+`main.py`, `atualizar.py`, `requirements.txt` e este `AGENTS.md`.
+Binários e dados operacionais locais não são necessários para preparar
+um ambiente de desenvolvimento novo.
+
+<a id="executar-fontes"></a>
+
+### A.2. Preparar e executar no Linux
+
+Em Ubuntu/Debian, instale as dependências de sistema que estiverem faltando:
+
+```bash
+sudo apt-get update
+sudo apt-get install python3 python3-venv python3-tk git
+```
+
+Em outras distribuições, instale os equivalentes de Python, venv e Tkinter.
+Na raiz dos fontes:
+
+```bash
+python3 -m venv .venv
+.venv/bin/python -m pip install --upgrade pip
+.venv/bin/python -m pip install -r requirements.txt
+.venv/bin/python -m tkinter
+mkdir -p scratch
+DB_BACKEND=sqlite SQLITE_PATH="$PWD/scratch/desenvolvimento.db" .venv/bin/python main.py
+```
+
+O comando de Tkinter deve abrir uma pequena janela de teste; feche-a para
+prosseguir. O último comando usa um banco de desenvolvimento em `scratch/`,
+pasta já ignorada pelo Git, preservando o `jobmanager.db` que acompanha o checkout.
+Use esse mesmo banco nas próximas aberturas para manter os dados do seu ensaio.
+
+### A.3. Preparar e executar no Windows
+
+Instale Python 3.12 com Tcl/Tk e o lançador `py`. Abra PowerShell na raiz dos
+fontes. Os comandos abaixo usam o Python do ambiente virtual diretamente,
+sem depender da ativação de scripts do PowerShell:
+
+```powershell
+py -3.12 -m venv .venv
+.\.venv\Scripts\python.exe -m pip install --upgrade pip
+.\.venv\Scripts\python.exe -m pip install -r requirements.txt
+.\.venv\Scripts\python.exe -m tkinter
+New-Item -ItemType Directory -Force scratch
+$env:DB_BACKEND = "sqlite"
+$env:SQLITE_PATH = Join-Path $PWD "scratch\desenvolvimento.db"
+.\.venv\Scripts\python.exe main.py
+```
+
+Feche a janela de teste do Tkinter antes de iniciar o programa. As variáveis
+valem para essa sessão do PowerShell; defina-as novamente ao abrir outro terminal
+para continuar usando o banco de desenvolvimento.
+
+### A.4. Banco local e MySQL da fábrica
+
+O desenvolvimento inicial pode usar somente SQLite, sem servidor MySQL.
+As dependências de execução estão em `requirements.txt`: Pillow, PyMySQL e
+cryptography. A configuração pode vir de `db.ini` ou de variáveis de ambiente;
+as variáveis têm prioridade. Nos comandos acima, `DB_BACKEND` e `SQLITE_PATH`
+selecionam explicitamente um SQLite próprio.
+
+Para configurar uma instalação de uso, abra **Ferramentas → Conexão com Banco
+de Dados**, escolha local ou MySQL, teste a conexão, salve e reabra a aplicação.
+Se o programa indicar configuração externa, revise as variáveis do terminal
+antes de tentar mudar pela tela. Para MySQL, use os dados fornecidos pelo
+responsável pela rede; esta configuração não instala o servidor nem transfere
+ou reconcilia os dados entre bancos.
+
+Não use comandos `--clean-db` ou `--reset-layouts` para preparar uma máquina de
+produção. Dados reais, credenciais e compartilhamentos exigem o procedimento
+de proteção descrito em G.3.
+
+<a id="primeira-conferencia"></a>
+
+### A.5. Primeira conferência e continuação do trabalho
+
+1. Confira a versão com o Python do ambiente virtual: `python main.py --version`
+   (substitua `python` pelo caminho utilizado acima).
+2. Abra o programa com o banco próprio, crie uma sessão de ensaio, associe
+   material e moldes de teste e confira a abertura do Layout Editor.
+3. Antes de editar código, leia G.1–G.7 e encontre os testes do fluxo.
+   Para instalar ferramentas de teste/build no ambiente virtual, use
+   `python -m pip install pytest pyinstaller`, com o mesmo Python dos fontes.
+4. Execute testes em uma cópia descartável que inclua suas alterações atuais,
+   com banco/configuração próprios. Não copie `db.ini`, credenciais ou dados de
+   produção. Evite iniciar pela suíte MySQL sem preparar um schema descartável.
+5. Para começar pela manutenção/documentação, a seleção
+   `python -m pytest -q tests/test_atualizar.py tests/test_release_notes.py tests/test_release_assets.py`
+   verifica o atualizador sem publicar ou acessar o banco da fábrica.
+6. Valide a documentação com `python atualizar.py --documentacao --check`.
+   Se fizer uma mudança intencional nos fontes, sincronize com
+   `python atualizar.py --documentacao` e confira o diff.
+7. Para somente compilar, use `python atualizar.py --build`. Para uma entrega
+   funcional autorizada e pronta para publicação, siga G.8: executar
+   `python atualizar.py` também muda versão, cria commit/tag, instala e publica.
+
+Em caso de falha, registre sistema operacional, versão de Python, comando,
+erro e fluxo que o causou, sem incluir senhas. `No module named tkinter` indica
+Tkinter ausente no Python usado; erro de display exige uma sessão gráfica;
+`No module named PIL/pymysql` normalmente indica dependências instaladas em
+outro ambiente. Falhas de regressão devem ser comparadas com a mesma versão
+anterior no mesmo ambiente, conforme G.7.
+
+<a id="guia-pratico"></a>
+
+## G. Guia prático para pessoas e agentes
+
+Orientações consolidadas do código e das entregas até 1.8.28. Este bloco deve
+ser mantido junto das decisões técnicas das seções numeradas; uma alteração
+confirmada precisa atualizar ambos quando afetar a orientação atual.
+
+### G.1. Como iniciar uma tarefa
+
+1. Leia o pedido atual e respeite seu escopo. Pedidos de análise ou de lista
+   acompanhados de “não altere nada” não autorizam mudanças no sistema.
+2. Confira `git status --short` antes de editar. Preserve alterações existentes
+   do operador, principalmente em `jobmanager.db`, configurações e exportações.
+3. Consulte o arquivo AGENTS.md: §6 para regras industriais; §7 para atalhos;
+   §8.47–§8.67 para consolidações e evoluções; §9 para pendências; §11–§12
+   para manutenção e publicação. Confira também as notas das releases posteriores
+   às seções consultadas e os testes do fluxo afetado.
+4. Diferencie `[CONFIRMADO]`, `[NÃO CONFIRMADO]`, `[INFERIDO]` e `[PREENCHER]`.
+   Não transforme hipótese, planejamento ou resultado histórico em fato atual.
+5. Confira a implementação antes de reutilizar instruções antigas. Há trechos
+   históricos substituídos por decisões posteriores, inclusive sobre seleção,
+   impressão, sobras, scripts e nomes de atalhos.
+6. Faça mudanças pequenas, verifique o fluxo real e registre resultado,
+   limitações e pendências. Não implemente outras sugestões apenas porque
+   aparecem no planejamento.
+
+A prioridade do usuário é **velocidade com preservação dos dados e das regras
+de produção**. Preserve a interação do Job original nos comportamentos já
+confirmados. Quando faltar uma decisão industrial, investigue o que for
+possível e esclareça apenas o ponto necessário antes de mudar essa regra.
+
+### G.2. Contexto e mapa do código
+
+O OpenCorte reconstrói o fluxo do JobManager/ATOM para corte de calçados em
+couro e sintéticos. Este checkout é o cliente Python com Tkinter/ttk, SQLite
+local e suporte a MySQL central, executável em Linux e Windows 10/11.
+O serviço `atom_reborn`, citado no histórico, é outra implementação; não
+presuma que suas funções estejam disponíveis neste cliente.
+
+| Área | Arquivos de referência |
+| --- | --- |
+| Entrada e configuração | `main.py`, `config.py`, `requirements.txt` |
+| Janela principal e abertura dos editores | `ui/main_window.py` |
+| Sessões e cálculo em lote | `ui/session_view.py`, `ui/batch_nest_dialog.py` |
+| Layout Editor e interação CAD | `ui/layout_editor_view.py` |
+| Moldes e biblioteca | `ui/shape_editor_view.py`, `ui/shape_library_view.py`, `ui/shape_catalog_view.py` |
+| Tema, ícones e atalhos locais | `ui/themes.py`, `ui/desktop_shortcut.py` |
+| Persistência e conexões | `database.py`, `db/config.py`, `db/connection.py`, `db/schema_mysql.sql`, `db/migrations/` |
+| Geometria e encaixe | `cad/geometry.py`, `cad/nesting_engine.py`, `cad/nesting_backend.py`, `cad/nfp.py`, `cad/macro_engine.py` |
+| Camadas, sobras e contadores | `cad/layers_rule.py`, `cad/layers_split.py`, `cad/sidebar_rules.py` |
+| Formatos e entrega à máquina | `cad/die_parser.py`, `cad/lay_parser.py`, `cad/onx_exporter.py`, `cad/czlib.py`, `cad/dual_exporter.py`, `cad/project_packager.py` |
+| Impressão e código de barras | `ui/production_sheet.py`, `ui/layout_print_dialog.py`, `cad/barcode.py` |
+| Backup e agendamento | `cad/shape_backup.py`, `cad/shape_backup_scheduler.py` |
+| Manutenção e empacotamento | `atualizar.py`, `.github/workflows/release.yml`, `packaging/corteac_setup.iss` |
+
+Prefira extrair regras puras para módulos de `cad/` e manter chamadores
+compatíveis. Não aumente o acoplamento de `MainWindow` ou `LayoutEditorView`
+para resolver uma regra que pode ser verificada sem criar janelas.
+
+### G.3. Proteção dos dados
+
+- Trate `jobmanager.db` como banco operacional, mesmo quando aparecer como
+  modificado no Git. Não restaure a cópia versionada sobre ele, não faça limpeza
+  de sessões e não o inclua em commits ou pacotes de distribuição.
+- Preserve `db.ini`, credenciais, diretórios compartilhados, backups e arquivos
+  de produção. Não copie segredos para relatórios ou saídas de diagnóstico.
+- Use SQLite em memória ou bancos temporários explícitos para testes. Para
+  consultar dados reais sem autorização de gravação, abra em modo somente leitura.
+- Execute suítes amplas em uma cópia descartável dos fontes, com configuração
+  e banco próprios. `tests/conftest.py` faz backup/restauração do banco do checkout;
+  isso não substitui isolamento. Não rode processos pytest simultâneos no mesmo
+  checkout: eles compartilham `jobmanager.db.pytest_backup`.
+- Testes MySQL, incluindo `test_db_layer.py` e `test_mysql_concurrency.py`,
+  exigem revisão do destino antes de executar: há limpeza de tabelas de teste.
+  Use servidor/schema descartável, nunca o banco central da fábrica.
+- Mantenha transações, rollback e compatibilidade SQLite/MySQL. Migrações devem
+  preservar dados existentes e poder ser reaplicadas com segurança.
+- O fallback para SQLite não demonstra sincronização com MySQL. Não apresente
+  migração ou reconexão como reconciliação automática entre bases.
+
+### G.4. Regras industriais que precisam ser preservadas
+
+#### Quantidades, camadas e sobras
+
+- Um posicionamento desenhado produz tantas peças físicas quanto suas camadas
+  efetivas. Para demanda de `P` pares e `L` camadas, a demanda inicial em desenhos
+  é `ceil(2 * P / L)`. Pares solicitados comandam a demanda; `target_pieces`
+  residual não pode reduzi-la.
+- Resolva camadas com as funções de `cad/layers_rule.py`, inclusive
+  `layers_for_piece`. A ponta de duas camadas tem tratamento próprio;
+  não aplique cegamente as camadas da base a todas as peças.
+- A produção por molde/tamanho deve conservar `sum(camadas efetivas) = 2 * P`.
+  Transferir um desenho de quatro camadas para duas exige dois desenhos no
+  destino. Na divisão com dobra: `N4 = P // 2 - k` e
+  `N2 = P % 2 + 2 * k`, mantendo `4 * N4 + 2 * N2 = 2 * P`.
+- Preserve a opção da sessão entre ponta em degrau e placa separada de duas
+  camadas. Separação e finalização precisam ser idempotentes, respeitar limites
+  e colisões e reverter integralmente quando a produção não fechar.
+- Formatos `1x1`, `4x1` e `6x1` têm fatores próprios. Não introduza esse fator
+  silenciosamente nos pares efetivos do editor: a ficha distingue pares,
+  multiplicador e pares equivalentes. Reutilize `shape_multiplier`.
+
+#### Geometria, encaixe e refile
+
+- No encaixe automático, preenchimento de vãos e IA-teste, preserve a regra
+  de orientação **0°/180°**. Giros de 90°/270° não são uma otimização permitida
+  para aumentar aproveitamento. Rotação manual é um fluxo distinto.
+- Respeite fio, tolerância angular, margens, limites da placa e distância real
+  entre contornos. Bounding boxes e simplificações não podem substituir a
+  validação geométrica final.
+- Zona de qualidade 0 é proibida. Para defeitos de nível positivo, preserve
+  a relação `L_def <= Q_req` documentada na §6.1.
+- Transforme contorno, furos, costuras, recortes e direção do fio de forma
+  consistente, a partir da geometria base. Preserve arcos e detalhes do `.die`.
+- Preserve a sequência de geração: encaixe, preenchimento, separação de sobras,
+  preenchimento/finalização após separação, refile e persistência. Verifique
+  geração individual e lote; alterar a ordem já causou regressões nas sobras.
+- Refile deve atualizar dimensões, `trim_cut_line`, `tip_zone` e `layers_tip`
+  no banco e na sessão em memória. Reutilize `clamp_tip_zone` para manter a linha
+  da ponta dentro da placa no editor, miniatura e impressão.
+- Cálculos internos usam suas unidades técnicas existentes, em geral milímetros;
+  a apresentação ao operador e a ficha usam metros com vírgula decimal.
+
+#### Corte, impressão e exportação
+
+- Preserve a ordem CNC: furos, piques/punções, costuras/recortes internos e
+  contorno externo por último, mantendo a fixação da peça durante o corte.
+- Confira unidades, rotações e espelhamento nos parsers/exportadores e nas
+  amostras reais; formatos `.lay` e `.onx` não têm convenções intercambiáveis.
+- A entrega para máquina inclui todas as placas da sessão, os moldes usados e
+  o manifesto. Prefira `.die` originais; geração a partir do banco tem limitações
+  documentadas e precisa continuar identificada como tal.
+- Prévia, PDF, PNG e impressão usam o renderizador compartilhado da ficha.
+  Preserve paginação, identificação por sessão/placa, camadas por peça e Code 128.
+- Não invente pedido, operador, caminho exportado ou estado de produção quando
+  faltarem dados. Envio de arquivos ou ao spool não comprova corte ou impressão.
+- ANP TCP e homologação física permanecem frentes a validar. Não presuma portas,
+  protocolo ou confirmação da máquina a partir de referências históricas.
+
+### G.5. Layout Editor: comportamento atual
+
+As correções das versões 1.8.23–1.8.26 substituem comportamentos descritos em
+seções antigas sobre seleção pela miniatura.
+
+- **Clique simples na miniatura:** ativa o molde do catálogo; não seleciona
+  coletivamente as cópias que estão na mesa.
+- **Duplo clique na miniatura:** inicia inclusão manual com a peça acompanhando
+  o ponteiro. O centro geométrico usado pela prévia considera contornos fora
+  da origem e deve continuar correto com zoom e pan.
+- **Clique na chapa:** confirma a inclusão na posição do ponteiro, se válida.
+  Colisão ou posição fora da chapa mantém a prévia sem inserir a peça.
+- **Esc:** cancela a prévia. Ctrl+Z durante a prévia cancela essa inclusão sem
+  consumir a edição anterior. Trocar de placa também cancela a prévia.
+- **Botão direito na miniatura → Select:** acrescenta à seleção as instâncias
+  daquele molde na placa atual. Não dispara rotação ou menu da mesa.
+- **Shift+clique na mesa:** acrescenta/remove peças da seleção.
+  **Ctrl+clique na mesa:** zoom. Não reintroduza conflito entre inclusão,
+  seleção coletiva e zoom.
+- A prévia ainda não confirmada não modifica banco, lista de peças nem histórico
+  de desfazer. Ao confirmar, preserve detalhes do molde e uma operação de undo.
+- Preserve F1/F2 em passos de 2°, F3 em 90°, F4 em 180°, Ctrl+Z e Ctrl+S.
+  Shift+F3 e Ctrl+Y foram removidos por decisão do usuário.
+- Contagem, seleção e identificação de placas usam `cad/sidebar_rules.py`.
+  A placa ativa deve refletir as peças em memória, inclusive quando foi esvaziada.
+
+#### Estabilidade visual
+
+- Preserve o tamanho fixo da área de texto de `lbl_stat_pos`; mensagens longas
+  ou com várias linhas não devem redimensionar o editor ou a mesa.
+- Eventos `Map` aplicam tema somente a controles novos. Reabrir janelas, menus
+  ou tooltips não deve reconfigurar controles, ícones e tabelas já estilizados
+  nem disparar redesenhos do layout em repouso.
+- A troca explícita de tema continua podendo atualizar a aplicação inteira.
+- Respeite a thread principal do Tkinter, a coalescência de eventos e os callbacks
+  agendados existentes. Cancele tarefas pendentes ao encerrar gestos/janelas.
+
+### G.6. Otimizações entregues e como evitar regressões
+
+#### Inicialização sob demanda — 1.8.27
+
+`order_view`, `shape_editor_view`, `shape_catalog_view`, `layout_editor_view` e
+`material_codes_view` começam como `None`. `_ensure_mdi_view` cria cada editor
+no primeiro acesso e reutiliza a instância nas reaberturas.
+
+Não crie esses editores em sincronizações de material, atalhos ou tarefas de
+fundo. Acesse-os pelas entradas apropriadas ou confira se existem; `hasattr`
+sozinho não resolve um atributo cujo valor é `None`. O catálogo global de moldes
+é consultado sob demanda, com atualização explícita por F5. A primeira abertura
+e a primeira exportação devem usar a sessão/material atuais, sem herdar camadas
+de uma sessão antiga. O Layout Editor inicia com `load_sample=False`.
+
+#### Salvamento incremental — 1.8.28
+
+`DatabaseManager.save_session_layouts` recebe a **lista completa das placas da
+sessão**, identifica alterações e grava somente o necessário. Não passe apenas
+as placas modificadas: índices ausentes são interpretados como remoções.
+
+- Placas inalteradas preservam IDs, peças relacionais, versão, datas e responsável
+  pela produção. Mudanças apenas nos metadados não recriam suas peças.
+- Placas novas são inseridas; somente placas removidas são excluídas.
+- A gravação ocorre em transação única. Falhas não podem deixar salvamento parcial
+  nem atualizar metadados de entrada/cache antes do commit.
+- O resumo da sessão permanece sincronizado. Preserve controle de versão e
+  tratamento de conflito, sem prometer proteção concorrente além da demonstrada.
+- O cache de serialização fica limitado à última sessão salva e é validado contra
+  conteúdo e versão lidos do banco. Não use apenas identidade do objeto: edições
+  em contornos aninhados precisam ser detectadas. O snapshot com `pickle.dumps`
+  é comparado como bytes; não introduza desserialização de pickle.
+
+#### Medição de velocidade
+
+Compare entradas, configuração, ambiente e resultados equivalentes, com aquecimento
+e várias repetições. Informe tempo antes/depois, média/mediana, tamanho da amostra
+e limitações. Meça separadamente abertura, desenho, encaixe, gravação e exportação.
+Ganho de uma etapa não representa velocidade do sistema inteiro.
+
+Referências locais já registradas, sem promessa de resultado em outra máquina:
+
+- Abertura sob demanda: mediana de aproximadamente 244 para 160 ms em três
+  execuções por versão, com banco em memória e imports fora da medição.
+- Salvamento incremental: média das reduções percentuais de sessões com 10,
+  50 e 100 placas, 100 peças por placa e sete medições após aquecimento:
+  **78,6%** com uma placa editada e cache; **23,2%** sem cache de conversão;
+  **87,3%** sem alterações. Com todas as placas alteradas, houve **3% de aumento**
+  médio. Ensaio em SQLite temporário local, sem medição de MySQL/rede.
+
+Reprodução do salvamento: `tools/bench_incremental_layout_save.py`.
+Método e dados: `docs/performance/incremental-save-v1.8.28.md` e seu JSON.
+Dados legados podem exigir normalização no primeiro salvamento.
+
+Cache adicional de contadores, paginação de consultas e outras sugestões de
+desempenho não devem ser consideradas entregues apenas por terem sido propostas.
+Confira o código e a autorização da tarefa antes de implementá-las.
+
+### G.7. Verificação proporcional à mudança
+
+Na cópia isolada e com dependências instaladas, selecione os testes do fluxo:
+
+| Mudança | Regressões de referência |
+| --- | --- |
+| Inclusão, seleção e atalhos | `tests/test_layout_editor_manual_placement.py`, `tests/test_layout_editor_sidebar_selection.py`, `tests/test_layout_editor_shortcuts.py` |
+| Tremor, tema e geometria de janela | `tests/test_layout_editor_status_geometry.py`, `tests/test_themes.py` |
+| Abertura sob demanda | `tests/test_lazy_editors.py` |
+| Salvamento incremental | `tests/test_incremental_layout_save.py`, `tests/test_layout_save_refile.py` |
+| Camadas e sobras | `tests/test_layers_split.py`, `tests/test_sobras_dobra.py`, `tests/test_sobras_destino.py` |
+| Impressão e entrega | `tests/test_production_sheet.py`, `tests/test_project_packager.py`, `tests/test_dual_exporter.py` |
+| Atualizador e publicação | `tests/test_atualizar.py`, `tests/test_semver.py`, `tests/test_release_notes.py`, `tests/test_release_assets.py` |
+
+Exemplo, executado no checkout descartável:
+
+```bash
+DB_BACKEND=sqlite python3 -m pytest -q tests/test_incremental_layout_save.py tests/test_layout_save_refile.py
+```
+
+Testes Tkinter precisam de display; informe quando forem ignorados por falta dele.
+Verifique também a sequência real de eventos, primeira abertura, reabertura,
+sessão vazia e troca de placa quando a mudança afetar esses caminhos.
+
+Não enfraqueça testes para esconder regressões. Ao encontrar falhas existentes,
+compare com a versão anterior no mesmo ambiente e registre a evidência.
+Contagens de testes de releases antigas são históricas, não validação da tarefa
+atual. Mudanças somente documentais pedem conferência de conteúdo, links e diff;
+não exigem recompilar o aplicativo.
+
+### G.8. Documentação, versão e publicação
+
+- Registre novas decisões, diagnósticos e benchmarks no arquivo AGENTS.md.
+  Não crie novos relatórios Markdown avulsos em `docs/`. Preserve o histórico
+  e os arquivos existentes; acrescente correções com contexto.
+- Não edite manualmente blocos `<!-- AUTO:... -->`. Sincronize-os pelo atualizador.
+  A sincronização antes executada por um script separado foi incorporada ao
+  ponto de entrada único.
+- Mudanças apenas documentais não pedem incremento de versão ou release.
+  Entregas funcionais de código seguem a publicação oficial prevista nas §11–§12.
+  Esta unificação documental, incluindo seu caminho de sincronização, mantém a versão do aplicativo.
+- Use **somente `atualizar.py`** para coordenar manutenção/publicação. Scripts
+  históricos de build, limpeza, cadência e versão foram incorporados; não os
+  recrie nem execute receitas antigas sobre o banco operacional.
+
+```bash
+# Somente documentação; o segundo comando verifica sem reescrever.
+python3 atualizar.py --documentacao
+python3 atualizar.py --documentacao --check
+
+# Plano completo sem alterações ou acesso à rede.
+python3 atualizar.py --simular
+
+# Build isolada, sem mudar versão, publicar ou instalar atalhos.
+python3 atualizar.py --build
+
+# Entrega completa: incrementa versão, testa, compila, instala e publica.
+python3 atualizar.py
+
+# Retomada de uma entrega que falhou, mantendo a mesma versão.
+python3 atualizar.py --retomar
+```
+
+A execução completa faz commit e push: use-a para uma entrega de código no escopo
+autorizado, com alterações revisadas e prontas para publicação. Ela exige índice
+Git vazio no início e remoto integrado; não descarte trabalho do usuário para
+cumprir essa condição. O snapshot exclui banco operacional, INI e credenciais.
+O script confere os fontes contra a build e não usa force-push.
+
+Preserve `.release/estado.json` de uma execução pendente e use `--retomar` depois
+de resolver a falha. Não invente nova versão ou reescreva tag publicada para
+contornar um erro. `APP_VERSION`, tag e instalador devem corresponder.
+
+O atualizador executa a seleção `CHECKS`, que não é a suíte inteira. Acrescente
+a validação dirigida ao código alterado antes da entrega. O encerramento só é
+confirmado após o sucesso dos jobs Windows/Linux e os cinco artefatos:
+
+- `OpenCorte.exe`
+- `OpenCorte-Windows-x64.zip`
+- `OpenCorte-Setup-<versão>.exe`
+- `opencorte_linux`
+- `OpenCorte-Linux-x64.tar.gz`
+
+O nome visível e os downloads oficiais usam **OpenCorte**. Referências
+a pacotes `CorteAC` no histórico descrevem nomes de versões anteriores.
+A atualização preserva binários anteriores e atualiza o atalho versionado.
+Ela não reinicia a aplicação aberta: para usar o binário novo, feche e reabra
+pelo atalho atualizado.
+
+### G.9. Como concluir uma tarefa
+
+Informe em português o resultado, os arquivos relevantes, o que foi verificado
+e qualquer limitação material. Em melhorias de velocidade, apresente o método
+e o ganho da operação medida. Em releases, confira versão local, workflow e
+artefatos antes de afirmar que a atualização terminou. Diferencie validação
+automatizada, inspeção visual e homologação física.
 
 ---
 
+<a id="referencia-completa"></a>
+
+## Referência completa e histórico do Projeto ATOM
+
+O conteúdo técnico a seguir preserva o registro anterior. Menções a
+`docs/PROJETO_ATOM_JOBMANAGER.md`, `agente.md`, caminhos da máquina do autor,
+scripts removidos e nomes antigos de pacotes pertencem ao histórico.
+O arquivo central atual é `AGENTS.md`, na raiz. Os links para fontes foram
+ajustados para funcionar em outro clone do repositório.
+
 ## 0. Como manter este documento
 
-**Automático:** os blocos entre `<!-- AUTO:nome:start -->` e `<!-- AUTO:nome:end -->` (cabeçalho, seção 3, seção 4, seção 7.4 e commits recentes) são reescritos por `tools/sync_project_doc.py` a cada commit, via hook do Git. **Não edite esses blocos à mão: a próxima execução apaga a edição.** Todo o resto é manual.
+**Automático:** os blocos entre `<!-- AUTO:nome:start -->` e `<!-- AUTO:nome:end -->` (cabeçalho, seção 3, seção 4, seção 7.4 e commits recentes) são sincronizados por `python3 atualizar.py --documentacao`. O hook Git verifica a sincronização antes do commit. **Não edite esses blocos à mão: a próxima execução apaga a edição.** Todo o resto é manual.
 
 1. Alterações que o script não vê (regras, decisões, confirmações do usuário, pendências) são atualizadas à mão nas seções 5, 6, 7.1, 7.2, 8, 9 e 10.
 2. Nunca apagar entradas do Changelog (seção 10). Apenas acrescentar.
 3. Ao mudar um item de `[NÃO CONFIRMADO]` para `[CONFIRMADO]`, registrar quem confirmou e quando.
-4. O Claude só afirma sobre o código aquilo que está descrito aqui. Se algo não estiver aqui, o Claude pergunta em vez de presumir.
-5. **Publicação de Releases (seção 12)**: toda entrega com mudança de código gera **release oficial** via GitHub Actions (binários `CorteAC.exe`, `CorteAC-Windows-x64.zip`, `corteac_linux`, `CorteAC-Linux-x64.tar.gz`), incrementando a versão **SemVer** em `config.py`, `.github/workflows/release.yml` e na tag `vX.Y.Z` — sempre os três em sincronia.
-6. **Centralização Total de Relatórios e Especificações**: A partir de 30/10/2026, **todo e qualquer relatório de fase, diagnóstico técnico, benchmark, especificação de arquitetura ou decisão de projeto deve ser documentado DIRETAMENTE neste arquivo (`docs/PROJETO_ATOM_JOBMANAGER.md`)**. É expressamente proibido criar novos arquivos `.md` avulsos na pasta `docs/`, mantendo a pasta limpa e este arquivo como a fonte única de verdade absoluta.
+4. Pessoas e agentes devem conferir o código e os testes antes de afirmar comportamentos. Registre divergências e esclareça decisões industriais não confirmadas, sem promover hipóteses a fatos.
+5. **Publicação de Releases (seção 12)**: entregas funcionais de código seguem o atualizador e a release oficial via GitHub Actions, com os cinco artefatos OpenCorte indicados no guia prático. `APP_VERSION`, a versão do instalador e a tag `vX.Y.Z` devem corresponder; o workflow lê essa versão. A reorganização documental e o ajuste do caminho de sincronização não exigem uma nova versão do aplicativo.
+6. **Centralização Total de Relatórios e Especificações**: A partir de 30/10/2026, **todo e qualquer relatório de fase, diagnóstico técnico, benchmark, especificação de arquitetura ou decisão de projeto deve ser documentado DIRETAMENTE neste arquivo (`AGENTS.md`)**. É expressamente proibido criar novos arquivos `.md` avulsos na pasta `docs/`, mantendo a pasta limpa e este arquivo como a fonte única de verdade absoluta.
+
 
 ---
 
@@ -2490,13 +2992,13 @@ Amostras autênticas de arquivos `.lay` (`teste.lay`, `A40118.LAY`) foram locali
 
 ## 8.1. Exportação Dual e Formato Comelz .ONX / Container CZLIB `[CONFIRMADO]`
 
-O sistema oferece **Dupla Saída de Layout** unificada ([`cad/dual_exporter.py`](file:///home/dola/Documentos/clone%20do%20job/jobmanager-win10-python/cad/dual_exporter.py)), permitindo salvar simultaneamente layouts para máquinas **ATOM FlashCut** (`.lay`) e **Comelz CM44** (`.onx`), eliminando a necessidade de redigitação ou recálculo manual para linhas de produção com mesas híbridas.
+O sistema oferece **Dupla Saída de Layout** unificada ([`cad/dual_exporter.py`](cad/dual_exporter.py)), permitindo salvar simultaneamente layouts para máquinas **ATOM FlashCut** (`.lay`) e **Comelz CM44** (`.onx`), eliminando a necessidade de redigitação ou recálculo manual para linhas de produção com mesas híbridas.
 
 ### Especificação Técnica do Formato Comelz (.onx)
 - **Container `CZLIB\x02`**:
   - Bytes 0 a 5: Assinatura mágica `CZLIB\x02` (`0x43 0x5A 0x4C 0x49 0x42 0x02`).
   - Bytes 6 em diante: Stream comprimido em BZIP2 modificado. O algoritmo proprietário da Comelz compacta o XML UTF-8 e **suprime os 10 primeiros bytes de cabeçalho padrão** (`BZh91AY&SY`). Na descompressão, reinjeta a assinatura antes de invocar o descompressor BZIP2.
-  - Implementado em Python puro em [`cad/czlib.py`](file:///home/dola/Documentos/clone%20do%20job/jobmanager-win10-python/cad/czlib.py) (`compress_czlib` e `decompress_czlib`), garantindo reversibilidade bit a bit com zero dependências externas.
+  - Implementado em Python puro em [`cad/czlib.py`](cad/czlib.py) (`compress_czlib` e `decompress_czlib`), garantindo reversibilidade bit a bit com zero dependências externas.
 - **Estrutura XML (Schema ONX v1.1)**:
   - `<security><cuttable /></security>`: Autorização de execução CNC no cabeçote.
   - `<material id="..." type="sheet" width="W" height="H" margin-top="M" margin-left="M" margin-bottom="M" margin-right="M" layers="L">`: Especificação física da chapa/pele.
@@ -2546,7 +3048,7 @@ O sistema desacopla a geometria física do material da estratégia de cálculo e
 
 ## 8.3. Arquitetura de Encaixe em 3 Camadas (`NestingModeWidget`) `[CONFIRMADO]`
 
-Para equilibrar facilidade de uso fabril para o operador com controle cirúrgico para a engenharia, a interface adota a **Arquitetura Hierárquica em 3 Camadas** ([`ui/nesting_mode_widget.py`](file:///home/dola/Documentos/clone%20do%20job/jobmanager-win10-python/ui/nesting_mode_widget.py)):
+Para equilibrar facilidade de uso fabril para o operador com controle cirúrgico para a engenharia, a interface adota a **Arquitetura Hierárquica em 3 Camadas** ([`ui/nesting_mode_widget.py`](ui/nesting_mode_widget.py)):
 
 ```
 ┌────────────────────────────────────────────────────────────────────────┐
@@ -2575,7 +3077,7 @@ Para equilibrar facilidade de uso fabril para o operador com controle cirúrgico
 3. **Camada 3 — Diagnóstico e P&D (Especialistas)**:
    - **`DebugPanel`**: Seleção explícita de backend de execução (`NFP`, `Python clássico`, etc.) e profiling `cProfile` em tempo real.
    - **`MacroPanel`**: Editor de DSL declarativa com árvore de regras e visualizador de aprendizado do modelo UCB1 Multi-Armed Bandit.
-- **Persistência**: Coluna `nesting_mode` persistida na tabela `sessions` (migração [`db/migrations/003_add_session_nesting_mode.sql`](file:///home/dola/Documentos/clone%20do%20job/jobmanager-win10-python/db/migrations/003_add_session_nesting_mode.sql)).
+- **Persistência**: Coluna `nesting_mode` persistida na tabela `sessions` (migração [`db/migrations/003_add_session_nesting_mode.sql`](db/migrations/003_add_session_nesting_mode.sql)).
 
 ---
 
@@ -2600,11 +3102,11 @@ A instrumentação empírica via `cProfile` revelou que:
 
 ## 8.5. Catálogo Matricial de Moldes (`ShapeCatalogView`) `[CONFIRMADO]`
 
-O [`ShapeCatalogView`](file:///home/dola/Documentos/clone%20do%20job/jobmanager-win10-python/ui/shape_catalog_view.py) oferece visualização em matriz MDI bidimensional inspirada no Shape Editor Comelz:
+O [`ShapeCatalogView`](ui/shape_catalog_view.py) oferece visualização em matriz MDI bidimensional inspirada no Shape Editor Comelz:
 
 - **Organização Matricial**: Eixo Vertical com peças base (Gáspea, Traseiro, Língua, Forro...) e Eixo Horizontal com grade completa de tamanhos (22a ao 45).
 - **Performance Submilimétrica (< 3 ms)**:
-  - Índice composto dedicado `idx_shapes_article_size_name` no SQLite e MySQL 8.0 ([`db/migrations/004_add_shapes_index.sql`](file:///home/dola/Documentos/clone%20do%20job/jobmanager-win10-python/db/migrations/004_add_shapes_index.sql)).
+  - Índice composto dedicado `idx_shapes_article_size_name` no SQLite e MySQL 8.0 ([`db/migrations/004_add_shapes_index.sql`](db/migrations/004_add_shapes_index.sql)).
   - Carregamento de catálogo completo em 2,1 ms para artigos com > 100 variações de molde.
 - **Renderização Gráfica Vetorial**:
   - Exibição do contorno principal com código de cor padrão ATOM por tamanho.
@@ -2619,7 +3121,7 @@ O [`ShapeCatalogView`](file:///home/dola/Documentos/clone%20do%20job/jobmanager-
 
 ## 8.6. Trava de Segurança CAD e Ferramentas do Shape Editor `[CONFIRMADO]`
 
-O [`ShapeEditorView`](file:///home/dola/Documentos/clone%20do%20job/jobmanager-win10-python/ui/shape_editor_view.py) incorpora salvaguardas industriais essenciais para o chão de fábrica:
+O [`ShapeEditorView`](ui/shape_editor_view.py) incorpora salvaguardas industriais essenciais para o chão de fábrica:
 
 - **Trava de Segurança de Geometria (`geometry_locked`)**:
   - Inicializa por padrão **BLOQUEADO (`🔒 Editar Geometria`)**, impedindo que operadores alterem acidentalmente vértices, piques ou dimensões de moldes já validados em produção.
@@ -3392,7 +3894,7 @@ Diagnóstico e correção da quebra no motor de aninhamento automático (`nest_m
 ### 1. Diagnóstico da Causa Raiz
 1. **Quebra por Contaminação de Parâmetros**:
    - Com a inclusão de opções de sessão como `separar_sobras=1`, `tip_mode=canto` e `folga_ponta=15.0`, o identificador `params` era formatado como string composta (ex.: `HighYield;separar_sobras=1;tip_mode=canto`).
-   - Comparações literais `if params == "HighYield"` e `if params == "ALTERNADO"` em [`cad/nesting_backend.py`](file:///home/dola/Documentos/clone%20do%20job/jobmanager-win10-python/cad/nesting_backend.py) e [`cad/nesting_engine.py`](file:///home/dola/Documentos/clone%20do%20job/jobmanager-win10-python/cad/nesting_engine.py) falhavam silenciosamente, caindo no `else:` com `row_interlock: False` e `coupling: "0/0"`.
+   - Comparações literais `if params == "HighYield"` e `if params == "ALTERNADO"` em [`cad/nesting_backend.py`](cad/nesting_backend.py) e [`cad/nesting_engine.py`](cad/nesting_engine.py) falhavam silenciosamente, caindo no `else:` com `row_interlock: False` e `coupling: "0/0"`.
    - Com o intertravamento desligado, as peças não penetravam nos vales contorno-a-contorno nem alternavam giros de 180°, empilhando-se por bounding box com perdas massivas de aproveitamento.
    - Além disso, a busca no banco via `get_dieproc_preset(params)` retornava `None`.
 2. **Poluição de Estado Transitório**:
@@ -4222,7 +4724,7 @@ A v1.6.29 adiciona o fluxo **sessão → pasta pronta para a máquina**, com tod
 
 ### 2. Arquitetura
 
-- Novo módulo [`cad/project_packager.py`](file:///home/dola/Documentos/clone%20do%20job/jobmanager-win10-python/cad/project_packager.py):
+- Novo módulo [`cad/project_packager.py`](cad/project_packager.py):
   - `export_session(db, session_id, target_dir, ...)`: lê a sessão e **todos** os layouts (`get_session_layouts`), monta a pasta e copia os moldes usados.
   - `pack_session_folder(folder, output_cac)`: compacta a pasta em `.cac` (ZIP) para e-mail/arquivo.
   - `export_session_cac(...)`: atalho que exporta e compacta.
@@ -4515,7 +5017,7 @@ No processo de corte de calçados, determinados componentes e moldes são produz
 
 - **Banco de Dados e Migração**:
   - Nova coluna `shape_format VARCHAR(8) NOT NULL DEFAULT '1x1'` na tabela `shapes`.
-  - Migração versionada [`db/migrations/008_add_shape_format.sql`](file:///home/dola/Documentos/clone%20do%20job/jobmanager-win10-python/db/migrations/008_add_shape_format.sql) e DDL central em `db/schema_mysql.sql`.
+  - Migração versionada [`db/migrations/008_add_shape_format.sql`](db/migrations/008_add_shape_format.sql) e DDL central em `db/schema_mysql.sql`.
   - Auto-migração idempotente em tempo de execução via `DatabaseManager.init_db()` tanto no SQLite quanto no MySQL 8.0.
   - Métodos `create_shape`, `update_shape`, `get_shape`, `get_shapes_by_article`, `get_article_shape_catalog` e `get_all_shapes` atualizados para persistência e leitura com fallback automático `'1x1'`.
   - Callback de persistência `MainWindow.on_shape_saved` repassa `shape_format` para `update_shape`.
@@ -4602,8 +5104,8 @@ O usuário solicitou via print da interface (`media_1794095266829.png`): "retira
 - **Menu Ferramentas (`ui/main_window.py`)**:
   - Adicionado o comando `tools_menu.add_command(label="💾 Exportar G-Code (ATOM)...", command=self.on_export_gcode)` na seção de execução de CAM/Nesting (junto a Parâmetros, DieProc, Auto-Nest e Simulação).
 - **Testes Automatizados**:
-  - Atualizado [`tests/test_create_session_left_click.py`](file:///home/dola/Documentos/clone%20do%20job/jobmanager-win10-python/tests/test_create_session_left_click.py) ajustando a lista de botões da barra de ferramentas.
-  - Atualizado [`tests/test_tools_menu_items.py`](file:///home/dola/Documentos/clone%20do%20job/jobmanager-win10-python/tests/test_tools_menu_items.py) com novos testes validando que `self.root.btn_tb_export_gcode` não está na toolbar e que `Exportar G-Code` está presente no menu Ferramentas.
+  - Atualizado [`tests/test_create_session_left_click.py`](tests/test_create_session_left_click.py) ajustando a lista de botões da barra de ferramentas.
+  - Atualizado [`tests/test_tools_menu_items.py`](tests/test_tools_menu_items.py) com novos testes validando que `self.root.btn_tb_export_gcode` não está na toolbar e que `Exportar G-Code` está presente no menu Ferramentas.
 
 ## 8.60. Identificação das Placas dos Moldes na Barra Lateral do Layout Editor (v1.6.42) `[CONFIRMADO]`
 
@@ -4631,7 +5133,7 @@ O operador de corte solicitou via print da interface (`media_1794095714124.png`)
 - **Feedback Interativo ao Clicar na Grade (`ui/layout_editor_view.py:on_sidebar_click`)**:
   - Quando o operador clica em um molde que não possui peças na placa atual, a barra de status inferior informa com precisão: `Molde {nome}: nenhuma peça nesta placa (presente na Placa 2)`.
 - **Testes Automatizados**:
-  - Criado [`tests/test_sidebar_plates_identification.py`](file:///home/dola/Documentos/clone%20do%20job/jobmanager-win10-python/tests/test_sidebar_plates_identification.py) simulando o cenário exato do print com 2 placas, 5 tamanhos (`36a`, `32a`, `31a`, `30a`, `29a`), validação das strings renderizadas em cada troca de placa e validação da mensagem de clique na barra de status.
+  - Criado [`tests/test_sidebar_plates_identification.py`](tests/test_sidebar_plates_identification.py) simulando o cenário exato do print com 2 placas, 5 tamanhos (`36a`, `32a`, `31a`, `30a`, `29a`), validação das strings renderizadas em cada troca de placa e validação da mensagem de clique na barra de status.
 
 ## 8.61. Ferramenta de Backup e Restauração de Moldes no Menu Ferramentas (v1.6.43) `[CONFIRMADO]`
 
@@ -4651,8 +5153,8 @@ O operador solicitou: *"quero criar uma ferramenta de bkp e restouracao( dos mol
   - Adicionado comando em `tools_menu`.
   - Callback `on_shapes_restored()` sincroniza imediatamente a árvore de moldes e o grid inferior sem reiniciar.
 - **Testes Automatizados**:
-  - Criado [`tests/test_shape_backup_restore.py`](file:///home/dola/Documentos/clone%20do%20job/jobmanager-win10-python/tests/test_shape_backup_restore.py) com 9 casos de teste (exportação total/filtrada, inspeção válida/inválida, overwrite, skip, rename, compatibilidade legado .die e inicialização da UI).
-  - Atualizado [`tests/test_tools_menu_items.py`](file:///home/dola/Documentos/clone%20do%20job/jobmanager-win10-python/tests/test_tools_menu_items.py).
+  - Criado [`tests/test_shape_backup_restore.py`](tests/test_shape_backup_restore.py) com 9 casos de teste (exportação total/filtrada, inspeção válida/inválida, overwrite, skip, rename, compatibilidade legado .die e inicialização da UI).
+  - Atualizado [`tests/test_tools_menu_items.py`](tests/test_tools_menu_items.py).
 
 ---
 
@@ -4687,7 +5189,7 @@ O operador solicitou: *"adicionar no bkp uma opcao de programar as datas e horas
   - Monitoramento em background iniciado em `load_initial_data()` e encerrado em `on_app_close()`.
   - Notificações na barra de status inferior ao término de cada backup programado.
 - **Testes Automatizados**:
-  - Criado [`tests/test_shape_backup_scheduler.py`](file:///home/dola/Documentos/clone%20do%20job/jobmanager-win10-python/tests/test_shape_backup_scheduler.py) com 11 casos de teste cobrindo todas as modalidades de agendamento, cálculo temporal, retenção de arquivos, serviço em background e UI.
+  - Criado [`tests/test_shape_backup_scheduler.py`](tests/test_shape_backup_scheduler.py) com 11 casos de teste cobrindo todas as modalidades de agendamento, cálculo temporal, retenção de arquivos, serviço em background e UI.
 
 ---
 
@@ -4732,7 +5234,7 @@ O operador solicitou: *"adicionar no bkp uma opcao de programar as datas e horas
   - **`ui/main_window.py`**:
     - Métodos `cascade_windows()`, `tile_horizontal()` e `tile_vertical()` delegam automaticamente a chamada para `layout_editor_view` quando este for a janela ativa com múltiplos layouts na sessão.
   - **Testes Automatizados**:
-    - Criado [`tests/test_layout_editor_multi_window.py`](file:///home/dola/Documentos/clone%20do%20job/jobmanager-win10-python/tests/test_layout_editor_multi_window.py) com 6 testes cobrindo criação e posicionamento em cascata, divisão horizontal de colunas, empilhamento vertical, seleção, maximização, lista dinâmica de placas no menu Janela e delegação no MainWindow.
+    - Criado [`tests/test_layout_editor_multi_window.py`](tests/test_layout_editor_multi_window.py) com 6 testes cobrindo criação e posicionamento em cascata, divisão horizontal de colunas, empilhamento vertical, seleção, maximização, lista dinâmica de placas no menu Janela e delegação no MainWindow.
 
 ---
 
@@ -4762,7 +5264,7 @@ O operador solicitou: *"adicionar no bkp uma opcao de programar as datas e horas
     - Menus atualizados para `📦 Backup e Restauração (Moldes e Sessões)...` e `⏰ Programar Backup Automático...`.
     - Implementado callback `on_sessions_restored` sincronizando a árvore de produção, catálogo e grid inferior após a restauração.
   - **Testes Automatizados**:
-    - Criado [`tests/test_shape_session_backup.py`](file:///home/dola/Documentos/clone%20do%20job/jobmanager-win10-python/tests/test_shape_session_backup.py) com 10 testes dedicados cobrindo backups de escopo completo, exclusivo de sessões e exclusivo de moldes, inspeção, estratégias `import_new_id`, `overwrite` e `skip`, direcionamento de Job, restauração em banco limpo e agendamento automático.
+    - Criado [`tests/test_shape_session_backup.py`](tests/test_shape_session_backup.py) com 10 testes dedicados cobrindo backups de escopo completo, exclusivo de sessões e exclusivo de moldes, inspeção, estratégias `import_new_id`, `overwrite` e `skip`, direcionamento de Job, restauração em banco limpo e agendamento automático.
     - Total de 30 testes passando nas 3 suítes de backup (`test_shape_session_backup.py`, `test_shape_backup_restore.py`, `test_shape_backup_scheduler.py`).
 
 ---
@@ -5220,6 +5722,7 @@ Com dados confiáveis e validações definidas, avaliar comparação do aproveit
 <!-- AUTO:gitlog:start -->
 | Commit | Data | Autor | Mensagem |
 |---|---|---|---|
+| `e6bfcf2` | 2026-11-17 | Doletabgi | docs: record incremental save benchmark and reproduction tool |
 | `e835fc9` | 2026-11-17 | Doletabgi | chore(release): OpenCorte v1.8.28 |
 | `a17b84a` | 2026-11-17 | Doletabgi | chore(release): OpenCorte v1.8.27 |
 | `1a4aff0` | 2026-11-16 | Doletabgi | chore(release): OpenCorte v1.8.26 |
@@ -5234,7 +5737,6 @@ Com dados confiáveis e validações definidas, avaliar comparação do aproveit
 | `c01ca3a` | 2026-11-15 | Doletabgi | chore(release): OpenCorte v1.8.17 |
 | `485fb10` | 2026-11-15 | Doletabgi | chore(release): OpenCorte v1.8.16 |
 | `88f105c` | 2026-11-13 | Doletabgi | chore(release): OpenCorte v1.8.15 |
-| `67df97a` | 2026-11-13 | Doletabgi | chore(release): OpenCorte v1.8.14 |
 <!-- AUTO:gitlog:end -->
 
 ---
@@ -5319,6 +5821,8 @@ Com dados confiáveis e validações definidas, avaliar comparação do aproveit
 
 | Qua, 11/11/2026 | — | Codex | Release v1.8.6 publicada: builds Windows/Linux, Inno Setup e publicação aprovados no workflow 43037058227. Cinco assets baixados, hashes e conteúdo dos pacotes conferidos; versões/módulos e base limpa verificados nos executáveis de ambas as plataformas. Banco operacional preservado; validação física permanece pendente. | `docs/PROJETO_ATOM_JOBMANAGER.md` |
 
+| Qua, 18/11/2026 | — | Codex + usuário | Encerramento do desenvolvimento atual para possível retomada. Documento ATOM e guia reunidos em `AGENTS.md`, com início rápido, preservação do histórico, quatro relatos REA de três famílias e propostas futuras identificadas. Atualizador/documentação ajustados ao arquivo central; sem nova versão funcional. | `AGENTS.md`, `README.md`, `atualizar.py`, `tests/test_atualizar.py` |
+
 ## 11. Ponto de entrada único para manutenção
 
 Desde 12/11/2026, a manutenção e a publicação estão centralizadas em
@@ -5331,7 +5835,7 @@ python3 atualizar.py
 
 O comando coordena versão, documentação, testes selecionados e build em cópia
 isolada, pacotes, Área de Trabalho e publicação no GitHub. Consulte
-[fases/ATUALIZACAO_UNIFICADA.md](fases/ATUALIZACAO_UNIFICADA.md).
+[fases/ATUALIZACAO_UNIFICADA.md](docs/fases/ATUALIZACAO_UNIFICADA.md).
 
 ## 12. Versionamento e publicação
 
@@ -5383,3 +5887,570 @@ python3 atualizar.py --documentacao
 python3 atualizar.py --documentacao --check
 python3 atualizar.py --build
 ```
+
+---
+
+<a id="retomada"></a>
+
+## 13. Encerramento do desenvolvimento e retomada futura
+
+### 13.1. Decisão e referência preservada
+
+**[CONFIRMADO PELO RESPONSÁVEL — 18/11/2026]** O desenvolvimento atual foi
+encerrado; o repositório deve guardar o contexto para baixar e continuar no
+futuro. Isso não declara todas as pendências resolvidas, não altera regras de
+produção e não constitui homologação de máquinas.
+
+A referência funcional é `v1.8.28`, com abertura dos editores sob demanda,
+salvamento incremental e as correções de inclusão/seleção e estabilidade do
+Layout Editor descritas em G.5–G.6. A documentação de encerramento e a mudança
+do atualizador para sincronizar `AGENTS.md` são posteriores a essa tag.
+Para recuperar este contexto completo, clone a branch `master` do repositório,
+em vez de usar somente o ZIP dos fontes da release funcional antiga.
+
+O histórico registra a publicação Windows/Linux da versão funcional. Para
+conferir o estado encontrado em um novo download, execute `git log -1`,
+`git status --short` e consulte `APP_VERSION`/`main.py --version`. Não use
+uma contagem histórica de testes como prova do ambiente recém-preparado.
+
+### 13.2. O que fica no repositório e o que é externo
+
+| Item | Situação para a retomada |
+| --- | --- |
+| Fontes, assets, testes e ferramentas versionadas | Disponíveis no clone, incluindo o atualizador ajustado para `AGENTS.md`. |
+| Histórico, regras, roteiro de ambiente e propostas | Reunidos neste arquivo; o README aponta para ele. |
+| Quatro relatórios REA fornecidos pelo usuário | Conteúdo integral em §16, com nomes e hashes em §14. Não dependem mais dos arquivos Markdown da máquina do autor. |
+| Instaladores e executáveis prontos do OpenCorte | Disponíveis nas releases oficiais; fontes e binários têm formas distintas de obtenção. |
+| Bancos operacionais, credenciais, configurações pessoais e backups da fábrica | Permanecem externos. Um clone prepara o desenvolvimento, mas não restaura a produção do operador. O `jobmanager.db` operacional não integra esta entrega. |
+| Instaladores proprietários, binários legados e projetos brutos de Ghidra/REA | Os relatórios registram nomes, caminhos históricos e alguns hashes; esses artefatos externos não são incorporados por este encerramento. |
+| Equipamentos, portas e protocolos de máquina | Requisitos e homologação continuam dependentes de evidência do equipamento; consultar §9.4. |
+| Sessões reais usadas em diagnósticos antigos | Não presuma presença no clone. Use fixtures versionadas ou dados autorizados/anonimizados; não recrie dados reais a partir de números de relatórios. |
+
+Os caminhos `/home/dola/...` dos relatos são proveniência da análise anterior,
+não dependências para abrir o OpenCorte. Caso uma investigação futura precise
+de um binário original, obtenha a amostra autorizada e confira o hash disponível
+antes de aplicar conclusões de uma versão a outra.
+
+### 13.3. Ambiente de referência no encerramento
+
+Levantamento do ambiente local que verificou esta reorganização em 18/11/2026:
+Python **3.12.3**, Linux x86_64 com glibc 2.39, Pillow **10.2.0**,
+PyMySQL **1.2.3**, cryptography **41.0.7**, pytest **9.2.0** e
+PyInstaller **6.22.3**. São versões observadas, não um lockfile nem garantia
+para qualquer versão futura. `requirements.txt` preserva as dependências de
+execução e o workflow usa Python 3.12 em Windows/Linux.
+
+A verificação dirigida da reorganização executou os testes do atualizador,
+notas de release e assets em cópia isolada: **42 aprovados**. A sincronização
+documental foi conferida separadamente. O SHA-256 do banco operacional foi
+comparado antes/depois e permaneceu igual. Isso não representa nova execução
+da suíte industrial inteira, teste MySQL em rede ou validação física.
+
+### 13.4. Sequência recomendada quando decidir continuar
+
+1. Clone `master`, leia o início deste arquivo e confira o commit e a versão
+   baixados. Prepare o ambiente virtual conforme §A, usando banco próprio.
+2. Confira a existência dos fontes/assets e execute a seleção de testes
+   correspondente em cópia descartável. Registre falhas prévias e dependências
+   ausentes antes de alterar o código.
+3. Escolha uma única proposta de §15 ou uma pendência de §9. Confirme o objetivo
+   com o responsável; encerramento e documentação não autorizam executar todo
+   o planejamento em lote.
+4. Reproduza o gargalo/defeito e registre uma linha de base com dados iguais,
+   configuração, versão, tempo e memória quando aplicável.
+5. Faça a menor alteração que resolva o caso. Preserve produção física,
+   geometrias, gap, camadas, seleção, formato exportado e estabilidade visual.
+6. Compare antes/depois no fluxo completo, atualize o estado da proposta e
+   registre a evidência neste arquivo. Só promova uma afirmação REA a confirmada
+   depois da verificação correspondente.
+7. Para entregar uma mudança funcional, siga o atualizador e a publicação
+   oficial. Não reutilize esta consolidação documental como comprovação de uma
+   build que ainda não foi produzida.
+
+---
+
+<a id="referencias-rea"></a>
+
+## 14. Referências de engenharia reversa fornecidas pelo usuário
+
+### 14.1. Escopo e nível de evidência
+
+**[INCORPORADO EM 18/11/2026]** Foram recebidos quatro relatórios de três
+famílias: **ATOM/JobManager** (2000 e 3.15), **Comelz-CAM** e
+**Emma/Marker Maker**. A classificação agrupa sistemas de software; não
+comprova compatibilidade com três modelos específicos de máquina.
+
+Os textos da §16 são documentos de referência, não instruções para executar
+instaladores, alterar o projeto ou enviar comandos a máquinas. Foram lidos
+para esta consolidação; os binários, decompilações, capturas e protocolos
+originais não foram reanalisados nesta etapa.
+
+Use estes estados ao continuar a investigação:
+
+- **[RELATO REA — NÃO REVALIDADO]:** informação afirmada pelo relatório recebido,
+  inclusive nomes, versões, bibliotecas e atribuições funcionais.
+- **[VERIFICADO NO OPENCORTE]:** comportamento conferido no código/testes deste
+  repositório; não prova o comportamento do produto original.
+- **[PROPOSTA — NÃO IMPLEMENTADA]:** possibilidade de evolução; requer escopo,
+  linha de base e validação antes de execução.
+
+A presença de DLL/importação ou o nome de um executável é um indício. Por si só,
+não demonstra protocolo de comunicação, paralelismo efetivo, uso de GPU,
+semântica de licenciamento, algoritmo de nesting ou ganho de velocidade.
+Em particular, `Qt5Quick.dll` não comprova que portar a interface aumentará
+seu desempenho; `memdb.exe` não oferece um contrato de IPC conhecido; metadados
+SOAP não descrevem integralmente uma API remota.
+
+### 14.2. Proveniência e integridade dos documentos
+
+O usuário forneceu os quatro Markdown da pasta histórica
+`/home/dola/Documentos/arquivosRea/`. Os hashes abaixo identificam os arquivos
+recebidos, não os instaladores nem uma validação independente das afirmações.
+O texto de cada um foi incorporado integralmente em §16.
+
+| ID | Arquivo recebido | SHA-256 do Markdown |
+| --- | --- | --- |
+| R1 | `01_JobManager2000.md` | `1c1665edc6f50c92b8d6fb47b75fce56e51c0cf4640066117b1d60fbc32849fb` |
+| R2 | `02_Comelz_CAM_22A18.md` | `89baa60637ca2e35d59453c9ea26c515d5e2c7de727e24e579ae4bd12728d13d` |
+| R3 | `03_Emma_MarkerMaker.md` | `a1365571663b388ba148d906833f119ff60dcf1df306af9e07fe543d153e74a4` |
+| R4 | `04_JobManager_v3.15.7107.md` | `1c7f29a48fbac451c1785ec5ce43cb6907440d48e3d76740d7001a4b735234b7` |
+
+### 14.3. Síntese comparativa e relação com o OpenCorte
+
+| Família / fonte | O relatório descreve | Relação com o estado atual | Possível aproveitamento futuro |
+| --- | --- | --- | --- |
+| ATOM / JobManager 2000 — R1 | VB6 x86, COM/ActiveX, Access, componentes de geometria/nesting e processos Loop/System Tester. | O cliente já reproduz parte da UX e dos formatos com Python/Tkinter e SQLite/MySQL; não depende do runtime VB6 para abrir. | Preservar os gestos confirmados, melhorar diagnóstico e estudar fila de trabalho desacoplada. Não transportar dependências COM antigas sem necessidade demonstrada. |
+| ATOM / Job Manager 3.15 — R4 | .NET, MySQL, NestingManager, geração de relatórios/código de barras, metadados SOAP e host OLE DB legado. | Já existem pool MySQL, processamento em lote, Code 128 e exportação de sessão. Isso não demonstra a integração direta da versão original com máquinas. | Verificação integral de sessão/exportação, fila com estados/cancelamento e contratos versionados de integração. Código de barras e MySQL não precisam ser recriados. |
+| Comelz-CAM 22A.18 — R2 | Suite modular com CNC, `memdb.exe`, visão/calibração, qualidade, nesting, coleta, etiquetas e relatórios; amostras `.cmz`/`.onx`. | Existem exportação `.onx`/CZLIB e saída dual; não equivalem a suporte integral à suíte, câmeras, laser ou controle CNC. | Separar adaptadores de destino, validar arquivos com amostras e avaliar cache em memória com persistência preservada; coleta/visão ficam para etapas próprias. |
+| Emma / Marker Maker v26 — R3 | Executável x64, C++/MinGW e componentes Qt5/QML/Quick, com arquivos de tradução. | A interface deste checkout continua Tkinter; a análise não mede o desenho ou o encaixe comparativamente. | Medir desenho incremental, compartilhamento de geometrias e trabalho fora da thread da UI antes de considerar outro toolkit. |
+
+### 14.4. Lacunas a fechar antes de usar os relatos como especificação
+
+- **ATOM:** documentar o ciclo de tarefa/retorno e o contrato real de comunicação.
+  Não deduzir portas, mensagens, retry seguro ou confirmação de corte a partir
+  de `TheLoop`, SOAP ou de uma comparação arquitetural.
+- **Comelz:** validar separadamente layout `.onx`, pele/qualidade `.onx`, `.cmz`,
+  unidades, ferramentas e associações de moldes. A lista de módulos não fornece
+  esses contratos. Graus de qualidade A/B/C do relato não têm conversão automática
+  demonstrada para a escala 0–5 do OpenCorte.
+- **Emma:** obter medições e evidência do caminho de renderização/nesting antes
+  de atribuir performance a C++, 64 bits ou GPU. Dependências de rede/cripto/USB
+  também não bastam para deduzir sua finalidade completa.
+- **Todas as famílias:** distinguir inspeção estática, comportamento em execução,
+  teste de arquivo e homologação física. Reproduzir a versão/hash quando houver
+  amostra; registrar o que não pôde ser confirmado.
+
+---
+
+<a id="melhorias-futuras"></a>
+
+## 15. Possíveis mudanças e melhorias após a retomada
+
+### 15.1. Ordem de avaliação
+
+**Todas as linhas abaixo são [PROPOSTA — NÃO IMPLEMENTADA POR ESTA ENTREGA].**
+São extensões sugeridas a partir do projeto e dos relatos, não funções que
+passaram a existir ao unir a documentação. Recursos parcialmente existentes
+são citados para orientar uma evolução, evitando reescrever o que já funciona.
+Não há percentuais de ganho previstos sem medição.
+
+Comece por reprodutibilidade e gargalos do fluxo atual. Avalie integração
+com equipamentos e mudanças de interface depois de demonstrar necessidade.
+As prioridades indicam sequência sugerida, não um compromisso de prazo.
+
+| Prioridade / ID | Possível melhoria e motivo | Ponto de partida | Como demonstrar o resultado |
+| --- | --- | --- | --- |
+| P0 / M01 | Reproduzir ambiente, dados sintéticos e linha de base antes de otimizar. Evita perder o estado funcional após longo intervalo. | §A, §13, testes/fixtures e ferramentas de benchmark. | Checkout novo abre com SQLite próprio; testes escolhidos reproduzíveis; tempo e memória registrados com a mesma entrada. |
+| P1 / M02 | Recalcular contadores/placas dos moldes apenas quando os dados relevantes mudarem. Reduz varreduras repetidas na barra lateral. | `cad/sidebar_rules.py`, `LayoutEditorView.draw_sidebar`, G.5. | Contagens iguais nas edições, exclusões, troca de placa e ponta; pan/zoom/seleção não repetem a varredura sem necessidade. Medir desenho e invalidações. |
+| P1 / M03 | Atualizar itens existentes do Canvas e compartilhar geometria imutável com cache limitado, em vez de recriar/copiar todo o conjunto a cada gesto. | `ui/layout_editor_view.py`, `cad/geometry.py`; inspiração de organização visual em R3. | Menor tempo/pico de memória em 100/1.000/10.000 posicionamentos quando viável, sem mudar contorno, seleção, zoom, ponta ou estabilidade em repouso. |
+| P1 / M04 | Consultas resumidas/paginadas para listas de sessões, carregando os contornos quando abrir a sessão. | `database.py`, `ui/main_window.py`, `ui/session_view.py`. | Menos linhas/bytes consultados e menor tempo para abrir listas grandes; ordenação, busca, totais e primeira abertura corretos. |
+| P1 / M05 | Separar tarefas pesadas da UI, com fila, progresso, cancelamento e descarte de resultados antigos. Avaliar processo para CPU somente após perfil. | Lote/worker atual e callbacks em `ui/main_window.py`; referências Loop/NestingManager de R1/R4. | Interface continua respondendo; cancelar/trocar sessão não aplica resultado antigo; falha mantém layout anterior; sobrecusto de envio dos dados medido. |
+| P1 / M06 | Medir e ajustar o salvamento incremental em MySQL isolado e rede representativa; reduzir round trips demonstrados. | `DatabaseManager.save_session_layouts`, teste incremental e benchmark da versão 1.8.28. | Tempos p50/p95 e número de consultas para sessão inalterada, uma/todas as placas alteradas; rollback, IDs e conflitos preservados. |
+| P2 / M07 | Validador único de integridade antes de salvar/exportar, com diagnóstico por sessão, placa e molde. | Regras de camadas, geometria, `cad/session_diagnostics.py`, `cad/project_packager.py`; R4. | Detecta referência ausente, contorno inválido, produção divergente e metadado inconsistente com mensagem útil, sem corrigir/salvar silenciosamente dados reais. |
+| P2 / M08 | Adaptadores e perfis por destino, com testes de contrato de arquivos ATOM/Comelz e amostras autorizadas. | `cad/dual_exporter.py`, `cad/onx_exporter.py`, `cad/project_packager.py`; R1/R2/R4. | Round-trip e aceitação no software de destino preservam dimensões, camadas, fio, ferramentas, quantidades e caminhos. Suporte direto à máquina exige contrato próprio. |
+| P2 / M09 | Fila persistente de lotes/exportações com identificação de tarefa, estados, recuperação e falhas por sessão. | Processamento em lote existente; organização modular relatada em R1/R2/R4. | Reinício controlado permite identificar tarefas pendentes; tentativas não duplicam exportação/corte; estados representam o que de fato foi confirmado. |
+| P2 / M10 | Rastreabilidade, coleta guiada e etiquetas a partir de eventos reais, preservando os códigos de barras existentes. | `cad/barcode.py`, ficha A4 e painel de produção; R2/R4. | Diferencia planejado, exportado, confirmado e executado; leitura associa sessão/placa corretas; indicadores reais dependem de eventos auditáveis. |
+| P3 / M11 | Avaliar um protótipo de visualização com outro toolkit/GPU somente se M03 deixar um gargalo relevante comprovado. | Amostra isolada comparando a cena Tkinter atual com uma alternativa; referência R3. | Mesmo dataset/qualidade visual, menor latência e consumo aceitável, incluindo custo de empacotamento e manutenção; sem migração integral por suposição. |
+| P3 / M12 | Importação de peles/defeitos, captura/calibração e assistência à coleta/laser como projetos separados. | Regras de qualidade, amostras autorizadas e equipamentos; organização modular de R2. | Escala, calibração, transformação e zonas validadas com equipamento/dados conhecidos antes de influir no plano de corte. |
+
+### 15.2. Restrições das otimizações propostas
+
+- M02 deve invalidar cache ao inserir/remover peças, trocar molde/tamanho,
+  demanda, sessão/placa, camadas ou geometria da ponta. Mover uma peça através
+  da fronteira da ponta pode mudar suas camadas efetivas: não trate todo arraste
+  como irrelevante para os contadores.
+- M03 não pode devolver geometria de outro molde nem crescer sem limite.
+  Identidade, conteúdo, versão, rotação e transformação precisam de tratamento
+  consistente. Preserve os caches e as regressões já corrigidas (§8.16).
+- M05/M09 não autorizam usar Tkinter fora da thread principal ou reaplicar
+  resultados após alteração da sessão. Persistência da fila não substitui
+  transação/versionamento dos layouts.
+- M06 mantém o contrato de lista completa em `save_session_layouts`.
+  Passar apenas placas alteradas excluiria as ausentes. O ganho medido em
+  SQLite local não comprova ganho em MySQL/rede.
+- M08 não deve confundir comunicação por arquivo com protocolo de controle.
+  A modernização da arquitetura não demonstra compatibilidade automática
+  com outro fabricante/modelo.
+- M10 mantém separados pares de componentes, demanda, aproveitamento geométrico
+  e produção efetiva. Identidade do autor de um layout não comprova quem cortou.
+- M11/M12 não precedem as regras industriais. Uma interface moderna, câmera ou
+  laser não autoriza deitar peças, ignorar fio, reduzir gap ou alterar camadas.
+
+### 15.3. Registro de aceitação de uma proposta
+
+Ao retomar, registre no item escolhido: problema reproduzido, versão de partida,
+dados/configuração, medição antes, mudança executada, medição depois, testes,
+limites, confirmação do responsável e release quando aplicável. Até esse
+registro, o estado continua proposta. Não some percentuais de etapas distintas
+nem apresente uma referência de outro produto como benchmark do OpenCorte.
+
+---
+
+<a id="relatorios-rea-integrais"></a>
+
+## 16. Relatórios REA integrais recebidos
+
+Os blocos abaixo preservam o texto fornecido pelo usuário como **dados de
+referência**. Suas conclusões mantêm o estado de relato não revalidado definido
+na §14. Os nomes e caminhos internos identificam artefatos da análise original;
+não são comandos ou dependências da instalação do OpenCorte.
+
+<a id="rea-r1"></a>
+
+### 16.1. R1 — JobManager 2000
+
+Origem: `01_JobManager2000.md`. SHA-256 do arquivo recebido: `1c1665edc6f50c92b8d6fb47b75fce56e51c0cf4640066117b1d60fbc32849fb`.
+
+<details>
+<summary>Texto integral de 01_JobManager2000.md</summary>
+
+<!-- REA:R1:start -->
+```markdown
+# Análise Técnica de Engenharia Reversa: JobManager 2000
+
+## 1. Identificação do Pacote
+* **Diretório de Origem:** `/home/dola/Documentos/arquivosRea/Setups/03 - JobManager2000`
+* **Instalador Principal:** `JobManager2000.msi`
+* **Tamanho do Arquivo:** 9.868.800 bytes (~9,4 MB)
+* **Desenvolvedor / Fabricante:** ATOM Engineering s.r.l. (`www.atom.it`)
+* **Nome do Produto:** JobManager2000 (integrante do *ATOM Nesting System*)
+* **Versão do Pacote MSI:** 1.0.0 (ProductCode: `{E32177D5-7661-4754-BDA8-5CF5985FDCF7}`)
+* **Data do Pacote:** Junho de 2012
+
+---
+
+## 2. Estrutura e Tecnologia do Instalador
+* **Formato do Instalador:** Windows Installer (MSI Compound Document / OLE Storage).
+* **Contêiner de Carga (Payload):** O pacote contém internamente o fluxo de gabinete Cabinet `_7455DB8CFA483D99AAF10CBB8BF718ED` com 79 arquivos compactados.
+* **Mapeamento de Destino Padrão:** `[ProgramFilesFolder]\ATOM\Common` e menus em `ATOM Nesting System`.
+* **Registro de Configurações:** Grava dados em `Software\String\Nesting System\Job Manager`.
+
+---
+
+## 3. Binários e Executáveis Principais (Análise Ghidra & REA)
+
+A descompactação dos fluxos de dados e análise dos binários identificou as seguintes aplicações principais:
+
+### 3.1. `JobManager2000.exe` (ID de Carga: `_F8159E7D81FA42D18DBF23DD2FA08D32`)
+* **Hash SHA-256:** `7ccdbe2ad133ac1996ed1929946332b9d51d6a7d90a222325a4fe2f1d9734f85`
+* **Arquitetura:** PE32 (x86 32-bit, Windows GUI)
+* **Compilador / Runtime:** Microsoft Visual Basic 6.0 (`MSVBVM60.DLL`).
+* **Estrutura de Importações:**
+  * Vinculado ao motor OLE/COM do VB6: `EVENT_SINK_GetIDsOfNames`, `__vbaVarTstGt`, `__vbaVarSub`, `__vbaStrI2`, `__vbaVargParmRef`.
+* **Função:** Aplicação gráfica central para operadores gerenciarem as ordens de produção, modelos de corte e alocação de peles para mesas de corte ATOM.
+
+### 3.2. `Apps Loop.EXE` (v3.0.3.1, ID: `_1185FC6C88384B2DB31F830940B12C1E`)
+* **Arquitetura:** PE32 x86
+* **Função:** Processo em background responsável pela sincronização contínua e processamento de filas de tarefas entre o banco de dados e as máquinas de corte.
+
+### 3.3. `TheLoop.exe` (v1.0.14.1, ID: `_99ADEB7B1FB448A38D3146DE948301F2`)
+* **Arquitetura:** PE32 x86
+* **Função:** Módulo auxiliar de repetição e despacho de rotinas de corte automático.
+
+### 3.4. `System Tester.exe` (v1.06, ID: `_4D2E975BAAD94CDBB9964E77231D1DBA`)
+* **Arquitetura:** PE32 x86
+* **Função:** Utilitário de diagnóstico de comunicação e teste de periféricos da mesa de corte.
+
+### 3.5. `Squeeze.EXE` (v1.0.1.1, ID: `_7968B59AEA8B40A89460F5989B1E0FA0`)
+* **Arquitetura:** PE32 x86
+* **Função:** Compactador e organizador de arquivos de layout de corte e histórico de sessões.
+
+---
+
+## 4. Bibliotecas e Componentes de Engenharia (DLLs e OCXs)
+
+O sistema baseia-se em um conjunto de bibliotecas proprietárias C++ e controles ActiveX:
+
+| Arquivo Original | Versão | Função Técnica |
+| :--- | :--- | :--- |
+| `SMPNst.DLL` | 1.0.13.0 | Motor de cálculo de nesting (encaixe automático de moldes). |
+| `comnest.DLL` | 1.0.2.0 | Ponte de comunicação COM com o motor de encaixe. |
+| `Afcadv.DLL` | 1.19.15.0 | Advance Feature Cutting: Algoritmos geométricos avançados. |
+| `Afcgeo.DLL` | 1.1.5.1 | Biblioteca de cálculo de polígonos, curvas e tolerâncias. |
+| `Afchlib12.DLL` | 1.2.34.0 | Suporte de hardware e periféricos de corte. |
+| `NsDb20.DLL` / `NSDBCom.DLL` | 2.1.22.0 | Camada de persistência em banco de dados Microsoft Access (MDB). |
+| `DxfHelper.dll` | 1.06.0031 | Importação e conversão de arquivos de desenho vetorial DXF. |
+| `LPTIntf.DLL` | 1.0.7.0 | Interface direta de baixo nível com portas paralelas / seriais. |
+| `ParamControls.OCX` | 1.0.11.1 | Controles de interface gráfica para ajuste de parâmetros de corte. |
+| `FlexGrid.Ocx` / `GridEX16.ocx` | 6.0 / 1.06 | Controles de tabela para listagem de peças e materiais. |
+
+---
+
+## 5. Resumo Arquitetural
+O **JobManager 2000** representa a geração legada dos sistemas de corte ATOM:
+* Arquitetura 32 bits monolítica em Visual Basic 6 com DLLs numéricas em C++ (MFC 3.0 / MSVCRT 2.0/6.0).
+* Dependência de banco de dados Access (`.mdb`) local ou compartilhado via SMB.
+* Comunicação via chamadas COM/ActiveX registradas no Windows Registry.
+```
+<!-- REA:R1:end -->
+
+</details>
+
+<a id="rea-r2"></a>
+
+### 16.2. R2 — Comelz-CAM 22A.18
+
+Origem: `02_Comelz_CAM_22A18.md`. SHA-256 do arquivo recebido: `89baa60637ca2e35d59453c9ea26c515d5e2c7de727e24e579ae4bd12728d13d`.
+
+<details>
+<summary>Texto integral de 02_Comelz_CAM_22A18.md</summary>
+
+<!-- REA:R2:start -->
+```markdown
+# Análise Técnica de Engenharia Reversa: Comelz-CAM 22A.18
+
+## 1. Identificação do Pacote
+* **Diretório de Origem:** `/home/dola/Documentos/arquivosRea/Setups/comelz`
+* **Instalador Principal:** `Comelz-CAM-22A.18-setup.exe`
+* **Tamanho do Arquivo:** 399.795.368 bytes (~381,2 MB)
+* **Desenvolvedor / Fabricante:** Comelz S.p.A. (Vigevano, Itália — `www.comelz.com`)
+* **Nome do Produto:** Comelz-CAM Suite (Versão 22A.18)
+* **Data dos Módulos Internos:** 24 de março de 2023 (Compilação base em 2019/2023)
+* **Finalidade:** Suíte industrial completa de Computer-Aided Manufacturing (CAM) para controle de máquinas automáticas de corte de couro e calçados da série Comelz (máquinas CM44, CZ, etc.).
+
+---
+
+## 2. Estrutura e Tecnologia do Instalador
+* **Tecnologia Principal:** Inno Setup versão 6.0.0 (Unicode).
+* **Conceito de Empacotamento:** Atua como um **Master Suite Setup** (Meta-Instalador). Ele encapsula e orquestra 14 instaladores secundários especializados, descompactados e chamados via rotinas Pascal Script (`code:GetSubInsDir`).
+* **Mecanismos Auxiliares de Instalação:** Contém binários integrados do 7-Zip (`7zG.exe` e `7z.dll` v1.09 MB) para descompressão ultrarrápida de pacotes internos de modelos e bibliotecas.
+
+---
+
+## 3. Arquitetura Modular e Sub-Sistemas Identificados
+
+A análise estrutural de descompactação revelou a divisão da suíte em módulos independentes:
+
+### 3.1. Núcleo de Controle da Máquina CNC (`CM44GL3.15722A.18.exe`)
+* **Formato:** Instalador NSIS (Nullsoft Scriptable Install System) com 38,3 MB.
+* **Componentes Centrais:**
+  * `bin/gl.exe` (19,85 MB): **Motor Gráfico e Executável Principal do CNC**. Comunica-se diretamente com as placas de interpolação e servomotores da máquina de corte Comelz CM44.
+  * `bin/memdb.exe` (10,32 MB): **Banco de Dados em Memória (In-Memory Database)**. Fornece comunicação interprocessos (IPC) ultrarrápida e controle de estados em tempo real para o processo de corte.
+  * `bin/mapview2.exe` e `bin/wenity.exe`: Visualizadores e assistentes visuais de corte.
+
+### 3.2. Visão Computacional e Inspeção Óptica (`Vision-22A.18-setup.exe`)
+* **Formato:** Inno Setup com 94,22 MB.
+* **Componentes Centrais:**
+  * `Vision.exe` (19,1 MiB): Sistema de processamento de imagens para reconhecimento automático de bordas e imperfeições em couros naturais via câmeras suspensas.
+  * `target_editor.exe` (19,3 MiB): Editor de alvos ópticos e marcadores de calibração.
+  * `show5.exe` (11,7 MiB) e `offset_maps.exe` (7,49 MiB): Mapeamento de correção de distorção de lente de câmeras industriais.
+
+### 3.3. Módulos de Calibração e Projeção Laser
+* `CamCal-22A.18-setup.exe` (30,86 MB): Ferramenta de calibração espacial de câmeras.
+* `CalCon-22A.18-setup.exe` (10,56 MB): Controlador de calibração de eixos.
+* `AutoLaser-22A.18-setup.exe` (12,19 MB): Controle do projetor laser de linhas guia para assistência ao operador na colocação de peles.
+
+### 3.4. Módulos de Nesting e Otimização de Rendimento
+* `NesterManager-22A.18-setup.exe` (26,53 MB): Gerenciador dos algoritmos de encaixe de corte automático multivariável.
+* `NestingViewer-22A.18-setup.exe` (22,21 MB): Interface de visualização dos aproveitamentos e layouts de corte.
+* `QualityEditor-22A.18-setup.exe` (24,50 MB): Definição das zonas de qualidade (Classificação de couro: Grau A nobre, Grau B médio, Grau C com defeitos).
+
+### 3.5. Logística, Coleta e Relatórios
+* `PartCollector-22A.18-setup.exe` (43,75 MB): Interface de descarregamento interativo (mostra ao operador qual peça recolher na esteira de saída).
+* `StatsReport-22A.18-setup.exe` (15,15 MB) e `NestingReport-22A.18-setup.exe` (8,83 MB): Geração de dados de rendimento e consumo de matéria-prima.
+* `TPrinter-22A.18-setup.exe` (20,38 MB): Impressão térmica de etiquetas de lotes de peças cortadas.
+
+### 3.6. Telemetria e Diagnóstico de Rede
+* `nxlog-ce-2.11.2190.msi` (3,73 MB): Agente do NXLog Community Edition para coleta de logs de sistema e envio para centrais de monitoramento e manutenção remota da Comelz.
+* `nxlog-firewall.cmd`: Script de configuração automática de regras de firewall do Windows.
+
+---
+
+## 4. Análise dos Arquivos de Produção Acompanhantes
+Na pasta de trabalho (`comelz/1791878926705/`) foram identificadas amostras reais de ordens de corte exportadas:
+* **Modelos Geométricos Comelz (`.cmz`):** Arquivos `453.135000.001844-002.cmz` e `453.132000.018701-002.cmz`.
+* **Mapeamento de Peles (`.onx`):** Arquivo `skins/AS74467.onx` e respectiva fotografia em alta resolução (`AS74467.png`).
+* **Formatos de Integração:** O sistema exporta simultaneamente os resultados de corte em XML (`1791878926705_default.xml`), planilhas Excel (`.xlsx`), CSV e relatórios em HTML para impressão na fábrica.
+```
+<!-- REA:R2:end -->
+
+</details>
+
+<a id="rea-r3"></a>
+
+### 16.3. R3 — Emma / Marker Maker v26
+
+Origem: `03_Emma_MarkerMaker.md`. SHA-256 do arquivo recebido: `a1365571663b388ba148d906833f119ff60dcf1df306af9e07fe543d153e74a4`.
+
+<details>
+<summary>Texto integral de 03_Emma_MarkerMaker.md</summary>
+
+<!-- REA:R3:start -->
+```markdown
+# Análise Técnica de Engenharia Reversa: Emma / Marker Maker
+
+## 1. Identificação do Pacote
+* **Diretório de Origem:** `/home/dola/Documentos/arquivosRea/Setups/Emma`
+* **Instalador Principal:** `MarkerMaker-setup-v26-beba3fc (1).exe`
+* **Tamanho do Arquivo:** 31.162.408 bytes (~29,7 MB)
+* **Desenvolvedor:** Emma CAD / Marker Maker Solution
+* **Versão do Software:** Versão 26 (Git Commit Hash: `beba3fc`)
+* **Data da Compilação:** 14 de junho de 2018 (10:27:46)
+* **Finalidade:** Software CAD para criação de enfestações, encaixe automático (nesting) e elaboração de marcadores de corte para confecções têxteis, calçados e tecidos industriais.
+
+---
+
+## 2. Estrutura e Tecnologia do Instalador
+* **Tecnologia do Instalador:** Inno Setup versão 5.6.0 (Unicode).
+* **Hash SHA-256 do Instalador:** `36196ca7203a749744565de3d2d2f54c40227abf099543a3b886e8fc893b492f`
+* **Assinatura do Instalador:** Formato PE32 com cabeçalho padrão de bootstrapper Inno Setup (`JR.Inno.Setup`).
+
+---
+
+## 3. Binários e Executáveis Principais (Análise Ghidra & REA)
+
+### 3.1. `marker-maker.exe` (Localizado em `app/marker-maker.exe`)
+* **Tamanho Descompactado:** 12.197.902 bytes (~11,63 MB)
+* **Arquitetura:** **PE32+ (64-bit AMD64 / x86_64)**
+* **Toolchain / Compilador:**
+  * Compilado nativamente com **GCC / MinGW-w64** para arquitetura de 64 bits.
+  * Gerenciamento de exceções Structured Exception Handling (SEH) via `libgcc_s_seh-1.dll` e `libstdc++-6.dll` (biblioteca padrão C++ com 26 MB).
+* **Framework Gráfico e de Aplicação:** **Qt 5**
+  * O software utiliza intensamente o ecossistema Qt5 de 64 bits para renderização gráfica e aceleração por hardware:
+    * `Qt5Core.dll` (6,54 MB): Núcleo da aplicação, sistema de sinais e slots e I/O.
+    * `Qt5Gui.dll` (6,80 MB): Abstração gráfica e manipulação de janelas.
+    * `Qt5Widgets.dll`: Interface tradicional com botões, caixas de diálogo e painéis.
+    * `Qt5Network.dll` (1,54 MB): Comunicação em rede para licenciamento e compartilhamento de marcadores.
+    * `Qt5Qml.dll` (3,97 MB) e `Qt5Quick.dll` (4,48 MB): Motor declarativo QML/Qt Quick para animações de interface e visualização interativa do tecido e das peças.
+    * `Qt5QuickControls2.dll` e `Qt5QuickShapes.dll`: Desenho vetorial de geometrias complexas de moldes.
+
+### 3.2. Estrutura de Importações do Sistema Windows (PE Imports)
+A análise das tabelas de importação do executável revela dependências de baixo nível:
+* `bcrypt.dll` e `CRYPT32.dll`: Criptografia e hashes criptográficos para validação de licenças/arquivos protegidos.
+* `WININET.dll` e `WS2_32.dll`: Conexões HTTP/Sockets com servidores externos.
+* `SETUPAPI.dll`: Comunicação e identificação de dispositivos de proteção física (dongles USB / HASP).
+
+---
+
+## 4. Internacionalização (i18n)
+O executável vem acompanhado de **22 arquivos de tradução binária do Qt (`.qm`)**, cobrindo os principais polos mundiais da indústria de confecção e calçados:
+* `marker-maker_pt-BR.qm` (Português do Brasil)
+* `marker-maker_pt-PT.qm` (Português de Portugal)
+* `marker-maker_en-US.qm` (Inglês)
+* `marker-maker_it-IT.qm` (Italiano — o pacote completo de strings indica forte origem de desenvolvimento na Itália)
+* `marker-maker_es-ES.qm`, `es-AR.qm`, `es-MX.qm` (Espanhol)
+* `marker-maker_fr-FR.qm`, `de-DE.qm`, `zh-CN.qm`, `ru-RU.qm`, entre outros.
+
+---
+
+## 5. Resumo Arquitetural
+* **Modernidade:** Dentre os quatro programas inspecionados, o **Marker Maker** destaca-se por ser o único compilado nativamente em **64 bits (x86_64)**.
+* **Portabilidade de Interface:** A escolha de C++ com MinGW e Qt5 QML permite alta performance matemática nos algoritmos de rotação e encaixe de geometrias, aliada a uma interface moderna acelerada por GPU.
+```
+<!-- REA:R3:end -->
+
+</details>
+
+<a id="rea-r4"></a>
+
+### 16.4. R4 — Job Manager v3.15.7107
+
+Origem: `04_JobManager_v3.15.7107.md`. SHA-256 do arquivo recebido: `1c7f29a48fbac451c1785ec5ce43cb6907440d48e3d76740d7001a4b735234b7`.
+
+<details>
+<summary>Texto integral de 04_JobManager_v3.15.7107.md</summary>
+
+<!-- REA:R4:start -->
+```markdown
+# Análise Técnica de Engenharia Reversa: Job Manager v3.15.7107
+
+## 1. Identificação do Pacote
+* **Diretório de Origem:** `/home/dola/Documentos/arquivosRea/Setups/JobManagerSetup_v3.15.7107`
+* **Instaladores e Arquivos:**
+  * `JobManagerSetup.exe` (7.168 bytes — ~7 KB)
+  * `JobManagerSetup.msi` (25.707.494 bytes — ~24,5 MB)
+  * `JobManager3.15.7107-ReleaseNotes-June2019-17062019.pdf` (Notas oficiais de lançamento)
+* **Desenvolvedor / Fabricante:** ATOM Engineering s.r.l. / String (`www.string.it` / `www.atom.it`)
+* **Versão Oficial:** 3.15.7107 (Build Release GA: 17 de junho de 2019)
+* **Finalidade:** Plataforma corporativa de gerenciamento de ordens de corte, controle de bancos de dados relacionais e conexão com mesas de corte automáticas ATOM.
+
+---
+
+## 2. Estrutura e Tecnologia do Instalador
+
+O pacote utiliza um padrão de instalação em duas etapas:
+
+### 2.1. O Bootstrapper `JobManagerSetup.exe` (Engenharia Reversa com Ghidra)
+* **Hash SHA-256:** `c253584cbada7067383ada0189a4de145dfefaf9982f2b0d214ded71c1fc3345`
+* **Arquitetura:** PE32 (x86 32-bit Console Executable)
+* **Compilador:** Microsoft Visual C++ 2013 (`MSVCR120.dll`).
+* **Caminho PDB Original Identificado:** `C:\Pal\trunk\Prove\SetupExe\SetupExe\Release\SetupExe.pdb`
+* **Descompilação da Função Principal (`FUN_00401000` via Ghidra):**
+  * O executável não instala arquivos por si só. Ele atua como um wrapper de inicialização segura que:
+    1. Localiza o executável padrão do Windows Installer (`c:\windows\system32\msiexec.exe`).
+    2. Monta a linha de comando passando o parâmetro `/i` e o caminho completo do arquivo companheiro `JobManagerSetup.msi`.
+    3. Inicializa as estruturas `STARTUPINFOW` e `PROCESS_INFORMATION` e chama a API `KERNEL32.DLL::CreateProcessW`.
+
+### 2.2. O Pacote Principal `JobManagerSetup.msi`
+* Contém um arquivo de gabinete interno compactado com MSZip (`cab1.cab` com 24,4 MB) agrupando centenas de bibliotecas, modelos, esquemas XML e executáveis de aplicação.
+
+---
+
+## 3. Binários e Executáveis Principais (Análise REA .NET Static Provider)
+
+Ao contrário da versão legada de 2000 (feita em VB6), a versão 3.15 é desenvolvida sobre a plataforma **.NET Framework (C# / CLI Managed Code)**:
+
+### 3.1. `JobManager.exe` (Versão do Produto: 3.15.7107.26367)
+* **Classificação de Carga:** PE32 com diretório CLI Managed Metadata ativo (`CLR: True`).
+* **Função:** Aplicação gráfica principal de produção.
+* **Recursos Internos Identificados:**
+  * Suporte híbrido a bancos de dados: migração de Microsoft Access (`.mdb`) para **MySQL** relacional corporativo.
+  * Integração com Web Services SOAP (`System.Web.Services.Protocols.SoapDocumentMethodAttribute`).
+  * Ferramenta de verificação de integridade física e relacional de desenhos de peças, materiais e arquivos de layout.
+
+### 3.2. `Activation.exe` (Versão 1.2.7107.26375)
+* **Arquitetura:** .NET Framework Executable
+* **Função:** Assistente de ativação e licenciamento do produto com os servidores centrais da String/ATOM via chamadas web seguras.
+
+### 3.3. `NestingManager.exe` (Versão 1.1.7107.26371)
+* **Arquitetura:** .NET Framework Executable
+* **Função:** Orquestrador dedicado aos processos assíncronos e multithread de nesting para grandes lotes de ordens de corte.
+
+### 3.4. `SessionXmlReportGenerator.exe` (Versão 1.0.7107.26376)
+* **Arquitetura:** .NET Framework Executable
+* **Função:** Motor de relatórios de sessão. Conforme as notas de versão, este módulo gera os documentos contendo códigos de barras que são lidos por leitores ópticos instalados nas próprias máquinas de corte da ATOM para puxar o plano de corte instantaneamente.
+
+### 3.5. `NsDb30OleDbHost.exe` (Versão 1.0.7107.26365)
+* **Arquitetura:** .NET Framework Executable
+* **Função:** Servidor host OLE DB para manter compatibilidade com sistemas legados da geração Nesting System 2.0/3.0.
+
+---
+
+## 4. Diferenças e Avanços em Relação ao JobManager2000
+
+| Aspecto | JobManager 2000 (v1.0) | JobManager Moderno (v3.15.7107) |
+| :--- | :--- | :--- |
+| **Linguagem Principal** | Visual Basic 6.0 (VB6) | C# / .NET Framework gerenciado |
+| **Banco de Dados** | Microsoft Access local (`.mdb`) | MySQL Server corporativo + assistente de migração MDB->SQL |
+| **Comunicação de Hardware** | Porta paralela / DLLs de baixo nível | Redes Ethernet / IPC TCP / Web Services SOAP |
+| **Integração na Máquina** | Fila manual de arquivos | Relatórios com código de barras para leitura direta na mesa de corte |
+| **Licenciamento** | Chaves locais de registro | Ativação via Web Service (`Activation.exe`) |
+
+---
+
+## 5. Resumo Arquitetural
+A versão **3.15.7107** marca o salto geracional dos softwares de corte da ATOM para o ecossistema .NET, permitindo escalabilidade em rede, robustez com bancos de dados relacionais padrão SQL e automação na fábrica via código de barras.
+```
+<!-- REA:R4:end -->
+
+</details>

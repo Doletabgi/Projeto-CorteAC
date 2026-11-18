@@ -19,7 +19,6 @@ jobmanager.db.bak*
 profile_*.txt
 *.json
 docs/*
-!docs/PROJETO_ATOM_JOBMANAGER.md
 !docs/releases/
 !docs/releases/*.md
 !docs/fases/
